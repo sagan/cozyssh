@@ -1,0 +1,42 @@
+version: 1
+project_name: cozyssh
+
+before:
+  hooks:
+    - npm --prefix frontend install
+    - npm --prefix frontend run build
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    main: ./main.go
+    binary: cozyssh
+    flags:
+      - -trimpath
+archives:
+  - format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
