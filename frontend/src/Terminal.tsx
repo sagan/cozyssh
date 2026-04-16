@@ -15,9 +15,11 @@ interface TerminalProps {
   isActive?: boolean;
   isCtrlActive?: boolean;
   onCtrlDone?: () => void;
+  onStateChange?: (state: string) => void;
+  onStolen?: () => void;
 }
 
-const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, sessionId, isActive, isCtrlActive, onCtrlDone }, ref) => {
+const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, sessionId, isActive, isCtrlActive, onCtrlDone, onStateChange, onStolen }, ref) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -68,25 +70,59 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const token = localStorage.getItem('cozy_token');
     const wsUrl = `${protocol}//${window.location.host}/api/ws?host=${encodeURIComponent(host)}&sessionId=${encodeURIComponent(sessionId || '')}&token=${encodeURIComponent(token || '')}`;
-    const ws = new WebSocket(wsUrl);
-    ws.binaryType = 'arraybuffer';
-    wsRef.current = ws;
+    
+    let isDisposed = false;
+    let reconnectTimer: ReturnType<typeof setTimeout>;
 
-    ws.onopen = () => {
-      // Send initial resize
-      ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+    const connectWS = () => {
+      if (isDisposed) return;
+      onStateChange?.('connecting to host');
+      const ws = new WebSocket(wsUrl);
+      ws.binaryType = 'arraybuffer';
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        if (isDisposed) { ws.close(); return; }
+        // Send initial resize
+        ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+      };
+
+      ws.onmessage = (ev) => {
+        if (typeof ev.data === 'string') {
+          try {
+            const msg = JSON.parse(ev.data);
+            if (msg.type === 'state') {
+              if (msg.state === 'stolen' || msg.state.includes('(fatal)')) {
+                isDisposed = true;
+                ws.close();
+                onStateChange?.(msg.state);
+                if (msg.state === 'stolen') onStolen?.();
+                return;
+              }
+              onStateChange?.(msg.state);
+              return;
+            }
+          } catch (e) {
+            // ignore
+          }
+          term.write(ev.data);
+        } else {
+          term.write(new Uint8Array(ev.data));
+        }
+      };
+
+      ws.onclose = () => {
+        if (isDisposed) return;
+        onStateChange?.('disconnected to ssh server');
+        reconnectTimer = setTimeout(connectWS, 2000);
+      };
     };
 
-    ws.onmessage = (ev) => {
-      if (typeof ev.data === 'string') {
-        term.write(ev.data);
-      } else {
-        term.write(new Uint8Array(ev.data));
-      }
-    };
+    connectWS();
 
     term.onData((data) => {
-      if (ws.readyState === WebSocket.OPEN) {
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
         if (ctrlRef.current && data.length === 1) {
           const code = data.toUpperCase().charCodeAt(0);
           if (code >= 64 && code <= 90) { // @ to Z
@@ -112,7 +148,8 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
       navigator.clipboard.readText().then(text => {
-        if (text && ws.readyState === WebSocket.OPEN) {
+        const ws = wsRef.current;
+        if (text && ws && ws.readyState === WebSocket.OPEN) {
           ws.send(new TextEncoder().encode(text));
         }
       }).catch(err => {
@@ -126,19 +163,23 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     }
 
     const handleResize = () => {
+      if (!isActive) return;
       fitAddon.fit();
-      if (ws.readyState === WebSocket.OPEN) {
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
       }
     };
     window.addEventListener('resize', handleResize);
 
     return () => {
+      isDisposed = true;
+      clearTimeout(reconnectTimer);
       window.removeEventListener('resize', handleResize);
       if (container) {
         container.removeEventListener('contextmenu', handleContextMenu);
       }
-      ws.close();
+      if (wsRef.current) wsRef.current.close();
       term.dispose();
     };
   }, [host]);
@@ -146,7 +187,17 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
   // Execute focus hook firmly AFTER initialization hook to prevent null-ref on first mount explicitly
   useEffect(() => {
     if (isActive && xtermRef.current) {
-      setTimeout(() => xtermRef.current?.focus(), 10);
+      setTimeout(() => {
+        xtermRef.current?.focus();
+        // Force fit when becoming active
+        const fitAddon = new FitAddon();
+        xtermRef.current?.loadAddon(fitAddon);
+        fitAddon.fit();
+        const ws = wsRef.current;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'resize', cols: xtermRef.current?.cols, rows: xtermRef.current?.rows }));
+        }
+      }, 50);
     }
   }, [isActive]);
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Box, CssBaseline, ThemeProvider, createTheme, Tabs, Tab, IconButton, Menu, MenuItem, Typography, Button, ButtonGroup, useMediaQuery, useTheme, Paper } from '@mui/material';
+import { Box, CssBaseline, ThemeProvider, createTheme, Tabs, Tab, IconButton, Menu, MenuItem, Typography, Button, ButtonGroup, useMediaQuery, useTheme, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField } from '@mui/material';
 import Sidebar from './Sidebar';
 import TerminalComponent from './Terminal';
 import type { TerminalHandle } from './Terminal';
@@ -11,6 +11,7 @@ import SouthIcon from '@mui/icons-material/South';
 import WestIcon from '@mui/icons-material/West';
 import EastIcon from '@mui/icons-material/East';
 import PushPinIcon from '@mui/icons-material/PushPin';
+import AddIcon from '@mui/icons-material/Add';
 
 const lightTheme = createTheme({
   palette: {
@@ -25,6 +26,14 @@ interface TabData {
   host: string;
   title: string;
   isPinned?: boolean;
+  state?: string;
+}
+
+interface ButtonData {
+  id: string;
+  name: string;
+  type: string;
+  payload: string;
 }
 
 export default function Dashboard() {
@@ -39,13 +48,19 @@ export default function Dashboard() {
   const [viewportHeight, setViewportHeight] = useState('100dvh');
   const [isCtrlActive, setIsCtrlActive] = useState(false);
 
+  const [buttons, setButtons] = useState<ButtonData[]>([]);
+  const [buttonDialogOpen, setButtonDialogOpen] = useState(false);
+  const [editingButton, setEditingButton] = useState<ButtonData | null>(null);
+  const [buttonFormData, setButtonFormData] = useState({ name: '', type: 'send_string', payload: '' });
+  const [btnMenuAnchor, setBtnMenuAnchor] = useState<{ anchor: HTMLElement, btn: ButtonData } | null>(null);
+
   const handleSendKey = (key: string) => {
     if (activeTabId && terminalRefs.current[activeTabId]) {
       terminalRefs.current[activeTabId]?.sendData(key);
       // Re-focus firmly
       setTimeout(() => {
         const term = terminalRefs.current[activeTabId];
-        if (term) (term as any).focus?.(); 
+        if (term) (term as any).focus?.();
       }, 0);
     }
   };
@@ -67,6 +82,7 @@ export default function Dashboard() {
   }, []);
 
   const [sysHostname, setSysHostname] = useState<string>('server');
+  const [appVersion, setAppVersion] = useState<string>('dev');
 
   const tabsRef = useRef(tabs);
   useEffect(() => {
@@ -77,12 +93,22 @@ export default function Dashboard() {
     const token = localStorage.getItem('cozy_token');
     fetch('/api/sysinfo', { headers: { 'Authorization': `Bearer ${token}` } })
       .then(r => r.json())
-      .then(data => data && data.hostname && setSysHostname(data.hostname))
+      .then(data => {
+        if (data) {
+          data.hostname && setSysHostname(data.hostname);
+          data.version && setAppVersion(data.version);
+        }
+      })
+      .catch(e => console.error(e));
+
+    fetch('/api/buttons', { headers: { 'Authorization': `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(data => setButtons(data || []))
       .catch(e => console.error(e));
 
     const bc = new BroadcastChannel('cozy_tabs');
     let pinnedElsewhere = false;
-    
+
     // The Responder: always listen and answer based on current state (via ref)
     bc.onmessage = (e) => {
       if (e.data === 'probe_pinned') {
@@ -91,7 +117,7 @@ export default function Dashboard() {
       }
       if (e.data === 'pinned_present') pinnedElsewhere = true;
     };
-    
+
     // The Initiator: run ONLY ONCE on mount
     bc.postMessage('probe_pinned');
 
@@ -154,10 +180,10 @@ export default function Dashboard() {
     e.stopPropagation();
     const targetTab = tabs.find(t => t.id === id);
     if (targetTab?.isPinned) {
-       // If pinned, call unpin first? Or just close in UI?
-       // Requirement says pinned tabs are permanent. 
-       // If the user clicks 'X' on a pinned tab, we should probably unpin it too.
-       handleUnpinTab(id);
+      // If pinned, call unpin first? Or just close in UI?
+      // Requirement says pinned tabs are permanent. 
+      // If the user clicks 'X' on a pinned tab, we should probably unpin it too.
+      handleUnpinTab(id);
     }
 
     setTabs(prev => {
@@ -198,6 +224,43 @@ export default function Dashboard() {
     setContextMenu(null);
   };
 
+  const handleAttach = async (id: string, host: string, title: string) => {
+    const token = localStorage.getItem('cozy_token');
+    await fetch('/api/sessions/attach', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
+    setTabs(prev => {
+      if (!prev.find(t => t.id === id)) {
+        return [...prev, { id, host, title, isPinned: true }];
+      }
+      return prev;
+    });
+    setActiveTabId(id);
+  };
+
+  const handleRename = async () => {
+    if (!contextMenu) return;
+    const targetId = contextMenu.targetTabId;
+    const targetTab = tabs.find(t => t.id === targetId);
+    if (!targetTab) return;
+
+    const newTitle = prompt("Enter new tab name:", targetTab.title);
+    if (newTitle && newTitle.trim() !== "") {
+      if (targetTab.isPinned) {
+        const token = localStorage.getItem('cozy_token');
+        await fetch('/api/tabs/rename', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: targetId, title: newTitle })
+        });
+      }
+      setTabs(prev => prev.map(t => t.id === targetId ? { ...t, title: newTitle } : t));
+    }
+    setContextMenu(null);
+  };
+
   const handleContextMenu = (e: React.MouseEvent, id: string) => {
     e.preventDefault();
     setContextMenu({ mouseX: e.clientX + 2, mouseY: e.clientY - 6, targetTabId: id });
@@ -221,7 +284,7 @@ export default function Dashboard() {
       return prev.slice(0, idx + 1);
     });
     if (activeTabId !== targetId) {
-      setActiveTabId(targetId); 
+      setActiveTabId(targetId);
     }
     setContextMenu(null);
   };
@@ -249,23 +312,78 @@ export default function Dashboard() {
       } else if (e.altKey && (e.key === 'w' || e.key === 'W')) {
         e.preventDefault();
         if (activeTabId) {
-          handleCloseTab({ stopPropagation: () => {} } as any, activeTabId);
+          handleCloseTab({ stopPropagation: () => { } } as any, activeTabId);
         }
       } else if (e.altKey && (e.key === 't' || e.key === 'T')) {
         e.preventDefault();
         handleSelectHost('local');
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeTabId, tabs]);
+
+  const handleButtonClick = (btn: ButtonData) => {
+    if (btn.type === 'send_string') {
+      handleSendKey(btn.payload);
+    }
+  };
+
+  const handleSaveButton = async () => {
+    const token = localStorage.getItem('cozy_token');
+    const method = editingButton ? 'PUT' : 'POST';
+    const url = editingButton ? `/api/buttons/${editingButton.id}` : '/api/buttons';
+    await fetch(url, {
+      method,
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(buttonFormData)
+    });
+    setButtonDialogOpen(false);
+    fetch('/api/buttons', { headers: { 'Authorization': `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(data => setButtons(data || []));
+  };
+
+  const handleDeleteButton = async (id: string, name: string) => {
+    if (!confirm(`Delete button "${name}"?`)) return;
+    const token = localStorage.getItem('cozy_token');
+    await fetch(`/api/buttons/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    setBtnMenuAnchor(null);
+    fetch('/api/buttons', { headers: { 'Authorization': `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(data => setButtons(data || []));
+  };
+
+  const handleMoveButton = async (id: string, direction: number) => {
+    const token = localStorage.getItem('cozy_token');
+    await fetch('/api/buttons/move', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, direction })
+    });
+    setBtnMenuAnchor(null);
+    fetch('/api/buttons', { headers: { 'Authorization': `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(data => setButtons(data || []));
+  };
 
   return (
     <ThemeProvider theme={lightTheme}>
       <Box sx={{ display: 'flex', height: viewportHeight, overflow: 'hidden' }}>
         <CssBaseline />
-        <Sidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} onSelect={(host) => { handleSelectHost(host); setMobileOpen(false); }} onLogout={handleLogout} />
+        <Sidebar
+          mobileOpen={mobileOpen}
+          onClose={() => setMobileOpen(false)}
+          onSelect={(host) => { handleSelectHost(host); setMobileOpen(false); }}
+          onLogout={handleLogout}
+          activeTabs={tabs.map(t => t.id)}
+          sysHostname={sysHostname}
+          appVersion={appVersion}
+          onAttach={handleAttach}
+        />
         <Box component="main" sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           {tabs.length > 0 && (
             <Box sx={{ bgcolor: '#f4f6f8', display: 'flex', alignItems: 'center', borderBottom: 1, borderColor: 'divider', flexShrink: 0, overflow: 'hidden' }}>
@@ -296,6 +414,11 @@ export default function Dashboard() {
                       label={
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
                           {tab.isPinned && <PushPinIcon sx={{ fontSize: 14, mr: 0.5, color: 'primary.main' }} />}
+                          <Box sx={{
+                            width: 8, height: 8, borderRadius: '50%', mr: 1,
+                            bgcolor: tab.state === 'connected' ? 'success.main' :
+                              (tab.state === 'connecting to host' || tab.state === 'connecting to ssh server') ? 'warning.main' : 'error.main'
+                          }} title={tab.state || 'disconnected'} />
                           <span>{tab.title}</span>
                           <IconButton
                             size="small"
@@ -323,33 +446,84 @@ export default function Dashboard() {
                   display: activeTabId === tab.id ? 'block' : 'none',
                 }}
               >
-                <TerminalComponent 
+                <TerminalComponent
                   ref={el => { terminalRefs.current[tab.id] = el; }}
-                  host={tab.host} 
+                  host={tab.host}
                   sessionId={tab.id}
-                  isActive={activeTabId === tab.id} 
+                  isActive={activeTabId === tab.id}
                   isCtrlActive={isCtrlActive}
                   onCtrlDone={() => setIsCtrlActive(false)}
+                  onStateChange={(state) => {
+                    setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, state } : t));
+                  }}
                 />
               </Box>
             ))}
             {tabs.length === 0 && (
               <Box sx={{ p: 4, textAlign: 'center', mt: 10 }}>
                 <IconButton onClick={() => setMobileOpen(true)} sx={{ display: { md: 'none' }, mb: 4 }}>
-                   <MenuIcon fontSize="large" />
+                  <MenuIcon fontSize="large" />
                 </IconButton>
                 <Typography color="text.secondary">Select a server from the sidebar to open a terminal interface.</Typography>
               </Box>
             )}
           </Box>
 
+          {tabs.length > 0 && (
+            <Box sx={{ borderTop: 1, borderColor: 'divider', bgcolor: '#f8f9fa', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center' }}>
+              <Tabs
+                value={false}
+                variant="scrollable"
+                scrollButtons="auto"
+                allowScrollButtonsMobile
+                sx={{
+                  flexGrow: 1,
+                  minHeight: 40,
+                  '& .MuiTabs-flexContainer': { gap: 1, px: 2, alignItems: 'center' },
+                  '& .MuiTabs-indicator': { display: 'none' }
+                }}
+              >
+                {buttons.map(btn => (
+                  <Tab
+                    key={btn.id}
+                    label={btn.name}
+                    title={btn.payload}
+                    component="div"
+                    onClick={() => handleButtonClick(btn)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setBtnMenuAnchor({ anchor: e.currentTarget, btn });
+                    }}
+                    sx={{
+                      minHeight: 28, minWidth: 'auto', p: '2px 12px',
+                      textTransform: 'none', fontSize: '0.8rem', borderRadius: 1.5,
+                      border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper',
+                      color: 'text.primary', margin: '6px 4px', cursor: 'pointer',
+                      '&:hover': { bgcolor: 'primary.light', color: 'white' }
+                    }}
+                  />
+                ))}
+                <Tab
+                  icon={<AddIcon fontSize="small" />}
+                  component="div"
+                  onClick={() => {
+                    setEditingButton(null);
+                    setButtonFormData({ name: '', type: 'send_string', payload: '' });
+                    setButtonDialogOpen(true);
+                  }}
+                  sx={{ minHeight: 28, minWidth: 40, p: 0, margin: '6px 4px', cursor: 'pointer' }}
+                />
+              </Tabs>
+            </Box>
+          )}
+
           {isMobile && tabs.length > 0 && (
-            <Paper 
-              elevation={3} 
-              sx={{ 
-                p: 0.5, 
-                bgcolor: '#f4f6f8', 
-                borderTop: 1, 
+            <Paper
+              elevation={3}
+              sx={{
+                p: 0.5,
+                bgcolor: '#f4f6f8',
+                borderTop: 1,
                 borderColor: 'divider',
                 display: 'flex',
                 justifyContent: 'center',
@@ -359,7 +533,7 @@ export default function Dashboard() {
               }}
             >
               <ButtonGroup size="small" variant="outlined">
-                <Button 
+                <Button
                   variant={isCtrlActive ? "contained" : "outlined"}
                   onMouseDown={(e) => { e.preventDefault(); setIsCtrlActive(!isCtrlActive); }}
                 >
@@ -392,9 +566,40 @@ export default function Dashboard() {
             <MenuItem onClick={() => handlePinTab(contextMenu.targetTabId)}>Pin Tab</MenuItem>
           )
         )}
+        <MenuItem onClick={handleRename}>Rename Tab</MenuItem>
         <MenuItem onClick={handleCloseOther}>Close Other tabs</MenuItem>
         <MenuItem onClick={handleCloseRight}>Close tabs to the right</MenuItem>
       </Menu>
+
+      <Menu
+        anchorEl={btnMenuAnchor?.anchor}
+        open={Boolean(btnMenuAnchor)}
+        onClose={() => setBtnMenuAnchor(null)}
+      >
+        <MenuItem onClick={() => {
+          if (!btnMenuAnchor) return;
+          setEditingButton(btnMenuAnchor.btn);
+          setButtonFormData({ name: btnMenuAnchor.btn.name, type: btnMenuAnchor.btn.type, payload: btnMenuAnchor.btn.payload });
+          setBtnMenuAnchor(null);
+          setButtonDialogOpen(true);
+        }}>Edit Button</MenuItem>
+        <MenuItem onClick={() => btnMenuAnchor && handleMoveButton(btnMenuAnchor.btn.id, -1)}>Move Button Left</MenuItem>
+        <MenuItem onClick={() => btnMenuAnchor && handleMoveButton(btnMenuAnchor.btn.id, 1)}>Move Button Right</MenuItem>
+        <MenuItem onClick={() => btnMenuAnchor && handleDeleteButton(btnMenuAnchor.btn.id, btnMenuAnchor.btn.name)} sx={{ color: 'error.main' }}>Delete Button</MenuItem>
+      </Menu>
+
+      <Dialog open={buttonDialogOpen} onClose={() => setButtonDialogOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle>{editingButton ? 'Edit Button' : 'Add Button'}</DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+          <TextField sx={{ mt: 1 }} fullWidth label="Button Name" size="small" value={buttonFormData.name} onChange={e => setButtonFormData({ ...buttonFormData, name: e.target.value })} />
+          <TextField fullWidth label="Command / String" size="small" multiline rows={3} value={buttonFormData.payload} onChange={e => setButtonFormData({ ...buttonFormData, payload: e.target.value })} placeholder="String to send to terminal..." />
+          <Typography variant="caption" color="text.secondary">Type: Sending String (Implicit)</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setButtonDialogOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleSaveButton} disabled={!buttonFormData.name || !buttonFormData.payload}>Save</Button>
+        </DialogActions>
+      </Dialog>
     </ThemeProvider>
   );
 }

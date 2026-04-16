@@ -3,7 +3,9 @@ package session
 import (
 	"io"
 	"log"
+	"strings"
 	"sync"
+	"time"
 )
 
 // CircularBuffer stores a fixed amount of terminal output.
@@ -48,6 +50,7 @@ type Session struct {
 	Writer     io.Writer
 	CloseFunc  func() error
 	ResizeFunc func(rows, cols uint16) error
+	RetryFunc  func() (io.Reader, io.Writer, error)
 	Buffer     *CircularBuffer
 	
 	mu        sync.Mutex
@@ -100,6 +103,33 @@ func (s *Session) run() {
 			if err != io.EOF {
 				log.Printf("Session %s read error: %v", s.ID, err)
 			}
+
+			if s.RetryFunc != nil {
+				// Broadcast state change to listeners (hack: push a special text/binary indicator if needed, 
+				// but let's notify the front-end via ws.go that ssh disconnected)
+				reconnected := false
+				for i := 0; i < 30; i++ { // Retry up to 30 times (1 min) or indefinitely? Requirements say "always re-try"
+					time.Sleep(3 * time.Second)
+					nr, nw, rErr := s.RetryFunc()
+					if rErr != nil {
+						errStr := strings.ToLower(rErr.Error())
+						if strings.Contains(errStr, "authenticate") || strings.Contains(errStr, "auth") || strings.Contains(errStr, "mismatch") || strings.HasPrefix(errStr, "fatal:") {
+							log.Printf("SSH fatal failure on reconnect for %s: %v", s.ID, rErr)
+							break
+						}
+						log.Printf("SSH reconnect failed for %s: %v", s.ID, rErr)
+						continue
+					}
+					s.Reader = nr
+					s.Writer = nw
+					reconnected = true
+					break
+				}
+				if reconnected {
+					continue
+				}
+			}
+
 			s.mu.Lock()
 			for _, l := range s.listeners {
 				close(l)
@@ -134,18 +164,51 @@ func (s *Session) RemoveListener(ch chan []byte) {
 	}
 }
 
+func (s *Session) Broadcast(data []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, l := range s.listeners {
+		select {
+		case l <- data:
+		default:
+		}
+	}
+}
+
 func (s *Session) Close() error {
 	return s.CloseFunc()
 }
 
+func (s *Session) Steal() {
+	s.mu.Lock()
+	stolenMsg := append([]byte("STATE:"), []byte(`{"type":"state","state":"stolen"}`)...)
+	for _, l := range s.listeners {
+		select {
+		case l <- stolenMsg:
+		default:
+		}
+		close(l)
+	}
+	s.listeners = nil
+	s.mu.Unlock()
+}
+
+func (s *Session) ListenerCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.listeners)
+}
+
 // SessionManager manages active sessions.
 type SessionManager struct {
-	mu       sync.Mutex
-	sessions map[string]*Session
+	mu               sync.Mutex
+	sessions         map[string]*Session
+	disconnectTimers map[string]*time.Timer
 }
 
 var GlobalManager = &SessionManager{
-	sessions: make(map[string]*Session),
+	sessions:         make(map[string]*Session),
+	disconnectTimers: make(map[string]*time.Timer),
 }
 
 func (m *SessionManager) Get(id string) *Session {
@@ -182,8 +245,33 @@ func (m *SessionManager) ClearInactive(id string) {
 		s.mu.Unlock()
 		
 		if !isPinned && listenerCount == 0 {
-			s.Close()
-			delete(m.sessions, id)
+			// Start 1 minute timer before closing
+			if _, exists := m.disconnectTimers[id]; !exists {
+				m.disconnectTimers[id] = time.AfterFunc(1*time.Minute, func() {
+					m.mu.Lock()
+					defer m.mu.Unlock()
+					// Check again
+					if sess, stillOk := m.sessions[id]; stillOk {
+						sess.mu.Lock()
+						lCount := len(sess.listeners)
+						sess.mu.Unlock()
+						if lCount == 0 {
+							sess.Close()
+							delete(m.sessions, id)
+						}
+					}
+					delete(m.disconnectTimers, id)
+				})
+			}
 		}
+	}
+}
+
+func (m *SessionManager) CancelDisconnectTimer(id string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if timer, ok := m.disconnectTimers[id]; ok {
+		timer.Stop()
+		delete(m.disconnectTimers, id)
 	}
 }

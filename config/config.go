@@ -2,11 +2,12 @@ package config
 
 import (
 	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/yaml.v3"
@@ -18,10 +19,18 @@ type PinnedTab struct {
 	Title string `yaml:"title" json:"title"`
 }
 
+type Button struct {
+	ID      string `yaml:"id" json:"id"`
+	Name    string `yaml:"name" json:"name"`
+	Type    string `yaml:"type" json:"type"`
+	Payload string `yaml:"payload" json:"payload"`
+}
+
 type Config struct {
 	Addr            string      `yaml:"addr"`
 	AppPasswordHash string      `yaml:"app_password_hash"`
 	PinnedTabs      []PinnedTab `yaml:"pinned_tabs"`
+	Buttons         []Button    `yaml:"buttons" json:"buttons"`
 	ConfigPath      string      `yaml:"-"` // internal use
 }
 
@@ -64,13 +73,43 @@ func LoadConfig(customDir string) (*Config, error) {
 	return &cfg, nil
 }
 
-func generateAndSaveConfig(path string) (*Config, error) {
-	// Generate random 12-char password
-	randBytes := make([]byte, 6)
-	if _, err := rand.Read(randBytes); err != nil {
-		return nil, err
+// Return a cryptographically secure random string of format /[a-zA-Z0-9]{length}/ .
+// If digigOnly is true, return  /[0-9]{length}/
+func RandString(length int, digitOnly bool) string {
+	if length <= 0 {
+		return ""
 	}
-	password := hex.EncodeToString(randBytes)
+	var rand_chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	if digitOnly {
+		rand_chars = "0123456789"
+	}
+	var sb strings.Builder
+	// (math.MaxUint8 / len(rand_chars)) results in an integer, e.g., 4
+	// The result is directly cast to float64, e.g., 4.0
+	// This is multiplied by float64(len(rand_chars))
+	var max byte = byte(float64(math.MaxUint8/len(rand_chars)) * float64(len(rand_chars)))
+	buf := make([]byte, length)
+outer:
+	for {
+		if _, err := rand.Read(buf); err != nil {
+			panic("rand.Read() failed")
+		}
+		for _, byte := range buf {
+			// By taking only the numbers up to a multiple of char space size and discarding others,
+			// we expect a uniform distribution of all possible chars.
+			if byte < max {
+				sb.WriteByte(rand_chars[int(byte)%len(rand_chars)])
+			}
+			if sb.Len() >= length {
+				break outer
+			}
+		}
+	}
+	return sb.String()
+}
+
+func generateAndSaveConfig(path string) (*Config, error) {
+	password := RandString(22, false)
 
 	// Hash the password
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -138,6 +177,16 @@ func (c *Config) AddPinnedTab(tab PinnedTab) error {
 	return c.Save()
 }
 
+func (c *Config) RenamePinnedTab(id string, title string) error {
+	for i, t := range c.PinnedTabs {
+		if t.ID == id {
+			c.PinnedTabs[i].Title = title
+			return c.Save()
+		}
+	}
+	return nil
+}
+
 func (c *Config) RemovePinnedTab(id string) error {
 	for i, t := range c.PinnedTabs {
 		if t.ID == id {
@@ -146,4 +195,48 @@ func (c *Config) RemovePinnedTab(id string) error {
 		}
 	}
 	return nil
+}
+
+func (c *Config) AddButton(btn Button) error {
+	c.Buttons = append(c.Buttons, btn)
+	return c.Save()
+}
+
+func (c *Config) UpdateButton(btn Button) error {
+	for i, b := range c.Buttons {
+		if b.ID == btn.ID {
+			c.Buttons[i] = btn
+			return c.Save()
+		}
+	}
+	return nil
+}
+
+func (c *Config) RemoveButton(id string) error {
+	for i, b := range c.Buttons {
+		if b.ID == id {
+			c.Buttons = append(c.Buttons[:i], c.Buttons[i+1:]...)
+			return c.Save()
+		}
+	}
+	return nil
+}
+
+func (c *Config) MoveButton(id string, direction int) error {
+	idx := -1
+	for i, b := range c.Buttons {
+		if b.ID == id {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		return nil
+	}
+	newIdx := idx + direction
+	if newIdx < 0 || newIdx >= len(c.Buttons) {
+		return nil
+	}
+	c.Buttons[idx], c.Buttons[newIdx] = c.Buttons[newIdx], c.Buttons[idx]
+	return c.Save()
 }

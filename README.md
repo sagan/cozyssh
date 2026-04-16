@@ -6,12 +6,22 @@ CozySSH is a lightweight, self-hosted web-based SSH client and terminal multiple
 
 ## Features
 
+- **Use Host SSH Config**: It uses the host OpenSSH client config files (`~/.ssh/id_ed25519`, `~/.ssh/known_hosts`, `~/.ssh/config`) directly for ssh auth & server management.
 - **Multi-Tab Interface**: Run multiple concurrent SSH sessions and local shells in a single browser tab.
-- **Modern UI**: A sleek, high-contrast Light Theme designed for readability.
+- **Modern UI**: A sleek, concise, yet full-fledged high-contrast Light Theme, designed for readability.
 - **Mobile-Friendly**:
   - Responsive sidebar and layout.
   - **Mobile Input Toolbar**: Quick access to Esc, Tab, Arrow keys, and a stateful **Ctrl toggle** for mobile touch keyboards.
   - **Keyboard-Aware Viewport**: Automatically resizes to fit your visible mobile screen perfectly even when the on-screen keyboard is active.
+- **Terminal Button Bar**: 💻
+  - **Custom Snippets**: A scrollable toolbar at the bottom of the terminal window for quick command execution.
+  - **Management**: Add, edit, delete, and **reorder buttons** directly from the UI context menu.
+  - **Hover Tooltips**: Instant preview of the command payload.
+- **Advanced SSH Management**: 🔑
+  - **Tagging System**: Organize your hosts using `### #tag` comments in your `~/.ssh/config`. Tags are displayed inline and are fully filterable in the sidebar.
+  - **Heartbeat & Keep-Alive**: Background heartbeat (`keepalive@openssh.com`) every 30 seconds ensures stable connections and prevents idle timeouts.
+  - **Interactive Verification**: Full support for interactive Host Key verification and Keyboard-Interactive (Password) authentication.
+  - **Smart Resize logic**: Optimized terminal resizing that preserves shell prompt integrity when switching between multiple active tabs.
 - **Terminal UX Enhancements**:
   - **Auto-copy**: Selected text is automatically copied to your clipboard.
   - **Right-click Paste**: Quickly paste clipboard contents into any active terminal session.
@@ -39,14 +49,40 @@ Run the CozySSH binary:
 
 On first run, CozySSH will generate a default configuration and an **App Password**. Check the terminal output to secure your credentials.
 
-**Command Line Flags**:
-- `-config`: Specify a custom configuration directory (default: `~/.config/cozyssh`).
+It listens to `127.0.0.1:8022` by default. In test environment you can visit http://localhost:8022 directly in your local browser. In production environment it's mandatory to deploy CozySSH behind a TLS enabled a reverse proxy (like [Traefik](https://github.com/traefik/traefik) or Nginx) and / or CDN provider (like Cloudflare).
+
+Example Traefik config (toml):
+
+```toml
+[core]
+  defaultRuleSyntax = "v2"
+
+[entryPoints.websecure]
+  address = ":443"
+
+[[tls.certificates]]
+  certFile = "/certs/example.com.pem"
+  keyFile = "/certs/example.com.key"
+
+[http.routers.cozyssh]
+rule = "Host(`cozyssh.example.com`)&&PathPrefix(`/`)"
+service = "cozyssh"
+
+[http]
+  [http.services]
+    [http.services.cozyssh]
+      [http.services.cozyssh.loadBalancer]
+        [[http.services.cozyssh.loadBalancer.servers]]
+          url = "http://127.0.0.1:8022/"
+```
 
 ### Configuration
 
 CozySSH stores its settings in `~/.config/cozyssh/config.yaml`. You can customize:
 - `addr`: The address and port the server binds to (default: `127.0.0.1:8022`).
 - `password`: The BCrypt hashed app password.
+
+The default `~/.config/cozyssh` config dir path can be changed by `-config` command line flag.
 
 ## Development
 
