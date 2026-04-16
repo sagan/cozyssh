@@ -456,6 +456,9 @@ export default function Dashboard() {
                   onStateChange={(state) => {
                     setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, state } : t));
                   }}
+                  onStolen={() => {
+                    setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, isPinned: false, state: 'stolen (attached elsewhere)' } : t));
+                  }}
                 />
               </Box>
             ))}

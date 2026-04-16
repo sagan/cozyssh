@@ -95,6 +95,11 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
               if (msg.state === 'stolen' || msg.state.includes('(fatal)')) {
                 isDisposed = true;
                 ws.close();
+                if (msg.state === 'stolen') {
+                  term.write('\r\n\x1b[31;1m*** Session stolen (attached by another client) ***\x1b[0m\r\n');
+                } else {
+                  term.write(`\r\n\x1b[31;1m*** ${msg.state} ***\x1b[0m\r\n`);
+                }
                 onStateChange?.(msg.state);
                 if (msg.state === 'stolen') onStolen?.();
                 return;

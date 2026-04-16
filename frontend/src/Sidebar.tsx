@@ -357,7 +357,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
               <List dense sx={{ border: '1px solid #ddd', borderRadius: 1, maxHeight: 250, overflow: 'auto' }}>
                 {pinnedSessions.map(ps => {
                   const isLocal = activeTabs.includes(ps.id);
-                  const canAttach = !isLocal && ps.listenerCount > 0;
+                  const canAttach = !isLocal;
                   return (
                     <ListItem key={ps.id} divider>
                       <ListItemText primary={ps.title} secondary={`${ps.host} (Listeners: ${ps.listenerCount})`} />
