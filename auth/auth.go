@@ -6,8 +6,11 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"cozyssh/config"
 )
@@ -60,25 +63,49 @@ func generateToken() string {
 	return "cozy." + sig
 }
 
+func SignDownloadToken(id, path string, expires int64) string {
+	mac := hmac.New(sha256.New, []byte(globalConfig.AppPasswordHash))
+	mac.Write([]byte(fmt.Sprintf("%s:%s:%d", id, path, expires)))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func VerifyDownloadToken(id, path, expiresStr, sig string) bool {
+	if globalConfig == nil {
+		return false
+	}
+	exp, err := strconv.ParseInt(expiresStr, 10, 64)
+	if err != nil {
+		return false
+	}
+	if time.Now().Unix() > exp {
+		return false
+	}
+	expected := SignDownloadToken(id, path, exp)
+	return subtle.ConstantTimeCompare([]byte(sig), []byte(expected)) == 1
+}
+
 func isValidToken(token string) bool {
 	if globalConfig == nil {
 		return false
 	}
+	
 	expected := generateToken()
 	// Using ConstantTimeCompare neutralizes timing-attacks
 	return subtle.ConstantTimeCompare([]byte(token), []byte(expected)) == 1
 }
 
-// Middleware verifies the session token in the Authorization header
+// Middleware verifies the session token in the Authorization header or URL query
 func Middleware(next http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		token := ""
 		authHeader := r.Header.Get("Authorization")
-		if !strings.HasPrefix(authHeader, "Bearer ") {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
+		if strings.HasPrefix(authHeader, "Bearer ") {
+			token = strings.TrimPrefix(authHeader, "Bearer ")
+		} else {
+			token = r.URL.Query().Get("token")
 		}
-		token := strings.TrimPrefix(authHeader, "Bearer ")
-		if !isValidToken(token) {
+
+		if token == "" || !isValidToken(token) {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}

@@ -13,6 +13,7 @@ import (
 
 	"cozyssh/auth"
 	"cozyssh/config"
+	"cozyssh/fsapi"
 	"cozyssh/session"
 	"cozyssh/sshmanager"
 	"cozyssh/ws"
@@ -75,6 +76,9 @@ func main() {
 			http.Error(w, "Security Restriction: CozySSH is not allowed to run in non-local HTTP environment. Use HTTPS or localhost, or lift this restriction with --allow-insecure-http flag.", http.StatusForbidden)
 		})
 	}
+
+	mux.Handle("/api/fs/download", securityMiddleware(http.HandlerFunc(fsapi.HandleDownloadDirect)))
+	mux.Handle("/api/fs/", securityMiddleware(auth.Middleware(http.HandlerFunc(fsapi.HandleFS))))
 
 	mux.HandleFunc("/api/sysinfo", func(w http.ResponseWriter, r *http.Request) {
 		hostname, err := os.Hostname()

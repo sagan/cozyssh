@@ -3,6 +3,7 @@ import { Box, CssBaseline, ThemeProvider, createTheme, Tabs, Tab, IconButton, Me
 import Sidebar from './Sidebar';
 import TerminalComponent from './Terminal';
 import type { TerminalHandle } from './Terminal';
+import FileBrowser from './FileBrowser';
 import CloseIcon from '@mui/icons-material/Close';
 import MenuIcon from '@mui/icons-material/Menu';
 import KeyboardTabIcon from '@mui/icons-material/KeyboardTab';
@@ -28,6 +29,7 @@ interface TabData {
   isPinned?: boolean;
   state?: string;
   cloneFrom?: string;
+  showFiles?: boolean;
 }
 
 interface ButtonData {
@@ -308,8 +310,15 @@ export default function Dashboard() {
     const targetTab = tabs.find(t => t.id === id);
     if (!targetTab) return;
     const newId = `${targetTab.host}-${Date.now()}`;
-    setTabs(prev => [...prev, { id: newId, host: targetTab.host, title: targetTab.title, cloneFrom: id }]);
+    setTabs(prev => [...prev, { id: newId, host: targetTab.host, title: targetTab.title, cloneFrom: id, showFiles: targetTab.showFiles }]);
     setActiveTabId(newId);
+    setContextMenu(null);
+  };
+
+  const handleToggleFiles = () => {
+    if (!contextMenu) return;
+    const targetId = contextMenu.targetTabId;
+    setTabs(prev => prev.map(t => t.id === targetId ? { ...t, showFiles: !t.showFiles } : t));
     setContextMenu(null);
   };
 
@@ -524,24 +533,36 @@ export default function Dashboard() {
                 sx={{
                   position: 'absolute',
                   inset: 0,
-                  display: activeTabId === tab.id ? 'block' : 'none',
+                  display: activeTabId === tab.id ? 'flex' : 'none',
+                  flexDirection: 'column'
                 }}
               >
-                <TerminalComponent
-                  ref={el => { terminalRefs.current[tab.id] = el; }}
-                  host={tab.host}
-                  sessionId={tab.id}
-                  cloneFrom={tab.cloneFrom}
-                  isActive={activeTabId === tab.id}
-                  isCtrlActive={isCtrlActive}
-                  onCtrlDone={() => setIsCtrlActive(false)}
-                  onStateChange={(state) => {
-                    setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, state } : t));
-                  }}
-                  onStolen={() => {
-                    setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, isPinned: false, state: 'stolen (attached elsewhere)' } : t));
-                  }}
-                />
+                <Box sx={{ flexGrow: 1, minHeight: 0, position: 'relative' }}>
+                  <TerminalComponent
+                    ref={el => { terminalRefs.current[tab.id] = el; }}
+                    host={tab.host}
+                    sessionId={tab.id}
+                    cloneFrom={tab.cloneFrom}
+                    isActive={activeTabId === tab.id}
+                    isCtrlActive={isCtrlActive}
+                    onCtrlDone={() => setIsCtrlActive(false)}
+                    onStateChange={(state) => {
+                      setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, state } : t));
+                    }}
+                    onStolen={() => {
+                      setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, isPinned: false, state: 'stolen (attached elsewhere)' } : t));
+                    }}
+                  />
+                </Box>
+                {tab.showFiles && (
+                  <Box sx={{ height: '50%', minHeight: 200, borderTop: 1, borderColor: 'divider' }}>
+                    <FileBrowser 
+                      sessionId={tab.id} 
+                      isActive={activeTabId === tab.id && tab.showFiles} 
+                      onClose={() => setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, showFiles: false } : t))}
+                    />
+                  </Box>
+                )}
               </Box>
             ))}
             {tabs.length === 0 && (
@@ -678,6 +699,11 @@ export default function Dashboard() {
         )}
         {contextMenu && tabs.find(t => t.id === contextMenu.targetTabId)?.host !== 'local' && (
           <MenuItem onClick={() => handleCloneSession(contextMenu.targetTabId)}>Clone Session</MenuItem>
+        )}
+        {contextMenu && (
+          <MenuItem onClick={handleToggleFiles}>
+            {tabs.find(t => t.id === contextMenu.targetTabId)?.showFiles ? 'Close Files' : (tabs.find(t => t.id === contextMenu.targetTabId)?.host === 'local' ? 'Open Files' : 'Open SFTP')}
+          </MenuItem>
         )}
         <MenuItem onClick={handleRename}>Rename Tab</MenuItem>
         <MenuItem onClick={handleCloseOther}>Close Other tabs</MenuItem>
