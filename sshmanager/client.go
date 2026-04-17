@@ -3,7 +3,6 @@ package sshmanager
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -13,7 +12,29 @@ import (
 	"github.com/kevinburke/ssh_config"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
+	"sync"
 )
+
+type PooledClient struct {
+	Client *ssh.Client
+	Mu     sync.Mutex
+	Refs   int
+}
+
+func (p *PooledClient) AddRef() {
+	p.Mu.Lock()
+	p.Refs++
+	p.Mu.Unlock()
+}
+
+func (p *PooledClient) Release() {
+	p.Mu.Lock()
+	p.Refs--
+	if p.Refs <= 0 {
+		p.Client.Close()
+	}
+	p.Mu.Unlock()
+}
 
 type HostConfig struct {
 	Alias        string   `json:"alias"`
@@ -139,14 +160,17 @@ func DeleteHost(alias string) error {
 }
 
 type HostInfo struct {
-	Name     string   `json:"name"`
-	HostName string   `json:"hostname"`
-	Port     string   `json:"port"`
-	User     string   `json:"user"`
-	Tags     []string `json:"tags"`
+	Name         string   `json:"name"`
+	HostName     string   `json:"hostname"`
+	Port         string   `json:"port"`
+	User         string   `json:"user"`
+	Tags         []string `json:"tags"`
+	Source       string   `json:"source"`   // "config" or "known_hosts"
+	IsAuto       bool     `json:"is_auto"`   // true if from known_hosts and not config
+	IsFavourite  bool     `json:"is_favourite"`
 }
 
-// ListHosts reads the standard ~/.ssh/config and returns a list of configured aliases
+// ListHosts reads the standard ~/.ssh/config and ~/.ssh/known_hosts and returns a list of configured and auto-discovered aliases
 func ListHosts() ([]HostInfo, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -155,70 +179,163 @@ func ListHosts() ([]HostInfo, error) {
 
 	configPath := filepath.Join(home, ".ssh", "config")
 	f, err := os.Open(configPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []HostInfo{}, nil
-		}
-		return nil, err
-	}
-	defer f.Close()
-
-	cfg, err := ssh_config.Decode(f)
-	if err != nil {
-		return nil, err
+	var cfg *ssh_config.Config
+	if err == nil {
+		cfg, _ = ssh_config.Decode(f)
+		f.Close()
 	}
 
 	lines, _ := readConfigLines()
 
 	var hosts []HostInfo
-	for _, host := range cfg.Hosts {
-		for _, pattern := range host.Patterns {
-			name := pattern.String()
-			if name == "*" || name == "" {
-				continue
-			}
+	seenHosts := make(map[string]bool)
 
-			hostname, _ := cfg.Get(name, "HostName")
-			if hostname == "" {
-				hostname = name
-			}
-			port, _ := cfg.Get(name, "Port")
-			if port == "" {
-				port = "22"
-			}
-			user, _ := cfg.Get(name, "User")
+	if cfg != nil {
+		for _, host := range cfg.Hosts {
+			for _, pattern := range host.Patterns {
+				name := pattern.String()
+				if name == "*" || name == "" {
+					continue
+				}
 
-			var tags []string
-			start, _ := findHostBlock(lines, name)
-			if start != -1 && strings.HasPrefix(strings.TrimSpace(lines[start]), "### ") {
-				fields := strings.Fields(strings.TrimSpace(lines[start]))
-				for _, f := range fields {
-					if strings.HasPrefix(f, "#") && f != "###" {
-						tags = append(tags, strings.TrimPrefix(f, "#"))
+				hostname, _ := cfg.Get(name, "HostName")
+				if hostname == "" {
+					hostname = name
+				}
+				port, _ := cfg.Get(name, "Port")
+				if port == "" {
+					port = "22"
+				}
+				user, _ := cfg.Get(name, "User")
+
+				var tags []string
+				start, _ := findHostBlock(lines, name)
+				if start != -1 && strings.HasPrefix(strings.TrimSpace(lines[start]), "### ") {
+					fields := strings.Fields(strings.TrimSpace(lines[start]))
+					for _, f := range fields {
+						if strings.HasPrefix(f, "#") && f != "###" {
+							tags = append(tags, strings.TrimPrefix(f, "#"))
+						}
 					}
 				}
-			}
 
-			hosts = append(hosts, HostInfo{
-				Name:     name,
-				HostName: hostname,
-				Port:     port,
-				User:     user,
-				Tags:     tags,
-			})
-			break // only one alias rep per block needed for sidebar
+				isFav := false
+				for _, t := range tags {
+					if t == "fav" {
+						isFav = true
+						break
+					}
+				}
+
+				hosts = append(hosts, HostInfo{
+					Name:        name,
+					HostName:    hostname,
+					Port:        port,
+					User:        user,
+					Tags:        tags,
+					Source:      "config",
+					IsAuto:      false,
+					IsFavourite: isFav,
+				})
+				seenHosts[name] = true
+				break // only one alias rep per block needed for sidebar
+			}
 		}
 	}
+
+	// Add auto-discovered hosts from known_hosts
+	autoHosts, _ := ListKnownHosts()
+	for _, ah := range autoHosts {
+		if !seenHosts[ah.Name] && !seenHosts[ah.HostName] {
+			hosts = append(hosts, ah)
+		}
+	}
+
 	return hosts, nil
+}
+
+// ListKnownHosts reads ~/.ssh/known_hosts and returns plain-name entries
+func ListKnownHosts() ([]HostInfo, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+
+	knownHostsPath := filepath.Join(home, ".ssh", "known_hosts")
+	data, err := os.ReadFile(knownHostsPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var hosts []HostInfo
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "|") {
+			continue
+		}
+
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+
+		hostPart := fields[0]
+		// Handle comma separated hosts/IPs
+		parts := strings.Split(hostPart, ",")
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p == "" || strings.Contains(p, "*") || strings.Contains(p, "?") {
+				continue
+			}
+			
+			// Basic heuristic: if it contains ":" it might be [host]:port
+			hostname := p
+			port := "22"
+			if strings.HasPrefix(p, "[") && strings.Contains(p, "]:") {
+				idx := strings.LastIndex(p, "]:")
+				hostname = p[1:idx]
+				port = p[idx+2:]
+			}
+
+			// We only want the first plain name we find or handle all? 
+			// Usually users want to see "root@server"
+			// The requirement says "display 'root@server' style title"
+			hosts = append(hosts, HostInfo{
+				Name:     "root@" + hostname, // Title style
+				HostName: hostname,
+				Port:     port,
+				User:     "root",
+				Source:   "known_hosts",
+				IsAuto:   true,
+			})
+			break // Just take the first name for simplicity, or should it be unique?
+		}
+	}
+	
+	// Deduplicate
+	unique := make(map[string]HostInfo)
+	for _, h := range hosts {
+		unique[h.HostName] = h
+	}
+	
+	var res []HostInfo
+	for _, h := range unique {
+		res = append(res, h)
+	}
+	
+	return res, nil
 }
 
 type TerminalUI interface {
 	Prompt(string) (string, error)
+	PromptMasked(string) (string, error)
 	Print(string)
 }
 
 // DialSSH resolves standard configs and connects via id_ed25519
-func DialSSH(alias string, term TerminalUI) (*ssh.Client, *ssh.Session, error) {
+// It always returns a new independent connection.
+func DialSSH(alias string, term TerminalUI) (*PooledClient, *ssh.Session, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, nil, err
@@ -237,6 +354,13 @@ func DialSSH(alias string, term TerminalUI) (*ssh.Client, *ssh.Session, error) {
 	user := os.Getenv("USER")
 	if user == "" {
 		user = "root"
+	}
+
+	// Handle user@host alias format (common for auto-discovered hosts)
+	if strings.Contains(alias, "@") {
+		parts := strings.SplitN(alias, "@", 2)
+		user = parts[0]
+		host = parts[1]
 	}
 
 	if cfg != nil {
@@ -267,15 +391,38 @@ func DialSSH(alias string, term TerminalUI) (*ssh.Client, *ssh.Session, error) {
 		}
 	}
 
-	keyDir, err := os.ReadFile(identityFile)
-	if err != nil {
-		return nil, nil, fmt.Errorf("unable to read private key %s: %w", identityFile, err)
+	var authMethods []ssh.AuthMethod
+	keyData, err := os.ReadFile(identityFile)
+	if err == nil {
+		signer, err := ssh.ParsePrivateKey(keyData)
+		if err == nil {
+			authMethods = append(authMethods, ssh.PublicKeys(signer))
+		}
 	}
 
-	signer, err := ssh.ParsePrivateKey(keyDir)
-	if err != nil {
-		return nil, nil, fmt.Errorf("unable to parse private key: %w", err)
-	}
+	authMethods = append(authMethods, ssh.KeyboardInteractive(func(user, instruction string, questions []string, echos []bool) ([]string, error) {
+		if len(questions) == 0 {
+			return nil, nil
+		}
+		if term == nil {
+			return nil, fmt.Errorf("interactive prompt required")
+		}
+		var answers []string
+		for i, q := range questions {
+			var ans string
+			var err error
+			if i < len(echos) && !echos[i] {
+				ans, err = term.PromptMasked(q)
+			} else {
+				ans, err = term.Prompt(q)
+			}
+			if err != nil {
+				return nil, err
+			}
+			answers = append(answers, ans)
+		}
+		return answers, nil
+	}))
 
 	knownHostsFile := filepath.Join(home, ".ssh", "known_hosts")
 	os.MkdirAll(filepath.Dir(knownHostsFile), 0700)
@@ -307,12 +454,12 @@ func DialSSH(alias string, term TerminalUI) (*ssh.Client, *ssh.Session, error) {
 	
 	defaultAlgos := []string{
 		ssh.KeyAlgoED25519,
+		ssh.KeyAlgoRSASHA256,
+		ssh.KeyAlgoRSASHA512,
+		ssh.KeyAlgoRSA,
 		ssh.KeyAlgoECDSA256,
 		ssh.KeyAlgoECDSA384,
 		ssh.KeyAlgoECDSA521,
-		"rsa-sha2-512",
-		"rsa-sha2-256",
-		ssh.KeyAlgoRSA,
 		ssh.KeyAlgoDSA,
 	}
 	
@@ -371,33 +518,24 @@ func DialSSH(alias string, term TerminalUI) (*ssh.Client, *ssh.Session, error) {
 	}
 
 	sshConfig := &ssh.ClientConfig{
-		User: user,
-		Auth: []ssh.AuthMethod{
-			ssh.PublicKeys(signer),
-			ssh.KeyboardInteractive(func(user, instruction string, questions []string, echos []bool) ([]string, error) {
-				if len(questions) == 0 {
-					return nil, nil
-				}
-				if term == nil {
-					return nil, fmt.Errorf("interactive prompt required")
-				}
-				var answers []string
-				for _, q := range questions {
-					ans, err := term.Prompt(q)
-					if err != nil {
-						return nil, err
-					}
-					answers = append(answers, strings.TrimSpace(ans))
-				}
-				return answers, nil
-			}),
-		},
+		User:              user,
+		Auth:              authMethods,
 		HostKeyAlgorithms: hostKeyAlgorithms,
 		HostKeyCallback:   hostKeyCallback,
+		Timeout:           10 * time.Second,
 	}
 
 	addr := fmt.Sprintf("%s:%s", host, port)
 	client, err := ssh.Dial("tcp", addr, sshConfig)
+	if err != nil && strings.Contains(err.Error(), "no supported methods remain") && term != nil {
+		// Try password fallback
+		pass, perr := term.PromptMasked(fmt.Sprintf("%s@%s's password: ", user, host))
+		if perr == nil {
+			sshConfig.Auth = append(sshConfig.Auth, ssh.Password(pass))
+			client, err = ssh.Dial("tcp", addr, sshConfig)
+		}
+	}
+
 	if err != nil {
 		if term != nil {
 			term.Print(fmt.Sprintf("\r\nSSH Authentication failed: %v\r\n", err))
@@ -405,12 +543,42 @@ func DialSSH(alias string, term TerminalUI) (*ssh.Client, *ssh.Session, error) {
 		return nil, nil, err
 	}
 
+	pClient := &PooledClient{Client: client, Refs: 1}
+
 	session, err := client.NewSession()
 	if err != nil {
-		client.Close()
+		pClient.Release()
 		return nil, nil, err
 	}
 
+	if err := setupSession(session); err != nil {
+		session.Close()
+		pClient.Release()
+		return nil, nil, err
+	}
+
+	go startKeepAlive(client)
+
+	return pClient, session, nil
+}
+
+// CloneSSH creates a new terminal session from an existing PooledClient.
+func CloneSSH(pClient *PooledClient) (*ssh.Session, error) {
+	pClient.AddRef()
+	session, err := pClient.Client.NewSession()
+	if err != nil {
+		pClient.Release()
+		return nil, err
+	}
+	if err := setupSession(session); err != nil {
+		session.Close()
+		pClient.Release()
+		return nil, err
+	}
+	return session, nil
+}
+
+func setupSession(session *ssh.Session) error {
 	modes := ssh.TerminalModes{
 		ssh.ECHO:          1,
 		ssh.TTY_OP_ISPEED: 14400,
@@ -418,32 +586,22 @@ func DialSSH(alias string, term TerminalUI) (*ssh.Client, *ssh.Session, error) {
 	}
 
 	if err := session.RequestPty("xterm-256color", 24, 80, modes); err != nil {
-		session.Close()
-		client.Close()
-		return nil, nil, fmt.Errorf("request for pseudo terminal failed: %s", err)
+		return fmt.Errorf("request for pseudo terminal failed: %s", err)
 	}
-
-	go startKeepAlive(client)
-
-	return client, session, nil
+	return nil
 }
 
 func startKeepAlive(client *ssh.Client) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
-	failedCount := 0
 	for range ticker.C {
 		_, _, err := client.SendRequest("keepalive@openssh.com", true, nil)
 		if err != nil {
-			failedCount++
-			if failedCount >= 3 {
-				log.Printf("SSH keep-alive failed %d times for %s, closing connection", failedCount, client.RemoteAddr())
-				client.Close()
-				return
-			}
-		} else {
-			failedCount = 0
+			// If keep-alive fails once, we assume it's dead or dying.
+			// The sessions will eventually get read errors and call Release.
+			client.Close()
+			return
 		}
 	}
 }

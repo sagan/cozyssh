@@ -6,6 +6,7 @@ import (
 	"flag"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -29,7 +30,23 @@ var (
 
 func main() {
 	configDir := flag.String("config", "", "Custom configuration directory (defaults to ~/.config/cozyssh)")
+	allowInsecure := flag.Bool("allow-insecure-http", false, "Lift the security restriction for non-local HTTP environments")
+	resetPwd := flag.Bool("do-reset-password", false, "Reset the app password to a random one and exit")
 	flag.Parse()
+
+	if *resetPwd {
+		cfg, err := config.LoadConfig(*configDir)
+		if err != nil {
+			log.Fatalf("Failed to load config: %v", err)
+		}
+		newPwd, err := cfg.ResetAppPassword()
+		if err != nil {
+			log.Fatalf("Failed to reset password: %v", err)
+		}
+		log.Printf("App password has been reset to a new random one.")
+		log.Printf("New app password: %s", newPwd)
+		os.Exit(0)
+	}
 
 	// 1. Load config and ensure App Password is created
 	cfg, err := config.LoadConfig(*configDir)
@@ -49,16 +66,31 @@ func main() {
 
 	mux.HandleFunc("/api/ws", ws.HandleTerminal)
 
-	mux.HandleFunc("/api/sysinfo", auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	securityMiddleware := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if *allowInsecure || isSecureRequest(r) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			http.Error(w, "Security Restriction: CozySSH is not allowed to run in non-local HTTP environment. Use HTTPS or localhost, or lift this restriction with --allow-insecure-http flag.", http.StatusForbidden)
+		})
+	}
+
+	mux.HandleFunc("/api/sysinfo", func(w http.ResponseWriter, r *http.Request) {
 		hostname, err := os.Hostname()
 		if err != nil {
 			hostname = "unknown"
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"hostname": hostname, "version": version})
-	})))
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"hostname":         hostname,
+			"version":          version,
+			"insecure_allowed": *allowInsecure,
+			"is_secure":        isSecureRequest(r),
+		})
+	})
 
-	mux.HandleFunc("/api/hosts", auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/api/hosts", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			hosts, err := sshmanager.ListHosts()
@@ -82,9 +114,9 @@ func main() {
 		default:
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		}
-	})))
+	}))))
 
-	mux.HandleFunc("/api/hosts/", auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/api/hosts/", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		alias := strings.TrimPrefix(r.URL.Path, "/api/hosts/")
 		switch r.Method {
 		case http.MethodPut:
@@ -107,9 +139,9 @@ func main() {
 		default:
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		}
-	})))
+	}))))
 
-	mux.HandleFunc("/api/settings/password", auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/api/settings/password", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
@@ -131,14 +163,14 @@ func main() {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"success": true}`))
-	})))
+	}))))
 
-	mux.HandleFunc("/api/tabs/pinned", auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/api/tabs/pinned", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(cfg.PinnedTabs)
-	})))
+	}))))
 
-	mux.HandleFunc("/api/tabs/pin", auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/api/tabs/pin", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
@@ -153,9 +185,9 @@ func main() {
 			s.Pinned = true
 		}
 		w.WriteHeader(http.StatusOK)
-	})))
+	}))))
 
-	mux.HandleFunc("/api/tabs/unpin", auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/api/tabs/unpin", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
@@ -173,9 +205,9 @@ func main() {
 			session.GlobalManager.ClearInactive(req.ID)
 		}
 		w.WriteHeader(http.StatusOK)
-	})))
+	}))))
 
-	mux.HandleFunc("/api/sessions/pinned", auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/api/sessions/pinned", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		type PinnedSessionResponse struct {
 			ID            string `json:"id"`
 			Host          string `json:"host"`
@@ -192,9 +224,9 @@ func main() {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(res)
-	})))
+	}))))
 
-	mux.HandleFunc("/api/sessions/attach", auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/api/sessions/attach", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
@@ -210,9 +242,9 @@ func main() {
 			s.Steal()
 		}
 		w.WriteHeader(http.StatusOK)
-	})))
+	}))))
 
-	mux.HandleFunc("/api/tabs/rename", auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/api/tabs/rename", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
@@ -227,9 +259,9 @@ func main() {
 		}
 		cfg.RenamePinnedTab(req.ID, req.Title)
 		w.WriteHeader(http.StatusOK)
-	})))
+	}))))
 
-	mux.HandleFunc("/api/buttons", auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/api/buttons", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			w.Header().Set("Content-Type", "application/json")
@@ -248,9 +280,9 @@ func main() {
 		default:
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		}
-	})))
+	}))))
 
-	mux.HandleFunc("/api/buttons/", auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/api/buttons/", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := strings.TrimPrefix(r.URL.Path, "/api/buttons/")
 		switch r.Method {
 		case http.MethodPut:
@@ -268,9 +300,9 @@ func main() {
 		default:
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		}
-	})))
+	}))))
 
-	mux.HandleFunc("/api/buttons/move", auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/api/buttons/move", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
@@ -285,7 +317,7 @@ func main() {
 		}
 		cfg.MoveButton(req.ID, req.Direction)
 		w.WriteHeader(http.StatusOK)
-	})))
+	}))))
 
 	// 4. Serve embedded frontend
 	distFS, err := fs.Sub(frontendFS, "frontend/dist")
@@ -311,4 +343,28 @@ func main() {
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func isSecureRequest(r *http.Request) bool {
+	// 1. Check if accessed via localhost
+	host, _, _ := net.SplitHostPort(r.RemoteAddr)
+	if host == "127.0.0.1" || host == "::1" || host == "localhost" {
+		return true
+	}
+
+	// 2. Check if reached via HTTPS
+	if r.TLS != nil {
+		return true
+	}
+
+	// 3. Check for reverse proxy headers
+	headers := []string{"X-Forwarded-Proto", "X-Forwarded-Ssl", "X-Url-Scheme"}
+	for _, h := range headers {
+		val := strings.ToLower(r.Header.Get(h))
+		if val == "https" || val == "on" {
+			return true
+		}
+	}
+
+	return false
 }

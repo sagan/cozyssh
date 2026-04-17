@@ -24,6 +24,7 @@ type Button struct {
 	Name    string `yaml:"name" json:"name"`
 	Type    string `yaml:"type" json:"type"`
 	Payload string `yaml:"payload" json:"payload"`
+	Group   string `yaml:"group" json:"group"`
 }
 
 type Config struct {
@@ -164,6 +165,19 @@ func (c *Config) Save() error {
 		return err
 	}
 	return os.WriteFile(c.ConfigPath, data, 0600)
+}
+
+func (c *Config) ResetAppPassword() (string, error) {
+	password := RandString(22, false)
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	c.AppPasswordHash = string(hash)
+	if err := c.Save(); err != nil {
+		return "", err
+	}
+	return password, nil
 }
 
 func (c *Config) AddPinnedTab(tab PinnedTab) error {

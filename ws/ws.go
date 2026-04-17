@@ -15,6 +15,8 @@ import (
 	"cozyssh/localpty"
 	"cozyssh/session"
 	"cozyssh/sshmanager"
+
+	"golang.org/x/crypto/ssh"
 )
 
 var globalConfig *config.Config
@@ -44,6 +46,14 @@ func (w *WsTerminal) Print(msg string) {
 }
 
 func (w *WsTerminal) Prompt(msg string) (string, error) {
+	return w.prompt(msg, false)
+}
+
+func (w *WsTerminal) PromptMasked(msg string) (string, error) {
+	return w.prompt(msg, true)
+}
+
+func (w *WsTerminal) prompt(msg string, masked bool) (string, error) {
 	w.Print(msg)
 	var buf []byte
 	for {
@@ -53,20 +63,25 @@ func (w *WsTerminal) Prompt(msg string) (string, error) {
 		}
 		if mt == websocket.BinaryMessage {
 			for _, b := range data {
-				if b == '\r' || b == '\n' {
+				switch b {
+				case '\r', '\n':
 					w.Print("\r\n")
 					return string(buf), nil
-				} else if b == 127 || b == '\b' {
+				case 127, '\b':
 					if len(buf) > 0 {
 						buf = buf[:len(buf)-1]
-						w.conn.WriteMessage(websocket.BinaryMessage, []byte("\b \b"))
+						if !masked {
+							w.conn.WriteMessage(websocket.BinaryMessage, []byte("\b \b"))
+						}
 					}
-				} else if b == 3 { // Ctrl+C
+				case 3: // Ctrl+C
 					w.Print("^C\r\n")
 					return "", fmt.Errorf("cancelled")
-				} else {
+				default:
 					buf = append(buf, b)
-					w.conn.WriteMessage(websocket.BinaryMessage, []byte{b})
+					if !masked {
+						w.conn.WriteMessage(websocket.BinaryMessage, []byte{b})
+					}
 				}
 			}
 		}
@@ -86,6 +101,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
+	cloneFrom := r.URL.Query().Get("cloneFrom")
 	host := r.URL.Query().Get("host")
 	sessionID := r.URL.Query().Get("sessionId")
 	if sessionID == "" {
@@ -104,9 +120,26 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 		} else {
 			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"state","state":"connecting to ssh server"}`))
 			term := &WsTerminal{conn: conn}
-			client, sshSession, err := sshmanager.DialSSH(host, term)
+
+			var pClient *sshmanager.PooledClient
+			var sshSession *ssh.Session
+			var err error
+
+			if cloneFrom != "" {
+				if parent := session.GlobalManager.Get(cloneFrom); parent != nil {
+					if pc, ok := parent.SSHClient.(*sshmanager.PooledClient); ok {
+						pClient = pc
+						sshSession, err = sshmanager.CloneSSH(pClient)
+					}
+				}
+			}
+
+			if pClient == nil {
+				pClient, sshSession, err = sshmanager.DialSSH(host, term)
+			}
+
 			if err != nil {
-				log.Println("SSH dial error:", err)
+				log.Println("SSH dial/clone error:", err)
 				errStr := strings.ToLower(err.Error())
 				if strings.Contains(errStr, "mismatch") || strings.Contains(errStr, "auth") {
 					conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"state","state":"disconnected (fatal)"}`))
@@ -117,20 +150,22 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			stdin, _ := sshSession.StdinPipe()
 			if err := sshSession.Shell(); err != nil {
 				log.Println("Shell err:", err)
+				pClient.Release()
 				return
 			}
 			s = session.NewSession(sessionID, host, stdout, stdin, func() error {
 				sshSession.Close()
-				return client.Close()
+				pClient.Release()
+				return nil
 			}, func(rows, cols uint16) error {
 				return sshSession.WindowChange(int(rows), int(cols))
 			})
-			
+			s.SSHClient = pClient
+
 			s.RetryFunc = func() (io.Reader, io.Writer, error) {
-				// We can push connecting state to all listeners
 				s.Broadcast(append([]byte("STATE:"), []byte(`{"type":"state","state":"disconnected to ssh server"}`)...))
-				
-				newClient, newSess, err := sshmanager.DialSSH(host, nil)
+
+				newPClient, newSess, err := sshmanager.DialSSH(host, nil)
 				if err != nil {
 					errStr := strings.ToLower(err.Error())
 					if strings.Contains(errStr, "mismatch") || strings.Contains(errStr, "auth") || strings.Contains(errStr, "interactive") {
@@ -142,27 +177,29 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 				nw, _ := newSess.StdinPipe()
 				if err := newSess.Shell(); err != nil {
 					newSess.Close()
-					newClient.Close()
+					newPClient.Release()
 					return nil, nil, err
 				}
 				s.CloseFunc = func() error {
 					newSess.Close()
-					return newClient.Close()
+					newPClient.Release()
+					return nil
 				}
 				s.ResizeFunc = func(rows, cols uint16) error {
 					return newSess.WindowChange(int(rows), int(cols))
 				}
 				sshSession.Close()
-				client.Close()
-				client = newClient
+				pClient.Release()
+				pClient = newPClient
 				sshSession = newSess
-				
+				s.SSHClient = pClient
+
 				s.Broadcast(append([]byte("STATE:"), []byte(`{"type":"state","state":"connected"}`)...))
-				
+
 				return nr, nw, nil
 			}
 		}
-		
+
 		if globalConfig != nil {
 			for _, pt := range globalConfig.PinnedTabs {
 				if pt.ID == sessionID {
@@ -171,7 +208,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		
+
 		session.GlobalManager.Add(s)
 	}
 
@@ -206,12 +243,13 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 		if connErr != nil {
 			break
 		}
-		if mt == websocket.TextMessage {
+		switch mt {
+		case websocket.TextMessage:
 			var wmsg WsMsg
 			if err := json.Unmarshal(msg, &wmsg); err == nil && wmsg.Type == "resize" {
 				s.Resize(wmsg.Rows, wmsg.Cols)
 			}
-		} else if mt == websocket.BinaryMessage {
+		case websocket.BinaryMessage:
 			s.Writer.Write(msg)
 		}
 	}

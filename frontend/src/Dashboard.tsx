@@ -27,6 +27,7 @@ interface TabData {
   title: string;
   isPinned?: boolean;
   state?: string;
+  cloneFrom?: string;
 }
 
 interface ButtonData {
@@ -34,6 +35,7 @@ interface ButtonData {
   name: string;
   type: string;
   payload: string;
+  group?: string;
 }
 
 export default function Dashboard() {
@@ -49,10 +51,25 @@ export default function Dashboard() {
   const [isCtrlActive, setIsCtrlActive] = useState(false);
 
   const [buttons, setButtons] = useState<ButtonData[]>([]);
+  const [activeGroup, setActiveGroup] = useState<string>(localStorage.getItem('cozy_active_group') || 'Default');
   const [buttonDialogOpen, setButtonDialogOpen] = useState(false);
   const [editingButton, setEditingButton] = useState<ButtonData | null>(null);
-  const [buttonFormData, setButtonFormData] = useState({ name: '', type: 'send_string', payload: '' });
+  const [buttonFormData, setButtonFormData] = useState({ name: '', type: 'send_string', payload: '', group: 'Default' });
+  const [initialBtnFormData, setInitialBtnFormData] = useState<any>(null);
   const [btnMenuAnchor, setBtnMenuAnchor] = useState<{ anchor: HTMLElement, btn: ButtonData } | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem('cozy_active_group', activeGroup);
+  }, [activeGroup]);
+
+  const groups = ['Default', ...Array.from(new Set(buttons.map(b => b.group || 'Default').filter(g => g !== 'Default')))].sort();
+  const filteredButtons = buttons.filter(b => (b.group || 'Default') === activeGroup);
+
+  useEffect(() => {
+    if (groups.length == 1) {
+      setActiveGroup(groups[0]);
+    }
+  }, [groups]);
 
   const handleSendKey = (key: string) => {
     if (activeTabId && terminalRefs.current[activeTabId]) {
@@ -91,6 +108,11 @@ export default function Dashboard() {
 
   useEffect(() => {
     const token = localStorage.getItem('cozy_token');
+    const hash = window.location.hash.substring(1);
+    if (hash) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+
     fetch('/api/sysinfo', { headers: { 'Authorization': `Bearer ${token}` } })
       .then(r => r.json())
       .then(data => {
@@ -109,7 +131,6 @@ export default function Dashboard() {
     const bc = new BroadcastChannel('cozy_tabs');
     let pinnedElsewhere = false;
 
-    // The Responder: always listen and answer based on current state (via ref)
     bc.onmessage = (e) => {
       if (e.data === 'probe_pinned') {
         const hasPinned = tabsRef.current.some(t => t.isPinned);
@@ -118,11 +139,33 @@ export default function Dashboard() {
       if (e.data === 'pinned_present') pinnedElsewhere = true;
     };
 
-    // The Initiator: run ONLY ONCE on mount
     bc.postMessage('probe_pinned');
 
     setTimeout(() => {
-      if (!pinnedElsewhere) {
+      if (hash) {
+        fetch('/api/hosts', { headers: { 'Authorization': `Bearer ${token}` } })
+          .then(r => r.json())
+          .then((hosts: any[]) => {
+            const host = hosts.find(h => h.name === hash || h.hostname === hash);
+            if (host) {
+              const newId = `${host.name}-${Date.now()}`;
+              setTabs([{ id: newId, host: host.name, title: host.name }]);
+              setActiveTabId(newId);
+            } else {
+              const initialId = `local-${Date.now()}`;
+              setTabs([{ id: initialId, host: 'local', title: 'local' }]);
+              setActiveTabId(initialId);
+              // Use a slight delay for alert to not block rendering
+              setTimeout(() => alert(`SSH server "${hash}" not found in config.`), 100);
+            }
+          })
+          .catch(e => {
+            console.error(e);
+            const initialId = `local-${Date.now()}`;
+            setTabs([{ id: initialId, host: 'local', title: 'local' }]);
+            setActiveTabId(initialId);
+          });
+      } else if (!pinnedElsewhere) {
         fetch('/api/tabs/pinned', { headers: { 'Authorization': `Bearer ${token}` } })
           .then(r => r.json())
           .then((pinned: any[]) => {
@@ -261,6 +304,15 @@ export default function Dashboard() {
     setContextMenu(null);
   };
 
+  const handleCloneSession = (id: string) => {
+    const targetTab = tabs.find(t => t.id === id);
+    if (!targetTab) return;
+    const newId = `${targetTab.host}-${Date.now()}`;
+    setTabs(prev => [...prev, { id: newId, host: targetTab.host, title: targetTab.title, cloneFrom: id }]);
+    setActiveTabId(newId);
+    setContextMenu(null);
+  };
+
   const handleContextMenu = (e: React.MouseEvent, id: string) => {
     e.preventDefault();
     setContextMenu({ mouseX: e.clientX + 2, mouseY: e.clientY - 6, targetTabId: id });
@@ -317,15 +369,35 @@ export default function Dashboard() {
       } else if (e.altKey && (e.key === 't' || e.key === 'T')) {
         e.preventDefault();
         handleSelectHost('local');
+      } else if (e.altKey && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault();
+        if (activeTabId && terminalRefs.current[activeTabId]) {
+          terminalRefs.current[activeTabId]?.focus();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeTabId, tabs]);
 
-  const handleButtonClick = (btn: ButtonData) => {
+  const handleButtonClick = async (btn: ButtonData) => {
     if (btn.type === 'send_string') {
-      handleSendKey(btn.payload);
+      const parts = btn.payload.split(/(<ctrl-[a-z]>)/gi);
+      for (const part of parts) {
+        if (!part) continue;
+        const ctrlMatch = part.match(/<ctrl-([a-z])>/i);
+        if (ctrlMatch) {
+          const char = ctrlMatch[1];
+          const ctrlChar = String.fromCharCode(char.toLowerCase().charCodeAt(0) - 96);
+          handleSendKey(ctrlChar);
+          // Wait a bit after control character
+          await new Promise(r => setTimeout(r, 50));
+        } else {
+          handleSendKey(part);
+          // Small delay to ensure echo order
+          await new Promise(r => setTimeout(r, 10));
+        }
+      }
     }
   };
 
@@ -338,6 +410,7 @@ export default function Dashboard() {
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(buttonFormData)
     });
+    setInitialBtnFormData(null);
     setButtonDialogOpen(false);
     fetch('/api/buttons', { headers: { 'Authorization': `Bearer ${token}` } })
       .then(r => r.json())
@@ -368,6 +441,14 @@ export default function Dashboard() {
     fetch('/api/buttons', { headers: { 'Authorization': `Bearer ${token}` } })
       .then(r => r.json())
       .then(data => setButtons(data || []));
+  };
+
+  const handleCloseBtnDialog = (_: any, reason: string) => {
+    const isDirty = initialBtnFormData && JSON.stringify(buttonFormData) !== JSON.stringify(initialBtnFormData);
+    if (isDirty && (reason === 'backdropClick' || reason === 'escapeKeyDown')) {
+      return;
+    }
+    setButtonDialogOpen(false);
   };
 
   return (
@@ -450,6 +531,7 @@ export default function Dashboard() {
                   ref={el => { terminalRefs.current[tab.id] = el; }}
                   host={tab.host}
                   sessionId={tab.id}
+                  cloneFrom={tab.cloneFrom}
                   isActive={activeTabId === tab.id}
                   isCtrlActive={isCtrlActive}
                   onCtrlDone={() => setIsCtrlActive(false)}
@@ -473,8 +555,27 @@ export default function Dashboard() {
           </Box>
 
           {tabs.length > 0 && (
-            <Box sx={{ borderTop: 1, borderColor: 'divider', bgcolor: '#f8f9fa', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center' }}>
+            <Box sx={{ borderTop: 1, borderColor: 'divider', bgcolor: '#f8f9fa', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+              <Box sx={{ px: 1, display: 'flex', alignItems: 'center', borderRight: 1, borderColor: 'divider', flexShrink: 0 }}>
+                <TextField
+                  select
+                  size="small"
+                  value={activeGroup}
+                  onChange={(e) => setActiveGroup(e.target.value)}
+                  slotProps={{ select: { native: true } }}
+                  sx={{
+                    minWidth: 80,
+                    '& .MuiInputBase-root': { fontSize: '0.8rem', height: 26 },
+                    '& select': { py: 0, pr: '18px !important' }
+                  }}
+                >
+                  {groups.map(g => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </TextField>
+              </Box>
               <Tabs
+                key={`tabs-${activeGroup}-${filteredButtons.length}`}
                 value={false}
                 variant="scrollable"
                 scrollButtons="auto"
@@ -482,11 +583,12 @@ export default function Dashboard() {
                 sx={{
                   flexGrow: 1,
                   minHeight: 40,
+                  minWidth: 0,
                   '& .MuiTabs-flexContainer': { gap: 1, px: 2, alignItems: 'center' },
                   '& .MuiTabs-indicator': { display: 'none' }
                 }}
               >
-                {buttons.map(btn => (
+                {filteredButtons.map(btn => (
                   <Tab
                     key={btn.id}
                     label={btn.name}
@@ -501,22 +603,27 @@ export default function Dashboard() {
                       minHeight: 28, minWidth: 'auto', p: '2px 12px',
                       textTransform: 'none', fontSize: '0.8rem', borderRadius: 1.5,
                       border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper',
-                      color: 'text.primary', margin: '6px 4px', cursor: 'pointer',
+                      color: 'text.primary', margin: '6px 0', cursor: 'pointer',
                       '&:hover': { bgcolor: 'primary.light', color: 'white' }
                     }}
                   />
                 ))}
-                <Tab
-                  icon={<AddIcon fontSize="small" />}
-                  component="div"
+              </Tabs>
+              <Box sx={{ flexShrink: 0, px: 1, borderLeft: 1, borderColor: 'divider' }}>
+                <IconButton
+                  size="small"
                   onClick={() => {
+                    const data = { name: '', type: 'send_string', payload: '', group: activeGroup };
                     setEditingButton(null);
-                    setButtonFormData({ name: '', type: 'send_string', payload: '' });
+                    setButtonFormData(data);
+                    setInitialBtnFormData(data);
                     setButtonDialogOpen(true);
                   }}
-                  sx={{ minHeight: 28, minWidth: 40, p: 0, margin: '6px 4px', cursor: 'pointer' }}
-                />
-              </Tabs>
+                  sx={{ p: 0.5 }}
+                >
+                  <AddIcon fontSize="small" />
+                </IconButton>
+              </Box>
             </Box>
           )}
 
@@ -569,6 +676,9 @@ export default function Dashboard() {
             <MenuItem onClick={() => handlePinTab(contextMenu.targetTabId)}>Pin Tab</MenuItem>
           )
         )}
+        {contextMenu && tabs.find(t => t.id === contextMenu.targetTabId)?.host !== 'local' && (
+          <MenuItem onClick={() => handleCloneSession(contextMenu.targetTabId)}>Clone Session</MenuItem>
+        )}
         <MenuItem onClick={handleRename}>Rename Tab</MenuItem>
         <MenuItem onClick={handleCloseOther}>Close Other tabs</MenuItem>
         <MenuItem onClick={handleCloseRight}>Close tabs to the right</MenuItem>
@@ -581,8 +691,15 @@ export default function Dashboard() {
       >
         <MenuItem onClick={() => {
           if (!btnMenuAnchor) return;
+          const data = {
+            name: btnMenuAnchor.btn.name,
+            type: btnMenuAnchor.btn.type,
+            payload: btnMenuAnchor.btn.payload,
+            group: btnMenuAnchor.btn.group || 'Default'
+          };
           setEditingButton(btnMenuAnchor.btn);
-          setButtonFormData({ name: btnMenuAnchor.btn.name, type: btnMenuAnchor.btn.type, payload: btnMenuAnchor.btn.payload });
+          setButtonFormData(data);
+          setInitialBtnFormData(data);
           setBtnMenuAnchor(null);
           setButtonDialogOpen(true);
         }}>Edit Button</MenuItem>
@@ -591,11 +708,12 @@ export default function Dashboard() {
         <MenuItem onClick={() => btnMenuAnchor && handleDeleteButton(btnMenuAnchor.btn.id, btnMenuAnchor.btn.name)} sx={{ color: 'error.main' }}>Delete Button</MenuItem>
       </Menu>
 
-      <Dialog open={buttonDialogOpen} onClose={() => setButtonDialogOpen(false)} fullWidth maxWidth="xs">
+      <Dialog open={buttonDialogOpen} onClose={handleCloseBtnDialog} fullWidth maxWidth="xs">
         <DialogTitle>{editingButton ? 'Edit Button' : 'Add Button'}</DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
           <TextField sx={{ mt: 1 }} fullWidth label="Button Name" size="small" value={buttonFormData.name} onChange={e => setButtonFormData({ ...buttonFormData, name: e.target.value })} />
-          <TextField fullWidth label="Command / String" size="small" multiline rows={3} value={buttonFormData.payload} onChange={e => setButtonFormData({ ...buttonFormData, payload: e.target.value })} placeholder="String to send to terminal..." />
+          <TextField fullWidth label="Button Group" size="small" value={buttonFormData.group} onChange={e => setButtonFormData({ ...buttonFormData, group: e.target.value })} placeholder="Default" />
+          <TextField fullWidth label="Command / String" size="small" multiline rows={3} value={buttonFormData.payload} onChange={e => setButtonFormData({ ...buttonFormData, payload: e.target.value })} placeholder="String to send to terminal, <ctrl-c> style syntax supported" />
           <Typography variant="caption" color="text.secondary">Type: Sending String (Implicit)</Typography>
         </DialogContent>
         <DialogActions>

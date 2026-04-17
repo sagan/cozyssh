@@ -17,11 +17,13 @@ interface TerminalProps {
   onCtrlDone?: () => void;
   onStateChange?: (state: string) => void;
   onStolen?: () => void;
+  cloneFrom?: string;
 }
 
-const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, sessionId, isActive, isCtrlActive, onCtrlDone, onStateChange, onStolen }, ref) => {
+const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, sessionId, isActive, isCtrlActive, onCtrlDone, onStateChange, onStolen, cloneFrom }, ref) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const ctrlRef = useRef(isCtrlActive);
 
@@ -55,13 +57,27 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     });
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
+    fitAddonRef.current = fitAddon;
 
     term.open(terminalRef.current);
-    fitAddon.fit();
     xtermRef.current = term;
 
+    // Use ResizeObserver for more reliable fitting
+    const resizeObserver = new ResizeObserver(() => {
+      if (isActive && terminalRef.current && terminalRef.current.offsetWidth > 0) {
+        requestAnimationFrame(() => {
+          fitAddon.fit();
+          const ws = wsRef.current;
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+          }
+        });
+      }
+    });
+    resizeObserver.observe(terminalRef.current);
+
     term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
-      if (e.altKey && (e.key === 'j' || e.key === 'k' || e.key === 'J' || e.key === 'K' || e.key === 'w' || e.key === 'W' || e.key === 't' || e.key === 'T')) {
+      if (e.altKey && (e.key === 'j' || e.key === 'k' || e.key === 'i' || e.key === 'f' || e.key === 'J' || e.key === 'K' || e.key === 'I' || e.key === 'F' || e.key === 'w' || e.key === 'W' || e.key === 't' || e.key === 'T')) {
         return false; 
       }
       return true;
@@ -69,7 +85,10 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const token = localStorage.getItem('cozy_token');
-    const wsUrl = `${protocol}//${window.location.host}/api/ws?host=${encodeURIComponent(host)}&sessionId=${encodeURIComponent(sessionId || '')}&token=${encodeURIComponent(token || '')}`;
+    let wsUrl = `${protocol}//${window.location.host}/api/ws?host=${encodeURIComponent(host)}&sessionId=${encodeURIComponent(sessionId || '')}&token=${encodeURIComponent(token || '')}`;
+    if (cloneFrom) {
+      wsUrl += `&cloneFrom=${encodeURIComponent(cloneFrom)}`;
+    }
     
     let isDisposed = false;
     let reconnectTimer: ReturnType<typeof setTimeout>;
@@ -167,20 +186,10 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
       container.addEventListener('contextmenu', handleContextMenu);
     }
 
-    const handleResize = () => {
-      if (!isActive) return;
-      fitAddon.fit();
-      const ws = wsRef.current;
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
-      }
-    };
-    window.addEventListener('resize', handleResize);
-
     return () => {
       isDisposed = true;
       clearTimeout(reconnectTimer);
-      window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
       if (container) {
         container.removeEventListener('contextmenu', handleContextMenu);
       }
@@ -191,18 +200,18 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
 
   // Execute focus hook firmly AFTER initialization hook to prevent null-ref on first mount explicitly
   useEffect(() => {
-    if (isActive && xtermRef.current) {
+    if (isActive && xtermRef.current && terminalRef.current && terminalRef.current.offsetWidth > 0) {
       setTimeout(() => {
         xtermRef.current?.focus();
         // Force fit when becoming active
-        const fitAddon = new FitAddon();
-        xtermRef.current?.loadAddon(fitAddon);
-        fitAddon.fit();
-        const ws = wsRef.current;
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'resize', cols: xtermRef.current?.cols, rows: xtermRef.current?.rows }));
+        if (fitAddonRef.current && terminalRef.current && terminalRef.current.offsetWidth > 0) {
+          fitAddonRef.current.fit();
+          const ws = wsRef.current;
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'resize', cols: xtermRef.current?.cols, rows: xtermRef.current?.rows }));
+          }
         }
-      }, 50);
+      }, 100);
     }
   }, [isActive]);
 

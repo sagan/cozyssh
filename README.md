@@ -9,12 +9,20 @@ CozySSH is a lightweight, self-hosted web-based SSH client and terminal multiple
 - **Use Host SSH Config**: It uses the host OpenSSH client config files (`~/.ssh/id_ed25519`, `~/.ssh/known_hosts`, `~/.ssh/config`) directly for ssh auth & server management.
 - **Multi-Tab Interface**: Run multiple concurrent SSH sessions and local shells in a single browser tab.
 - **Modern UI**: A sleek, concise, yet full-fledged high-contrast Light Theme, designed for readability.
+- **Full keyboard Shortcuts**: It supports a complete set of keyboard shortcuts.
+  - `Alt + T` : Open new local shell tab
+  - `Alt + J` : Switch to next tab
+  - `Alt + K` : Switch to previous tab
+  - `Alt + W` : Close current tab
+  - `Alt + I` : Focus sidebar search filter, then Use `↑ ↓` to select, `Enter` to open
+  - `Alt + F` : Focus active terminal session
 - **Mobile-Friendly**:
   - Responsive sidebar and layout.
   - **Mobile Input Toolbar**: Quick access to Esc, Tab, Arrow keys, and a stateful **Ctrl toggle** for mobile touch keyboards.
   - **Keyboard-Aware Viewport**: Automatically resizes to fit your visible mobile screen perfectly even when the on-screen keyboard is active.
 - **Terminal Button Bar**: 💻
   - **Custom Snippets**: A scrollable toolbar at the bottom of the terminal window for quick command execution.
+  - **Special Syntax**: Full support for control keys via `<ctrl-x>` syntax (e.g., `<ctrl-c>` for SIGINT), which are sent with precise timing to ensure they reach the shell correctly.
   - **Management**: Add, edit, delete, and **reorder buttons** directly from the UI context menu.
   - **Hover Tooltips**: Instant preview of the command payload.
 - **Advanced SSH Management**: 🔑
@@ -22,6 +30,7 @@ CozySSH is a lightweight, self-hosted web-based SSH client and terminal multiple
   - **Heartbeat & Keep-Alive**: Background heartbeat (`keepalive@openssh.com`) every 30 seconds ensures stable connections and prevents idle timeouts.
   - **Interactive Verification**: Full support for interactive Host Key verification and Keyboard-Interactive (Password) authentication.
   - **Smart Resize logic**: Optimized terminal resizing that preserves shell prompt integrity when switching between multiple active tabs.
+  - **Accident-Proof Forms**: All "Add / Edit" dialogs prevent accidental closure via backdrop click if any data has been modified.
 - **Terminal UX Enhancements**:
   - **Auto-copy**: Selected text is automatically copied to your clipboard.
   - **Right-click Paste**: Quickly paste clipboard contents into any active terminal session.
@@ -31,7 +40,14 @@ CozySSH is a lightweight, self-hosted web-based SSH client and terminal multiple
   - **Output Buffering**: Pinned sessions maintain a circular output buffer (approx. 50KB), ensuring you see the most recent activity immediately upon reconnection.
   - **Usage-Aware Auto-Restore**: Pinned tabs automatically resume when you re-open CozySSH, but only in the primary window to prevent duplicate UI clutter.
 - **Editable SSH Config**: Directly manage your `~/.ssh/config` from the web UI. CozySSH uses surgical text replacement to ensure your custom comments and formatting remain intact.
-- **Secure**: Stateless HMAC-SHA256 token-based authentication with a simple App Password.
+  - It also automatically displays plain text (non hashed name) servers in `~/.ssh/known_hosts`. It's recommended to disable known_hosts hash name feature by adding the below two lines to `~/.ssh/config`:
+    ```
+    Host *
+      HashKnownHosts no
+    ```
+- **Secure by Default**: 
+  - Stateless HMAC-SHA256 token-based authentication with a simple App Password.
+  - **Non-Local Restriction**: Automatically blocks access from non-local, non-HTTPS environments to prevent credential sniffing.
 - **Self-Hosted**: Distributed as a single Go binary that embeds the entire React frontend.
 
 ## Getting Started
@@ -49,7 +65,21 @@ Run the CozySSH binary:
 
 On first run, CozySSH will generate a default configuration and an **App Password**. Check the terminal output to secure your credentials.
 
-It listens to `127.0.0.1:8022` by default. In test environment you can visit http://localhost:8022 directly in your local browser. In production environment it's mandatory to deploy CozySSH behind a TLS enabled a reverse proxy (like [Traefik](https://github.com/traefik/traefik) or Nginx) and / or CDN provider (like Cloudflare).
+CozySSH listens on `127.0.0.1:8022` by default.
+
+### Security Note
+
+By default, CozySSH **restricts access** to the following environments:
+- **Localhost**: Access via `127.0.0.1`, `::1`, or `localhost`.
+- **HTTPS**: Access behind a reverse proxy or CDN that provides TLS (identified via headers like `X-Forwarded-Proto`).
+
+If you attempt to access CozySSH over a non-local HTTP connection, you will see a security warning. To lift this restriction (highly discouraged in production), start with:
+
+```bash
+./cozyssh --allow-insecure-http
+```
+
+In production environment it's mandatory to deploy CozySSH behind a TLS enabled a reverse proxy (like [Traefik](https://github.com/traefik/traefik) or Nginx) and / or CDN provider (like Cloudflare).
 
 Example Traefik config (toml):
 

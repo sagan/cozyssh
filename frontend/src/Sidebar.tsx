@@ -1,11 +1,12 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { List, ListItem, ListItemButton, ListItemIcon, ListItemText, Drawer, Toolbar, Typography, Box, CircularProgress, IconButton, Menu, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button, useMediaQuery, useTheme, Tabs, Tab, Chip } from '@mui/material';
+import { List, ListItem, ListItemButton, ListItemIcon, ListItemText, Drawer, Toolbar, Typography, Box, CircularProgress, IconButton, Menu, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button, useMediaQuery, useTheme, Tabs, Tab, Chip, Divider } from '@mui/material';
 import ComputerIcon from '@mui/icons-material/Computer';
 import DnsIcon from '@mui/icons-material/Dns';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import AddIcon from '@mui/icons-material/Add';
+import StarIcon from '@mui/icons-material/Star';
 
-const drawerWidth = 260; // Expanded slightly for filter components naturally
+const drawerWidth = 260;
 
 interface Host {
   name: string;
@@ -14,6 +15,9 @@ interface Host {
   user: string;
   identity_file?: string;
   tags?: string[];
+  source?: string;
+  is_auto?: boolean;
+  is_favourite?: boolean;
 }
 
 export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, onSelect, onLogout, activeTabs, onAttach }: { sysHostname: string, appVersion: string, mobileOpen: boolean, onClose: () => void, onSelect: (host: string) => void, onLogout?: () => void, activeTabs: string[], onAttach: (id: string, host: string, title: string) => void }) {
@@ -45,11 +49,14 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   const [tagsExpanded, setTagsExpanded] = useState(false);
   const [showTagsToggle, setShowTagsToggle] = useState(false);
   const tagsContainerRef = useRef<HTMLDivElement>(null);
+  const filterRef = useRef<HTMLInputElement>(null);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
 
   // Host CRUD State
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAlias, setEditingAlias] = useState<string | null>(null);
   const [formData, setFormData] = useState({ alias: '', hostname: '', user: '', port: '', identity_file: '', tags: '' });
+  const [initialHostFormData, setInitialHostFormData] = useState<any>(null);
 
   // Context Menu State
   const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number; target: Host } | null>(null);
@@ -101,22 +108,27 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   const closeMenu = () => setContextMenu(null);
 
   const handleAddOpen = () => {
+    const data = { alias: '', hostname: '', user: 'root', port: '22', identity_file: '', tags: '' };
     setEditingAlias(null);
-    setFormData({ alias: '', hostname: '', user: 'root', port: '22', identity_file: '', tags: '' });
+    setFormData(data);
+    setInitialHostFormData(data);
     setDialogOpen(true);
   };
 
   const handleEditOpen = () => {
     if (!contextMenu) return;
-    setEditingAlias(contextMenu.target.name);
-    setFormData({
-      alias: contextMenu.target.name,
+    const isAuto = contextMenu.target.source === 'known_hosts';
+    const data = {
+      alias: isAuto ? contextMenu.target.hostname : contextMenu.target.name,
       hostname: contextMenu.target.hostname,
       user: contextMenu.target.user || 'root',
       port: contextMenu.target.port || '22',
       identity_file: contextMenu.target.identity_file || '',
       tags: contextMenu.target.tags ? contextMenu.target.tags.join(' ') : ''
-    });
+    };
+    setEditingAlias(isAuto ? null : contextMenu.target.name);
+    setFormData(data);
+    setInitialHostFormData(data);
     closeMenu();
     setDialogOpen(true);
   };
@@ -134,13 +146,48 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
     closeMenu();
   };
 
+  const handleToggleFavourite = async () => {
+    if (!contextMenu) return;
+    const host = contextMenu.target;
+    const token = localStorage.getItem('cozy_token');
+
+    let newTags = host.tags ? [...host.tags] : [];
+    if (host.is_favourite) {
+      newTags = newTags.filter(t => t !== 'fav');
+    } else {
+      if (!newTags.includes('fav')) {
+        newTags.push('fav');
+      }
+    }
+
+    const payload = {
+      alias: host.source === 'known_hosts' ? host.hostname : host.name,
+      hostname: host.hostname,
+      user: host.user || 'root',
+      port: host.port || '22',
+      identity_file: host.identity_file || '',
+      tags: newTags
+    };
+
+    const url = host.source === 'config' ? `/api/hosts/${host.name}` : `/api/hosts`;
+    const method = host.source === 'config' ? 'PUT' : 'POST';
+
+    await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify(payload)
+    });
+
+    closeMenu();
+    fetchHosts();
+  };
+
   const handleSaveHost = async () => {
     if (!formData.alias || !formData.hostname) return;
     const token = localStorage.getItem('cozy_token');
     const url = editingAlias ? `/api/hosts/${editingAlias}` : `/api/hosts`;
     const method = editingAlias ? 'PUT' : 'POST';
 
-    // Convert comma or space separated string to array safely
     const parsedTags = formData.tags.replace(/,/g, ' ').split(/\s+/).filter(t => t.trim() !== '');
 
     const payload = {
@@ -154,17 +201,25 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
       body: JSON.stringify(payload)
     });
 
+    setInitialHostFormData(null); // Reset dirty state on successful save
     setDialogOpen(false);
     fetchHosts();
   };
 
+  const handleCloseHostDialog = (_: any, reason: string) => {
+    const isDirty = initialHostFormData && JSON.stringify(formData) !== JSON.stringify(initialHostFormData);
+    if (isDirty && (reason === 'backdropClick' || reason === 'escapeKeyDown')) {
+      return;
+    }
+    setDialogOpen(false);
+  };
+
   const filteredHosts = useMemo(() => {
-    const tokens = filterStr.toLowerCase().split(/\s+/);
+    const tokens = filterStr.toLowerCase().split(/\s+/).filter(t => t.trim() !== '');
     const requiredTags = tokens.filter(t => t.startsWith('#')).map(t => t.substring(1));
     const searchWords = tokens.filter(t => !t.startsWith('#')).map(t => t.toLowerCase());
 
-    return hosts.filter(h => {
-      // Check tags
+    const filtered = hosts.filter(h => {
       if (requiredTags.length > 0) {
         if (!h.tags) return false;
         const lowerTags = h.tags.map(t => t.toLowerCase());
@@ -173,15 +228,73 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
         }
       }
 
-      // Check normal strings
       if (searchWords.length > 0) {
-        const matches = searchWords.every(word => h.name.toLowerCase().includes(word) || h.hostname.toLowerCase().includes(word));
-        if (!matches) return false;
+        return searchWords.every(word =>
+          h.name.toLowerCase().includes(word) ||
+          h.hostname.toLowerCase().includes(word) ||
+          (h.user && h.user.toLowerCase().includes(word))
+        );
       }
 
       return true;
     });
+
+    const favs = filtered.filter(h => h.is_favourite);
+    const normals = filtered.filter(h => !h.is_favourite && !h.is_auto);
+    const autos = filtered.filter(h => !h.is_favourite && h.is_auto);
+
+    const sorter = (a: Host, b: Host) => {
+      if (a.hostname === b.hostname) {
+        return (a.user || '').localeCompare(b.user || '');
+      }
+      return a.hostname.localeCompare(b.hostname);
+    };
+
+    return {
+      favourite: favs.sort(sorter),
+      normal: normals.sort(sorter),
+      auto: autos.sort(sorter)
+    };
   }, [hosts, filterStr]);
+
+  const flatFilteredHosts = useMemo(() => {
+    return [...filteredHosts.favourite, ...filteredHosts.normal, ...filteredHosts.auto];
+  }, [filteredHosts]);
+
+  useEffect(() => {
+    if (filterStr.trim() !== '' && flatFilteredHosts.length > 0) {
+      setSelectedIndex(0);
+    } else {
+      setSelectedIndex(-1);
+    }
+  }, [filterStr, flatFilteredHosts]);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && (e.key === 'i' || e.key === 'I')) {
+        e.preventDefault();
+        filterRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
+
+  const handleFilterKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex(prev => Math.min(prev + 1, flatFilteredHosts.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex(prev => Math.max(prev - 1, 0));
+    } else if (e.key === 'Enter') {
+      if (selectedIndex >= 0 && selectedIndex < flatFilteredHosts.length) {
+        onSelect(flatFilteredHosts[selectedIndex].name);
+        setFilterStr('');
+        filterRef.current?.blur();
+      }
+    }
+  };
 
   const uniqueTags = useMemo(() => {
     const set = new Set<string>();
@@ -192,7 +305,6 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   }, [hosts]);
 
   useEffect(() => {
-    // Slight timeout gives the DOM time to render the chips and evaluate scrollHeight cleanly
     setTimeout(() => {
       if (tagsContainerRef.current) {
         setShowTagsToggle(tagsContainerRef.current.scrollHeight > 60);
@@ -229,11 +341,13 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
       <Box sx={{ px: 2, pb: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <TextField
+            inputRef={filterRef}
             size="small"
             type="search"
             placeholder="Filter hosts or #tag..."
             value={filterStr}
             onChange={(e) => setFilterStr(e.target.value)}
+            onKeyDown={handleFilterKeyDown}
             sx={{ flexGrow: 1 }}
           />
           <IconButton size="small" onClick={handleAddOpen} sx={{ bgcolor: 'action.hover', border: '1px solid #ccc' }}>
@@ -267,6 +381,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
                       } else {
                         setFilterStr(`#${tag} `);
                       }
+                      filterRef.current?.focus();
                     }}
                     sx={{
                       borderRadius: '6px',
@@ -301,32 +416,27 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
               <ListItemText primary="Local Shell" />
             </ListItemButton>
           </ListItem>
-          {filteredHosts.map((host, idx) => (
-            <ListItem key={idx} disablePadding onContextMenu={(e) => handleContextMenu(e, host)}>
-              <ListItemButton onClick={() => onSelect(host.name)}>
-                <ListItemIcon sx={{ minWidth: 40 }}><DnsIcon fontSize="small" /></ListItemIcon>
-                <ListItemText 
-                  primary={
-                    <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 0.5 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 500, lineHeight: 1.2, wordBreak: 'break-all' }}>{host.name}</Typography>
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 0.25, mt: 0.2 }}>
-                        {host.tags && host.tags.map(tag => (
-                          <Typography key={tag} variant="caption" sx={{ color: 'primary.main', fontSize: '0.65rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                            #{tag}
-                          </Typography>
-                        ))}
-                      </Box>
-                    </Box>
-                  } 
-                  secondary={
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.2 }}>
-                      {`${host.user || 'root'}@${host.hostname}`}
-                    </Typography>
-                  } 
-                />
-              </ListItemButton>
-            </ListItem>
-          ))}
+
+          {(filteredHosts.favourite.length > 0 || filteredHosts.normal.length > 0 || filteredHosts.auto.length > 0) && <Divider sx={{ my: 1 }} />}
+
+          {filteredHosts.favourite.map((host, idx) => {
+            const absIdx = idx;
+            return <HostListItem key={`fav-${idx}`} host={host} onSelect={onSelect} onContextMenu={handleContextMenu} isSelected={selectedIndex === absIdx} />;
+          })}
+
+          {filteredHosts.favourite.length > 0 && (filteredHosts.normal.length > 0 || filteredHosts.auto.length > 0) && <Divider sx={{ my: 1 }} />}
+
+          {filteredHosts.normal.map((host, idx) => {
+            const absIdx = filteredHosts.favourite.length + idx;
+            return <HostListItem key={`normal-${idx}`} host={host} onSelect={onSelect} onContextMenu={handleContextMenu} isSelected={selectedIndex === absIdx} />;
+          })}
+
+          {filteredHosts.normal.length > 0 && filteredHosts.auto.length > 0 && <Divider sx={{ my: 1 }} />}
+
+          {filteredHosts.auto.map((host, idx) => {
+            const absIdx = filteredHosts.favourite.length + filteredHosts.normal.length + idx;
+            return <HostListItem key={`auto-${idx}`} host={host} onSelect={onSelect} onContextMenu={handleContextMenu} isSelected={selectedIndex === absIdx} />;
+          })}
         </List>
       </Box>
 
@@ -338,21 +448,39 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
         anchorPosition={contextMenu ? { top: contextMenu.mouseY, left: contextMenu.mouseX } : undefined}
       >
         <MenuItem onClick={handleEditOpen}>Edit {contextMenu?.target.name}</MenuItem>
-        <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>Delete File Target</MenuItem>
+        {contextMenu?.target.source !== 'known_hosts' && (
+          <MenuItem onClick={() => {
+            if (!contextMenu) return;
+            const url = `${window.location.origin}/#${contextMenu.target.name}`;
+            navigator.clipboard.writeText(url);
+            closeMenu();
+          }}>Copy URL</MenuItem>
+        )}
+        <MenuItem onClick={handleToggleFavourite}>
+          {contextMenu?.target.is_favourite ? 'Remove from favourite' : 'Add to favourite'}
+        </MenuItem>
+        <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>Delete {contextMenu?.target.source === 'config' ? 'Host' : 'Auto Host'}</MenuItem>
       </Menu>
 
       {/* Dashboard Dialog */}
       <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>CozySSH {appVersion} Dashboard</DialogTitle>
+        <DialogTitle>Dashboard</DialogTitle>
         <DialogContent sx={{ minHeight: 400 }}>
           <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-            <Tabs value={dialogTab} onChange={(_, newVal) => setDialogTab(newVal)}>
+            <Tabs
+              value={dialogTab}
+              onChange={(_, newVal) => setDialogTab(newVal)}
+              variant="scrollable"
+              scrollButtons="auto"
+              allowScrollButtonsMobile
+            >
               <Tab label="Sessions" />
               <Tab label="Settings" />
               <Tab label="Shortcuts" />
+              <Tab label="About" />
             </Tabs>
           </Box>
-          <Box sx={{ mt: 2, minWidth: 350, minHeight: 200 }}>
+          <Box sx={{ mt: 2, minWidth: 0, minHeight: 200, overflowX: 'hidden' }}>
             {dialogTab === 0 && (
               <List dense sx={{ border: '1px solid #ddd', borderRadius: 1, maxHeight: 250, overflow: 'auto' }}>
                 {pinnedSessions.map(ps => {
@@ -385,9 +513,25 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
                   <b>Alt + T</b> : Open new local shell tab<br />
                   <b>Alt + J</b> : Switch to next tab<br />
                   <b>Alt + K</b> : Switch to previous tab<br />
-                  <b>Alt + W</b> : Close current tab
+                  <b>Alt + W</b> : Close current tab<br />
+                  <b>Alt + I</b> : Focus sidebar search filter, then Use ↑ ↓ to select, Enter to open<br />
+                  <b>Alt + F</b> : Focus active terminal session
                 </Typography>
               </>
+            )}
+
+            {dialogTab === 3 && (
+              <Box sx={{ textAlign: 'center', mt: 4 }}>
+                <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold' }}>CozySSH</Typography>
+                <Typography variant="body1" color="text.secondary" gutterBottom>
+                  Version: <b>{appVersion}</b>
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 3 }}>
+                  <a href="https://github.com/sagan/cozyssh" target="_blank" rel="noopener noreferrer" style={{ color: theme.palette.primary.main, textDecoration: 'none' }}>
+                    GitHub Repository
+                  </a>
+                </Typography>
+              </Box>
             )}
           </Box>
         </DialogContent>
@@ -397,7 +541,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
       </Dialog>
 
       {/* Host CRUD Dialog */}
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={dialogOpen} onClose={handleCloseHostDialog} maxWidth="sm" fullWidth>
         <DialogTitle>{editingAlias ? `Edit Host: ${editingAlias}` : 'Add New Server'}</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -415,5 +559,59 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
         </DialogActions>
       </Dialog>
     </Drawer>
+  );
+}
+
+function HostListItem({ host, onSelect, onContextMenu, isSelected }: { host: Host, onSelect: (name: string) => void, onContextMenu: (e: React.MouseEvent, host: Host) => void, isSelected?: boolean }) {
+  const isFavourite = host.is_favourite;
+  return (
+    <ListItem
+      disablePadding
+      onContextMenu={(e) => onContextMenu(e, host)}
+      sx={{
+        bgcolor: isSelected ? 'action.hover' : (isFavourite ? 'action.selected' : 'transparent'),
+        '&:hover': {
+          bgcolor: isSelected ? 'action.hover' : (isFavourite ? 'action.focus' : 'action.hover'),
+        },
+        mb: 0.2,
+        outline: isSelected ? '1px solid' : 'none',
+        outlineColor: 'primary.main',
+        outlineOffset: '-1px',
+        borderRadius: 1
+      }}
+    >
+      <ListItemButton onClick={() => onSelect(host.name)} sx={{ py: 0.5 }}>
+        <ListItemIcon sx={{ minWidth: 32 }}>
+          {isFavourite ? (
+            <StarIcon fontSize="small" sx={{ color: 'primary.main', filter: 'drop-shadow(0 0 2px rgba(25, 118, 210, 0.3))' }} />
+          ) : (
+            <DnsIcon fontSize="small" color="action" />
+          )}
+        </ListItemIcon>
+        <ListItemText
+          primary={
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 0.5 }}>
+              <Typography variant="body2" sx={{ fontWeight: isFavourite ? 700 : 500, lineHeight: 1.2, wordBreak: 'break-all', color: isFavourite ? 'primary.main' : 'text.primary' }}>
+                {host.name}
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 0.25 }}>
+                {host.tags && host.tags.filter(t => t !== 'fav').map(tag => (
+                  <Typography key={tag} variant="caption" sx={{ color: 'primary.main', fontSize: '0.6rem', fontWeight: 600, opacity: 0.8 }}>
+                    #{tag}
+                  </Typography>
+                ))}
+              </Box>
+            </Box>
+          }
+          secondary={
+            (!host.is_auto || host.name !== `${host.user || 'root'}@${host.hostname}`) && (
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.7rem' }}>
+                {`${host.user || 'root'}@${host.hostname}`}
+              </Typography>
+            )
+          }
+        />
+      </ListItemButton>
+    </ListItem>
   );
 }
