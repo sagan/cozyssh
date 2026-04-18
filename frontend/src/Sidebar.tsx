@@ -14,7 +14,9 @@ interface Host {
   port: string;
   user: string;
   identity_file?: string;
+  proxy_jump?: string;
   tags?: string[];
+  comment?: string;
   source?: string;
   is_auto?: boolean;
   is_favourite?: boolean;
@@ -55,11 +57,12 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   // Host CRUD State
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAlias, setEditingAlias] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ alias: '', hostname: '', user: '', port: '', identity_file: '', tags: '' });
+  const [formData, setFormData] = useState({ alias: '', hostname: '', user: '', port: '', identity_file: '', proxy_jump: '', tags: '', comment: '' });
   const [initialHostFormData, setInitialHostFormData] = useState<any>(null);
 
   // Context Menu State
   const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number; target: Host } | null>(null);
+  const [tagContextMenu, setTagContextMenu] = useState<{ mouseX: number; mouseY: number; tag: string } | null>(null);
 
   const fetchHosts = () => {
     const token = localStorage.getItem('cozy_token');
@@ -106,9 +109,24 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   };
 
   const closeMenu = () => setContextMenu(null);
+  const closeTagMenu = () => setTagContextMenu(null);
+
+  const handleTagContextMenu = (e: React.MouseEvent, tag: string) => {
+    e.preventDefault();
+    setTagContextMenu({ mouseX: e.clientX - 2, mouseY: e.clientY - 4, tag });
+  };
+
+  const handleOpenAllServers = () => {
+    if (!tagContextMenu) return;
+    const tag = tagContextMenu.tag;
+    setFilterStr(`#${tag} `);
+    const targets = hosts.filter(h => h.tags && h.tags.includes(tag));
+    targets.forEach(h => onSelect(h.name));
+    setTagContextMenu(null);
+  };
 
   const handleAddOpen = () => {
-    const data = { alias: '', hostname: '', user: 'root', port: '22', identity_file: '', tags: '' };
+    const data = { alias: '', hostname: '', user: 'root', port: '22', identity_file: '', proxy_jump: '', tags: '', comment: '' };
     setEditingAlias(null);
     setFormData(data);
     setInitialHostFormData(data);
@@ -124,7 +142,9 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
       user: contextMenu.target.user || 'root',
       port: contextMenu.target.port || '22',
       identity_file: contextMenu.target.identity_file || '',
-      tags: contextMenu.target.tags ? contextMenu.target.tags.join(' ') : ''
+      proxy_jump: contextMenu.target.proxy_jump || '',
+      tags: contextMenu.target.tags ? contextMenu.target.tags.join(' ') : '',
+      comment: contextMenu.target.comment || ''
     };
     setEditingAlias(isAuto ? null : contextMenu.target.name);
     setFormData(data);
@@ -166,6 +186,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
       user: host.user || 'root',
       port: host.port || '22',
       identity_file: host.identity_file || '',
+      proxy_jump: host.proxy_jump || '',
       tags: newTags
     };
 
@@ -383,6 +404,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
                       }
                       filterRef.current?.focus();
                     }}
+                    onContextMenu={(e) => handleTagContextMenu(e, tag)}
                     sx={{
                       borderRadius: '6px',
                       fontWeight: isActive ? 600 : 400,
@@ -462,6 +484,15 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
         <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>Delete {contextMenu?.target.source === 'config' ? 'Host' : 'Auto Host'}</MenuItem>
       </Menu>
 
+      <Menu
+        open={tagContextMenu !== null}
+        onClose={closeTagMenu}
+        anchorReference="anchorPosition"
+        anchorPosition={tagContextMenu ? { top: tagContextMenu.mouseY, left: tagContextMenu.mouseX } : undefined}
+      >
+        <MenuItem onClick={handleOpenAllServers}>Open All ({tagContextMenu?.tag})</MenuItem>
+      </Menu>
+
       {/* Dashboard Dialog */}
       <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Dashboard</DialogTitle>
@@ -513,9 +544,11 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
                   <b>Alt + T</b> : Open new local shell tab<br />
                   <b>Alt + J</b> : Switch to next tab<br />
                   <b>Alt + K</b> : Switch to previous tab<br />
+                  <b>Alt + 1-9</b> : Switch to tab 1-9<br />
+                  <b>Alt + 0</b> : Switch to last tab<br />
                   <b>Alt + W</b> : Close current tab<br />
                   <b>Alt + I</b> : Focus sidebar search filter, then Use ↑ ↓ to select, Enter to open<br />
-                  <b>Alt + F</b> : Focus active terminal session
+                  <b>Alt + G</b> : Focus active terminal session
                 </Typography>
               </>
             )}
@@ -549,8 +582,10 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
             <TextField fullWidth label="HostName (IP / Domain)" size="small" value={formData.hostname} onChange={e => setFormData({ ...formData, hostname: e.target.value })} required />
             <TextField fullWidth label="User" size="small" value={formData.user} onChange={e => setFormData({ ...formData, user: e.target.value })} placeholder="default: root" />
             <TextField fullWidth label="Port" size="small" value={formData.port} onChange={e => setFormData({ ...formData, port: e.target.value })} placeholder="default: 22" />
-            <TextField fullWidth label="IdentityFile (Optional)" size="small" value={formData.identity_file} onChange={e => setFormData({ ...formData, identity_file: e.target.value })} placeholder="~/.ssh/id_ed25519" />
             <TextField fullWidth label="Tags (Optional)" size="small" value={formData.tags} onChange={e => setFormData({ ...formData, tags: e.target.value })} placeholder="e.g. production web" />
+            <TextField fullWidth label="IdentityFile (Optional)" size="small" value={formData.identity_file} onChange={e => setFormData({ ...formData, identity_file: e.target.value })} placeholder="~/.ssh/id_ed25519" />
+            <TextField fullWidth label="ProxyJump (Optional)" size="small" value={formData.proxy_jump} onChange={e => setFormData({ ...formData, proxy_jump: e.target.value })} placeholder="e.g. jump-host-alias" />
+            <TextField fullWidth label="Comment (Optional)" size="small" multiline rows={2} value={formData.comment} onChange={e => setFormData({ ...formData, comment: e.target.value })} placeholder="Host description..." />
           </Box>
         </DialogContent>
         <DialogActions>
@@ -580,7 +615,7 @@ function HostListItem({ host, onSelect, onContextMenu, isSelected }: { host: Hos
         borderRadius: 1
       }}
     >
-      <ListItemButton onClick={() => onSelect(host.name)} sx={{ py: 0.5 }}>
+      <ListItemButton title={host.comment || ""} onClick={() => onSelect(host.name)} sx={{ py: 0.5 }}>
         <ListItemIcon sx={{ minWidth: 32 }}>
           {isFavourite ? (
             <StarIcon fontSize="small" sx={{ color: 'primary.main', filter: 'drop-shadow(0 0 2px rgba(25, 118, 210, 0.3))' }} />

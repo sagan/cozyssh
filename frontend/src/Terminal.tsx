@@ -7,6 +7,12 @@ import { Box } from '@mui/material';
 export interface TerminalHandle {
   sendData: (data: string) => void;
   focus: () => void;
+  getSelection: () => string;
+  selectAll: () => void;
+  clearSelection: () => void;
+  clear: () => void;
+  reset: () => void;
+  reconnect: () => void;
 }
 
 interface TerminalProps {
@@ -17,15 +23,20 @@ interface TerminalProps {
   onCtrlDone?: () => void;
   onStateChange?: (state: string) => void;
   onStolen?: () => void;
+  onManualReconnect?: (wasStolen: boolean) => void;
+  onCwdChange?: (cwd: string) => void;
   cloneFrom?: string;
+  isTouch?: boolean;
 }
 
-const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, sessionId, isActive, isCtrlActive, onCtrlDone, onStateChange, onStolen, cloneFrom }, ref) => {
+const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, sessionId, isActive, isCtrlActive, onCtrlDone, onStateChange, onStolen, onManualReconnect, onCwdChange, cloneFrom, isTouch }, ref) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const ctrlRef = useRef(isCtrlActive);
+  const reconnectFuncRef = useRef<(() => void) | null>(null);
+  const forceReconnectRef = useRef(false);
 
   useEffect(() => {
     ctrlRef.current = isCtrlActive;
@@ -39,6 +50,25 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     },
     focus: () => {
       xtermRef.current?.focus();
+    },
+    getSelection: () => {
+      return xtermRef.current?.getSelection() || '';
+    },
+    selectAll: () => {
+      xtermRef.current?.selectAll();
+    },
+    clearSelection: () => {
+      xtermRef.current?.clearSelection();
+    },
+    clear: () => {
+      xtermRef.current?.clear();
+    },
+    reset: () => {
+      xtermRef.current?.reset();
+    },
+    reconnect: () => {
+      forceReconnectRef.current = true;
+      reconnectFuncRef.current?.();
     }
   }));
 
@@ -47,11 +77,11 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
 
     const term = new Terminal({
       cursorBlink: true,
-      theme: { 
-        background: '#ffffff', 
-        foreground: '#000000', 
+      theme: {
+        background: '#ffffff',
+        foreground: '#000000',
         cursor: '#000000',
-        selectionBackground: 'rgba(0, 0, 0, 0.2)' 
+        selectionBackground: 'rgba(0, 0, 0, 0.2)'
       },
       fontFamily: 'Consolas, "Courier New", monospace',
     });
@@ -61,6 +91,38 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
 
     term.open(terminalRef.current);
     xtermRef.current = term;
+
+    term.parser.registerOscHandler(7, (data) => {
+      try {
+        let path = '';
+        if (data.startsWith('file://')) {
+          // Handle standard file://hostname/path
+          // Look for the first '/' after file://
+          const firstSlash = data.indexOf('/', 7);
+          if (firstSlash !== -1) {
+            path = data.substring(firstSlash);
+          } else {
+            path = data.substring(7);
+          }
+        } else if (data.includes('=')) {
+          // Fallback for non-standard formats like CurrentDir=/path
+          const parts = data.split('=');
+          path = parts.slice(1).join('=');
+        } else {
+          path = data;
+        }
+
+        // Final cleaning
+        path = path.replace(/^['"]|['"]$/g, '').trim();
+
+        if (path && (path.startsWith('/') || path.includes('\\') || /^[a-zA-Z]:/.test(path))) {
+          onCwdChange?.(path);
+        }
+      } catch (e) {
+        console.error('Error parsing OSC 7:', e);
+      }
+      return true;
+    });
 
     // Use ResizeObserver for more reliable fitting
     const resizeObserver = new ResizeObserver(() => {
@@ -77,8 +139,8 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     resizeObserver.observe(terminalRef.current);
 
     term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
-      if (e.altKey && (e.key === 'j' || e.key === 'k' || e.key === 'i' || e.key === 'f' || e.key === 'J' || e.key === 'K' || e.key === 'I' || e.key === 'F' || e.key === 'w' || e.key === 'W' || e.key === 't' || e.key === 'T')) {
-        return false; 
+      if (e.altKey && (e.key === 'j' || e.key === 'k' || e.key === 'i' || e.key === 'g' || e.key === 'J' || e.key === 'K' || e.key === 'I' || e.key === 'G' || e.key === 'w' || e.key === 'W' || e.key === 't' || e.key === 'T' || (e.key >= '0' && e.key <= '9'))) {
+        return false;
       }
       return true;
     });
@@ -89,14 +151,31 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     if (cloneFrom) {
       wsUrl += `&cloneFrom=${encodeURIComponent(cloneFrom)}`;
     }
-    
+
     let isDisposed = false;
+    let isDead = false;
+    let deathType: 'fatal' | 'stolen' | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout>;
 
     const connectWS = () => {
+      if (wsRef.current) {
+        wsRef.current.onclose = null;
+        wsRef.current.close();
+      }
+      clearTimeout(reconnectTimer);
+
+      let finalUrl = wsUrl;
+      if (forceReconnectRef.current) {
+        finalUrl += '&reconnect=true';
+        forceReconnectRef.current = false;
+        xtermRef.current?.reset();
+      }
+
       if (isDisposed) return;
+      isDead = false;
+      deathType = null;
       onStateChange?.('connecting to host');
-      const ws = new WebSocket(wsUrl);
+      const ws = new WebSocket(finalUrl);
       ws.binaryType = 'arraybuffer';
       wsRef.current = ws;
 
@@ -113,11 +192,13 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
             if (msg.type === 'state') {
               if (msg.state === 'stolen' || msg.state.includes('(fatal)')) {
                 isDisposed = true;
+                isDead = true;
+                deathType = msg.state === 'stolen' ? 'stolen' : 'fatal';
                 ws.close();
                 if (msg.state === 'stolen') {
-                  term.write('\r\n\x1b[31;1m*** Session stolen (attached by another client) ***\x1b[0m\r\n');
+                  term.write('\r\n\x1b[31;1m*** Session stolen (attached by another client) *** (Press Enter to reconnect)\x1b[0m\r\n');
                 } else {
-                  term.write(`\r\n\x1b[31;1m*** ${msg.state} ***\x1b[0m\r\n`);
+                  term.write(`\r\n\x1b[31;1m*** ${msg.state} *** (Press Enter to reconnect)\x1b[0m\r\n`);
                 }
                 onStateChange?.(msg.state);
                 if (msg.state === 'stolen') onStolen?.();
@@ -142,9 +223,22 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
       };
     };
 
+    reconnectFuncRef.current = connectWS;
     connectWS();
 
     term.onData((data) => {
+      if (isDead && data === '\r') {
+        if (deathType === 'stolen') {
+          onManualReconnect?.(true);
+          return;
+        }
+        isDead = false;
+        deathType = null;
+        isDisposed = false;
+        term.write('\r\nReconnecting...\r\n');
+        connectWS();
+        return;
+      }
       const ws = wsRef.current;
       if (ws && ws.readyState === WebSocket.OPEN) {
         if (ctrlRef.current && data.length === 1) {
@@ -161,6 +255,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     });
 
     term.onSelectionChange(() => {
+      if (isTouch) return;
       const selection = term.getSelection();
       if (selection) {
         navigator.clipboard.writeText(selection).catch(err => {
@@ -170,6 +265,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     });
 
     const handleContextMenu = (e: MouseEvent) => {
+      if (isTouch) return;
       e.preventDefault();
       navigator.clipboard.readText().then(text => {
         const ws = wsRef.current;

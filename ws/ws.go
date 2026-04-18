@@ -101,11 +101,19 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
+	reconnect := r.URL.Query().Get("reconnect") == "true"
 	cloneFrom := r.URL.Query().Get("cloneFrom")
 	host := r.URL.Query().Get("host")
 	sessionID := r.URL.Query().Get("sessionId")
 	if sessionID == "" {
 		sessionID = host // Fallback to host if no unique ID provided
+	}
+
+	if reconnect {
+		if s := session.GlobalManager.Get(sessionID); s != nil {
+			s.Close()
+			session.GlobalManager.Remove(sessionID)
+		}
 	}
 
 	s := session.GlobalManager.Get(sessionID)

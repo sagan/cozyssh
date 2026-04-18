@@ -139,6 +139,7 @@ func (s *Session) run() {
 			s.mu.Unlock()
 			// If session is pinned, we might want it to auto-restart? 
 			// For now, if the process dies, the session is dead.
+			GlobalManager.Remove(s.ID)
 			break
 		}
 	}
@@ -216,6 +217,16 @@ func (m *SessionManager) Get(id string) *Session {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.sessions[id]
+}
+
+func (m *SessionManager) Remove(id string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.sessions, id)
+	if timer, ok := m.disconnectTimers[id]; ok {
+		timer.Stop()
+		delete(m.disconnectTimers, id)
+	}
 }
 
 func (m *SessionManager) Add(s *Session) {

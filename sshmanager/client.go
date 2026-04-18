@@ -3,6 +3,7 @@ package sshmanager
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -16,9 +17,10 @@ import (
 )
 
 type PooledClient struct {
-	Client *ssh.Client
-	Mu     sync.Mutex
-	Refs   int
+	Client  *ssh.Client
+	Closers []io.Closer
+	Mu      sync.Mutex
+	Refs    int
 }
 
 func (p *PooledClient) AddRef() {
@@ -32,6 +34,9 @@ func (p *PooledClient) Release() {
 	p.Refs--
 	if p.Refs <= 0 {
 		p.Client.Close()
+		for _, c := range p.Closers {
+			c.Close()
+		}
 	}
 	p.Mu.Unlock()
 }
@@ -42,7 +47,9 @@ type HostConfig struct {
 	User         string   `json:"user"`
 	Port         string   `json:"port"`
 	IdentityFile string   `json:"identity_file"`
+	ProxyJump    string   `json:"proxy_jump"`
 	Tags         []string `json:"tags"`
+	Comment      string   `json:"comment"`
 }
 
 func getSSHConfigPath() string {
@@ -85,7 +92,7 @@ func findHostBlock(lines []string, targetAlias string) (int, int) {
 	}
 
 	start := hostIdx
-	if start > 0 && strings.HasPrefix(strings.TrimSpace(lines[start-1]), "### ") {
+	for start > 0 && strings.HasPrefix(strings.TrimSpace(lines[start-1]), "### ") {
 		start = start - 1
 	}
 
@@ -107,6 +114,11 @@ func SaveHost(oldAlias string, h HostConfig) error {
 	}
 
 	var block []string
+	if h.Comment != "" {
+		for _, line := range strings.Split(h.Comment, "\n") {
+			block = append(block, fmt.Sprintf("### %s", strings.TrimSpace(line)))
+		}
+	}
 	if len(h.Tags) > 0 {
 		var tagStrs []string
 		for _, t := range h.Tags {
@@ -124,6 +136,9 @@ func SaveHost(oldAlias string, h HostConfig) error {
 	}
 	if h.IdentityFile != "" {
 		block = append(block, fmt.Sprintf("    IdentityFile %s", h.IdentityFile))
+	}
+	if h.ProxyJump != "" {
+		block = append(block, fmt.Sprintf("    ProxyJump %s", h.ProxyJump))
 	}
 	block = append(block, "")
 
@@ -160,14 +175,16 @@ func DeleteHost(alias string) error {
 }
 
 type HostInfo struct {
-	Name         string   `json:"name"`
-	HostName     string   `json:"hostname"`
-	Port         string   `json:"port"`
-	User         string   `json:"user"`
-	Tags         []string `json:"tags"`
-	Source       string   `json:"source"`   // "config" or "known_hosts"
-	IsAuto       bool     `json:"is_auto"`   // true if from known_hosts and not config
-	IsFavourite  bool     `json:"is_favourite"`
+	Name        string   `json:"name"`
+	HostName    string   `json:"hostname"`
+	Port        string   `json:"port"`
+	User        string   `json:"user"`
+	ProxyJump   string   `json:"proxy_jump"`
+	Tags        []string `json:"tags"`
+	Comment     string   `json:"comment"`
+	Source      string   `json:"source"` // "config" or "known_hosts"
+	IsAuto      bool     `json:"is_auto"` // true if from known_hosts and not config
+	IsFavourite bool     `json:"is_favourite"`
 }
 
 // ListHosts reads the standard ~/.ssh/config and ~/.ssh/known_hosts and returns a list of configured and auto-discovered aliases
@@ -207,17 +224,39 @@ func ListHosts() ([]HostInfo, error) {
 					port = "22"
 				}
 				user, _ := cfg.Get(name, "User")
+				proxyJump, _ := cfg.Get(name, "ProxyJump")
 
 				var tags []string
-				start, _ := findHostBlock(lines, name)
-				if start != -1 && strings.HasPrefix(strings.TrimSpace(lines[start]), "### ") {
-					fields := strings.Fields(strings.TrimSpace(lines[start]))
-					for _, f := range fields {
-						if strings.HasPrefix(f, "#") && f != "###" {
-							tags = append(tags, strings.TrimPrefix(f, "#"))
+				var commentParts []string
+				start, end := findHostBlock(lines, name)
+				if start != -1 {
+					for i := start; i < end; i++ {
+						line := strings.TrimSpace(lines[i])
+						if strings.HasPrefix(line, "### ") {
+							content := strings.TrimPrefix(line, "### ")
+							fields := strings.Fields(content)
+							isTagLine := true
+							if len(fields) == 0 {
+								isTagLine = false
+							}
+							for _, f := range fields {
+								if !strings.HasPrefix(f, "#") {
+									isTagLine = false
+									break
+								}
+							}
+
+							if isTagLine {
+								for _, f := range fields {
+									tags = append(tags, strings.TrimPrefix(f, "#"))
+								}
+							} else {
+								commentParts = append(commentParts, content)
+							}
 						}
 					}
 				}
+				comment := strings.Join(commentParts, " ")
 
 				isFav := false
 				for _, t := range tags {
@@ -232,7 +271,9 @@ func ListHosts() ([]HostInfo, error) {
 					HostName:    hostname,
 					Port:        port,
 					User:        user,
+					ProxyJump:   proxyJump,
 					Tags:        tags,
+					Comment:     comment,
 					Source:      "config",
 					IsAuto:      false,
 					IsFavourite: isFav,
@@ -336,6 +377,31 @@ type TerminalUI interface {
 // DialSSH resolves standard configs and connects via id_ed25519
 // It always returns a new independent connection.
 func DialSSH(alias string, term TerminalUI) (*PooledClient, *ssh.Session, error) {
+	client, closers, err := getSSHClient(alias, term)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	pClient := &PooledClient{Client: client, Refs: 1, Closers: closers}
+
+	session, err := client.NewSession()
+	if err != nil {
+		pClient.Release()
+		return nil, nil, err
+	}
+
+	if err := setupSession(session); err != nil {
+		session.Close()
+		pClient.Release()
+		return nil, nil, err
+	}
+
+	go startKeepAlive(client)
+
+	return pClient, session, nil
+}
+
+func getSSHClient(alias string, term TerminalUI) (*ssh.Client, []io.Closer, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, nil, err
@@ -375,9 +441,11 @@ func DialSSH(alias string, term TerminalUI) (*PooledClient, *ssh.Session, error)
 		}
 	}
 
+	proxyJumpAlias := ""
 	identityFile := ""
 	if cfg != nil {
 		identityFile, _ = cfg.Get(alias, "IdentityFile")
+		proxyJumpAlias, _ = cfg.Get(alias, "ProxyJump")
 	}
 
 	if identityFile == "" || identityFile == "~/.ssh/identity" {
@@ -526,13 +594,39 @@ func DialSSH(alias string, term TerminalUI) (*PooledClient, *ssh.Session, error)
 	}
 
 	addr := fmt.Sprintf("%s:%s", host, port)
-	client, err := ssh.Dial("tcp", addr, sshConfig)
+	var client *ssh.Client
+	var closers []io.Closer
+
+	dialFunc := func(config *ssh.ClientConfig) (*ssh.Client, error) {
+		if proxyJumpAlias != "" {
+			proxyClient, proxyClosers, err := getSSHClient(proxyJumpAlias, term)
+			if err != nil {
+				return nil, fmt.Errorf("failed to connect to ProxyJump %s: %w", proxyJumpAlias, err)
+			}
+			closers = append(closers, proxyClosers...)
+			closers = append(closers, proxyClient)
+
+			jumpConn, err := proxyClient.Dial("tcp", addr)
+			if err != nil {
+				return nil, err
+			}
+			
+			c, chans, reqs, err := ssh.NewClientConn(jumpConn, addr, config)
+			if err != nil {
+				return nil, err
+			}
+			return ssh.NewClient(c, chans, reqs), nil
+		}
+		return ssh.Dial("tcp", addr, config)
+	}
+
+	client, err = dialFunc(sshConfig)
 	if err != nil && strings.Contains(err.Error(), "no supported methods remain") && term != nil {
 		// Try password fallback
 		pass, perr := term.PromptMasked(fmt.Sprintf("%s@%s's password: ", user, host))
 		if perr == nil {
 			sshConfig.Auth = append(sshConfig.Auth, ssh.Password(pass))
-			client, err = ssh.Dial("tcp", addr, sshConfig)
+			client, err = dialFunc(sshConfig)
 		}
 	}
 
@@ -540,26 +634,14 @@ func DialSSH(alias string, term TerminalUI) (*PooledClient, *ssh.Session, error)
 		if term != nil {
 			term.Print(fmt.Sprintf("\r\nSSH Authentication failed: %v\r\n", err))
 		}
+		// Close any partial closers we accumulated
+		for _, c := range closers {
+			c.Close()
+		}
 		return nil, nil, err
 	}
 
-	pClient := &PooledClient{Client: client, Refs: 1}
-
-	session, err := client.NewSession()
-	if err != nil {
-		pClient.Release()
-		return nil, nil, err
-	}
-
-	if err := setupSession(session); err != nil {
-		session.Close()
-		pClient.Release()
-		return nil, nil, err
-	}
-
-	go startKeepAlive(client)
-
-	return pClient, session, nil
+	return client, closers, nil
 }
 
 // CloneSSH creates a new terminal session from an existing PooledClient.

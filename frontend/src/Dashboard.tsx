@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Box, CssBaseline, ThemeProvider, createTheme, Tabs, Tab, IconButton, Menu, MenuItem, Typography, Button, ButtonGroup, useMediaQuery, useTheme, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField } from '@mui/material';
+import { Box, CssBaseline, ThemeProvider, createTheme, Tabs, Tab, IconButton, Menu, MenuItem, Typography, Button, ButtonGroup, useMediaQuery, useTheme, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, FormControlLabel, Checkbox } from '@mui/material';
 import Sidebar from './Sidebar';
 import TerminalComponent from './Terminal';
 import type { TerminalHandle } from './Terminal';
@@ -43,6 +43,7 @@ interface ButtonData {
 export default function Dashboard() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isTouch = useMediaQuery('(pointer: coarse)');
   const defaultTabId = `local-${Date.now()}`;
   const [tabs, setTabs] = useState<TabData[]>([]);
   const [activeTabId, setActiveTabId] = useState<string>(defaultTabId);
@@ -51,6 +52,7 @@ export default function Dashboard() {
   const terminalRefs = useRef<{ [key: string]: TerminalHandle | null }>({});
   const [viewportHeight, setViewportHeight] = useState('100dvh');
   const [isCtrlActive, setIsCtrlActive] = useState(false);
+  const [shellCwds, setShellCwds] = useState<{ [key: string]: string }>({});
 
   const [buttons, setButtons] = useState<ButtonData[]>([]);
   const [activeGroup, setActiveGroup] = useState<string>(localStorage.getItem('cozy_active_group') || 'Default');
@@ -59,6 +61,10 @@ export default function Dashboard() {
   const [buttonFormData, setButtonFormData] = useState({ name: '', type: 'send_string', payload: '', group: 'Default' });
   const [initialBtnFormData, setInitialBtnFormData] = useState<any>(null);
   const [btnMenuAnchor, setBtnMenuAnchor] = useState<{ anchor: HTMLElement, btn: ButtonData } | null>(null);
+  const [buttonsLoaded, setButtonsLoaded] = useState(false);
+  const [inputDialogOpen, setInputDialogOpen] = useState(false);
+  const [inputValue, setInputValue] = useState('');
+  const [appendNewLine, setAppendNewLine] = useState(true);
 
   useEffect(() => {
     localStorage.setItem('cozy_active_group', activeGroup);
@@ -68,10 +74,17 @@ export default function Dashboard() {
   const filteredButtons = buttons.filter(b => (b.group || 'Default') === activeGroup);
 
   useEffect(() => {
-    if (groups.length == 1) {
-      setActiveGroup(groups[0]);
+    if (buttonsLoaded && !groups.includes(activeGroup)) {
+      setActiveGroup('Default');
     }
-  }, [groups]);
+  }, [groups, buttonsLoaded, activeGroup]);
+
+  const handleCloseInputDialog = () => {
+    setInputDialogOpen(false);
+    setTimeout(() => {
+      terminalRefs.current[activeTabId]?.focus();
+    }, 50);
+  };
 
   const handleSendKey = (key: string) => {
     if (activeTabId && terminalRefs.current[activeTabId]) {
@@ -127,7 +140,10 @@ export default function Dashboard() {
 
     fetch('/api/buttons', { headers: { 'Authorization': `Bearer ${token}` } })
       .then(r => r.json())
-      .then(data => setButtons(data || []))
+      .then(data => {
+        setButtons(data || []);
+        setButtonsLoaded(true);
+      })
       .catch(e => console.error(e));
 
     const bc = new BroadcastChannel('cozy_tabs');
@@ -216,7 +232,7 @@ export default function Dashboard() {
   };
 
   const handleSelectHost = (host: string) => {
-    const newId = `${host}-${Date.now()}`;
+    const newId = `${host}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     setTabs(prev => [...prev, { id: newId, host, title: host }]);
     setActiveTabId(newId);
   };
@@ -378,10 +394,18 @@ export default function Dashboard() {
       } else if (e.altKey && (e.key === 't' || e.key === 'T')) {
         e.preventDefault();
         handleSelectHost('local');
-      } else if (e.altKey && (e.key === 'f' || e.key === 'F')) {
+      } else if (e.altKey && (e.key === 'g' || e.key === 'G')) {
         e.preventDefault();
         if (activeTabId && terminalRefs.current[activeTabId]) {
           terminalRefs.current[activeTabId]?.focus();
+        }
+      } else if (e.altKey && e.key >= '0' && e.key <= '9') {
+        e.preventDefault();
+        if (e.key === '0') {
+          if (tabs.length > 0) setActiveTabId(tabs[tabs.length - 1].id);
+        } else {
+          const idx = parseInt(e.key) - 1;
+          if (idx < tabs.length) setActiveTabId(tabs[idx].id);
         }
       }
     };
@@ -407,6 +431,36 @@ export default function Dashboard() {
           await new Promise(r => setTimeout(r, 10));
         }
       }
+    } else if (btn.type === 'terminal_function') {
+      const term = terminalRefs.current[activeTabId];
+      if (!term) return;
+      if (btn.payload === 'COPY') {
+        term.selectAll();
+        const text = term.getSelection();
+        if (text) {
+          navigator.clipboard.writeText(text);
+        }
+        term.clearSelection();
+        term.focus();
+      } else if (btn.payload === 'PASTE') {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          term.sendData(text);
+        }
+        term.focus();
+      } else if (btn.payload === 'INPUT') {
+        setInputValue('');
+        setInputDialogOpen(true);
+      } else if (btn.payload === 'CLEAR') {
+        term.clear();
+        term.focus();
+      } else if (btn.payload === 'RESET') {
+        term.reset();
+        term.focus();
+      } else if (btn.payload === 'RECONNECT') {
+        term.reconnect();
+        term.focus();
+      }
     }
   };
 
@@ -423,7 +477,10 @@ export default function Dashboard() {
     setButtonDialogOpen(false);
     fetch('/api/buttons', { headers: { 'Authorization': `Bearer ${token}` } })
       .then(r => r.json())
-      .then(data => setButtons(data || []));
+      .then(data => {
+        setButtons(data || []);
+        setButtonsLoaded(true);
+      });
   };
 
   const handleDeleteButton = async (id: string, name: string) => {
@@ -436,7 +493,10 @@ export default function Dashboard() {
     setBtnMenuAnchor(null);
     fetch('/api/buttons', { headers: { 'Authorization': `Bearer ${token}` } })
       .then(r => r.json())
-      .then(data => setButtons(data || []));
+      .then(data => {
+        setButtons(data || []);
+        setButtonsLoaded(true);
+      });
   };
 
   const handleMoveButton = async (id: string, direction: number) => {
@@ -449,7 +509,10 @@ export default function Dashboard() {
     setBtnMenuAnchor(null);
     fetch('/api/buttons', { headers: { 'Authorization': `Bearer ${token}` } })
       .then(r => r.json())
-      .then(data => setButtons(data || []));
+      .then(data => {
+        setButtons(data || []);
+        setButtonsLoaded(true);
+      });
   };
 
   const handleCloseBtnDialog = (_: any, reason: string) => {
@@ -549,16 +612,28 @@ export default function Dashboard() {
                     onStateChange={(state) => {
                       setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, state } : t));
                     }}
+                    onCwdChange={(cwd) => {
+                      setShellCwds(prev => ({ ...prev, [tab.id]: cwd }));
+                    }}
                     onStolen={() => {
                       setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, isPinned: false, state: 'stolen (attached elsewhere)' } : t));
                     }}
+                    onManualReconnect={(wasStolen) => {
+                      if (wasStolen) {
+                        const newId = `${tab.host}-${Date.now()}`;
+                        setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, id: newId, isPinned: false, state: 'connecting' } : t));
+                        setActiveTabId(newId);
+                      }
+                    }}
+                    isTouch={isTouch}
                   />
                 </Box>
                 {tab.showFiles && (
                   <Box sx={{ height: '50%', minHeight: 200, borderTop: 1, borderColor: 'divider' }}>
-                    <FileBrowser 
-                      sessionId={tab.id} 
-                      isActive={activeTabId === tab.id && tab.showFiles} 
+                    <FileBrowser
+                      sessionId={tab.id}
+                      isActive={activeTabId === tab.id && tab.showFiles}
+                      shellCwd={shellCwds[tab.id]}
                       onClose={() => setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, showFiles: false } : t))}
                     />
                   </Box>
@@ -624,7 +699,7 @@ export default function Dashboard() {
                       minHeight: 28, minWidth: 'auto', p: '2px 12px',
                       textTransform: 'none', fontSize: '0.8rem', borderRadius: 1.5,
                       border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper',
-                      color: 'text.primary', margin: '6px 0', cursor: 'pointer',
+                      color: 'text.primary', margin: '6px 4px', cursor: 'pointer',
                       '&:hover': { bgcolor: 'primary.light', color: 'white' }
                     }}
                   />
@@ -648,7 +723,7 @@ export default function Dashboard() {
             </Box>
           )}
 
-          {isMobile && tabs.length > 0 && (
+          {(isMobile || isTouch) && tabs.length > 0 && (
             <Paper
               elevation={3}
               sx={{
@@ -739,12 +814,102 @@ export default function Dashboard() {
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
           <TextField sx={{ mt: 1 }} fullWidth label="Button Name" size="small" value={buttonFormData.name} onChange={e => setButtonFormData({ ...buttonFormData, name: e.target.value })} />
           <TextField fullWidth label="Button Group" size="small" value={buttonFormData.group} onChange={e => setButtonFormData({ ...buttonFormData, group: e.target.value })} placeholder="Default" />
-          <TextField fullWidth label="Command / String" size="small" multiline rows={3} value={buttonFormData.payload} onChange={e => setButtonFormData({ ...buttonFormData, payload: e.target.value })} placeholder="String to send to terminal, <ctrl-c> style syntax supported" />
-          <Typography variant="caption" color="text.secondary">Type: Sending String (Implicit)</Typography>
+          <TextField
+            select
+            fullWidth
+            label="Button Type"
+            size="small"
+            value={buttonFormData.type}
+            onChange={e => setButtonFormData({ ...buttonFormData, type: e.target.value, payload: e.target.value === 'terminal_function' ? 'COPY' : '' })}
+            slotProps={{ select: { native: true } }}
+          >
+            <option value="send_string">Send String</option>
+            <option value="terminal_function">Terminal Function</option>
+          </TextField>
+
+          {buttonFormData.type === 'send_string' ? (
+            <TextField
+              fullWidth
+              label="Command / String"
+              size="small"
+              multiline
+              rows={3}
+              value={buttonFormData.payload}
+              onChange={e => setButtonFormData({ ...buttonFormData, payload: e.target.value })}
+              placeholder="String to send to terminal, <ctrl-c> style syntax supported"
+            />
+          ) : (
+            <TextField
+              select
+              fullWidth
+              label="Function"
+              size="small"
+              value={buttonFormData.payload}
+              onChange={e => setButtonFormData({ ...buttonFormData, payload: e.target.value })}
+              slotProps={{ select: { native: true } }}
+            >
+              <option value="COPY">COPY (Buffer)</option>
+              <option value="PASTE">PASTE (Clipboard)</option>
+              <option value="INPUT">INPUT (Prompt)</option>
+              <option value="CLEAR">CLEAR (Screen)</option>
+              <option value="RESET">RESET (Terminal)</option>
+              <option value="RECONNECT">RECONNECT (Session)</option>
+            </TextField>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setButtonDialogOpen(false)}>Cancel</Button>
           <Button variant="contained" onClick={handleSaveButton} disabled={!buttonFormData.name || !buttonFormData.payload}>Save</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={inputDialogOpen} onClose={handleCloseInputDialog} fullWidth maxWidth="sm">
+        <DialogTitle>Terminal Input</DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <TextField
+            fullWidth
+            multiline
+            rows={6}
+            variant="outlined"
+            placeholder="Type input to send to terminal. Press Enter to send, Shift + Enter for new line."
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (inputValue) {
+                  const term = terminalRefs.current[activeTabId];
+                  const data = appendNewLine ? inputValue + '\n' : inputValue;
+                  if (term) {
+                    term.sendData(data);
+                  }
+                }
+                handleCloseInputDialog();
+              }
+            }}
+            autoFocus
+          />
+          <FormControlLabel
+            control={<Checkbox checked={appendNewLine} onChange={(e) => setAppendNewLine(e.target.checked)} size="small" />}
+            label={<Typography variant="body2">Append new line (\n)</Typography>}
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseInputDialog}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              const term = terminalRefs.current[activeTabId];
+              const data = appendNewLine ? inputValue + '\n' : inputValue;
+              if (term && inputValue) {
+                term.sendData(data);
+              }
+              handleCloseInputDialog();
+            }}
+          >
+            Send
+          </Button>
         </DialogActions>
       </Dialog>
     </ThemeProvider>

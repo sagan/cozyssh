@@ -133,9 +133,120 @@ func HandleFS(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		handleUpload(w, r, path, isLocal, sftpClient)
+	case "rename":
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		handleRename(w, r, path, isLocal, sftpClient)
+	case "delete":
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		handleDelete(w, path, isLocal, sftpClient)
+	case "mkdir":
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		handleMkdir(w, r, path, isLocal, sftpClient)
 	default:
 		http.Error(w, "Not found", http.StatusNotFound)
 	}
+}
+
+func handleRename(w http.ResponseWriter, r *http.Request, oldPath string, isLocal bool, sftpClient *sftp.Client) {
+	var req struct {
+		NewPath string `json:"newPath"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+	if isLocal {
+		if err := os.Rename(oldPath, req.NewPath); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		if err := sftpClient.Rename(oldPath, req.NewPath); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func handleDelete(w http.ResponseWriter, path string, isLocal bool, sftpClient *sftp.Client) {
+	if isLocal {
+		if err := os.RemoveAll(path); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		if err := sftpRemoveAll(sftpClient, path); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func sftpRemoveAll(c *sftp.Client, path string) error {
+	info, err := c.Stat(path)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return c.Remove(path)
+	}
+	entries, err := c.ReadDir(path)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		sub := path
+		if !strings.HasSuffix(sub, "/") {
+			sub += "/"
+		}
+		sub += e.Name()
+		if err := sftpRemoveAll(c, sub); err != nil {
+			return err
+		}
+	}
+	return c.RemoveDirectory(path)
+}
+
+func handleMkdir(w http.ResponseWriter, r *http.Request, parentPath string, isLocal bool, sftpClient *sftp.Client) {
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+	newPath := filepath.Join(parentPath, req.Name)
+	if !isLocal {
+		newPath = parentPath
+		if !strings.HasSuffix(newPath, "/") {
+			newPath += "/"
+		}
+		newPath += req.Name
+	}
+
+	if isLocal {
+		if err := os.MkdirAll(newPath, 0755); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		if err := sftpClient.Mkdir(newPath); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func handleList(w http.ResponseWriter, path string, isLocal bool, sftpClient *sftp.Client) {
