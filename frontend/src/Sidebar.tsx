@@ -22,7 +22,7 @@ interface Host {
   is_favourite?: boolean;
 }
 
-export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, onSelect, onLogout, activeTabs, onAttach }: { sysHostname: string, appVersion: string, mobileOpen: boolean, onClose: () => void, onSelect: (host: string) => void, onLogout?: () => void, activeTabs: string[], onAttach: (id: string, host: string, title: string) => void }) {
+export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, onSelect, onSelectTagAsSplit, onLogout, activeTabs, onAttach }: { sysHostname: string, appVersion: string, mobileOpen: boolean, onClose: () => void, onSelect: (host: string) => void, onSelectTagAsSplit?: (tag: string, hosts: string[]) => void, onLogout?: () => void, activeTabs: string[], onAttach: (id: string, host: string, title: string) => void }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -122,6 +122,35 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
     setFilterStr(`#${tag} `);
     const targets = hosts.filter(h => h.tags && h.tags.includes(tag));
     targets.forEach(h => onSelect(h.name));
+    setTagContextMenu(null);
+  };
+
+  const handleOpenSplitServers = () => {
+    if (!tagContextMenu || !onSelectTagAsSplit) return;
+    const tag = tagContextMenu.tag;
+    const filtered = hosts.filter(h => h.tags && h.tags.includes(tag));
+    
+    const nameSorter = (a: any, b: any) => a.name.localeCompare(b.name);
+    const hostNameSorter = (a: any, b: any) => {
+      if (a.hostname === b.hostname) return a.name.localeCompare(b.name);
+      return a.hostname.localeCompare(b.hostname);
+    };
+
+    const favs = filtered.filter(h => h.is_favourite).sort(nameSorter);
+    const normals = filtered.filter(h => !h.is_favourite && !h.is_auto).sort(nameSorter);
+    const autos = filtered.filter(h => !h.is_favourite && h.is_auto).sort(hostNameSorter);
+    
+    const targets = [...favs, ...normals, ...autos].slice(0, 4);
+    if (targets.length > 0) {
+      onSelectTagAsSplit(tag, targets.map(h => h.name));
+    }
+    setTagContextMenu(null);
+  };
+
+  const handleCopyTagUrl = () => {
+    if (!tagContextMenu) return;
+    const url = `${window.location.origin}/##${tagContextMenu.tag}`;
+    navigator.clipboard.writeText(url);
     setTagContextMenu(null);
   };
 
@@ -264,17 +293,18 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
     const normals = filtered.filter(h => !h.is_favourite && !h.is_auto);
     const autos = filtered.filter(h => !h.is_favourite && h.is_auto);
 
-    const sorter = (a: Host, b: Host) => {
+    const nameSorter = (a: Host, b: Host) => a.name.localeCompare(b.name);
+    const hostNameSorter = (a: Host, b: Host) => {
       if (a.hostname === b.hostname) {
-        return (a.user || '').localeCompare(b.user || '');
+        return a.name.localeCompare(b.name);
       }
       return a.hostname.localeCompare(b.hostname);
     };
 
     return {
-      favourite: favs.sort(sorter),
-      normal: normals.sort(sorter),
-      auto: autos.sort(sorter)
+      favourite: favs.sort(nameSorter),
+      normal: normals.sort(nameSorter),
+      auto: autos.sort(hostNameSorter)
     };
   }, [hosts, filterStr]);
 
@@ -491,6 +521,8 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
         anchorPosition={tagContextMenu ? { top: tagContextMenu.mouseY, left: tagContextMenu.mouseX } : undefined}
       >
         <MenuItem onClick={handleOpenAllServers}>Open All ({tagContextMenu?.tag})</MenuItem>
+        <MenuItem onClick={handleOpenSplitServers}>Open All in same tab (split)</MenuItem>
+        <MenuItem onClick={handleCopyTagUrl}>Copy URL</MenuItem>
       </Menu>
 
       {/* Dashboard Dialog */}

@@ -22,13 +22,19 @@ const lightTheme = createTheme({
   },
 });
 
-interface TabData {
+interface PaneData {
   id: string;
   host: string;
-  title: string;
-  isPinned?: boolean;
   state?: string;
   cloneFrom?: string;
+}
+
+interface TabData {
+  id: string;
+  title: string;
+  panes: PaneData[];
+  activePaneId: string;
+  isPinned?: boolean;
   showFiles?: boolean;
 }
 
@@ -53,6 +59,8 @@ export default function Dashboard() {
   const [viewportHeight, setViewportHeight] = useState('100dvh');
   const [isCtrlActive, setIsCtrlActive] = useState(false);
   const [shellCwds, setShellCwds] = useState<{ [key: string]: string }>({});
+  const [memoTabId, setMemoTabId] = useState<string | null>(null);
+  const [activePaneId, setActivePaneId] = useState<string>('');
 
   const [buttons, setButtons] = useState<ButtonData[]>([]);
   const [activeGroup, setActiveGroup] = useState<string>(localStorage.getItem('cozy_active_group') || 'Default');
@@ -65,6 +73,7 @@ export default function Dashboard() {
   const [inputDialogOpen, setInputDialogOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [appendNewLine, setAppendNewLine] = useState(true);
+  const [sendToAll, setSendToAll] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('cozy_active_group', activeGroup);
@@ -87,13 +96,35 @@ export default function Dashboard() {
   };
 
   const handleSendKey = (key: string) => {
-    if (activeTabId && terminalRefs.current[activeTabId]) {
-      terminalRefs.current[activeTabId]?.sendData(key);
+    if (activePaneId && terminalRefs.current[activePaneId]) {
+      terminalRefs.current[activePaneId]?.sendData(key);
       // Re-focus firmly
       setTimeout(() => {
-        const term = terminalRefs.current[activeTabId];
+        const term = terminalRefs.current[activePaneId];
         if (term) (term as any).focus?.();
       }, 0);
+    }
+  };
+
+  const sendParsedString = async (input: string, forceAll: boolean = false) => {
+    const currentTab = tabsRef.current.find(t => t.id === activeTabId);
+    if (!currentTab) return;
+    const targetPaneIds = (sendToAll || forceAll) ? currentTab.panes.map(p => p.id) : [activePaneId];
+
+    const parts = input.split(/(<ctrl-[a-z]>)/gi);
+    for (const part of parts) {
+      if (!part) continue;
+      const ctrlMatch = part.match(/<ctrl-([a-z])>/i);
+      const dataToSend = ctrlMatch
+        ? String.fromCharCode(ctrlMatch[1].toLowerCase().charCodeAt(0) - 96)
+        : part;
+
+      for (const pid of targetPaneIds) {
+        if (pid && terminalRefs.current[pid]) {
+          terminalRefs.current[pid]?.sendData(dataToSend);
+        }
+      }
+      await new Promise(r => setTimeout(r, ctrlMatch ? 50 : 10));
     }
   };
 
@@ -164,49 +195,89 @@ export default function Dashboard() {
         fetch('/api/hosts', { headers: { 'Authorization': `Bearer ${token}` } })
           .then(r => r.json())
           .then((hosts: any[]) => {
-            const host = hosts.find(h => h.name === hash || h.hostname === hash);
-            if (host) {
-              const newId = `${host.name}-${Date.now()}`;
-              setTabs([{ id: newId, host: host.name, title: host.name }]);
-              setActiveTabId(newId);
+            if (hash.startsWith('#')) {
+              // Tag mode /##tag
+              const tag = hash.substring(1);
+              const filtered = hosts.filter(h => h.tags && h.tags.includes(tag));
+              
+              const nameSorter = (a: any, b: any) => a.name.localeCompare(b.name);
+              const hostNameSorter = (a: any, b: any) => {
+                if (a.hostname === b.hostname) return a.name.localeCompare(b.name);
+                return a.hostname.localeCompare(b.hostname);
+              };
+
+              const favs = filtered.filter(h => h.tags?.includes('fav')).sort(nameSorter);
+              const normals = filtered.filter(h => !h.tags?.includes('fav') && !h.is_auto).sort(nameSorter);
+              const autos = filtered.filter(h => !h.tags?.includes('fav') && h.is_auto).sort(hostNameSorter);
+              
+              const targets = [...favs, ...normals, ...autos].slice(0, 4);
+              if (targets.length > 0) {
+                handleSelectTagAsSplit(tag, targets.map(h => h.name));
+              } else {
+                const initialId = `local-${Date.now()}`;
+                const initialPaneId = Math.random().toString(36).substring(2);
+                setTabs([{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
+                setActiveTabId(initialId);
+                setActivePaneId(initialPaneId);
+              }
             } else {
-              const initialId = `local-${Date.now()}`;
-              setTabs([{ id: initialId, host: 'local', title: 'local' }]);
-              setActiveTabId(initialId);
-              // Use a slight delay for alert to not block rendering
-              setTimeout(() => alert(`SSH server "${hash}" not found in config.`), 100);
+              // Single host mode /#host
+              const host = hosts.find(h => h.name === hash || h.hostname === hash);
+              if (host) {
+                handleSelectHost(host.name);
+              } else {
+                const initialId = `local-${Date.now()}`;
+                const initialPaneId = Math.random().toString(36).substring(2);
+                setTabs([{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
+                setActiveTabId(initialId);
+                setActivePaneId(initialPaneId);
+                // Use a slight delay for alert to not block rendering
+                setTimeout(() => alert(`SSH server "${hash}" not found in config.`), 100);
+              }
             }
           })
           .catch(e => {
             console.error(e);
             const initialId = `local-${Date.now()}`;
-            setTabs([{ id: initialId, host: 'local', title: 'local' }]);
+            const initialPaneId = Math.random().toString(36).substring(2);
+            setTabs([{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
             setActiveTabId(initialId);
+            setActivePaneId(initialPaneId);
           });
       } else if (!pinnedElsewhere) {
         fetch('/api/tabs/pinned', { headers: { 'Authorization': `Bearer ${token}` } })
           .then(r => r.json())
           .then((pinned: any[]) => {
-            const pinnedTabs = pinned.map(p => ({ id: p.id, host: p.host, title: p.title, isPinned: true }));
+            const pinnedTabs = pinned.map(p => {
+              const paneId = p.id;
+              return { id: p.id, panes: [{ id: paneId, host: p.host }], activePaneId: paneId, title: p.title, isPinned: true };
+            });
             if (pinnedTabs.length > 0) {
               setTabs(pinnedTabs);
               setActiveTabId(pinnedTabs[0].id);
+              setActivePaneId(pinnedTabs[0].activePaneId);
             } else {
               const initialId = `local-${Date.now()}`;
-              setTabs([{ id: initialId, host: 'local', title: 'local' }]);
+              const initialPaneId = Math.random().toString(36).substring(2);
+              setTabs([{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
               setActiveTabId(initialId);
+              setActivePaneId(initialPaneId);
             }
           })
           .catch(e => {
             console.error(e);
             const initialId = `local-${Date.now()}`;
-            setTabs([{ id: initialId, host: 'local', title: 'local' }]);
+            const initialPaneId = Math.random().toString(36).substring(2);
+            setTabs([{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
             setActiveTabId(initialId);
+            setActivePaneId(initialPaneId);
           });
       } else {
         const initialId = `local-${Date.now()}`;
-        setTabs([{ id: initialId, host: 'local', title: 'local' }]);
+        const initialPaneId = Math.random().toString(36).substring(2);
+        setTabs([{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
         setActiveTabId(initialId);
+        setActivePaneId(initialPaneId);
       }
     }, 150);
 
@@ -232,18 +303,39 @@ export default function Dashboard() {
   };
 
   const handleSelectHost = (host: string) => {
-    const newId = `${host}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    setTabs(prev => [...prev, { id: newId, host, title: host }]);
-    setActiveTabId(newId);
+    const id = Math.random().toString(36).substring(2);
+    const newTab: TabData = {
+      id: id,
+      title: host,
+      panes: [{ id: id, host }],
+      activePaneId: id,
+    };
+    setTabs([...tabs, newTab]);
+    setActiveTabId(newTab.id);
+    setActivePaneId(id);
+  };
+
+  const handleSelectTagAsSplit = (tag: string, hosts: string[]) => {
+    const tabId = Math.random().toString(36).substring(2);
+    const panes = hosts.map(host => ({
+      id: Math.random().toString(36).substring(2),
+      host
+    }));
+    const newTab: TabData = {
+      id: tabId,
+      title: tag,
+      panes: panes,
+      activePaneId: panes[0].id,
+    };
+    setTabs([...tabs, newTab]);
+    setActiveTabId(newTab.id);
+    setActivePaneId(panes[0].id);
   };
 
   const handleCloseTab = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     const targetTab = tabs.find(t => t.id === id);
     if (targetTab?.isPinned) {
-      // If pinned, call unpin first? Or just close in UI?
-      // Requirement says pinned tabs are permanent. 
-      // If the user clicks 'X' on a pinned tab, we should probably unpin it too.
       handleUnpinTab(id);
     }
 
@@ -251,11 +343,13 @@ export default function Dashboard() {
       const idx = prev.findIndex(t => t.id === id);
       const newTabs = prev.filter(t => t.id !== id);
       if (activeTabId === id && newTabs.length > 0) {
-        // Shift active tab cleanly
         const nextIdx = idx > 0 ? idx - 1 : 0;
-        setActiveTabId(newTabs[nextIdx].id);
+        const nextTab = newTabs[nextIdx];
+        setActiveTabId(nextTab.id);
+        setActivePaneId(nextTab.activePaneId);
       } else if (newTabs.length === 0) {
         setActiveTabId('');
+        setActivePaneId('');
       }
       return newTabs;
     });
@@ -264,11 +358,17 @@ export default function Dashboard() {
   const handlePinTab = async (id: string) => {
     const tab = tabs.find(t => t.id === id);
     if (!tab) return;
+    if (tab.panes.length > 1) {
+      alert("Only single-pane tabs can be pinned.");
+      return;
+    }
     const token = localStorage.getItem('cozy_token');
+    // Pinning only supports single-pane tabs for now (backend requirement)
+    const host = tab.panes[0]?.host || 'local';
     await fetch('/api/tabs/pin', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: tab.id, host: tab.host, title: tab.title })
+      body: JSON.stringify({ id: tab.id, host, title: tab.title })
     });
     setTabs(prev => prev.map(t => t.id === id ? { ...t, isPinned: true } : t));
     setContextMenu(null);
@@ -294,11 +394,12 @@ export default function Dashboard() {
     });
     setTabs(prev => {
       if (!prev.find(t => t.id === id)) {
-        return [...prev, { id, host, title, isPinned: true }];
+        return [...prev, { id, panes: [{ id, host }], activePaneId: id, title, isPinned: true }];
       }
       return prev;
     });
     setActiveTabId(id);
+    // Note: panes[0].id will be active
   };
 
   const handleRename = async () => {
@@ -325,9 +426,19 @@ export default function Dashboard() {
   const handleCloneSession = (id: string) => {
     const targetTab = tabs.find(t => t.id === id);
     if (!targetTab) return;
-    const newId = `${targetTab.host}-${Date.now()}`;
-    setTabs(prev => [...prev, { id: newId, host: targetTab.host, title: targetTab.title, cloneFrom: id, showFiles: targetTab.showFiles }]);
+    // Clone first pane
+    const pane = targetTab.panes[0];
+    const newPaneId = Math.random().toString(36).substring(2);
+    const newId = `${pane.host}-${Date.now()}`;
+    setTabs(prev => [...prev, {
+      id: newId,
+      title: targetTab.title + ' (1)',
+      panes: [{ id: newPaneId, host: pane.host, cloneFrom: pane.id, state: pane.state }],
+      activePaneId: newPaneId,
+      showFiles: targetTab.showFiles
+    }]);
     setActiveTabId(newId);
+    setActivePaneId(newPaneId);
     setContextMenu(null);
   };
 
@@ -340,6 +451,7 @@ export default function Dashboard() {
 
   const handleContextMenu = (e: React.MouseEvent, id: string) => {
     e.preventDefault();
+    setMemoTabId(id);
     setContextMenu({ mouseX: e.clientX + 2, mouseY: e.clientY - 6, targetTabId: id });
   };
 
@@ -348,8 +460,10 @@ export default function Dashboard() {
   const handleCloseOther = () => {
     if (!contextMenu) return;
     const targetId = contextMenu.targetTabId;
+    const tab = tabs.find(t => t.id === targetId);
     setTabs(prev => prev.filter(t => t.id === targetId));
     setActiveTabId(targetId);
+    if (tab) setActivePaneId(tab.activePaneId);
     setContextMenu(null);
   };
 
@@ -358,11 +472,14 @@ export default function Dashboard() {
     const targetId = contextMenu.targetTabId;
     setTabs(prev => {
       const idx = prev.findIndex(t => t.id === targetId);
-      return prev.slice(0, idx + 1);
+      const newTabs = prev.slice(0, idx + 1);
+      const targetTab = newTabs[idx];
+      if (activeTabId !== targetId) {
+        setActiveTabId(targetId);
+        setActivePaneId(targetTab.activePaneId);
+      }
+      return newTabs;
     });
-    if (activeTabId !== targetId) {
-      setActiveTabId(targetId);
-    }
     setContextMenu(null);
   };
 
@@ -370,69 +487,66 @@ export default function Dashboard() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.altKey && (e.key === 'j' || e.key === 'J')) {
         e.preventDefault();
-        setTabs(prev => {
-          if (prev.length <= 1) return prev;
-          const idx = prev.findIndex(t => t.id === activeTabId);
-          const nextIdx = (idx + 1) % prev.length;
-          setActiveTabId(prev[nextIdx].id);
-          return prev;
-        });
+        const allPanes = tabs.flatMap(t => t.panes.map(p => ({ tabId: t.id, paneId: p.id })));
+        if (allPanes.length === 0) return;
+        const idx = allPanes.findIndex(p => p.paneId === activePaneId);
+        const nextIdx = (idx + 1) % allPanes.length;
+        setActiveTabId(allPanes[nextIdx].tabId);
+        setActivePaneId(allPanes[nextIdx].paneId);
       } else if (e.altKey && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
-        setTabs(prev => {
-          if (prev.length <= 1) return prev;
-          const idx = prev.findIndex(t => t.id === activeTabId);
-          const nextIdx = (idx - 1 + prev.length) % prev.length;
-          setActiveTabId(prev[nextIdx].id);
-          return prev;
-        });
+        const allPanes = tabs.flatMap(t => t.panes.map(p => ({ tabId: t.id, paneId: p.id })));
+        if (allPanes.length === 0) return;
+        const idx = allPanes.findIndex(p => p.paneId === activePaneId);
+        const nextIdx = (idx - 1 + allPanes.length) % allPanes.length;
+        setActiveTabId(allPanes[nextIdx].tabId);
+        setActivePaneId(allPanes[nextIdx].paneId);
+      } else if (e.altKey && (e.key === 'g' || e.key === 'G')) {
+        e.preventDefault();
+        const currentTab = tabs.find(t => t.id === activeTabId);
+        if (currentTab && currentTab.panes.length > 0) {
+          setActivePaneId(currentTab.panes[0].id);
+        }
       } else if (e.altKey && (e.key === 'w' || e.key === 'W')) {
         e.preventDefault();
-        if (activeTabId) {
+        const currentTab = tabs.find(t => t.id === activeTabId);
+        if (!currentTab) return;
+        if (currentTab.panes.length > 1) {
+          const paneIdx = currentTab.panes.findIndex(p => p.id === activePaneId);
+          const newPanes = currentTab.panes.filter(p => p.id !== activePaneId);
+          setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, panes: newPanes, activePaneId: newPanes[Math.max(0, paneIdx - 1)].id } : t));
+          setActivePaneId(newPanes[Math.max(0, paneIdx - 1)].id);
+        } else {
           handleCloseTab({ stopPropagation: () => { } } as any, activeTabId);
         }
       } else if (e.altKey && (e.key === 't' || e.key === 'T')) {
         e.preventDefault();
         handleSelectHost('local');
-      } else if (e.altKey && (e.key === 'g' || e.key === 'G')) {
+      } else if (e.altKey && e.key >= '1' && e.key <= '9') {
         e.preventDefault();
-        if (activeTabId && terminalRefs.current[activeTabId]) {
-          terminalRefs.current[activeTabId]?.focus();
+        const idx = parseInt(e.key) - 1;
+        if (idx < tabs.length) {
+          setActiveTabId(tabs[idx].id);
+          setActivePaneId(tabs[idx].activePaneId);
         }
-      } else if (e.altKey && e.key >= '0' && e.key <= '9') {
+      } else if (e.altKey && e.key === '0') {
         e.preventDefault();
-        if (e.key === '0') {
-          if (tabs.length > 0) setActiveTabId(tabs[tabs.length - 1].id);
-        } else {
-          const idx = parseInt(e.key) - 1;
-          if (idx < tabs.length) setActiveTabId(tabs[idx].id);
+        if (tabs.length > 0) {
+          const last = tabs[tabs.length - 1];
+          setActiveTabId(last.id);
+          setActivePaneId(last.activePaneId);
         }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTabId, tabs]);
+  }, [activeTabId, activePaneId, tabs]);
 
   const handleButtonClick = async (btn: ButtonData) => {
     if (btn.type === 'send_string') {
-      const parts = btn.payload.split(/(<ctrl-[a-z]>)/gi);
-      for (const part of parts) {
-        if (!part) continue;
-        const ctrlMatch = part.match(/<ctrl-([a-z])>/i);
-        if (ctrlMatch) {
-          const char = ctrlMatch[1];
-          const ctrlChar = String.fromCharCode(char.toLowerCase().charCodeAt(0) - 96);
-          handleSendKey(ctrlChar);
-          // Wait a bit after control character
-          await new Promise(r => setTimeout(r, 50));
-        } else {
-          handleSendKey(part);
-          // Small delay to ensure echo order
-          await new Promise(r => setTimeout(r, 10));
-        }
-      }
+      await sendParsedString(btn.payload);
     } else if (btn.type === 'terminal_function') {
-      const term = terminalRefs.current[activeTabId];
+      const term = terminalRefs.current[activePaneId];
       if (!term) return;
       if (btn.payload === 'COPY') {
         term.selectAll();
@@ -531,6 +645,7 @@ export default function Dashboard() {
           mobileOpen={mobileOpen}
           onClose={() => setMobileOpen(false)}
           onSelect={(host) => { handleSelectHost(host); setMobileOpen(false); }}
+          onSelectTagAsSplit={(tag, hosts) => { handleSelectTagAsSplit(tag, hosts); setMobileOpen(false); }}
           onLogout={handleLogout}
           activeTabs={tabs.map(t => t.id)}
           sysHostname={sysHostname}
@@ -569,9 +684,9 @@ export default function Dashboard() {
                           {tab.isPinned && <PushPinIcon sx={{ fontSize: 14, mr: 0.5, color: 'primary.main' }} />}
                           <Box sx={{
                             width: 8, height: 8, borderRadius: '50%', mr: 1,
-                            bgcolor: tab.state === 'connected' ? 'success.main' :
-                              (tab.state === 'connecting to host' || tab.state === 'connecting to ssh server') ? 'warning.main' : 'error.main'
-                          }} title={tab.state || 'disconnected'} />
+                            bgcolor: (tab.panes.find(p => p.id === tab.activePaneId)?.state || 'disconnected') === 'connected' ? 'success.main' :
+                              ((tab.panes.find(p => p.id === tab.activePaneId)?.state || '').startsWith('connecting')) ? 'warning.main' : 'error.main'
+                          }} title={tab.panes.find(p => p.id === tab.activePaneId)?.state || 'disconnected'} />
                           <span>{tab.title}</span>
                           <IconButton
                             size="small"
@@ -600,40 +715,107 @@ export default function Dashboard() {
                   flexDirection: 'column'
                 }}
               >
-                <Box sx={{ flexGrow: 1, minHeight: 0, position: 'relative' }}>
-                  <TerminalComponent
-                    ref={el => { terminalRefs.current[tab.id] = el; }}
-                    host={tab.host}
-                    sessionId={tab.id}
-                    cloneFrom={tab.cloneFrom}
-                    isActive={activeTabId === tab.id}
-                    isCtrlActive={isCtrlActive}
-                    onCtrlDone={() => setIsCtrlActive(false)}
-                    onStateChange={(state) => {
-                      setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, state } : t));
-                    }}
-                    onCwdChange={(cwd) => {
-                      setShellCwds(prev => ({ ...prev, [tab.id]: cwd }));
-                    }}
-                    onStolen={() => {
-                      setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, isPinned: false, state: 'stolen (attached elsewhere)' } : t));
-                    }}
-                    onManualReconnect={(wasStolen) => {
-                      if (wasStolen) {
-                        const newId = `${tab.host}-${Date.now()}`;
-                        setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, id: newId, isPinned: false, state: 'connecting' } : t));
-                        setActiveTabId(newId);
-                      }
-                    }}
-                    isTouch={isTouch}
-                  />
+                <Box sx={{ flexGrow: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column' }}>
+                  {(() => {
+                    const renderPaneInner = (pane: PaneData) => (
+                      <Box
+                        sx={{
+                          flex: 1,
+                          height: '100%',
+                          minWidth: 0,
+                          minHeight: 0,
+                          position: 'relative',
+                          outline: activePaneId === pane.id ? '1px solid #1976d2' : 'none',
+                          outlineOffset: -1,
+                          zIndex: activePaneId === pane.id ? 1 : 0
+                        }}
+                        onClick={() => setActivePaneId(pane.id)}
+                      >
+                        <TerminalComponent
+                          key={pane.id}
+                          ref={el => { terminalRefs.current[pane.id] = el; }}
+                          host={pane.host}
+                          sessionId={pane.id}
+                          cloneFrom={pane.cloneFrom}
+                          isActive={activeTabId === tab.id && activePaneId === pane.id}
+                          isCtrlActive={isCtrlActive}
+                          onCtrlDone={() => setIsCtrlActive(false)}
+                          onStateChange={(state) => {
+                            setTabs(prev => prev.map(t => t.id === tab.id ? {
+                              ...t,
+                              panes: t.panes.map(p => p.id === pane.id ? { ...p, state } : p)
+                            } : t));
+                          }}
+                          onCwdChange={(cwd) => {
+                            setShellCwds(prev => ({ ...prev, [pane.id]: cwd }));
+                          }}
+                          onStolen={() => {
+                            setTabs(prev => prev.map(t => t.id === tab.id ? {
+                              ...t,
+                              isPinned: false,
+                              panes: t.panes.map(p => p.id === pane.id ? { ...p, state: 'stolen' } : p)
+                            } : t));
+                          }}
+                          onManualReconnect={(wasStolen) => {
+                            if (wasStolen) {
+                              const newId = `${pane.host}-${Date.now()}`;
+                              setTabs(prev => prev.map(t => t.id === tab.id ? {
+                                ...t,
+                                activePaneId: newId,
+                                panes: t.panes.map(p => p.id === pane.id ? { ...p, id: newId, state: 'connecting' } : p)
+                              } : t));
+                              setActivePaneId(newId);
+                            }
+                          }}
+                          isTouch={isTouch}
+                        />
+                      </Box>
+                    );
+
+                    const n = tab.panes.length;
+                    if (n <= 1) return renderPaneInner(tab.panes[0]);
+                    if (n === 2) return (
+                      <Box sx={{ display: 'flex', flexDirection: 'row', height: '100%' }}>
+                        {renderPaneInner(tab.panes[0])}
+                        <Box sx={{ width: '1px', bgcolor: 'divider', flexShrink: 0 }} />
+                        {renderPaneInner(tab.panes[1])}
+                      </Box>
+                    );
+                    if (n === 3) return (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+                        {renderPaneInner(tab.panes[0])}
+                        <Box sx={{ height: '1px', bgcolor: 'divider', flexShrink: 0 }} />
+                        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'row', minHeight: 0 }}>
+                          {renderPaneInner(tab.panes[1])}
+                          <Box sx={{ width: '1px', bgcolor: 'divider', flexShrink: 0 }} />
+                          {renderPaneInner(tab.panes[2])}
+                        </Box>
+                      </Box>
+                    );
+                    if (n === 4) return (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+                        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'row', minHeight: 0 }}>
+                          {renderPaneInner(tab.panes[0])}
+                          <Box sx={{ width: '1px', bgcolor: 'divider', flexShrink: 0 }} />
+                          {renderPaneInner(tab.panes[1])}
+                        </Box>
+                        <Box sx={{ height: '1px', bgcolor: 'divider', flexShrink: 0 }} />
+                        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'row', minHeight: 0 }}>
+                          {renderPaneInner(tab.panes[2])}
+                          <Box sx={{ width: '1px', bgcolor: 'divider', flexShrink: 0 }} />
+                          {renderPaneInner(tab.panes[3])}
+                        </Box>
+                      </Box>
+                    );
+                    return null;
+                  })()}
                 </Box>
                 {tab.showFiles && (
                   <Box sx={{ height: '50%', minHeight: 200, borderTop: 1, borderColor: 'divider' }}>
                     <FileBrowser
-                      sessionId={tab.id}
+                      sessionId={tab.activePaneId}
                       isActive={activeTabId === tab.id && tab.showFiles}
-                      shellCwd={shellCwds[tab.id]}
+                      shellCwd={shellCwds[tab.activePaneId]}
                       onClose={() => setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, showFiles: false } : t))}
                     />
                   </Box>
@@ -765,24 +947,32 @@ export default function Dashboard() {
         anchorReference="anchorPosition"
         anchorPosition={contextMenu ? { top: contextMenu.mouseY, left: contextMenu.mouseX } : undefined}
       >
-        {contextMenu && (
-          tabs.find(t => t.id === contextMenu.targetTabId)?.isPinned ? (
-            <MenuItem onClick={() => handleUnpinTab(contextMenu.targetTabId)}>Unpin Tab</MenuItem>
-          ) : (
-            <MenuItem onClick={() => handlePinTab(contextMenu.targetTabId)}>Pin Tab</MenuItem>
-          )
-        )}
-        {contextMenu && tabs.find(t => t.id === contextMenu.targetTabId)?.host !== 'local' && (
-          <MenuItem onClick={() => handleCloneSession(contextMenu.targetTabId)}>Clone Session</MenuItem>
-        )}
-        {contextMenu && (
-          <MenuItem onClick={handleToggleFiles}>
-            {tabs.find(t => t.id === contextMenu.targetTabId)?.showFiles ? 'Close Files' : (tabs.find(t => t.id === contextMenu.targetTabId)?.host === 'local' ? 'Open Files' : 'Open SFTP')}
-          </MenuItem>
-        )}
-        <MenuItem onClick={handleRename}>Rename Tab</MenuItem>
-        <MenuItem onClick={handleCloseOther}>Close Other tabs</MenuItem>
-        <MenuItem onClick={handleCloseRight}>Close tabs to the right</MenuItem>
+        {memoTabId && (() => {
+          const tab = tabs.find(t => t.id === memoTabId);
+          if (!tab) return null;
+          return (
+            <>
+              {tab.isPinned ? (
+                <MenuItem onClick={() => handleUnpinTab(memoTabId)}>Unpin Tab</MenuItem>
+              ) : tab.panes.length === 1 ? (
+                <MenuItem onClick={() => handlePinTab(memoTabId)}>Pin Tab</MenuItem>
+              ) : null}
+              {tab.panes.length === 1 && (
+                <>
+                  {tab.panes[0]?.host !== 'local' && (
+                    <MenuItem onClick={() => handleCloneSession(memoTabId)}>Clone Session</MenuItem>
+                  )}
+                  <MenuItem onClick={handleToggleFiles}>
+                    {tab.showFiles ? 'Close Files' : (tab.panes[0]?.host === 'local' ? 'Open Files' : 'Open SFTP')}
+                  </MenuItem>
+                </>
+              )}
+              <MenuItem onClick={handleRename}>Rename Tab</MenuItem>
+              <MenuItem onClick={handleCloseOther}>Close Other tabs</MenuItem>
+              <MenuItem onClick={handleCloseRight}>Close tabs to the right</MenuItem>
+            </>
+          );
+        })()}
       </Menu>
 
       <Menu
@@ -836,7 +1026,7 @@ export default function Dashboard() {
               rows={3}
               value={buttonFormData.payload}
               onChange={e => setButtonFormData({ ...buttonFormData, payload: e.target.value })}
-              placeholder="String to send to terminal, <ctrl-c> style syntax supported"
+              placeholder="String to send to terminal, <ctrl-x> style syntax supported"
             />
           ) : (
             <TextField
@@ -871,39 +1061,42 @@ export default function Dashboard() {
             multiline
             rows={6}
             variant="outlined"
-            placeholder="Type input to send to terminal. Press Enter to send, Shift + Enter for new line."
+            placeholder="Type input to send to terminal. Press Enter to send, Shift + Enter for new line. <ctrl-x> style syntax supported."
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 if (inputValue) {
-                  const term = terminalRefs.current[activeTabId];
                   const data = appendNewLine ? inputValue + '\n' : inputValue;
-                  if (term) {
-                    term.sendData(data);
-                  }
+                  sendParsedString(data);
                 }
                 handleCloseInputDialog();
               }
             }}
             autoFocus
           />
-          <FormControlLabel
-            control={<Checkbox checked={appendNewLine} onChange={(e) => setAppendNewLine(e.target.checked)} size="small" />}
-            label={<Typography variant="body2">Append new line (\n)</Typography>}
-            sx={{ mt: 1 }}
-          />
+          <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
+            <FormControlLabel
+              control={<Checkbox checked={appendNewLine} onChange={(e) => setAppendNewLine(e.target.checked)} size="small" />}
+              label={<Typography variant="body2">Append new line (\n)</Typography>}
+            />
+            {tabs.find(t => t.id === activeTabId)?.panes.length! > 1 && (
+              <FormControlLabel
+                control={<Checkbox checked={sendToAll} onChange={(e) => setSendToAll(e.target.checked)} size="small" />}
+                label={<Typography variant="body2">Send to all</Typography>}
+              />
+            )}
+          </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseInputDialog}>Cancel</Button>
           <Button
             variant="contained"
             onClick={() => {
-              const term = terminalRefs.current[activeTabId];
-              const data = appendNewLine ? inputValue + '\n' : inputValue;
-              if (term && inputValue) {
-                term.sendData(data);
+              if (inputValue) {
+                const data = appendNewLine ? inputValue + '\n' : inputValue;
+                sendParsedString(data);
               }
               handleCloseInputDialog();
             }}

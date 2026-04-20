@@ -207,17 +207,20 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 				return nr, nw, nil
 			}
 		}
+		session.GlobalManager.Add(s)
+	} else {
+		// Taking over an existing session
+		s.Steal()
+	}
 
-		if globalConfig != nil {
-			for _, pt := range globalConfig.PinnedTabs {
-				if pt.ID == sessionID {
-					s.Pinned = true
-					break
-				}
+	// Always sync pinned status from config if possible
+	if globalConfig != nil {
+		for _, pt := range globalConfig.PinnedTabs {
+			if pt.ID == sessionID {
+				s.Pinned = true
+				break
 			}
 		}
-
-		session.GlobalManager.Add(s)
 	}
 
 	session.GlobalManager.CancelDisconnectTimer(sessionID)

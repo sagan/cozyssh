@@ -104,16 +104,19 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
           } else {
             path = data.substring(7);
           }
+        } else if (data.startsWith('CurrentDir=')) {
+          // Support for CurrentDir='/path style sequences
+          path = data.substring(11);
         } else if (data.includes('=')) {
-          // Fallback for non-standard formats like CurrentDir=/path
+          // Fallback for non-standard formats like CWD=/path
           const parts = data.split('=');
           path = parts.slice(1).join('=');
         } else {
           path = data;
         }
 
-        // Final cleaning
-        path = path.replace(/^['"]|['"]$/g, '').trim();
+        // Final cleaning: remove any surrounding quotes and trim
+        path = path.replace(/^['"]+|['"]+$/g, '').trim();
 
         if (path && (path.startsWith('/') || path.includes('\\') || /^[a-zA-Z]:/.test(path))) {
           onCwdChange?.(path);
@@ -126,7 +129,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
 
     // Use ResizeObserver for more reliable fitting
     const resizeObserver = new ResizeObserver(() => {
-      if (isActive && terminalRef.current && terminalRef.current.offsetWidth > 0) {
+      if (terminalRef.current && terminalRef.current.offsetWidth > 0) {
         requestAnimationFrame(() => {
           fitAddon.fit();
           const ws = wsRef.current;
@@ -292,14 +295,14 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
       if (wsRef.current) wsRef.current.close();
       term.dispose();
     };
-  }, [host]);
+  }, [host, sessionId]);
 
-  // Execute focus hook firmly AFTER initialization hook to prevent null-ref on first mount explicitly
+  // Execute focus and fit firmly when becoming active or mounted
   useEffect(() => {
-    if (isActive && xtermRef.current && terminalRef.current && terminalRef.current.offsetWidth > 0) {
+    if (xtermRef.current && terminalRef.current) {
       setTimeout(() => {
-        xtermRef.current?.focus();
-        // Force fit when becoming active
+        if (isActive) xtermRef.current?.focus();
+        // Force fit
         if (fitAddonRef.current && terminalRef.current && terminalRef.current.offsetWidth > 0) {
           fitAddonRef.current.fit();
           const ws = wsRef.current;
