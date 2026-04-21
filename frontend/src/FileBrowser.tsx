@@ -11,6 +11,8 @@ import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import { Menu, MenuItem, TableSortLabel } from '@mui/material';
 import TerminalIcon from '@mui/icons-material/Terminal';
+import NoteAddIcon from '@mui/icons-material/NoteAdd';
+import TextEditor from './TextEditor';
 
 interface FileInfo {
   name: string;
@@ -34,6 +36,9 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number; file: FileInfo } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [editingFile, setEditingFile] = useState<FileInfo | null>(null);
+  const [editorContent, setEditorContent] = useState<string>('');
 
   const fetchFiles = async (path: string = '') => {
     setLoading(true);
@@ -165,6 +170,68 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
       console.error(e);
       alert("Error initiating secure download.");
     }
+    setContextMenu(null);
+  };
+
+  const handleEditAsText = async (file: FileInfo) => {
+    const targetPath = currentPath + (currentPath.endsWith('/') ? '' : '/') + file.name;
+    const token = localStorage.getItem('cozy_token');
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/fs/token?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(targetPath)}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const dlUrl = `/api/fs/download?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(targetPath)}&expires=${data.expires}&sig=${data.sig}`;
+        const dlRes = await fetch(dlUrl, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (dlRes.ok) {
+          const text = await dlRes.text();
+          setEditorContent(text);
+          setEditingFile(file);
+        } else {
+          alert("Failed to download file for editing.");
+        }
+      } else {
+        alert("Failed to initiate secure editing.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Error fetching file for editing.");
+    } finally {
+      setLoading(false);
+      setContextMenu(null);
+    }
+  };
+
+  const handleSaveTextFile = async (newContent: string) => {
+    if (!editingFile) return;
+    setLoading(true);
+    const token = localStorage.getItem('cozy_token');
+    try {
+      const blob = new Blob([newContent], { type: 'text/plain' });
+      const formData = new FormData();
+      formData.append('file', blob, editingFile.name);
+
+      const res = await fetch(`/api/fs/upload?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(currentPath)}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData,
+      });
+
+      if (res.ok) {
+        setEditingFile(null);
+        fetchFiles(currentPath);
+      } else {
+        alert('Save failed');
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Save error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleRename = async (file: FileInfo) => {
@@ -235,6 +302,36 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
     }
   };
 
+  const handleNewFile = async () => {
+    const name = prompt('New file name:');
+    if (!name) return;
+
+    setLoading(true);
+    const token = localStorage.getItem('cozy_token');
+    try {
+      const blob = new Blob([''], { type: 'text/plain' });
+      const formData = new FormData();
+      formData.append('file', blob, name);
+
+      const res = await fetch(`/api/fs/upload?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(currentPath)}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData,
+      });
+
+      if (res.ok) {
+        fetchFiles(currentPath);
+      } else {
+        alert('Failed to create file');
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Error creating file');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCopyPath = (file: FileInfo) => {
     const fullPath = currentPath + (currentPath.endsWith('/') ? '' : '/') + file.name;
     navigator.clipboard.writeText(fullPath).then(() => {
@@ -261,7 +358,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   };
 
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper' }}>
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper', position: 'relative' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', p: 1, borderBottom: '1px solid', borderColor: 'divider', bgcolor: '#f4f6f8' }}>
         <IconButton size="small" onClick={() => handleNavigate('..')} sx={{ mr: 1 }} title="Up one level">
           <ArrowUpwardIcon fontSize="small" />
@@ -274,6 +371,9 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
         </IconButton>
         <IconButton size="small" onClick={handleMkdir} disabled={loading} sx={{ mr: 1 }} title="New Folder">
           <CreateNewFolderIcon fontSize="small" />
+        </IconButton>
+        <IconButton size="small" onClick={handleNewFile} disabled={loading} sx={{ mr: 1 }} title="New File">
+          <NoteAddIcon fontSize="small" />
         </IconButton>
         <IconButton 
           size="small" 
@@ -393,7 +493,19 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
         {!contextMenu?.file.isDir && (
           <MenuItem onClick={() => contextMenu && handleDownload(contextMenu.file.name)}>Download</MenuItem>
         )}
+        {!contextMenu?.file.isDir && contextMenu?.file.size !== undefined && contextMenu.file.size <= 1048576 && (
+          <MenuItem onClick={() => contextMenu && handleEditAsText(contextMenu.file)}>Edit as text</MenuItem>
+        )}
       </Menu>
+
+      {editingFile && (
+        <TextEditor
+          fileName={currentPath + (currentPath.endsWith('/') ? '' : '/') + editingFile.name}
+          initialContent={editorContent}
+          onSave={handleSaveTextFile}
+          onClose={() => setEditingFile(null)}
+        />
+      )}
     </Box>
   );
 }

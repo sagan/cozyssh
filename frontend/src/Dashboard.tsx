@@ -91,7 +91,7 @@ export default function Dashboard() {
   const handleCloseInputDialog = () => {
     setInputDialogOpen(false);
     setTimeout(() => {
-      terminalRefs.current[activeTabId]?.focus();
+      terminalRefs.current[activePaneId]?.focus();
     }, 50);
   };
 
@@ -199,7 +199,7 @@ export default function Dashboard() {
               // Tag mode /##tag
               const tag = hash.substring(1);
               const filtered = hosts.filter(h => h.tags && h.tags.includes(tag));
-              
+
               const nameSorter = (a: any, b: any) => a.name.localeCompare(b.name);
               const hostNameSorter = (a: any, b: any) => {
                 if (a.hostname === b.hostname) return a.name.localeCompare(b.name);
@@ -209,7 +209,7 @@ export default function Dashboard() {
               const favs = filtered.filter(h => h.tags?.includes('fav')).sort(nameSorter);
               const normals = filtered.filter(h => !h.tags?.includes('fav') && !h.is_auto).sort(nameSorter);
               const autos = filtered.filter(h => !h.tags?.includes('fav') && h.is_auto).sort(hostNameSorter);
-              
+
               const targets = [...favs, ...normals, ...autos].slice(0, 4);
               if (targets.length > 0) {
                 handleSelectTagAsSplit(tag, targets.map(h => h.name));
@@ -310,7 +310,7 @@ export default function Dashboard() {
       panes: [{ id: id, host }],
       activePaneId: id,
     };
-    setTabs([...tabs, newTab]);
+    setTabs(prev => [...prev, newTab]);
     setActiveTabId(newTab.id);
     setActivePaneId(id);
   };
@@ -327,7 +327,7 @@ export default function Dashboard() {
       panes: panes,
       activePaneId: panes[0].id,
     };
-    setTabs([...tabs, newTab]);
+    setTabs(prev => [...prev, newTab]);
     setActiveTabId(newTab.id);
     setActivePaneId(panes[0].id);
   };
@@ -491,21 +491,27 @@ export default function Dashboard() {
         if (allPanes.length === 0) return;
         const idx = allPanes.findIndex(p => p.paneId === activePaneId);
         const nextIdx = (idx + 1) % allPanes.length;
-        setActiveTabId(allPanes[nextIdx].tabId);
-        setActivePaneId(allPanes[nextIdx].paneId);
+        const target = allPanes[nextIdx];
+        setActiveTabId(target.tabId);
+        setActivePaneId(target.paneId);
+        setTimeout(() => terminalRefs.current[target.paneId]?.focus(), 10);
       } else if (e.altKey && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
         const allPanes = tabs.flatMap(t => t.panes.map(p => ({ tabId: t.id, paneId: p.id })));
         if (allPanes.length === 0) return;
         const idx = allPanes.findIndex(p => p.paneId === activePaneId);
         const nextIdx = (idx - 1 + allPanes.length) % allPanes.length;
-        setActiveTabId(allPanes[nextIdx].tabId);
-        setActivePaneId(allPanes[nextIdx].paneId);
+        const target = allPanes[nextIdx];
+        setActiveTabId(target.tabId);
+        setActivePaneId(target.paneId);
+        setTimeout(() => terminalRefs.current[target.paneId]?.focus(), 10);
       } else if (e.altKey && (e.key === 'g' || e.key === 'G')) {
         e.preventDefault();
         const currentTab = tabs.find(t => t.id === activeTabId);
         if (currentTab && currentTab.panes.length > 0) {
-          setActivePaneId(currentTab.panes[0].id);
+          const pid = currentTab.panes[0].id;
+          setActivePaneId(pid);
+          setTimeout(() => terminalRefs.current[pid]?.focus(), 0);
         }
       } else if (e.altKey && (e.key === 'w' || e.key === 'W')) {
         e.preventDefault();
@@ -526,8 +532,10 @@ export default function Dashboard() {
         e.preventDefault();
         const idx = parseInt(e.key) - 1;
         if (idx < tabs.length) {
-          setActiveTabId(tabs[idx].id);
-          setActivePaneId(tabs[idx].activePaneId);
+          const target = tabs[idx];
+          setActiveTabId(target.id);
+          setActivePaneId(target.activePaneId);
+          setTimeout(() => terminalRefs.current[target.activePaneId]?.focus(), 10);
         }
       } else if (e.altKey && e.key === '0') {
         e.preventDefault();
@@ -535,16 +543,29 @@ export default function Dashboard() {
           const last = tabs[tabs.length - 1];
           setActiveTabId(last.id);
           setActivePaneId(last.activePaneId);
+          setTimeout(() => terminalRefs.current[last.activePaneId]?.focus(), 10);
+        }
+      } else if (e.altKey && e.shiftKey) {
+        const digitMatch = e.code.match(/Digit(\d)/);
+        if (digitMatch) {
+          e.preventDefault();
+          const num = parseInt(digitMatch[1]);
+          const idx = num === 0 ? 9 : num - 1;
+          const filteredButtons = buttons.filter(b => (b.group || 'Default') === activeGroup);
+          if (idx < filteredButtons.length) {
+            handleButtonClick(filteredButtons[idx]);
+          }
         }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTabId, activePaneId, tabs]);
+  }, [activeTabId, activePaneId, tabs, buttons, activeGroup]);
 
   const handleButtonClick = async (btn: ButtonData) => {
     if (btn.type === 'send_string') {
       await sendParsedString(btn.payload);
+      terminalRefs.current[activePaneId]?.focus();
     } else if (btn.type === 'terminal_function') {
       const term = terminalRefs.current[activePaneId];
       if (!term) return;
@@ -574,6 +595,16 @@ export default function Dashboard() {
       } else if (btn.payload === 'RECONNECT') {
         term.reconnect();
         term.focus();
+      }
+    } else if (btn.type === 'misc') {
+      if (btn.payload === 'NEXT_BUTTON_GROUP') {
+        const idx = groups.indexOf(activeGroup);
+        const nextIdx = (idx + 1) % groups.length;
+        setActiveGroup(groups[nextIdx]);
+      } else if (btn.payload === 'PREV_BUTTON_GROUP') {
+        const idx = groups.indexOf(activeGroup);
+        const prevIdx = (idx - 1 + groups.length) % groups.length;
+        setActiveGroup(groups[prevIdx]);
       }
     }
   };
@@ -667,7 +698,14 @@ export default function Dashboard() {
               <Box sx={{ flexGrow: 1, minWidth: 0, overflow: 'hidden' }}>
                 <Tabs
                   value={activeTabId}
-                  onChange={(_, val) => setActiveTabId(val)}
+                  onChange={(_, val) => {
+                    setActiveTabId(val);
+                    const t = tabs.find(x => x.id === val);
+                    if (t) {
+                      setActivePaneId(t.activePaneId);
+                      setTimeout(() => terminalRefs.current[t.activePaneId]?.focus(), 50);
+                    }
+                  }}
                   variant="scrollable"
                   scrollButtons={true}
                   allowScrollButtonsMobile
@@ -1010,11 +1048,12 @@ export default function Dashboard() {
             label="Button Type"
             size="small"
             value={buttonFormData.type}
-            onChange={e => setButtonFormData({ ...buttonFormData, type: e.target.value, payload: e.target.value === 'terminal_function' ? 'COPY' : '' })}
+            onChange={e => setButtonFormData({ ...buttonFormData, type: e.target.value, payload: e.target.value === 'terminal_function' ? 'COPY' : e.target.value === 'misc' ? 'NEXT_BUTTON_GROUP' : '' })}
             slotProps={{ select: { native: true } }}
           >
             <option value="send_string">Send String</option>
             <option value="terminal_function">Terminal Function</option>
+            <option value="misc">Misc</option>
           </TextField>
 
           {buttonFormData.type === 'send_string' ? (
@@ -1028,7 +1067,7 @@ export default function Dashboard() {
               onChange={e => setButtonFormData({ ...buttonFormData, payload: e.target.value })}
               placeholder="String to send to terminal, <ctrl-x> style syntax supported"
             />
-          ) : (
+          ) : buttonFormData.type === 'terminal_function' ? (
             <TextField
               select
               fullWidth
@@ -1044,6 +1083,19 @@ export default function Dashboard() {
               <option value="CLEAR">CLEAR (Screen)</option>
               <option value="RESET">RESET (Terminal)</option>
               <option value="RECONNECT">RECONNECT (Session)</option>
+            </TextField>
+          ) : (
+            <TextField
+              select
+              fullWidth
+              label="Action"
+              size="small"
+              value={buttonFormData.payload}
+              onChange={e => setButtonFormData({ ...buttonFormData, payload: e.target.value })}
+              slotProps={{ select: { native: true } }}
+            >
+              <option value="NEXT_BUTTON_GROUP">Next Button Group</option>
+              <option value="PREV_BUTTON_GROUP">Prev Button Group</option>
             </TextField>
           )}
         </DialogContent>

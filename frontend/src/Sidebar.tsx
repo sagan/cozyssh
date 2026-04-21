@@ -129,7 +129,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
     if (!tagContextMenu || !onSelectTagAsSplit) return;
     const tag = tagContextMenu.tag;
     const filtered = hosts.filter(h => h.tags && h.tags.includes(tag));
-    
+
     const nameSorter = (a: any, b: any) => a.name.localeCompare(b.name);
     const hostNameSorter = (a: any, b: any) => {
       if (a.hostname === b.hostname) return a.name.localeCompare(b.name);
@@ -139,7 +139,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
     const favs = filtered.filter(h => h.is_favourite).sort(nameSorter);
     const normals = filtered.filter(h => !h.is_favourite && !h.is_auto).sort(nameSorter);
     const autos = filtered.filter(h => !h.is_favourite && h.is_auto).sort(hostNameSorter);
-    
+
     const targets = [...favs, ...normals, ...autos].slice(0, 4);
     if (targets.length > 0) {
       onSelectTagAsSplit(tag, targets.map(h => h.name));
@@ -578,6 +578,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
                   <b>Alt + K</b> : Switch to previous tab<br />
                   <b>Alt + 1-9</b> : Switch to tab 1-9<br />
                   <b>Alt + 0</b> : Switch to last tab<br />
+                  <b>Alt + Shift + 1-9,0</b> : Click the button in button bar<br />
                   <b>Alt + W</b> : Close current tab<br />
                   <b>Alt + I</b> : Focus sidebar search filter, then Use ↑ ↓ to select, Enter to open<br />
                   <b>Alt + G</b> : Focus active terminal session

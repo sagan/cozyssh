@@ -1,8 +1,42 @@
 # CozySSH
 
-CozySSH is a lightweight, self-hosted web-based SSH client and terminal multiplexer. It allows you to manage multiple SSH sessions and local shells from a single, modern web interface.
+CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and terminal multiplexer. It allows you to manage multiple SSH sessions and local shells from a single, modern web interface.
 
 ![CozySSH Screenshot 1](./docs/screenshot-1.png)
+
+## Screenshots
+
+<details>
+
+<summary>Mobile View</summary>
+
+![CozySSH Mobile View](./docs/screenshot-mobile-view.png)
+
+</details>
+
+<details>
+
+<summary>Split Window</summary>
+
+![CozySSH Split Window](./docs/screenshot-split-window.png)
+
+</details>
+
+<details>
+
+<summary>File Browser</summary>
+
+![CozySSH File Browser](./docs/screenshot-file-browser.png)
+
+</details>
+
+<details>
+
+<summary>Text Editor</summary>
+
+![CozySSH Text Editor](./docs/screenshot-text-editor.png)
+
+</details>
 
 ## Features
 
@@ -12,6 +46,7 @@ CozySSH is a lightweight, self-hosted web-based SSH client and terminal multiple
 - **SFTP & Local File Management**: 📁 🆕
   - **Unified Interface**: Browse, upload, download, rename, and delete files on both remote SSH servers (via SFTP) and your local machine.
   - **Split View**: Access the file browser via the terminal tab's context menu without losing your shell session.
+  - **Text File Editor**: Edit text file of SFTP / local server directly in Browser.
   - **Shell CWD Follow**: An button to navigate to shell cwd (`$PWD`) directly. It uses standard OSC 7 escape sequence. Requires adding the below line to `~/.bashrc` :
     ```sh
     # Standard OSC 7 (Recommended for most cases)
@@ -26,6 +61,7 @@ CozySSH is a lightweight, self-hosted web-based SSH client and terminal multiple
   - `Alt + K` : Switch to previous tab
   - `Alt + 1-9` : Switch to tab 1-9
   - `Alt + 0` : Switch to last tab
+  - `Alt + Shift + 1-9,0` : Click the button in button bar
   - `Alt + W` : Close current tab
   - `Alt + I` : Focus sidebar search filter, then Use `↑ ↓` to select, `Enter` to open
   - `Alt + G` : Focus active terminal session
@@ -53,6 +89,7 @@ CozySSH is a lightweight, self-hosted web-based SSH client and terminal multiple
   - **Auto-copy**: Selected text is automatically copied to your clipboard.
   - **Right-click Paste**: Quickly paste clipboard contents into any active terminal session.
   - **Selection Highlighting**: Clear visual feedback for selected text.
+- **Split Screen Window**: Display multiple ssh servers of a `#tag` in single split-screen tab.
 - **Tab Pinning & Persistence**:
   - **Persistent Sessions**: Right-click any tab and select **"Pin Tab"** to keep the terminal session (PTY or SSH) running in the background even if you close your browser or navigate away.
   - **Output Buffering**: Pinned sessions maintain a circular output buffer (approx. 50KB), ensuring you see the most recent activity immediately upon reconnection.
