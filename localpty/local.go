@@ -4,12 +4,11 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/creack/pty"
+	"github.com/aymanbagabas/go-pty"
 )
 
 type LocalSession struct {
-	PtyFile *os.File
-	Cmd     *exec.Cmd
+	Pty pty.Pty
 }
 
 func Start() (*LocalSession, error) {
@@ -19,46 +18,45 @@ func Start() (*LocalSession, error) {
 	args := []string{}
 	if shell == "" {
 		if os.PathSeparator == '\\' {
-			shell = "powershell.exe"
+			shell = "powershell"
 		} else {
 			shell = "bash"
 		}
 	}
+	shell, _ = exec.LookPath(shell)
 	if os.PathSeparator == '/' {
 		args = append(args, "-l") // most non-Windows shells has -l flag to set up a login shell
 	}
 
-	c := exec.Command(shell, args...)
-
-	// Set standard xterm env
-	c.Env = append(os.Environ(), "TERM=xterm-256color")
-
-	// Force explicitly working out of home dir
-	if home, err := os.UserHomeDir(); err == nil {
-		c.Dir = home
-	}
-
-	ptmx, err := pty.Start(c)
+	p, err := pty.New()
 	if err != nil {
 		return nil, err
 	}
 
+	cmd := p.Command(shell, args...)
+
+	// Set standard xterm env
+	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+
+	// Force explicitly working out of home dir
+	if home, err := os.UserHomeDir(); err == nil {
+		cmd.Dir = home
+	}
+
+	if err := cmd.Start(); err != nil {
+		p.Close()
+		return nil, err
+	}
+
 	return &LocalSession{
-		PtyFile: ptmx,
-		Cmd:     c,
+		Pty: p,
 	}, nil
 }
 
 func (s *LocalSession) Resize(rows, cols uint16) error {
-	return pty.Setsize(s.PtyFile, &pty.Winsize{
-		Rows: rows,
-		Cols: cols,
-	})
+	return s.Pty.Resize(int(cols), int(rows))
 }
 
 func (s *LocalSession) Close() error {
-	if s.Cmd != nil && s.Cmd.Process != nil {
-		s.Cmd.Process.Kill()
-	}
-	return s.PtyFile.Close()
+	return s.Pty.Close()
 }

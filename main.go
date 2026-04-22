@@ -383,7 +383,7 @@ func main() {
 		if os.PathSeparator == '/' {
 			cmd = os_exec.Command("bash", "-l", "-c", req.Cmdline)
 		} else {
-			cmd = os_exec.Command("powershell.exe", "-Command", req.Cmdline)
+			cmd = os_exec.Command("powershell", "-Command", req.Cmdline)
 		}
 
 		var stdoutBuf, stderrBuf bytes.Buffer

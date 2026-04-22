@@ -20,7 +20,24 @@ Returns the currently active `xterm.js` Terminal instance. Returns `undefined` i
 Displays a toast notification in the top-right corner. Up to 3 messages can be displayed simultaneously.
 
 ### `csGetHosts(): Host[]`
-Returns the list of all configured server objects.
+Returns the list of all configured server objects. Sample Host object:
+
+```json
+{
+  "name": "host50",
+  "hostname": "192.168.1.50",
+  "port": "22",
+  "user": "root",
+  "proxy_jump": "",
+  "tags": [
+    "fav"
+  ],
+  "comment": "",
+  "source": "config",
+  "is_auto": false,
+  "is_favourite": true
+},
+```
 
 ### `csOpen(target: Host | string | (Host | string)[], options?: { name?: string }): void`
 Opens a new tab or split-screen tab.
@@ -34,7 +51,7 @@ Performs an HTTP request via the CozySSH backend proxy to bypass browser CORS re
 ### `csExec(cmdline: string): Promise<{ error: any, stdout: string, stderr: string }>`
 Executes a shell command on the CozySSH backend server.
 - **Linux/macOS**: Uses `bash -l -c`.
-- **Windows**: Uses `powershell.exe -Command`.
+- **Windows**: Uses `powershell -Command`.
 
 ### `csRefresh(): Promise<void>`
 Asynchronously refreshes all application data (server list, buttons, system info). Can be awaited.

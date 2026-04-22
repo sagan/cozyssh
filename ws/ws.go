@@ -124,7 +124,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 				log.Println("pty start error:", err)
 				return
 			}
-			s = session.NewSession(sessionID, host, ls.PtyFile, ls.PtyFile, ls.Close, ls.Resize)
+			s = session.NewSession(sessionID, host, ls.Pty, ls.Pty, ls.Close, ls.Resize)
 		} else {
 			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"state","state":"connecting to ssh server"}`))
 			term := &WsTerminal{conn: conn}

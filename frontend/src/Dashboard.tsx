@@ -1235,7 +1235,7 @@ export default function Dashboard() {
           ) : (
             <Box sx={{ border: '1px solid #ccc', borderRadius: 1, overflow: 'hidden' }}>
               <Typography variant="body2">
-                Check <a target="_blank" rel="noopener noreferrer" href="https://github.com/sagan/cozyssh/blob/main/docs/SCRIPTS.md">help</a> about scripts.
+                Check <a target="_blank" rel="noopener noreferrer" href="https://github.com/sagan/cozyssh/blob/master/docs/SCRIPTS.md">help</a> about scripts.
               </Typography>
               <CodeMirror
                 value={buttonFormData.payload}
