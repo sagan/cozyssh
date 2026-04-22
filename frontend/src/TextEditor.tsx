@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Box, Button, AppBar, Toolbar, Typography, IconButton } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import CodeMirror from '@uiw/react-codemirror';
+import { EditorView } from "@codemirror/view";
 import { javascript } from '@codemirror/lang-javascript';
 import { python } from '@codemirror/lang-python';
 import { html } from '@codemirror/lang-html';
@@ -88,7 +89,7 @@ export default function TextEditor({ fileName, initialContent, onSave, onClose }
           value={content}
           height="100%"
           style={{ height: '100%' }}
-          extensions={getLanguageExtension(fileName)}
+          extensions={[...getLanguageExtension(fileName), EditorView.lineWrapping]}
           onChange={(val) => setContent(val)}
         />
       </Box>

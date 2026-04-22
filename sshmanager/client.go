@@ -8,12 +8,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kevinburke/ssh_config"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
-	"sync"
 )
 
 type PooledClient struct {
@@ -182,7 +182,7 @@ type HostInfo struct {
 	ProxyJump   string   `json:"proxy_jump"`
 	Tags        []string `json:"tags"`
 	Comment     string   `json:"comment"`
-	Source      string   `json:"source"` // "config" or "known_hosts"
+	Source      string   `json:"source"`  // "config" or "known_hosts"
 	IsAuto      bool     `json:"is_auto"` // true if from known_hosts and not config
 	IsFavourite bool     `json:"is_favourite"`
 }
@@ -329,7 +329,7 @@ func ListKnownHosts() ([]HostInfo, error) {
 			if p == "" || strings.Contains(p, "*") || strings.Contains(p, "?") {
 				continue
 			}
-			
+
 			// Basic heuristic: if it contains ":" it might be [host]:port
 			hostname := p
 			port := "22"
@@ -339,7 +339,7 @@ func ListKnownHosts() ([]HostInfo, error) {
 				port = p[idx+2:]
 			}
 
-			// We only want the first plain name we find or handle all? 
+			// We only want the first plain name we find or handle all?
 			// Usually users want to see "root@server"
 			// The requirement says "display 'root@server' style title"
 			hosts = append(hosts, HostInfo{
@@ -353,18 +353,18 @@ func ListKnownHosts() ([]HostInfo, error) {
 			break // Just take the first name for simplicity, or should it be unique?
 		}
 	}
-	
+
 	// Deduplicate
 	unique := make(map[string]HostInfo)
 	for _, h := range hosts {
 		unique[h.HostName] = h
 	}
-	
+
 	var res []HostInfo
 	for _, h := range unique {
 		res = append(res, h)
 	}
-	
+
 	return res, nil
 }
 
@@ -509,17 +509,17 @@ func getSSHClient(alias string, term TerminalUI) (*ssh.Client, []io.Closer, erro
 	probeAddr := fmt.Sprintf("%s:%s", host, port)
 	dummyKey, _, _, _, _ := ssh.ParseAuthorizedKey([]byte("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"))
 	dummyNetAddr := &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 22}
-	
+
 	probeErr := khCallback(probeAddr, dummyNetAddr, dummyKey)
 	var keyErr *knownhosts.KeyError
 	var prioritizedAlgos []string
-	
+
 	if errors.As(probeErr, &keyErr) && len(keyErr.Want) > 0 {
 		for _, w := range keyErr.Want {
 			prioritizedAlgos = append(prioritizedAlgos, w.Key.Type())
 		}
 	}
-	
+
 	defaultAlgos := []string{
 		ssh.KeyAlgoED25519,
 		ssh.KeyAlgoRSASHA256,
@@ -530,7 +530,7 @@ func getSSHClient(alias string, term TerminalUI) (*ssh.Client, []io.Closer, erro
 		ssh.KeyAlgoECDSA521,
 		ssh.KeyAlgoDSA,
 	}
-	
+
 	algoMap := make(map[string]bool)
 	var hostKeyAlgorithms []string
 	for _, a := range append(prioritizedAlgos, defaultAlgos...) {
@@ -564,7 +564,7 @@ func getSSHClient(alias string, term TerminalUI) (*ssh.Client, []io.Closer, erro
 			if term == nil {
 				return fmt.Errorf("host key unknown, interactive prompt required but not available")
 			}
-			
+
 			resp, e := term.Prompt(prompt)
 			if e != nil {
 				return e
@@ -610,7 +610,7 @@ func getSSHClient(alias string, term TerminalUI) (*ssh.Client, []io.Closer, erro
 			if err != nil {
 				return nil, err
 			}
-			
+
 			c, chans, reqs, err := ssh.NewClientConn(jumpConn, addr, config)
 			if err != nil {
 				return nil, err

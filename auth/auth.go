@@ -65,7 +65,7 @@ func generateToken() string {
 
 func SignDownloadToken(id, path string, expires int64) string {
 	mac := hmac.New(sha256.New, []byte(globalConfig.AppPasswordHash))
-	mac.Write([]byte(fmt.Sprintf("%s:%s:%d", id, path, expires)))
+	fmt.Fprintf(mac, "%s:%s:%d", id, path, expires)
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
@@ -88,7 +88,7 @@ func isValidToken(token string) bool {
 	if globalConfig == nil {
 		return false
 	}
-	
+
 	expected := generateToken()
 	// Using ConstantTimeCompare neutralizes timing-attacks
 	return subtle.ConstantTimeCompare([]byte(token), []byte(expected)) == 1

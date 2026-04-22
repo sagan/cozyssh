@@ -1,14 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"embed"
 	"encoding/json"
 	"flag"
+	"io"
 	"io/fs"
 	"log"
 	"net"
 	"net/http"
 	"os"
+	os_exec "os/exec"
 	"strings"
 
 	"cozyssh/auth"
@@ -86,7 +89,7 @@ func main() {
 			hostname = "unknown"
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"hostname":         hostname,
 			"version":          version,
 			"insecure_allowed": *allowInsecure,
@@ -321,6 +324,81 @@ func main() {
 		}
 		cfg.MoveButton(req.ID, req.Direction)
 		w.WriteHeader(http.StatusOK)
+	}))))
+
+	mux.Handle("/api/fetch", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		urlStr := r.URL.Query().Get("url")
+		if urlStr == "" {
+			http.Error(w, "Missing url", http.StatusBadRequest)
+			return
+		}
+
+		req, err := http.NewRequest(r.Method, urlStr, r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		for k, vv := range r.Header {
+			if k == "Authorization" || k == "Connection" || k == "Upgrade" || k == "Referer" || k == "Origin" {
+				continue
+			}
+			targetKey := k
+			if strings.HasPrefix(strings.ToLower(k), "x-cozyssh-") {
+				targetKey = k[10:]
+			}
+			for _, v := range vv {
+				req.Header.Add(targetKey, v)
+			}
+		}
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		defer resp.Body.Close()
+		for k, vv := range resp.Header {
+			for _, v := range vv {
+				w.Header().Add(k, v)
+			}
+		}
+		w.WriteHeader(resp.StatusCode)
+		io.Copy(w, resp.Body)
+	}))))
+
+	mux.Handle("/api/exec", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			Cmdline string `json:"cmdline"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+
+		var cmd *os_exec.Cmd
+		if os.PathSeparator == '/' {
+			cmd = os_exec.Command("bash", "-l", "-c", req.Cmdline)
+		} else {
+			cmd = os_exec.Command("powershell.exe", "-Command", req.Cmdline)
+		}
+
+		var stdoutBuf, stderrBuf bytes.Buffer
+		cmd.Stdout = &stdoutBuf
+		cmd.Stderr = &stderrBuf
+		err := cmd.Run()
+		stdout := stdoutBuf.String()
+		stderr := stderrBuf.String()
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"stdout": string(stdout),
+			"stderr": stderr,
+			"error":  err,
+		})
 	}))))
 
 	// 4. Serve embedded frontend

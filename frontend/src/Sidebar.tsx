@@ -8,7 +8,7 @@ import StarIcon from '@mui/icons-material/Star';
 
 const drawerWidth = 260;
 
-interface Host {
+export interface Host {
   name: string;
   hostname: string;
   port: string;
@@ -22,12 +22,11 @@ interface Host {
   is_favourite?: boolean;
 }
 
-export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, onSelect, onSelectTagAsSplit, onLogout, activeTabs, onAttach }: { sysHostname: string, appVersion: string, mobileOpen: boolean, onClose: () => void, onSelect: (host: string) => void, onSelectTagAsSplit?: (tag: string, hosts: string[]) => void, onLogout?: () => void, activeTabs: string[], onAttach: (id: string, host: string, title: string) => void }) {
+export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, onSelect, onSelectTagAsSplit, onLogout, activeTabs, onAttach, onRefresh, hosts, fetchHosts }: { sysHostname: string, appVersion: string, mobileOpen: boolean, onClose: () => void, onSelect: (host: string) => void, onSelectTagAsSplit?: (tag: string, hosts: string[]) => void, onLogout?: () => void, activeTabs: string[], onAttach: (id: string, host: string, title: string) => void, onRefresh?: () => void, hosts: Host[], fetchHosts: () => void }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  const [hosts, setHosts] = useState<Host[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   // Settings State
@@ -64,25 +63,9 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number; target: Host } | null>(null);
   const [tagContextMenu, setTagContextMenu] = useState<{ mouseX: number; mouseY: number; tag: string } | null>(null);
 
-  const fetchHosts = () => {
-    const token = localStorage.getItem('cozy_token');
-    fetch('/api/hosts', { headers: { 'Authorization': `Bearer ${token}` } })
-      .then((r) => {
-        if (r.status === 401) {
-          localStorage.removeItem('cozy_token');
-          window.location.href = '/login';
-          throw new Error('Unauthorized');
-        }
-        return r.json();
-      })
-      .then((data) => setHosts(data || []))
-      .catch((e) => console.error(e))
-      .finally(() => setLoading(false));
-  };
-
   useEffect(() => {
-    fetchHosts();
-  }, []);
+    if (loading && hosts.length > 0) setLoading(false);
+  }, [hosts, loading]);
 
   const handleSavePassword = async () => {
     if (newPwd !== confirmPwd) {
@@ -384,6 +367,11 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
           <MoreVertIcon />
         </IconButton>
         <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
+          <MenuItem onClick={() => {
+            setAnchorEl(null);
+            fetchHosts();
+            if (onRefresh) onRefresh();
+          }}>Refresh</MenuItem>
           <MenuItem onClick={() => { setAnchorEl(null); setSettingsOpen(true); }}>Dashboard</MenuItem>
           <MenuItem onClick={() => { setAnchorEl(null); if (onLogout) onLogout(); }}>Logout</MenuItem>
         </Menu>

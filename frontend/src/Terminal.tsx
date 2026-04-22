@@ -13,6 +13,7 @@ export interface TerminalHandle {
   clear: () => void;
   reset: () => void;
   reconnect: () => void;
+  getXterm: () => Terminal | null;
 }
 
 interface TerminalProps {
@@ -69,7 +70,8 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     reconnect: () => {
       forceReconnectRef.current = true;
       reconnectFuncRef.current?.();
-    }
+    },
+    getXterm: () => xtermRef.current
   }));
 
   useEffect(() => {

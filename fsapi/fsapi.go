@@ -126,7 +126,7 @@ func HandleFS(w http.ResponseWriter, r *http.Request) {
 		expires := time.Now().Add(5 * time.Minute).Unix()
 		sig := auth.SignDownloadToken(sessionID, path, expires)
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{"expires": expires, "sig": sig})
+		json.NewEncoder(w).Encode(map[string]any{"expires": expires, "sig": sig})
 	case "upload":
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -307,7 +307,7 @@ func handleList(w http.ResponseWriter, path string, isLocal bool, sftpClient *sf
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"path":  path,
 		"files": infos,
 	})

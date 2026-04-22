@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Box, CssBaseline, ThemeProvider, createTheme, Tabs, Tab, IconButton, Menu, MenuItem, Typography, Button, ButtonGroup, useMediaQuery, useTheme, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, FormControlLabel, Checkbox } from '@mui/material';
 import Sidebar from './Sidebar';
+import type { Host } from './Sidebar';
 import TerminalComponent from './Terminal';
 import type { TerminalHandle } from './Terminal';
 import FileBrowser from './FileBrowser';
@@ -13,6 +14,10 @@ import WestIcon from '@mui/icons-material/West';
 import EastIcon from '@mui/icons-material/East';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import AddIcon from '@mui/icons-material/Add';
+import CodeMirror from '@uiw/react-codemirror';
+import { EditorView } from "@codemirror/view";
+import { javascript } from '@codemirror/lang-javascript';
+import { transform } from 'sucrase';
 
 const lightTheme = createTheme({
   palette: {
@@ -74,6 +79,21 @@ export default function Dashboard() {
   const [inputValue, setInputValue] = useState('');
   const [appendNewLine, setAppendNewLine] = useState(true);
   const [sendToAll, setSendToAll] = useState(false);
+  const [toasts, setToasts] = useState<{ id: number; msg: string }[]>([]);
+  const toastIdRef = useRef(0);
+  const [hosts, setHosts] = useState<Host[]>([]);
+
+  const csNotify = (msg: string) => {
+    toastIdRef.current++;
+    const id = toastIdRef.current;
+    setToasts(prev => {
+      const newToasts = [...prev, { id, msg }];
+      return newToasts.slice(-3);
+    });
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 3000);
+  };
 
   useEffect(() => {
     localStorage.setItem('cozy_active_group', activeGroup);
@@ -87,6 +107,84 @@ export default function Dashboard() {
       setActiveGroup('Default');
     }
   }, [groups, buttonsLoaded, activeGroup]);
+
+  useEffect(() => {
+    (window as any).csGetTerminal = () => {
+      return terminalRefs.current[activePaneId]?.getXterm();
+    };
+    (window as any).csNotify = (msg: string) => csNotify(msg);
+    (window as any).csGetHosts = () => hosts;
+    (window as any).csOpen = (target: any, options: { name?: string } = {}) => {
+      const targets = Array.isArray(target) ? target.slice(0, 4) : [target];
+      const hostNames = targets.map(t => {
+        if (typeof t === 'string') {
+          const known = hosts.find(h => h.name === t || h.hostname === t);
+          return known ? known.name : t;
+        }
+        return t.name;
+      });
+
+      const title = options.name || hostNames[0];
+
+      if (hostNames.length > 1) {
+        handleSelectTagAsSplit(title, hostNames);
+      } else {
+        handleSelectHost(hostNames[0], options.name);
+      }
+    };
+
+    (window as any).csFetch = async (url: string, options: any = {}) => {
+      const token = localStorage.getItem('cozy_token');
+      const proxyUrl = `/api/fetch?url=${encodeURIComponent(url)}`;
+
+      const rawHeaders = options.headers || {};
+      const headers: any = {};
+      const restricted = ['authorization', 'referer', 'origin', 'user-agent', 'cookie'];
+
+      headers["Authorization"] = `Bearer ${token}`;
+      for (const key in rawHeaders) {
+        if (restricted.includes(key.toLowerCase())) {
+          headers[`X-CozySSH-${key}`] = rawHeaders[key];
+        } else {
+          headers[key] = rawHeaders[key];
+        }
+      }
+
+      return fetch(proxyUrl, {
+        method: options.method || 'GET',
+        headers: headers,
+        body: options.body
+      });
+    };
+
+    (window as any).csExec = async (cmdline: string) => {
+      const token = localStorage.getItem('cozy_token');
+      const res = await fetch('/api/exec', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ cmdline })
+      });
+      if (!res.ok) throw new Error("Exec failed: " + res.statusText);
+      return res.json();
+    };
+
+    (window as any).csRefresh = async () => {
+      await handleRefresh();
+    };
+
+    return () => {
+      delete (window as any).csGetTerminal;
+      delete (window as any).csNotify;
+      delete (window as any).csGetHosts;
+      delete (window as any).csOpen;
+      delete (window as any).csFetch;
+      delete (window as any).csExec;
+      delete (window as any).csRefresh;
+    };
+  }, [activePaneId, hosts]);
 
   const handleCloseInputDialog = () => {
     setInputDialogOpen(false);
@@ -152,14 +250,25 @@ export default function Dashboard() {
     tabsRef.current = tabs;
   }, [tabs]);
 
-  useEffect(() => {
+  const fetchHosts = () => {
     const token = localStorage.getItem('cozy_token');
-    const hash = window.location.hash.substring(1);
-    if (hash) {
-      window.history.replaceState(null, '', window.location.pathname + window.location.search);
-    }
+    return fetch('/api/hosts', { headers: { 'Authorization': `Bearer ${token}` } })
+      .then((r) => {
+        if (r.status === 401) {
+          localStorage.removeItem('cozy_token');
+          window.location.href = '/login';
+          throw new Error('Unauthorized');
+        }
+        return r.json();
+      })
+      .then((data) => setHosts(data || []))
+      .catch((e) => console.error(e));
+  };
 
-    fetch('/api/sysinfo', { headers: { 'Authorization': `Bearer ${token}` } })
+  const handleRefresh = () => {
+    const token = localStorage.getItem('cozy_token');
+    const p1 = fetchHosts();
+    const p2 = fetch('/api/sysinfo', { headers: { 'Authorization': `Bearer ${token}` } })
       .then(r => r.json())
       .then(data => {
         if (data) {
@@ -169,13 +278,25 @@ export default function Dashboard() {
       })
       .catch(e => console.error(e));
 
-    fetch('/api/buttons', { headers: { 'Authorization': `Bearer ${token}` } })
+    const p3 = fetch('/api/buttons', { headers: { 'Authorization': `Bearer ${token}` } })
       .then(r => r.json())
       .then(data => {
         setButtons(data || []);
         setButtonsLoaded(true);
       })
       .catch(e => console.error(e));
+
+    return Promise.all([p1, p2, p3]);
+  };
+
+  useEffect(() => {
+    const token = localStorage.getItem('cozy_token');
+    const hash = window.location.hash.substring(1);
+    if (hash) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+    handleRefresh();
+    fetchHosts();
 
     const bc = new BroadcastChannel('cozy_tabs');
     let pinnedElsewhere = false;
@@ -302,11 +423,11 @@ export default function Dashboard() {
     window.location.href = '/login';
   };
 
-  const handleSelectHost = (host: string) => {
+  const handleSelectHost = (host: string, customTitle?: string) => {
     const id = Math.random().toString(36).substring(2);
     const newTab: TabData = {
       id: id,
-      title: host,
+      title: customTitle || host,
       panes: [{ id: id, host }],
       activePaneId: id,
     };
@@ -606,6 +727,16 @@ export default function Dashboard() {
         const prevIdx = (idx - 1 + groups.length) % groups.length;
         setActiveGroup(groups[prevIdx]);
       }
+      terminalRefs.current[activePaneId]?.focus();
+    } else if (btn.type === 'run_script') {
+      try {
+        const jsCode = transform(btn.payload, { transforms: ['typescript'] }).code;
+        await eval(jsCode);
+      } catch (e) {
+        console.error('Script Error:', e);
+        csNotify('Script Error: ' + e);
+      }
+      terminalRefs.current[activePaneId]?.focus();
     }
   };
 
@@ -682,6 +813,9 @@ export default function Dashboard() {
           sysHostname={sysHostname}
           appVersion={appVersion}
           onAttach={handleAttach}
+          onRefresh={handleRefresh}
+          hosts={hosts}
+          fetchHosts={fetchHosts}
         />
         <Box component="main" sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           {tabs.length > 0 && (
@@ -908,7 +1042,7 @@ export default function Dashboard() {
                   <Tab
                     key={btn.id}
                     label={btn.name}
-                    title={btn.payload}
+                    title={btn.type + ": " + btn.payload}
                     component="div"
                     onClick={() => handleButtonClick(btn)}
                     onContextMenu={(e) => {
@@ -1054,6 +1188,7 @@ export default function Dashboard() {
             <option value="send_string">Send String</option>
             <option value="terminal_function">Terminal Function</option>
             <option value="misc">Misc</option>
+            <option value="run_script">Run Script</option>
           </TextField>
 
           {buttonFormData.type === 'send_string' ? (
@@ -1084,7 +1219,7 @@ export default function Dashboard() {
               <option value="RESET">RESET (Terminal)</option>
               <option value="RECONNECT">RECONNECT (Session)</option>
             </TextField>
-          ) : (
+          ) : buttonFormData.type === 'misc' ? (
             <TextField
               select
               fullWidth
@@ -1097,6 +1232,18 @@ export default function Dashboard() {
               <option value="NEXT_BUTTON_GROUP">Next Button Group</option>
               <option value="PREV_BUTTON_GROUP">Prev Button Group</option>
             </TextField>
+          ) : (
+            <Box sx={{ border: '1px solid #ccc', borderRadius: 1, overflow: 'hidden' }}>
+              <Typography variant="body2">
+                Check <a target="_blank" rel="noopener noreferrer" href="https://github.com/sagan/cozyssh/blob/main/docs/SCRIPTS.md">help</a> about scripts.
+              </Typography>
+              <CodeMirror
+                value={buttonFormData.payload}
+                height="200px"
+                extensions={[javascript({ typescript: true }), EditorView.lineWrapping]}
+                onChange={(value) => setButtonFormData({ ...buttonFormData, payload: value })}
+              />
+            </Box>
           )}
         </DialogContent>
         <DialogActions>
@@ -1157,6 +1304,17 @@ export default function Dashboard() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Box sx={{ position: 'fixed', top: 20, right: 20, zIndex: 10000, display: 'flex', flexDirection: 'column', gap: 1 }}>
+        {toasts.map(t => (
+          <Paper key={t.id} sx={{ p: 1.5, minWidth: 200, bgcolor: 'primary.main', color: 'white', display: 'flex', alignItems: 'center', boxShadow: 3 }}>
+            <Typography variant="body2" sx={{ flexGrow: 1 }}>{t.msg}</Typography>
+            <IconButton size="small" onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))} sx={{ color: 'white', ml: 1 }}>
+              <CloseIcon fontSize="inherit" />
+            </IconButton>
+          </Paper>
+        ))}
+      </Box>
     </ThemeProvider>
   );
 }
