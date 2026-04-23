@@ -13,6 +13,7 @@ export interface TerminalHandle {
   clear: () => void;
   reset: () => void;
   reconnect: () => void;
+  scrollLines: (amount: number) => void;
   getXterm: () => Terminal | null;
 }
 
@@ -70,6 +71,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     reconnect: () => {
       forceReconnectRef.current = true;
       reconnectFuncRef.current?.();
+    },
+    scrollLines: (amount: number) => {
+      xtermRef.current?.scrollLines(amount);
     },
     getXterm: () => xtermRef.current
   }));
@@ -144,7 +148,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     resizeObserver.observe(terminalRef.current);
 
     term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
-      if (e.altKey && (e.key === 'j' || e.key === 'k' || e.key === 'i' || e.key === 'g' || e.key === 'J' || e.key === 'K' || e.key === 'I' || e.key === 'G' || e.key === 'w' || e.key === 'W' || e.key === 't' || e.key === 'T' || (e.key >= '0' && e.key <= '9') || (e.shiftKey && e.code.startsWith('Digit')))) {
+      if (e.altKey && (e.key === 'j' || e.key === 'k' || e.key === 'i' || e.key === 'g' || e.key === 'J' || e.key === 'K' || e.key === 'I' || e.key === 'G' || e.key === 'w' || e.key === 'W' || e.key === 't' || e.key === 'T' || (e.key >= '0' && e.key <= '9') || (e.shiftKey && e.code.startsWith('Digit')) || e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
         return false;
       }
       return true;
@@ -159,6 +163,8 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
 
     let isDisposed = false;
     let isDead = false;
+    let expectingHistory = false;
+    let isRestoringHistory = false;
     let deathType: 'fatal' | 'stolen' | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout>;
 
@@ -194,6 +200,10 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
         if (typeof ev.data === 'string') {
           try {
             const msg = JSON.parse(ev.data);
+            if (msg.type === 'history_start') {
+              expectingHistory = true;
+              return;
+            }
             if (msg.type === 'state') {
               if (msg.state === 'stolen' || msg.state.includes('(fatal)')) {
                 isDisposed = true;
@@ -217,7 +227,16 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
           }
           term.write(ev.data);
         } else {
-          term.write(new Uint8Array(ev.data));
+          const buffer = new Uint8Array(ev.data);
+          if (expectingHistory) {
+            expectingHistory = false;
+            isRestoringHistory = true;
+            term.write(buffer, () => {
+              isRestoringHistory = false;
+            });
+          } else {
+            term.write(buffer);
+          }
         }
       };
 
@@ -232,6 +251,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     connectWS();
 
     term.onData((data) => {
+      if (isRestoringHistory) return;
       if (isDead && data === '\r') {
         if (deathType === 'stolen') {
           onManualReconnect?.(true);

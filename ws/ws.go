@@ -231,6 +231,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 
 	// Send history first
 	if len(history) > 0 {
+		conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"history_start"}`))
 		conn.WriteMessage(websocket.BinaryMessage, history)
 	}
 

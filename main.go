@@ -20,6 +20,7 @@ import (
 	"cozyssh/session"
 	"cozyssh/sshmanager"
 	"cozyssh/ws"
+	"cozyssh/scratchpad"
 )
 
 //go:embed all:frontend/dist
@@ -61,6 +62,7 @@ func main() {
 
 	auth.Init(cfg)
 	ws.SetConfig(cfg)
+	scratchpad.Init(cfg.ConfigDir)
 
 	// 2. Set up HTTP router
 	mux := http.NewServeMux()
@@ -69,6 +71,7 @@ func main() {
 	auth.AddAuthRoutes(mux)
 
 	mux.HandleFunc("/api/ws", ws.HandleTerminal)
+	mux.HandleFunc("/api/ws/scratchpad", scratchpad.HandleWS)
 
 	securityMiddleware := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -212,6 +215,16 @@ func main() {
 			session.GlobalManager.ClearInactive(req.ID)
 		}
 		w.WriteHeader(http.StatusOK)
+	}))))
+
+	mux.Handle("/api/scratchpad/reload", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		scratchpad.Reload()
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success":true}`))
 	}))))
 
 	mux.Handle("/api/sessions/pinned", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

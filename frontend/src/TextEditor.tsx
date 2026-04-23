@@ -44,9 +44,10 @@ interface TextEditorProps {
   initialContent: string;
   onSave: (content: string) => void;
   onClose: () => void;
+  isSaving?: boolean;
 }
 
-export default function TextEditor({ fileName, initialContent, onSave, onClose }: TextEditorProps) {
+export default function TextEditor({ fileName, initialContent, onSave, onClose, isSaving }: TextEditorProps) {
   const [content, setContent] = useState(initialContent);
   const hasChanged = content !== initialContent;
 
@@ -76,8 +77,15 @@ export default function TextEditor({ fileName, initialContent, onSave, onClose }
           <Typography variant="h6" sx={{ flexGrow: 1, fontFamily: 'monospace', fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             Editing: {fileName}
           </Typography>
-          <Button variant="contained" color="primary" size="small" sx={{ mr: 2 }} onClick={() => onSave(content)} disabled={!hasChanged}>
-            Save
+          <Button 
+            variant="contained" 
+            color="primary" 
+            size="small" 
+            sx={{ mr: 2 }} 
+            onClick={() => onSave(content)} 
+            disabled={!hasChanged || isSaving}
+          >
+            {isSaving ? 'Saving...' : 'Save'}
           </Button>
           <IconButton edge="end" color="inherit" onClick={handleClose}>
             <CloseIcon />

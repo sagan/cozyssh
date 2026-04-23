@@ -22,7 +22,7 @@ export interface Host {
   is_favourite?: boolean;
 }
 
-export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, onSelect, onSelectTagAsSplit, onLogout, activeTabs, onAttach, onRefresh, hosts, fetchHosts }: { sysHostname: string, appVersion: string, mobileOpen: boolean, onClose: () => void, onSelect: (host: string) => void, onSelectTagAsSplit?: (tag: string, hosts: string[]) => void, onLogout?: () => void, activeTabs: string[], onAttach: (id: string, host: string, title: string) => void, onRefresh?: () => void, hosts: Host[], fetchHosts: () => void }) {
+export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, onSelect, onSelectTagAsSplit, onLogout, onOpenScratchpad, activeTabs, onAttach, onRefresh, hosts, fetchHosts }: { sysHostname: string, appVersion: string, mobileOpen: boolean, onClose: () => void, onSelect: (host: string) => void, onSelectTagAsSplit?: (tag: string, hosts: string[]) => void, onLogout?: () => void, onOpenScratchpad?: () => void, activeTabs: string[], onAttach: (id: string, host: string, title: string) => void, onRefresh?: () => void, hosts: Host[], fetchHosts: () => void }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -216,7 +216,8 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   };
 
   const handleSaveHost = async () => {
-    if (!formData.alias || !formData.hostname) return;
+    if (!formData.hostname) return;
+    const finalAlias = formData.alias.trim() || formData.hostname.trim();
     const token = localStorage.getItem('cozy_token');
     const url = editingAlias ? `/api/hosts/${editingAlias}` : `/api/hosts`;
     const method = editingAlias ? 'PUT' : 'POST';
@@ -225,6 +226,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
 
     const payload = {
       ...formData,
+      alias: finalAlias,
       tags: parsedTags
     };
 
@@ -369,10 +371,10 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
         <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
           <MenuItem onClick={() => {
             setAnchorEl(null);
-            fetchHosts();
             if (onRefresh) onRefresh();
           }}>Refresh</MenuItem>
           <MenuItem onClick={() => { setAnchorEl(null); setSettingsOpen(true); }}>Dashboard</MenuItem>
+          <MenuItem onClick={() => { setAnchorEl(null); if (onOpenScratchpad) onOpenScratchpad(); }}>Open Scratchpad</MenuItem>
           <MenuItem onClick={() => { setAnchorEl(null); if (onLogout) onLogout(); }}>Logout</MenuItem>
         </Menu>
       </Toolbar>
@@ -569,7 +571,8 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
                   <b>Alt + Shift + 1-9,0</b> : Click the button in button bar<br />
                   <b>Alt + W</b> : Close current tab<br />
                   <b>Alt + I</b> : Focus sidebar search filter, then Use ↑ ↓ to select, Enter to open<br />
-                  <b>Alt + G</b> : Focus active terminal session
+                  <b>Alt + G</b> : Focus active terminal session<br />
+                  <b>Alt + ↑ / ↓</b> : Scroll terminal up / down
                 </Typography>
               </>
             )}
@@ -599,8 +602,8 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
         <DialogTitle>{editingAlias ? `Edit Host: ${editingAlias}` : 'Add New Server'}</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <TextField fullWidth label="Alias Name" size="small" value={formData.alias} onChange={e => setFormData({ ...formData, alias: e.target.value })} placeholder="e.g. production-database" required />
-            <TextField fullWidth label="HostName (IP / Domain)" size="small" value={formData.hostname} onChange={e => setFormData({ ...formData, hostname: e.target.value })} required />
+            <TextField fullWidth label="Alias Name" size="small" value={formData.alias} onChange={e => setFormData({ ...formData, alias: e.target.value })} placeholder={formData.hostname || "e.g. production-database"} />
+            <TextField fullWidth label="HostName (IP / Domain)" size="small" value={formData.hostname} onChange={e => setFormData({ ...formData, hostname: e.target.value })} required autoFocus={!formData.hostname} />
             <TextField fullWidth label="User" size="small" value={formData.user} onChange={e => setFormData({ ...formData, user: e.target.value })} placeholder="default: root" />
             <TextField fullWidth label="Port" size="small" value={formData.port} onChange={e => setFormData({ ...formData, port: e.target.value })} placeholder="default: 22" />
             <TextField fullWidth label="Tags (Optional)" size="small" value={formData.tags} onChange={e => setFormData({ ...formData, tags: e.target.value })} placeholder="e.g. production web" />
@@ -611,7 +614,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleSaveHost} disabled={!formData.alias || !formData.hostname}>Save Changes</Button>
+          <Button variant="contained" onClick={handleSaveHost} disabled={!formData.hostname}>Save Changes</Button>
         </DialogActions>
       </Dialog>
     </Drawer>

@@ -33,6 +33,7 @@ type Config struct {
 	PinnedTabs      []PinnedTab `yaml:"pinned_tabs"`
 	Buttons         []Button    `yaml:"buttons" json:"buttons"`
 	ConfigPath      string      `yaml:"-"` // internal use
+	ConfigDir       string      `yaml:"-"` // internal use
 }
 
 func LoadConfig(customDir string) (*Config, error) {
@@ -70,6 +71,7 @@ func LoadConfig(customDir string) (*Config, error) {
 		cfg.Addr = "127.0.0.1:8022"
 	}
 	cfg.ConfigPath = configPath
+	cfg.ConfigDir = configDir
 
 	return &cfg, nil
 }

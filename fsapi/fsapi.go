@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"time"
@@ -272,22 +273,33 @@ func handleList(w http.ResponseWriter, path string, isLocal bool, sftpClient *sf
 	var infos []FileInfo
 
 	if isLocal {
-		entries, err := os.ReadDir(path)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		for _, e := range entries {
-			info, err := e.Info()
-			if err != nil {
-				continue
+		if runtime.GOOS == "windows" {
+			path = filepath.Clean(path)
+			if strings.HasPrefix(path, "\\") && len(path) >= 3 && path[2] == ':' {
+				path = path[1:]
 			}
-			infos = append(infos, FileInfo{
-				Name:    info.Name(),
-				IsDir:   info.IsDir(),
-				Size:    info.Size(),
-				ModTime: info.ModTime().Format("2006-01-02 15:04:05"),
-			})
+			if path == "." || path == "" || path == "\\" || path == "/" {
+				infos = GetAvailableDrives()
+				path = "/"
+			} else {
+			entries, err := os.ReadDir(path)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			for _, e := range entries {
+				info, err := e.Info()
+				if err != nil {
+					continue
+				}
+				infos = append(infos, FileInfo{
+					Name:    info.Name(),
+					IsDir:   info.IsDir(),
+					Size:    info.Size(),
+					ModTime: info.ModTime().Format("2006-01-02 15:04:05"),
+				})
+			}
+			}
 		}
 	} else {
 		// SFTP
@@ -306,9 +318,14 @@ func handleList(w http.ResponseWriter, path string, isLocal bool, sftpClient *sf
 		}
 	}
 
+	displayPath := path
+	if isLocal && runtime.GOOS == "windows" && (path == "/" || path == "\\" || path == "") {
+		displayPath = "/"
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"path":  path,
+		"path":  displayPath,
 		"files": infos,
 	})
 }

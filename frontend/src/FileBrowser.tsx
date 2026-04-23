@@ -39,6 +39,33 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
 
   const [editingFile, setEditingFile] = useState<FileInfo | null>(null);
   const [editorContent, setEditorContent] = useState<string>('');
+  const [isWindowsHost, setIsWindowsHost] = useState<boolean>(false);
+
+  const isWindowsPath = (path: string) => /^[a-zA-Z]:/.test(path) || path.includes('\\') || /^\/[a-zA-Z]:/.test(path);
+
+  const getPathJoiner = (p: string) => {
+    const isWin = isWindowsHost || isWindowsPath(p);
+    const sep = isWin ? '\\' : '/';
+    return (child: string) => {
+      // If child is an absolute Windows path (C:\) or absolute Unix path (/etc), return as-is
+      if (/^[a-zA-Z]:/.test(child)) return child;
+      if (child.startsWith('/') && !isWin) return child;
+      
+      // Handle the case where child has a leading slash on Windows (from previous bugs)
+      if (isWin && child.startsWith('/')) {
+        const stripped = child.substring(1);
+        if (/^[a-zA-Z]:/.test(stripped)) return stripped;
+      }
+
+      if (!p || p === '') return child;
+      
+      // If we are at the virtual root, don't use double slashes
+      if (p === '/') return '/' + child;
+
+      if (p.endsWith('/') || p.endsWith('\\')) return p + child;
+      return p + sep + child;
+    };
+  };
 
   const fetchFiles = async (path: string = '') => {
     setLoading(true);
@@ -51,6 +78,9 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
         const data = await res.json();
         setCurrentPath(data.path);
         setFiles(data.files || []);
+        if (isWindowsPath(data.path) || (data.files && data.files.some((f: FileInfo) => isWindowsPath(f.name)))) {
+          setIsWindowsHost(true);
+        }
       } else {
         alert('Failed to list files');
       }
@@ -95,19 +125,30 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   };
 
   const handleNavigate = (folder: string) => {
+    const isWindows = isWindowsPath(currentPath);
+    const sep = isWindows ? '\\' : '/';
     let nextPath = currentPath;
-    
+
     if (folder === '..') {
-      const parts = currentPath.split('/').filter(Boolean);
+      const parts = currentPath.split(/[/\\]/).filter(Boolean);
       if (parts.length > 0) {
         parts.pop();
-        nextPath = parts.length === 0 ? '/' : '/' + parts.join('/');
+        if (parts.length === 0) {
+          nextPath = '/'; 
+        } else {
+          nextPath = parts.join(sep);
+          if (!isWindows) {
+            nextPath = '/' + nextPath;
+          } else if (parts.length === 1 && parts[0].endsWith(':')) {
+            nextPath += sep;
+          }
+        }
       } else {
         nextPath = '/';
       }
     } else {
-      if (!nextPath.endsWith('/')) nextPath += '/';
-      nextPath += folder;
+      const join = getPathJoiner(currentPath);
+      nextPath = join(folder);
     }
     fetchFiles(nextPath);
   };
@@ -147,7 +188,8 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   };
 
   const handleDownload = async (fileName: string) => {
-    const targetPath = currentPath + (currentPath.endsWith('/') ? '' : '/') + fileName;
+    const join = getPathJoiner(currentPath);
+    const targetPath = join(fileName);
     const token = localStorage.getItem('cozy_token');
     try {
       const res = await fetch(`/api/fs/token?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(targetPath)}`, {
@@ -174,7 +216,8 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   };
 
   const handleEditAsText = async (file: FileInfo) => {
-    const targetPath = currentPath + (currentPath.endsWith('/') ? '' : '/') + file.name;
+    const join = getPathJoiner(currentPath);
+    const targetPath = join(file.name);
     const token = localStorage.getItem('cozy_token');
     setLoading(true);
     try {
@@ -221,7 +264,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
       });
 
       if (res.ok) {
-        setEditingFile(null);
+        setEditorContent(newContent);
         fetchFiles(currentPath);
       } else {
         alert('Save failed');
@@ -238,8 +281,9 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
     const newName = prompt(`Rename ${file.name} to:`, file.name);
     if (!newName || newName === file.name) return;
 
-    const oldPath = currentPath + (currentPath.endsWith('/') ? '' : '/') + file.name;
-    const newPath = currentPath + (currentPath.endsWith('/') ? '' : '/') + newName;
+    const join = getPathJoiner(currentPath);
+    const oldPath = join(file.name);
+    const newPath = join(newName);
     const token = localStorage.getItem('cozy_token');
 
     try {
@@ -262,7 +306,8 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   const handleDelete = async (file: FileInfo) => {
     if (!confirm(`Are you sure you want to delete ${file.name}?`)) return;
 
-    const path = currentPath + (currentPath.endsWith('/') ? '' : '/') + file.name;
+    const join = getPathJoiner(currentPath);
+    const path = join(file.name);
     const token = localStorage.getItem('cozy_token');
 
     try {
@@ -333,7 +378,8 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   };
 
   const handleCopyPath = (file: FileInfo) => {
-    const fullPath = currentPath + (currentPath.endsWith('/') ? '' : '/') + file.name;
+    const join = getPathJoiner(currentPath);
+    const fullPath = join(file.name);
     navigator.clipboard.writeText(fullPath).then(() => {
       // maybe a toast?
     }).catch(err => {
@@ -487,8 +533,12 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
           contextMenu ? { top: contextMenu.mouseY, left: contextMenu.mouseX } : undefined
         }
       >
-        <MenuItem onClick={() => contextMenu && handleRename(contextMenu.file)}>Rename</MenuItem>
-        <MenuItem onClick={() => contextMenu && handleDelete(contextMenu.file)} sx={{ color: 'error.main' }}>Delete</MenuItem>
+        {!(contextMenu?.file.isDir && /^[a-zA-Z]:\\?$/.test(contextMenu.file.name)) && (
+          <>
+            <MenuItem onClick={() => contextMenu && handleRename(contextMenu.file)}>Rename</MenuItem>
+            <MenuItem onClick={() => contextMenu && handleDelete(contextMenu.file)} sx={{ color: 'error.main' }}>Delete</MenuItem>
+          </>
+        )}
         <MenuItem onClick={() => contextMenu && handleCopyPath(contextMenu.file)}>Copy Path</MenuItem>
         {!contextMenu?.file.isDir && (
           <MenuItem onClick={() => contextMenu && handleDownload(contextMenu.file.name)}>Download</MenuItem>
@@ -500,10 +550,11 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
 
       {editingFile && (
         <TextEditor
-          fileName={currentPath + (currentPath.endsWith('/') ? '' : '/') + editingFile.name}
+          fileName={getPathJoiner(currentPath)(editingFile.name)}
           initialContent={editorContent}
           onSave={handleSaveTextFile}
           onClose={() => setEditingFile(null)}
+          isSaving={loading}
         />
       )}
     </Box>

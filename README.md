@@ -68,10 +68,11 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
   - `Alt + K` : Switch to previous tab
   - `Alt + 1-9` : Switch to tab 1-9
   - `Alt + 0` : Switch to last tab
-  - `Alt + Shift + 1-9,0` : Click the button in button bar
   - `Alt + W` : Close current tab
   - `Alt + I` : Focus sidebar search filter, then Use `↑ ↓` to select, `Enter` to open
   - `Alt + G` : Focus active terminal session
+  - `Alt + Shift + 1-9,0` : Click the button in button bar
+  - `Alt + ↑ / ↓` : Scroll terminal up / down
 - **Mobile-Friendly**:
   - Responsive sidebar and layout.
   - **Mobile Input Toolbar**: Quick access to Esc, Tab, Arrow keys, and a stateful **Ctrl toggle** for mobile touch keyboards.
@@ -101,6 +102,7 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
   - **Persistent Sessions**: Right-click any tab and select **"Pin Tab"** to keep the terminal session (PTY or SSH) running in the background even if you close your browser or navigate away.
   - **Output Buffering**: Pinned sessions maintain a circular output buffer (approx. 50KB), ensuring you see the most recent activity immediately upon reconnection.
   - **Usage-Aware Auto-Restore**: Pinned tabs automatically resume when you re-open CozySSH, but only in the primary window to prevent duplicate UI clutter.
+- **Scratchpad feature**: Open a "Scratchpad" text editor tab to write your notes or paste some configuration commands or other text. All data is auto-saving and cached in browser localStorage and automatically synced with and persisted in backend host.
 - **Secure by Default**: 
   - Stateless HMAC-SHA256 token-based authentication with a simple App Password.
   - **Non-Local Restriction**: Automatically blocks access from non-local, non-HTTPS environments to prevent credential sniffing.

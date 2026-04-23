@@ -5,6 +5,8 @@ import type { Host } from './Sidebar';
 import TerminalComponent from './Terminal';
 import type { TerminalHandle } from './Terminal';
 import FileBrowser from './FileBrowser';
+import Scratchpad from './Scratchpad';
+import type { ScratchpadHandle } from './Scratchpad';
 import CloseIcon from '@mui/icons-material/Close';
 import MenuIcon from '@mui/icons-material/Menu';
 import KeyboardTabIcon from '@mui/icons-material/KeyboardTab';
@@ -14,10 +16,15 @@ import WestIcon from '@mui/icons-material/West';
 import EastIcon from '@mui/icons-material/East';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import AddIcon from '@mui/icons-material/Add';
+import SyncIcon from '@mui/icons-material/Sync';
+import CloudDoneIcon from '@mui/icons-material/CloudDone';
+import CloudOffIcon from '@mui/icons-material/CloudOff';
 import CodeMirror from '@uiw/react-codemirror';
 import { EditorView } from "@codemirror/view";
 import { javascript } from '@codemirror/lang-javascript';
 import { transform } from 'sucrase';
+
+const VIBRATE_PATTERN = 100;
 
 const lightTheme = createTheme({
   palette: {
@@ -41,6 +48,7 @@ interface TabData {
   activePaneId: string;
   isPinned?: boolean;
   showFiles?: boolean;
+  type?: 'terminal' | 'scratchpad';
 }
 
 interface ButtonData {
@@ -60,9 +68,10 @@ export default function Dashboard() {
   const [activeTabId, setActiveTabId] = useState<string>(defaultTabId);
   const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number; targetTabId: string } | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const terminalRefs = useRef<{ [key: string]: TerminalHandle | null }>({});
+  const terminalRefs = useRef<{ [key: string]: TerminalHandle | ScratchpadHandle | null }>({});
   const [viewportHeight, setViewportHeight] = useState('100dvh');
   const [isCtrlActive, setIsCtrlActive] = useState(false);
+  const [scratchpadSyncState, setScratchpadSyncState] = useState<'offline' | 'syncing' | 'synced'>('offline');
   const [shellCwds, setShellCwds] = useState<{ [key: string]: string }>({});
   const [memoTabId, setMemoTabId] = useState<string | null>(null);
   const [activePaneId, setActivePaneId] = useState<string>('');
@@ -110,7 +119,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     (window as any).csGetTerminal = () => {
-      return terminalRefs.current[activePaneId]?.getXterm();
+      const term: any = terminalRefs.current[activePaneId];
+      return term?.getXterm?.();
     };
     (window as any).csNotify = (msg: string) => csNotify(msg);
     (window as any).csGetHosts = () => hosts;
@@ -195,7 +205,8 @@ export default function Dashboard() {
 
   const handleSendKey = (key: string) => {
     if (activePaneId && terminalRefs.current[activePaneId]) {
-      terminalRefs.current[activePaneId]?.sendData(key);
+      const term: any = terminalRefs.current[activePaneId];
+      term?.sendData?.(key);
       // Re-focus firmly
       setTimeout(() => {
         const term = terminalRefs.current[activePaneId];
@@ -219,7 +230,8 @@ export default function Dashboard() {
 
       for (const pid of targetPaneIds) {
         if (pid && terminalRefs.current[pid]) {
-          terminalRefs.current[pid]?.sendData(dataToSend);
+          const term: any = terminalRefs.current[pid];
+          term?.sendData?.(dataToSend);
         }
       }
       await new Promise(r => setTimeout(r, ctrlMatch ? 50 : 10));
@@ -286,7 +298,10 @@ export default function Dashboard() {
       })
       .catch(e => console.error(e));
 
-    return Promise.all([p1, p2, p3]);
+    const p4 = fetch('/api/scratchpad/reload', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } })
+      .catch(e => console.error(e));
+
+    return Promise.all([p1, p2, p3, p4]);
   };
 
   useEffect(() => {
@@ -415,12 +430,42 @@ export default function Dashboard() {
   }, [tabs, activeTabId, sysHostname]);
 
   const handleLogout = async () => {
+    const syncState = localStorage.getItem('cozy_scratchpad_sync_state');
+    if (syncState && syncState !== 'synced') {
+      if (!confirm("Scratchpad data is not fully synced to the server. Are you sure you want to log out and clear the local cache?")) {
+        return;
+      }
+    }
     const token = localStorage.getItem('cozy_token');
     if (token) {
       await fetch('/api/logout', { headers: { 'Authorization': `Bearer ${token}` } });
     }
     localStorage.removeItem('cozy_token');
+    localStorage.removeItem('cozy_scratchpad_cache');
+    localStorage.removeItem('cozy_scratchpad_sync_state');
     window.location.href = '/login';
+  };
+
+  const handleOpenScratchpad = () => {
+    const existing = tabs.find(t => t.type === 'scratchpad');
+    if (existing) {
+      setActiveTabId(existing.id);
+      setActivePaneId(existing.panes[0].id);
+      setTimeout(() => terminalRefs.current[existing.panes[0].id]?.focus(), 50);
+      return;
+    }
+    const tabId = `scratchpad-${Date.now()}`;
+    const newTab: TabData = {
+      id: tabId,
+      title: 'Scratchpad',
+      panes: [{ id: tabId, host: 'scratchpad' }],
+      activePaneId: tabId,
+      type: 'scratchpad'
+    };
+    setTabs(prev => [...prev, newTab]);
+    setActiveTabId(newTab.id);
+    setActivePaneId(tabId);
+    setTimeout(() => terminalRefs.current[tabId]?.focus(), 50);
   };
 
   const handleSelectHost = (host: string, customTitle?: string) => {
@@ -474,6 +519,20 @@ export default function Dashboard() {
       }
       return newTabs;
     });
+  };
+
+  const handleCloseCurrentPaneOrTab = () => {
+    const currentTab = tabs.find(t => t.id === activeTabId);
+    if (!currentTab) return;
+    if (currentTab.panes.length > 1) {
+      const paneIdx = currentTab.panes.findIndex(p => p.id === activePaneId);
+      const newPanes = currentTab.panes.filter(p => p.id !== activePaneId);
+      const nextPaneId = newPanes[Math.max(0, paneIdx - 1)].id;
+      setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, panes: newPanes, activePaneId: nextPaneId } : t));
+      setActivePaneId(nextPaneId);
+    } else {
+      handleCloseTab({ stopPropagation: () => { } } as any, activeTabId);
+    }
   };
 
   const handlePinTab = async (id: string) => {
@@ -563,6 +622,16 @@ export default function Dashboard() {
     setContextMenu(null);
   };
 
+  const handleReconnectTab = (id: string) => {
+    const targetTab = tabs.find(t => t.id === id);
+    if (!targetTab) return;
+    targetTab.panes.forEach(p => {
+      const term: any = terminalRefs.current[p.id];
+      term?.reconnect?.();
+    });
+    setContextMenu(null);
+  };
+
   const handleToggleFiles = () => {
     if (!contextMenu) return;
     const targetId = contextMenu.targetTabId;
@@ -636,16 +705,7 @@ export default function Dashboard() {
         }
       } else if (e.altKey && (e.key === 'w' || e.key === 'W')) {
         e.preventDefault();
-        const currentTab = tabs.find(t => t.id === activeTabId);
-        if (!currentTab) return;
-        if (currentTab.panes.length > 1) {
-          const paneIdx = currentTab.panes.findIndex(p => p.id === activePaneId);
-          const newPanes = currentTab.panes.filter(p => p.id !== activePaneId);
-          setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, panes: newPanes, activePaneId: newPanes[Math.max(0, paneIdx - 1)].id } : t));
-          setActivePaneId(newPanes[Math.max(0, paneIdx - 1)].id);
-        } else {
-          handleCloseTab({ stopPropagation: () => { } } as any, activeTabId);
-        }
+        handleCloseCurrentPaneOrTab();
       } else if (e.altKey && (e.key === 't' || e.key === 'T')) {
         e.preventDefault();
         handleSelectHost('local');
@@ -666,6 +726,12 @@ export default function Dashboard() {
           setActivePaneId(last.activePaneId);
           setTimeout(() => terminalRefs.current[last.activePaneId]?.focus(), 10);
         }
+      } else if (e.altKey && e.key === 'ArrowUp') {
+        e.preventDefault();
+        (terminalRefs.current[activePaneId] as any)?.scrollLines?.(-3);
+      } else if (e.altKey && e.key === 'ArrowDown') {
+        e.preventDefault();
+        (terminalRefs.current[activePaneId] as any)?.scrollLines?.(3);
       } else if (e.altKey && e.shiftKey) {
         const digitMatch = e.code.match(/Digit(\d)/);
         if (digitMatch) {
@@ -684,38 +750,41 @@ export default function Dashboard() {
   }, [activeTabId, activePaneId, tabs, buttons, activeGroup]);
 
   const handleButtonClick = async (btn: ButtonData) => {
+    window.navigator.vibrate?.(VIBRATE_PATTERN);
     if (btn.type === 'send_string') {
       await sendParsedString(btn.payload);
       terminalRefs.current[activePaneId]?.focus();
     } else if (btn.type === 'terminal_function') {
-      const term = terminalRefs.current[activePaneId];
+      const term = terminalRefs.current[activePaneId] as any;
       if (!term) return;
       if (btn.payload === 'COPY') {
-        term.selectAll();
-        const text = term.getSelection();
+        term.selectAll?.();
+        const text = term.getSelection?.();
         if (text) {
           navigator.clipboard.writeText(text);
         }
-        term.clearSelection();
-        term.focus();
+        term.clearSelection?.();
+        term.focus?.();
       } else if (btn.payload === 'PASTE') {
         const text = await navigator.clipboard.readText();
         if (text) {
-          term.sendData(text);
+          term.sendData?.(text);
         }
-        term.focus();
+        term.focus?.();
       } else if (btn.payload === 'INPUT') {
         setInputValue('');
         setInputDialogOpen(true);
       } else if (btn.payload === 'CLEAR') {
-        term.clear();
-        term.focus();
+        term.clear?.();
+        term.focus?.();
       } else if (btn.payload === 'RESET') {
-        term.reset();
-        term.focus();
+        term.reset?.();
+        term.focus?.();
       } else if (btn.payload === 'RECONNECT') {
-        term.reconnect();
-        term.focus();
+        term.reconnect?.();
+        term.focus?.();
+      } else if (btn.payload === 'CLOSE') {
+        handleCloseCurrentPaneOrTab();
       }
     } else if (btn.type === 'misc') {
       if (btn.payload === 'NEXT_BUTTON_GROUP') {
@@ -726,6 +795,8 @@ export default function Dashboard() {
         const idx = groups.indexOf(activeGroup);
         const prevIdx = (idx - 1 + groups.length) % groups.length;
         setActiveGroup(groups[prevIdx]);
+      } else if (btn.payload === 'OPEN_SCRATCHPAD') {
+        handleOpenScratchpad();
       }
       terminalRefs.current[activePaneId]?.focus();
     } else if (btn.type === 'run_script') {
@@ -816,6 +887,7 @@ export default function Dashboard() {
           onRefresh={handleRefresh}
           hosts={hosts}
           fetchHosts={fetchHosts}
+          onOpenScratchpad={handleOpenScratchpad}
         />
         <Box component="main" sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           {tabs.length > 0 && (
@@ -854,11 +926,19 @@ export default function Dashboard() {
                       label={
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
                           {tab.isPinned && <PushPinIcon sx={{ fontSize: 14, mr: 0.5, color: 'primary.main' }} />}
-                          <Box sx={{
-                            width: 8, height: 8, borderRadius: '50%', mr: 1,
-                            bgcolor: (tab.panes.find(p => p.id === tab.activePaneId)?.state || 'disconnected') === 'connected' ? 'success.main' :
-                              ((tab.panes.find(p => p.id === tab.activePaneId)?.state || '').startsWith('connecting')) ? 'warning.main' : 'error.main'
-                          }} title={tab.panes.find(p => p.id === tab.activePaneId)?.state || 'disconnected'} />
+                          {tab.type === 'scratchpad' ? (
+                            <Box sx={{ mr: 1, display: 'flex', alignItems: 'center' }}>
+                              {scratchpadSyncState === 'offline' && <CloudOffIcon fontSize="small" color="error" />}
+                              {scratchpadSyncState === 'syncing' && <SyncIcon fontSize="small" color="warning" sx={{ animation: "spin 2s linear infinite", '@keyframes spin': { '0%': { transform: 'rotate(0deg)' }, '100%': { transform: 'rotate(360deg)' } } }} />}
+                              {scratchpadSyncState === 'synced' && <CloudDoneIcon fontSize="small" color="success" />}
+                            </Box>
+                          ) : (
+                            <Box sx={{
+                              width: 8, height: 8, borderRadius: '50%', mr: 1,
+                              bgcolor: (tab.panes.find(p => p.id === tab.activePaneId)?.state || 'disconnected') === 'connected' ? 'success.main' :
+                                ((tab.panes.find(p => p.id === tab.activePaneId)?.state || '').startsWith('connecting')) ? 'warning.main' : 'error.main'
+                            }} title={tab.panes.find(p => p.id === tab.activePaneId)?.state || 'disconnected'} />
+                          )}
                           <span>{tab.title}</span>
                           <IconButton
                             size="small"
@@ -903,44 +983,51 @@ export default function Dashboard() {
                         }}
                         onClick={() => setActivePaneId(pane.id)}
                       >
-                        <TerminalComponent
-                          key={pane.id}
-                          ref={el => { terminalRefs.current[pane.id] = el; }}
-                          host={pane.host}
-                          sessionId={pane.id}
-                          cloneFrom={pane.cloneFrom}
-                          isActive={activeTabId === tab.id && activePaneId === pane.id}
-                          isCtrlActive={isCtrlActive}
-                          onCtrlDone={() => setIsCtrlActive(false)}
-                          onStateChange={(state) => {
-                            setTabs(prev => prev.map(t => t.id === tab.id ? {
-                              ...t,
-                              panes: t.panes.map(p => p.id === pane.id ? { ...p, state } : p)
-                            } : t));
-                          }}
-                          onCwdChange={(cwd) => {
-                            setShellCwds(prev => ({ ...prev, [pane.id]: cwd }));
-                          }}
-                          onStolen={() => {
-                            setTabs(prev => prev.map(t => t.id === tab.id ? {
-                              ...t,
-                              isPinned: false,
-                              panes: t.panes.map(p => p.id === pane.id ? { ...p, state: 'stolen' } : p)
-                            } : t));
-                          }}
-                          onManualReconnect={(wasStolen) => {
-                            if (wasStolen) {
-                              const newId = `${pane.host}-${Date.now()}`;
+                        {tab.type === 'scratchpad' ? (
+                          <Scratchpad 
+                            ref={el => { terminalRefs.current[pane.id] = el; }}
+                            onSyncStateChange={setScratchpadSyncState}
+                          />
+                        ) : (
+                          <TerminalComponent
+                            key={pane.id}
+                            ref={el => { terminalRefs.current[pane.id] = el; }}
+                            host={pane.host}
+                            sessionId={pane.id}
+                            cloneFrom={pane.cloneFrom}
+                            isActive={activeTabId === tab.id && activePaneId === pane.id}
+                            isCtrlActive={isCtrlActive}
+                            onCtrlDone={() => setIsCtrlActive(false)}
+                            onStateChange={(state) => {
                               setTabs(prev => prev.map(t => t.id === tab.id ? {
                                 ...t,
-                                activePaneId: newId,
-                                panes: t.panes.map(p => p.id === pane.id ? { ...p, id: newId, state: 'connecting' } : p)
+                                panes: t.panes.map(p => p.id === pane.id ? { ...p, state } : p)
                               } : t));
-                              setActivePaneId(newId);
-                            }
-                          }}
-                          isTouch={isTouch}
-                        />
+                            }}
+                            onCwdChange={(cwd) => {
+                              setShellCwds(prev => ({ ...prev, [pane.id]: cwd }));
+                            }}
+                            onStolen={() => {
+                              setTabs(prev => prev.map(t => t.id === tab.id ? {
+                                ...t,
+                                isPinned: false,
+                                panes: t.panes.map(p => p.id === pane.id ? { ...p, state: 'stolen' } : p)
+                              } : t));
+                            }}
+                            onManualReconnect={(wasStolen) => {
+                              if (wasStolen) {
+                                const newId = `${pane.host}-${Date.now()}`;
+                                setTabs(prev => prev.map(t => t.id === tab.id ? {
+                                  ...t,
+                                  activePaneId: newId,
+                                  panes: t.panes.map(p => p.id === pane.id ? { ...p, id: newId, state: 'connecting' } : p)
+                                } : t));
+                                setActivePaneId(newId);
+                              }
+                            }}
+                            isTouch={isTouch}
+                          />
+                        )}
                       </Box>
                     );
 
@@ -1095,18 +1182,18 @@ export default function Dashboard() {
               <ButtonGroup size="small" variant="outlined">
                 <Button
                   variant={isCtrlActive ? "contained" : "outlined"}
-                  onMouseDown={(e) => { e.preventDefault(); setIsCtrlActive(!isCtrlActive); }}
+                  onMouseDown={(e) => { e.preventDefault(); window.navigator.vibrate?.(VIBRATE_PATTERN); setIsCtrlActive(!isCtrlActive); }}
                 >
                   Ctrl
                 </Button>
-                <Button onMouseDown={(e) => { e.preventDefault(); handleSendKey('\x1b'); }}>Esc</Button>
-                <Button onMouseDown={(e) => { e.preventDefault(); handleSendKey('\x09'); }}><KeyboardTabIcon fontSize="small" /></Button>
+                <Button onMouseDown={(e) => { e.preventDefault(); window.navigator.vibrate?.(VIBRATE_PATTERN); handleSendKey('\x1b'); }}>Esc</Button>
+                <Button onMouseDown={(e) => { e.preventDefault(); window.navigator.vibrate?.(VIBRATE_PATTERN); handleSendKey('\x09'); }}><KeyboardTabIcon fontSize="small" /></Button>
               </ButtonGroup>
               <ButtonGroup size="small" variant="outlined">
-                <Button onMouseDown={(e) => { e.preventDefault(); handleSendKey('\x1b[A'); }}><NorthIcon fontSize="small" /></Button>
-                <Button onMouseDown={(e) => { e.preventDefault(); handleSendKey('\x1b[B'); }}><SouthIcon fontSize="small" /></Button>
-                <Button onMouseDown={(e) => { e.preventDefault(); handleSendKey('\x1b[D'); }}><WestIcon fontSize="small" /></Button>
-                <Button onMouseDown={(e) => { e.preventDefault(); handleSendKey('\x1b[C'); }}><EastIcon fontSize="small" /></Button>
+                <Button onMouseDown={(e) => { e.preventDefault(); window.navigator.vibrate?.(VIBRATE_PATTERN); handleSendKey('\x1b[A'); }}><NorthIcon fontSize="small" /></Button>
+                <Button onMouseDown={(e) => { e.preventDefault(); window.navigator.vibrate?.(VIBRATE_PATTERN); handleSendKey('\x1b[B'); }}><SouthIcon fontSize="small" /></Button>
+                <Button onMouseDown={(e) => { e.preventDefault(); window.navigator.vibrate?.(VIBRATE_PATTERN); handleSendKey('\x1b[D'); }}><WestIcon fontSize="small" /></Button>
+                <Button onMouseDown={(e) => { e.preventDefault(); window.navigator.vibrate?.(VIBRATE_PATTERN); handleSendKey('\x1b[C'); }}><EastIcon fontSize="small" /></Button>
               </ButtonGroup>
             </Paper>
           )}
@@ -1124,12 +1211,12 @@ export default function Dashboard() {
           if (!tab) return null;
           return (
             <>
-              {tab.isPinned ? (
+              {tab.type !== 'scratchpad' && (tab.isPinned ? (
                 <MenuItem onClick={() => handleUnpinTab(memoTabId)}>Unpin Tab</MenuItem>
               ) : tab.panes.length === 1 ? (
                 <MenuItem onClick={() => handlePinTab(memoTabId)}>Pin Tab</MenuItem>
-              ) : null}
-              {tab.panes.length === 1 && (
+              ) : null)}
+              {tab.panes.length === 1 && tab.type !== 'scratchpad' && (
                 <>
                   {tab.panes[0]?.host !== 'local' && (
                     <MenuItem onClick={() => handleCloneSession(memoTabId)}>Clone Session</MenuItem>
@@ -1139,7 +1226,12 @@ export default function Dashboard() {
                   </MenuItem>
                 </>
               )}
-              <MenuItem onClick={handleRename}>Rename Tab</MenuItem>
+              {tab.type !== 'scratchpad' && (
+                <>
+                  <MenuItem onClick={() => handleReconnectTab(memoTabId)}>Reconnect</MenuItem>
+                  <MenuItem onClick={handleRename}>Rename Tab</MenuItem>
+                </>
+              )}
               <MenuItem onClick={handleCloseOther}>Close Other tabs</MenuItem>
               <MenuItem onClick={handleCloseRight}>Close tabs to the right</MenuItem>
             </>
@@ -1218,6 +1310,7 @@ export default function Dashboard() {
               <option value="CLEAR">CLEAR (Screen)</option>
               <option value="RESET">RESET (Terminal)</option>
               <option value="RECONNECT">RECONNECT (Session)</option>
+              <option value="CLOSE">CLOSE (Pane/Tab)</option>
             </TextField>
           ) : buttonFormData.type === 'misc' ? (
             <TextField
@@ -1231,6 +1324,7 @@ export default function Dashboard() {
             >
               <option value="NEXT_BUTTON_GROUP">Next Button Group</option>
               <option value="PREV_BUTTON_GROUP">Prev Button Group</option>
+              <option value="OPEN_SCRATCHPAD">Open Scratchpad</option>
             </TextField>
           ) : (
             <Box sx={{ border: '1px solid #ccc', borderRadius: 1, overflow: 'hidden' }}>
