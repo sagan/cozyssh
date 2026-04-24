@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Box, CssBaseline, ThemeProvider, createTheme, Tabs, Tab, IconButton, Menu, MenuItem, Typography, Button, ButtonGroup, useMediaQuery, useTheme, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, FormControlLabel, Checkbox } from '@mui/material';
 import Sidebar from './Sidebar';
 import type { Host } from './Sidebar';
@@ -21,6 +21,8 @@ import CloudDoneIcon from '@mui/icons-material/CloudDone';
 import CloudOffIcon from '@mui/icons-material/CloudOff';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
 import CodeMirror from '@uiw/react-codemirror';
 import { EditorView } from "@codemirror/view";
 import { javascript } from '@codemirror/lang-javascript';
@@ -64,6 +66,137 @@ interface ButtonData {
 interface DashboardProps {
   initialData?: any;
 }
+
+// Expose those objects to custom scripts
+const exposeObjects = {
+  "react": React,
+};
+
+// Generate Blob URLs for each exposed module
+const virtualModules: Record<string, string> = {};
+
+for (const [moduleName, moduleObj] of Object.entries(exposeObjects)) {
+  // Attach safely to window
+  const safeName = `__plugin_expose_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+  (window as any)[safeName] = moduleObj;
+
+  // Generate the named exports string (e.g., "useState, useEffect, useMemo")
+  const exportKeys = Object.keys(moduleObj)
+    .filter(key => key !== 'default')
+    .join(', ');
+
+  // Create the actual ES Module code
+  const shimCode = `
+    const mod = window["${safeName}"];
+    export default mod;
+    export const { ${exportKeys} } = mod;
+  `;
+
+  // Turn it into a Blob URL
+  const blob = new Blob([shimCode], { type: 'application/javascript' });
+  virtualModules[moduleName] = URL.createObjectURL(blob);
+}
+
+export interface AppletData {
+  name: string;
+  node: any;
+  position: 'widget' | 'sidebar';
+}
+
+const AppletWrapper = ({ applet, onClose, onSwitchPosition }: { applet: AppletData; onClose: () => void; onSwitchPosition: (pos: 'widget' | 'sidebar') => void; }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [position, setPosition] = useState(() => ({ 
+    x: window.innerWidth - 320, 
+    y: window.innerHeight - 250 
+  }));
+  const dragStartRef = useRef({ x: 0, y: 0, pos: { x: 0, y: 0 } });
+
+  useEffect(() => {
+    if (applet.node instanceof Node && containerRef.current) {
+      containerRef.current.innerHTML = '';
+      containerRef.current.appendChild(applet.node);
+    }
+  }, [applet.node]);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (applet.position !== 'widget') return;
+    setIsDragging(true);
+    dragStartRef.current = { x: e.clientX, y: e.clientY, pos: position };
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+      setPosition({
+        x: dragStartRef.current.pos.x + (e.clientX - dragStartRef.current.x),
+        y: dragStartRef.current.pos.y + (e.clientY - dragStartRef.current.y)
+      });
+    };
+    const handleMouseUp = () => setIsDragging(false);
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
+
+  const wrapperSx: any = applet.position === 'widget' ? {
+    position: 'fixed',
+    left: position.x,
+    top: position.y,
+    zIndex: 9999,
+    minWidth: 250,
+    minHeight: 150,
+    resize: 'both',
+    overflow: 'hidden',
+    boxShadow: 3,
+    display: 'flex',
+    flexDirection: 'column',
+    bgcolor: 'background.paper',
+    border: 1,
+    borderColor: 'divider',
+    borderRadius: 1
+  } : {
+    display: 'flex',
+    flexDirection: 'column',
+    flex: 1,
+    borderBottom: 1,
+    borderColor: 'divider',
+    minHeight: 150
+  };
+
+  const isReactComponent = !(applet.node instanceof Node);
+
+  return (
+    <Box sx={wrapperSx}>
+      <Box 
+        onMouseDown={handleMouseDown}
+        sx={{ 
+          display: 'flex', alignItems: 'center', px: 1, py: 0.5, bgcolor: '#f0f4f8', color: 'text.secondary',
+          borderBottom: 1, borderColor: 'divider',
+          cursor: applet.position === 'widget' ? 'move' : 'default', flexShrink: 0 
+        }}
+      >
+        <Typography variant="subtitle2" sx={{ flexGrow: 1, fontWeight: 'bold' }}>{applet.name}</Typography>
+        <IconButton size="small" color="inherit" onClick={() => onSwitchPosition(applet.position === 'widget' ? 'sidebar' : 'widget')}>
+          {applet.position === 'widget' ? <ViewSidebarIcon fontSize="small" /> : <OpenInNewIcon fontSize="small" />}
+        </IconButton>
+        <IconButton size="small" color="inherit" onClick={onClose} sx={{ ml: 0.5 }}>
+          <CloseIcon fontSize="small" />
+        </IconButton>
+      </Box>
+      <Box sx={{ flexGrow: 1, overflow: 'auto', p: applet.position === 'widget' ? 1 : 0, position: 'relative' }}>
+        {isReactComponent ? (React.isValidElement(applet.node) ? applet.node : React.createElement(applet.node as React.ComponentType, {})) : <div ref={containerRef} style={{ width: '100%', height: '100%' }} />}
+      </Box>
+    </Box>
+  );
+};
+
+
 export default function Dashboard({ initialData }: DashboardProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -81,6 +214,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [memoTabId, setMemoTabId] = useState<string | null>(null);
   const [activePaneId, setActivePaneId] = useState<string>('');
   const [unreadTabIds, setUnreadTabIds] = useState<Set<string>>(new Set());
+  const [applets, setApplets] = useState<AppletData[]>([]);
 
   const [buttons, setButtons] = useState<ButtonData[]>([]);
   const [activeGroup, setActiveGroup] = useState<string>(localStorage.getItem('cozy_active_group') || 'Default');
@@ -145,9 +279,28 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, [groups, buttonsLoaded, activeGroup]);
 
   useEffect(() => {
+    (window as any).csOpenApplet = (name: string, node: any, options: {position?: 'widget' | 'sidebar'} = {}) => {
+      setApplets(prev => {
+        const parsedPos = options.position === 'sidebar' ? 'sidebar' : 'widget';
+        const existing = prev.find(a => a.name === name);
+        if (existing) {
+          return prev;
+        }
+        return [...prev, { name, node, position: parsedPos }];
+      });
+    };
+    (window as any).csCloseApplet = (name: string) => {
+      setApplets(prev => prev.filter(a => a.name !== name));
+    };
+
     (window as any).csGetTerminal = () => {
       const term: any = terminalRefs.current[activePaneId];
       return term?.getXterm?.();
+    };
+    (window as any).csFocus = () => {
+      if (activePaneId) {
+        setTimeout(() => terminalRefs.current[activePaneId]?.focus(), 0);
+      }
     };
     (window as any).csNotify = (msg: string) => csNotify(msg);
     (window as any).csGetHosts = () => hosts;
@@ -840,12 +993,24 @@ export default function Dashboard({ initialData }: DashboardProps) {
       }
       terminalRefs.current[activePaneId]?.focus();
     } else if (btn.type === 'run_script') {
+      let resolvedCode = btn.payload;
+      for (const [moduleName, blobUrl] of Object.entries(virtualModules)) {
+        const regex = new RegExp(`(from\\s+['"])${moduleName}(['"])`, 'g');
+        resolvedCode = resolvedCode.replace(regex, `$1${blobUrl}$2`);
+      }
+      const jsCode = transform(resolvedCode, { transforms: ['typescript', 'jsx'] }).code;
+
+      const blob = new Blob([jsCode], { type: 'application/javascript' });
+      // Create a temporary URL pointing to that Blob
+      const url = URL.createObjectURL(blob);
       try {
-        const jsCode = transform(btn.payload, { transforms: ['typescript'] }).code;
-        await eval(jsCode);
+        await import(url);
       } catch (e) {
         console.error('Script Error:', e);
         csNotify('Script Error: ' + e);
+      } finally {
+        // Always clean up the URL to prevent memory leaks
+        URL.revokeObjectURL(url);
       }
       terminalRefs.current[activePaneId]?.focus();
     }
@@ -1253,7 +1418,18 @@ export default function Dashboard({ initialData }: DashboardProps) {
             </Paper>
           )}
         </Box>
+        {applets.filter(a => a.position === 'sidebar').length > 0 && (
+          <Box sx={{ width: 320, flexShrink: 0, borderLeft: 1, borderColor: 'divider', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper', overflowY: 'auto' }}>
+            {applets.filter(a => a.position === 'sidebar').map(applet => (
+               <AppletWrapper key={applet.name} applet={applet} onClose={() => setApplets(prev => prev.filter(a => a.name !== applet.name))} onSwitchPosition={(pos) => setApplets(prev => prev.map(a => a.name === applet.name ? { ...a, position: pos } : a))} />
+            ))}
+          </Box>
+        )}
       </Box>
+
+      {applets.filter(a => a.position === 'widget').map(applet => (
+         <AppletWrapper key={applet.name} applet={applet} onClose={() => setApplets(prev => prev.filter(a => a.name !== applet.name))} onSwitchPosition={(pos) => setApplets(prev => prev.map(a => a.name === applet.name ? { ...a, position: pos } : a))} />
+      ))}
 
       <Menu
         open={contextMenu !== null}
