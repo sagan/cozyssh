@@ -373,7 +373,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
             setAnchorEl(null);
             if (onRefresh) onRefresh();
           }}>Refresh</MenuItem>
-          <MenuItem onClick={() => { setAnchorEl(null); setSettingsOpen(true); }}>Dashboard</MenuItem>
+          <MenuItem onClick={() => { setAnchorEl(null); setSettingsOpen(true); if (isMobile) onClose(); }}>Dashboard</MenuItem>
           <MenuItem onClick={() => { setAnchorEl(null); if (onOpenScratchpad) onOpenScratchpad(); }}>Open Scratchpad</MenuItem>
           <MenuItem onClick={() => { setAnchorEl(null); if (onLogout) onLogout(); }}>Logout</MenuItem>
         </Menu>
@@ -499,7 +499,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
           }}>Copy URL</MenuItem>
         )}
         <MenuItem onClick={handleToggleFavourite}>
-          {contextMenu?.target.is_favourite ? 'Remove from favourite' : 'Add to favourite'}
+          {contextMenu?.target.is_favourite ? 'Remove From Favourite' : 'Add To Favourite'}
         </MenuItem>
         <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>Delete {contextMenu?.target.source === 'config' ? 'Host' : 'Auto Host'}</MenuItem>
       </Menu>

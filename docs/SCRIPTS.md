@@ -41,7 +41,7 @@ Returns the list of all configured server objects. Sample Host object:
 
 ### `csOpen(target: Host | string | (Host | string)[], options?: { name?: string }): void`
 Opens a new tab or split-screen tab.
-- `target`: A single host object, a connection string (e.g., `user@host`), or an array of up to 4 targets for split-screen.
+- `target`: A single host object, a connection string (e.g., `user@host`), a special string `"local"` to open a local shell, or an array of up to 4 targets for split-screen.
 - `options.name`: Optional title for the new tab.
 
 ### `csFetch(url: string, options?: RequestInit): Promise<Response>`
@@ -63,6 +63,11 @@ Asynchronously refreshes all application data (server list, buttons, system info
 ### Hello World Toast
 ```typescript
 csNotify("Hello from CozySSH!");
+```
+
+### Open a local shell
+```typescript
+csOpen("local", { name: "LOCAL" });
 ```
 
 ### Run command on backend and notify result

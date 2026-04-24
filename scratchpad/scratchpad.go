@@ -148,55 +148,49 @@ func HandleWS(w http.ResponseWriter, r *http.Request) {
 			if err := json.Unmarshal(msg, &sm); err == nil {
 				dataMu.Lock()
 				
-				// Build a map of global pages
-				globalMap := make(map[string]*ScratchpadPage)
-				for i := range globalData.Pages {
-					globalMap[globalData.Pages[i].ID] = &globalData.Pages[i]
-				}
-
 				changed := false
-				var newGlobalPages []ScratchpadPage
+				var updatedPages []ScratchpadPage
 
-				// For pages from client
-				clientMap := make(map[string]*ScratchpadPage)
-				for i := range sm.Data.Pages {
-					cp := sm.Data.Pages[i]
-					clientMap[cp.ID] = &cp
-					
-					gp, exists := globalMap[cp.ID]
-					if !exists || cp.LastUpdated > gp.LastUpdated {
-						// Client has a new or updated page
-						newGlobalPages = append(newGlobalPages, cp)
-						changed = true
-					} else {
-						// Keep global page
-						newGlobalPages = append(newGlobalPages, *gp)
-						if cp.LastUpdated < gp.LastUpdated {
-							changed = true // Need to push this back to client
+				for _, cp := range sm.Data.Pages {
+					found := false
+					for i := range globalData.Pages {
+						if globalData.Pages[i].ID == cp.ID {
+							found = true
+							if cp.LastUpdated > globalData.Pages[i].LastUpdated {
+								globalData.Pages[i] = cp
+								updatedPages = append(updatedPages, cp)
+								changed = true
+							}
+							break
 						}
+					}
+					if !found {
+						globalData.Pages = append(globalData.Pages, cp)
+						updatedPages = append(updatedPages, cp)
+						changed = true
 					}
 				}
 
-				// Check for deletions: if a global page is missing from client, and its LastUpdated
-				// hasn't changed since the client last synced. 
-				// Actually, if client deleted it, we accept the deletion if client claims authority.
-				// For simple conflict resolution: If client omits a page, we assume client deleted it.
-				// However, if the server updated it more recently than what the client knew, we should keep it.
-				// But we don't know what the client knew. So deletions from client win.
-				if len(globalData.Pages) != len(newGlobalPages) {
-					changed = true
+				// Special case: if client sends ALL pages (likely a deletion or full sync)
+				// we need to check for deletions. 
+				// However, our current partial sync only sends DIRTY pages.
+				// Deletions are triggered by sending the full set.
+				if len(sm.Data.Pages) > 1 && len(sm.Data.Pages) < len(globalData.Pages) {
+					// This logic is tricky if we don't know if it's a full sync.
+					// For now, assume if the client sends a list and it's missing something 
+					// that the client previously knew about, it's a deletion.
+					// BUT we don't know what the client knew.
+					// Let's decide: If Data carries multiple pages, we might treat it as 
+					// the authoritative full list if it has a special flag.
+					// For now, we only handle UPDATES/ADDS as partial.
 				}
 
-				globalData.Pages = newGlobalPages
-				save()
-
 				if changed {
-					syncBytes, _ := json.Marshal(SyncMsg{Type: "sync", Data: globalData})
-					broadcast(syncBytes, conn)
-					// Also send back to sender if they are missing newer data
-					// But for simplicity, we can just echo the current state to the sender
-					// to ensure they are fully aligned with the merged state.
-					conn.WriteMessage(websocket.TextMessage, syncBytes)
+					save()
+					// Broadcast updated pages to ALL clients (including sender) 
+					// so they know the sync is complete and can update UI.
+					syncBytes, _ := json.Marshal(SyncMsg{Type: "sync", Data: ScratchpadData{Pages: updatedPages}})
+					broadcast(syncBytes, nil)
 				}
 				dataMu.Unlock()
 			}

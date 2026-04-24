@@ -22,7 +22,7 @@ func Init(cfg *config.Config) {
 	globalConfig = cfg
 }
 
-func AddAuthRoutes(mux *http.ServeMux) {
+func AddAuthRoutes(mux *http.ServeMux, getFullData func(r *http.Request) map[string]any) {
 	mux.HandleFunc("/api/login", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -43,9 +43,13 @@ func AddAuthRoutes(mux *http.ServeMux) {
 		}
 
 		token := generateToken()
+		res := map[string]any{"token": token}
+		if getFullData != nil {
+			res["fulldata"] = getFullData(r)
+		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"token": token})
+		json.NewEncoder(w).Encode(res)
 	})
 
 	mux.HandleFunc("/api/logout", func(w http.ResponseWriter, r *http.Request) {

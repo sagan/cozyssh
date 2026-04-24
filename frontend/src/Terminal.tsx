@@ -27,11 +27,12 @@ interface TerminalProps {
   onStolen?: () => void;
   onManualReconnect?: (wasStolen: boolean) => void;
   onCwdChange?: (cwd: string) => void;
+  onDataReceived?: () => void;
   cloneFrom?: string;
   isTouch?: boolean;
 }
 
-const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, sessionId, isActive, isCtrlActive, onCtrlDone, onStateChange, onStolen, onManualReconnect, onCwdChange, cloneFrom, isTouch }, ref) => {
+const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, sessionId, isActive, isCtrlActive, onCtrlDone, onStateChange, onStolen, onManualReconnect, onCwdChange, onDataReceived, cloneFrom, isTouch }, ref) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -39,6 +40,11 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
   const ctrlRef = useRef(isCtrlActive);
   const reconnectFuncRef = useRef<(() => void) | null>(null);
   const forceReconnectRef = useRef(false);
+
+  const onDataRef = useRef(onDataReceived);
+  useEffect(() => {
+    onDataRef.current = onDataReceived;
+  }, [onDataReceived]);
 
   useEffect(() => {
     ctrlRef.current = isCtrlActive;
@@ -225,6 +231,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
           } catch (e) {
             // ignore
           }
+          if (!isRestoringHistory) onDataRef.current?.();
           term.write(ev.data);
         } else {
           const buffer = new Uint8Array(ev.data);
@@ -235,6 +242,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
               isRestoringHistory = false;
             });
           } else {
+            if (!isRestoringHistory) onDataRef.current?.();
             term.write(buffer);
           }
         }

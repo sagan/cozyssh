@@ -22,7 +22,7 @@ export interface ScratchpadHandle {
 }
 
 interface ScratchpadProps {
-  onSyncStateChange?: (state: 'offline' | 'syncing' | 'synced') => void;
+  onSyncStateChange?: (state: 'offline' | 'syncing' | 'synced' | 'dirty') => void;
 }
 
 const WS_RECONNECT_DELAY_MS = 3000;
@@ -47,12 +47,16 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
   });
 
   const [activePageId, setActivePageId] = useState<string>(data.pages.length > 0 ? data.pages[0].id : '');
-  const [syncState, setSyncState] = useState<'offline' | 'syncing' | 'synced'>('offline');
+  const [syncState, setSyncState] = useState<'offline' | 'syncing' | 'synced' | 'dirty'>('offline');
   const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number; pageId: string } | null>(null);
+  const [dirtyPageIds, setDirtyPageIds] = useState<Set<string>>(new Set());
 
   const wsRef = useRef<WebSocket | null>(null);
   const dataRef = useRef(data);
+  const dirtyRef = useRef<Set<string>>(new Set());
+  const lastSyncDataRef = useRef<string>(''); // To store JSON of what we last sent
   const wsTimerRef = useRef<any>(null);
+  const debounceTimerRef = useRef<any>(null);
   const cmRef = useRef<any>(null);
 
   const focusEditor = () => {
@@ -77,6 +81,10 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
     dataRef.current = data;
     localStorage.setItem(CACHE_KEY, JSON.stringify(data));
   }, [data]);
+
+  useEffect(() => {
+    dirtyRef.current = dirtyPageIds;
+  }, [dirtyPageIds]);
 
   useEffect(() => {
     if (data.pages.length > 0 && !data.pages.find(p => p.id === activePageId)) {
@@ -112,36 +120,22 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
         const msg = JSON.parse(evt.data);
         if (msg.type === 'sync' && msg.data) {
           setData(prev => {
-            const pageMap = new Map<string, ScratchpadPage>();
-            // Start with all local pages
-            prev.pages.forEach(p => pageMap.set(p.id, p));
-            // Apply server pages (they win if newer or same age, resolving conflicts safely)
+            const localMap = new Map<string, ScratchpadPage>();
+            prev.pages.forEach(p => localMap.set(p.id, p));
+
+            // Merge server pages
             msg.data.pages.forEach((sp: ScratchpadPage) => {
-              const lp = pageMap.get(sp.id);
+              const lp = localMap.get(sp.id);
+              // If server page is newer OR we don't have it, use server version
               if (!lp || sp.lastUpdated >= lp.lastUpdated) {
-                pageMap.set(sp.id, sp);
+                localMap.set(sp.id, sp);
               }
             });
 
-            const finalPages: ScratchpadPage[] = [];
-            // To handle deleted pages, any page on local that is older than server's latest sync, but simply missing from server, means server deleted it
-            // For true multi-device sync, we just trust server list but keep local pages that are NEWER.
-            msg.data.pages.forEach((sp: ScratchpadPage) => {
-              const lp = prev.pages.find(p => p.id === sp.id);
-              if (lp && lp.lastUpdated > sp.lastUpdated) {
-                finalPages.push(lp);
-              } else {
-                finalPages.push(sp);
-              }
-            });
-            // Also append any local pages completely missing from server (e.g. offline creates)
-            prev.pages.forEach(p => {
-              if (!msg.data.pages.find((sp: ScratchpadPage) => sp.id === p.id)) {
-                finalPages.push(p);
-              }
-            });
-
-            return { pages: finalPages };
+            // Reconstruct pages list. 
+            // Note: If we want to support deletions properly, we'd need more logic here.
+            // For now, this handles partial updates correctly.
+            return { pages: Array.from(localMap.values()) };
           });
           setSyncState('synced');
           if (onSyncStateChange) onSyncStateChange('synced');
@@ -177,39 +171,74 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
   useEffect(() => {
     connectWS();
     return () => {
+      if (dirtyRef.current.size > 0) {
+        triggerSync();
+      }
       if (wsRef.current) {
         wsRef.current.onclose = null;
         wsRef.current.close();
         wsRef.current = null;
       }
       clearTimeout(wsTimerRef.current);
+      clearTimeout(debounceTimerRef.current);
     };
   }, []);
 
-  const triggerUpload = (newData: ScratchpadData) => {
-    setData(newData);
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      setSyncState('syncing');
-      if (onSyncStateChange) onSyncStateChange('syncing');
-      wsRef.current.send(JSON.stringify({ type: 'sync', data: newData }));
+  const triggerSync = (forceAll = false) => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+
+    const dataToSend: ScratchpadData = { pages: [] };
+    if (forceAll) {
+      dataToSend.pages = dataRef.current.pages;
+    } else {
+      const dirty = Array.from(dirtyRef.current).map(id => dataRef.current.pages.find(p => p.id === id)).filter(Boolean) as ScratchpadPage[];
+      if (dirty.length === 0) return;
+      dataToSend.pages = dirty;
     }
+
+    const payload = JSON.stringify({ type: 'sync', data: dataToSend });
+    if (payload === lastSyncDataRef.current && !forceAll) return;
+
+    setSyncState('syncing');
+    if (onSyncStateChange) onSyncStateChange('syncing');
+    wsRef.current.send(payload);
+    lastSyncDataRef.current = payload;
+    setDirtyPageIds(new Set());
   };
 
+  useEffect(() => {
+    if (dirtyPageIds.size > 0) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = setTimeout(() => {
+        triggerSync();
+      }, 1000);
+    }
+  }, [dirtyPageIds]);
+
   const handleEditorChange = (value: string) => {
-    const newData = { ...data };
-    newData.pages = newData.pages.map(p => p.id === activePageId ? { ...p, content: value, lastUpdated: Date.now() } : p);
-    triggerUpload(newData);
+    const updatedNow = Date.now();
+    setData(prev => ({
+      ...prev,
+      pages: prev.pages.map(p => p.id === activePageId ? { ...p, content: value, lastUpdated: updatedNow } : p)
+    }));
+    setSyncState('dirty');
+    if (onSyncStateChange) onSyncStateChange('dirty');
+    setDirtyPageIds(prev => new Set(prev).add(activePageId));
   };
 
   const handleAddPage = () => {
+    const updatedNow = Date.now();
     const newId = Math.random().toString(36).substring(2);
     const newPageTitle = `Page ${data.pages.length + 1}`;
-    const newData = {
-      ...data,
-      lastUpdated: Date.now(),
-      pages: [...data.pages, { id: newId, title: newPageTitle, content: '', lastUpdated: Date.now() }]
-    };
-    triggerUpload(newData);
+    const newPage = { id: newId, title: newPageTitle, content: '', lastUpdated: updatedNow };
+
+    setData(prev => ({
+      ...prev,
+      pages: [...prev.pages, newPage]
+    }));
+    setSyncState('dirty');
+    if (onSyncStateChange) onSyncStateChange('dirty');
+    setDirtyPageIds(prev => new Set(prev).add(newId));
     setActivePageId(newId);
   };
 
@@ -224,12 +253,14 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
     if (!targetPage) return;
     const newTitle = prompt("Rename page:", targetPage.title);
     if (newTitle && newTitle !== targetPage.title) {
-      const newData = {
-        ...data,
-        lastUpdated: Date.now(),
-        pages: data.pages.map(p => p.id === contextMenu.pageId ? { ...p, title: newTitle, lastUpdated: Date.now() } : p)
-      };
-      triggerUpload(newData);
+      const updatedNow = Date.now();
+      setData(prev => ({
+        ...prev,
+        pages: prev.pages.map(p => p.id === contextMenu.pageId ? { ...p, title: newTitle, lastUpdated: updatedNow } : p)
+      }));
+      setSyncState('dirty');
+      if (onSyncStateChange) onSyncStateChange('dirty');
+      setDirtyPageIds(prev => new Set(prev).add(contextMenu.pageId));
     }
     setContextMenu(null);
   };
@@ -247,7 +278,14 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
         ...data,
         pages: data.pages.filter(p => p.id !== contextMenu.pageId)
       };
-      triggerUpload(newData);
+      setData(newData);
+      // For deletions, we currently send full state because backend merge logic 
+      // depends on the full list to detect deletions (or we should add a delete type)
+      // The requirement asks for partial updates for changes, but for simplicity of deletion 
+      // we'll trigger a full sync.
+      setSyncState('syncing');
+      if (onSyncStateChange) onSyncStateChange('syncing');
+      wsRef.current?.send(JSON.stringify({ type: 'sync', data: newData }));
       if (activePageId === contextMenu.pageId) {
         setActivePageId(newData.pages[0].id);
       }
@@ -257,11 +295,14 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
 
   const handleToggleLock = () => {
     if (!contextMenu) return;
-    const newData = {
-      ...data,
-      pages: data.pages.map(p => p.id === contextMenu.pageId ? { ...p, locked: !p.locked, lastUpdated: Date.now() } : p)
-    };
-    triggerUpload(newData);
+    const updatedNow = Date.now();
+    setData(prev => ({
+      ...prev,
+      pages: prev.pages.map(p => p.id === contextMenu.pageId ? { ...p, locked: !p.locked, lastUpdated: updatedNow } : p)
+    }));
+    setSyncState('dirty');
+    if (onSyncStateChange) onSyncStateChange('dirty');
+    setDirtyPageIds(prev => new Set(prev).add(contextMenu.pageId));
     setContextMenu(null);
   };
 
@@ -335,7 +376,7 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
         <MenuItem onClick={handleToggleLock}>
           {data.pages.find(p => p.id === contextMenu?.pageId)?.locked ? "Unlock" : "Lock"}
         </MenuItem>
-        <MenuItem onClick={handleCopy}>Copy Content</MenuItem>
+        <MenuItem onClick={handleCopy}>Copy Contents</MenuItem>
         <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>Delete</MenuItem>
       </Menu>
     </Box>

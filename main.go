@@ -67,8 +67,44 @@ func main() {
 	// 2. Set up HTTP router
 	mux := http.NewServeMux()
 
+	getFullData := func(r *http.Request) map[string]any {
+		scratchpad.Reload()
+		hostname, err := os.Hostname()
+		if err != nil {
+			hostname = "unknown"
+		}
+		hosts, err := sshmanager.ListHosts()
+		if err != nil {
+			hosts = []sshmanager.HostInfo{}
+		}
+		pinned := make([]map[string]any, 0)
+		for _, pt := range cfg.PinnedTabs {
+			lc := 0
+			if s := session.GlobalManager.Get(pt.ID); s != nil {
+				lc = s.ListenerCount()
+			}
+			pinned = append(pinned, map[string]any{
+				"id":            pt.ID,
+				"host":          pt.Host,
+				"title":         pt.Title,
+				"listenerCount": lc,
+			})
+		}
+		return map[string]any{
+			"sysinfo": map[string]any{
+				"hostname":         hostname,
+				"version":          version,
+				"insecure_allowed": *allowInsecure,
+				"is_secure":        isSecureRequest(r),
+			},
+			"hosts":   hosts,
+			"buttons": cfg.Buttons,
+			"pinned":  pinned,
+		}
+	}
+
 	// 3. API Routes setup (to be expanded)
-	auth.AddAuthRoutes(mux)
+	auth.AddAuthRoutes(mux, getFullData)
 
 	mux.HandleFunc("/api/ws", ws.HandleTerminal)
 	mux.HandleFunc("/api/ws/scratchpad", scratchpad.HandleWS)
@@ -86,19 +122,22 @@ func main() {
 	mux.Handle("/api/fs/download", securityMiddleware(http.HandlerFunc(fsapi.HandleDownloadDirect)))
 	mux.Handle("/api/fs/", securityMiddleware(auth.Middleware(http.HandlerFunc(fsapi.HandleFS))))
 
-	mux.HandleFunc("/api/sysinfo", func(w http.ResponseWriter, r *http.Request) {
-		hostname, err := os.Hostname()
-		if err != nil {
-			hostname = "unknown"
-		}
+	mux.HandleFunc("/api/preflight", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
-			"hostname":         hostname,
-			"version":          version,
 			"insecure_allowed": *allowInsecure,
 			"is_secure":        isSecureRequest(r),
 		})
 	})
+
+	mux.Handle("/api/fulldata", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(getFullData(r))
+	}))))
 
 	mux.Handle("/api/hosts", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

@@ -19,6 +19,8 @@ import AddIcon from '@mui/icons-material/Add';
 import SyncIcon from '@mui/icons-material/Sync';
 import CloudDoneIcon from '@mui/icons-material/CloudDone';
 import CloudOffIcon from '@mui/icons-material/CloudOff';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
 import CodeMirror from '@uiw/react-codemirror';
 import { EditorView } from "@codemirror/view";
 import { javascript } from '@codemirror/lang-javascript';
@@ -59,7 +61,10 @@ interface ButtonData {
   group?: string;
 }
 
-export default function Dashboard() {
+interface DashboardProps {
+  initialData?: any;
+}
+export default function Dashboard({ initialData }: DashboardProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const isTouch = useMediaQuery('(pointer: coarse)');
@@ -71,10 +76,11 @@ export default function Dashboard() {
   const terminalRefs = useRef<{ [key: string]: TerminalHandle | ScratchpadHandle | null }>({});
   const [viewportHeight, setViewportHeight] = useState('100dvh');
   const [isCtrlActive, setIsCtrlActive] = useState(false);
-  const [scratchpadSyncState, setScratchpadSyncState] = useState<'offline' | 'syncing' | 'synced'>('offline');
+  const [scratchpadSyncState, setScratchpadSyncState] = useState<'offline' | 'syncing' | 'synced' | 'dirty'>('offline');
   const [shellCwds, setShellCwds] = useState<{ [key: string]: string }>({});
   const [memoTabId, setMemoTabId] = useState<string | null>(null);
   const [activePaneId, setActivePaneId] = useState<string>('');
+  const [unreadTabIds, setUnreadTabIds] = useState<Set<string>>(new Set());
 
   const [buttons, setButtons] = useState<ButtonData[]>([]);
   const [activeGroup, setActiveGroup] = useState<string>(localStorage.getItem('cozy_active_group') || 'Default');
@@ -83,11 +89,12 @@ export default function Dashboard() {
   const [buttonFormData, setButtonFormData] = useState({ name: '', type: 'send_string', payload: '', group: 'Default' });
   const [initialBtnFormData, setInitialBtnFormData] = useState<any>(null);
   const [btnMenuAnchor, setBtnMenuAnchor] = useState<{ anchor: HTMLElement, btn: ButtonData } | null>(null);
+  const [lastMenuBtn, setLastMenuBtn] = useState<ButtonData | null>(null);
   const [buttonsLoaded, setButtonsLoaded] = useState(false);
   const [inputDialogOpen, setInputDialogOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [appendNewLine, setAppendNewLine] = useState(true);
-  const [sendToAll, setSendToAll] = useState(false);
+  const [sendScope, setSendScope] = useState<0 | 1 | 2>(0);
   const [toasts, setToasts] = useState<{ id: number; msg: string }[]>([]);
   const toastIdRef = useRef(0);
   const [hosts, setHosts] = useState<Host[]>([]);
@@ -103,6 +110,26 @@ export default function Dashboard() {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, 3000);
   };
+
+  const handleTerminalData = (tabId: string) => {
+    setUnreadTabIds(prev => {
+      // Don't mark active tab or already unread tabs
+      if (tabId === activeTabId || prev.has(tabId)) return prev;
+      const next = new Set(prev);
+      next.add(tabId);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (unreadTabIds.has(activeTabId)) {
+      setUnreadTabIds(prev => {
+        const next = new Set(prev);
+        next.delete(activeTabId);
+        return next;
+      });
+    }
+  }, [activeTabId, unreadTabIds]);
 
   useEffect(() => {
     localStorage.setItem('cozy_active_group', activeGroup);
@@ -128,6 +155,7 @@ export default function Dashboard() {
       const targets = Array.isArray(target) ? target.slice(0, 4) : [target];
       const hostNames = targets.map(t => {
         if (typeof t === 'string') {
+          if (t === 'local') return 'local';
           const known = hosts.find(h => h.name === t || h.hostname === t);
           return known ? known.name : t;
         }
@@ -215,10 +243,16 @@ export default function Dashboard() {
     }
   };
 
-  const sendParsedString = async (input: string, forceAll: boolean = false) => {
-    const currentTab = tabsRef.current.find(t => t.id === activeTabId);
-    if (!currentTab) return;
-    const targetPaneIds = (sendToAll || forceAll) ? currentTab.panes.map(p => p.id) : [activePaneId];
+  const sendParsedString = async (input: string) => {
+    let targetPaneIds: string[] = [];
+    if (sendScope === 2) {
+      targetPaneIds = tabsRef.current.flatMap(t => t.panes.map(p => p.id));
+    } else if (sendScope === 1) {
+      const currentTab = tabsRef.current.find(t => t.id === activeTabId);
+      targetPaneIds = currentTab ? currentTab.panes.map(p => p.id) : [activePaneId];
+    } else {
+      targetPaneIds = [activePaneId];
+    }
 
     const parts = input.split(/(<ctrl-[a-z]>)/gi);
     for (const part of parts) {
@@ -262,46 +296,50 @@ export default function Dashboard() {
     tabsRef.current = tabs;
   }, [tabs]);
 
-  const fetchHosts = () => {
-    const token = localStorage.getItem('cozy_token');
-    return fetch('/api/hosts', { headers: { 'Authorization': `Bearer ${token}` } })
-      .then((r) => {
-        if (r.status === 401) {
-          localStorage.removeItem('cozy_token');
-          window.location.href = '/login';
-          throw new Error('Unauthorized');
-        }
-        return r.json();
-      })
-      .then((data) => setHosts(data || []))
-      .catch((e) => console.error(e));
+  const loadFullData = (data: any) => {
+    if (data.sysinfo) {
+      setSysHostname(data.sysinfo.hostname || 'unknown');
+      setAppVersion(data.sysinfo.version || 'dev');
+    }
+    if (data.hosts) {
+      setHosts(data.hosts);
+    }
+    if (data.buttons) {
+      setButtons(data.buttons || []);
+      setButtonsLoaded(true);
+    }
   };
 
-  const handleRefresh = () => {
+  const fetchHosts = async () => {
     const token = localStorage.getItem('cozy_token');
-    const p1 = fetchHosts();
-    const p2 = fetch('/api/sysinfo', { headers: { 'Authorization': `Bearer ${token}` } })
-      .then(r => r.json())
-      .then(data => {
-        if (data) {
-          data.hostname && setSysHostname(data.hostname);
-          data.version && setAppVersion(data.version);
-        }
-      })
-      .catch(e => console.error(e));
+    try {
+      const r = await fetch('/api/hosts', { headers: { 'Authorization': `Bearer ${token}` } });
+      if (r.status === 401) {
+        localStorage.removeItem('cozy_token');
+        window.location.href = '/login';
+        return;
+      }
+      const data = await r.json();
+      setHosts(data || []);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
-    const p3 = fetch('/api/buttons', { headers: { 'Authorization': `Bearer ${token}` } })
-      .then(r => r.json())
-      .then(data => {
-        setButtons(data || []);
-        setButtonsLoaded(true);
-      })
-      .catch(e => console.error(e));
-
-    const p4 = fetch('/api/scratchpad/reload', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } })
-      .catch(e => console.error(e));
-
-    return Promise.all([p1, p2, p3, p4]);
+  const handleRefresh = async () => {
+    const token = localStorage.getItem('cozy_token');
+    try {
+      const r = await fetch('/api/fulldata', { headers: { 'Authorization': `Bearer ${token}` } });
+      if (r.status === 401) {
+        localStorage.removeItem('cozy_token');
+        window.location.href = '/login';
+        return;
+      }
+      const data = await r.json();
+      loadFullData(data);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   useEffect(() => {
@@ -310,88 +348,60 @@ export default function Dashboard() {
     if (hash) {
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
     }
-    handleRefresh();
-    fetchHosts();
 
-    const bc = new BroadcastChannel('cozy_tabs');
+    let bc: BroadcastChannel | null = new BroadcastChannel('cozy_tabs');
     let pinnedElsewhere = false;
 
-    bc.onmessage = (e) => {
-      if (e.data === 'probe_pinned') {
-        const hasPinned = tabsRef.current.some(t => t.isPinned);
-        if (hasPinned) bc.postMessage('pinned_present');
+    const initAsync = async () => {
+      bc!.onmessage = (e) => {
+        if (e.data === 'probe_pinned') {
+          const hasPinned = tabsRef.current.some(t => t.isPinned);
+          if (hasPinned) bc?.postMessage('pinned_present');
+        }
+        if (e.data === 'pinned_present') pinnedElsewhere = true;
+      };
+
+      let data = initialData;
+      if (!data) {
+        try {
+          const r = await fetch('/api/fulldata', { headers: { 'Authorization': `Bearer ${token}` } });
+          if (r.status === 401) {
+            localStorage.removeItem('cozy_token');
+            window.location.href = '/login';
+            return;
+          }
+          data = await r.json();
+        } catch (e) {
+          console.error(e);
+          return;
+        }
       }
-      if (e.data === 'pinned_present') pinnedElsewhere = true;
-    };
 
-    bc.postMessage('probe_pinned');
+      loadFullData(data);
 
-    setTimeout(() => {
-      if (hash) {
-        fetch('/api/hosts', { headers: { 'Authorization': `Bearer ${token}` } })
-          .then(r => r.json())
-          .then((hosts: any[]) => {
-            if (hash.startsWith('#')) {
-              // Tag mode /##tag
-              const tag = hash.substring(1);
-              const filtered = hosts.filter(h => h.tags && h.tags.includes(tag));
+      bc!.postMessage('probe_pinned');
 
-              const nameSorter = (a: any, b: any) => a.name.localeCompare(b.name);
-              const hostNameSorter = (a: any, b: any) => {
-                if (a.hostname === b.hostname) return a.name.localeCompare(b.name);
-                return a.hostname.localeCompare(b.hostname);
-              };
+      setTimeout(() => {
+        if (hash) {
+          const hostsData: any[] = data.hosts || [];
+          if (hash.startsWith('#')) {
+            // Tag mode /##tag
+            const tag = hash.substring(1);
+            const filtered = hostsData.filter(h => h.tags && h.tags.includes(tag));
 
-              const favs = filtered.filter(h => h.tags?.includes('fav')).sort(nameSorter);
-              const normals = filtered.filter(h => !h.tags?.includes('fav') && !h.is_auto).sort(nameSorter);
-              const autos = filtered.filter(h => !h.tags?.includes('fav') && h.is_auto).sort(hostNameSorter);
+            const nameSorter = (a: any, b: any) => a.name.localeCompare(b.name);
+            const hostNameSorter = (a: any, b: any) => {
+              if (a.hostname === b.hostname) return a.name.localeCompare(b.name);
+              return a.hostname.localeCompare(b.hostname);
+            };
 
-              const targets = [...favs, ...normals, ...autos].slice(0, 4);
-              if (targets.length > 0) {
-                handleSelectTagAsSplit(tag, targets.map(h => h.name));
-              } else {
-                const initialId = `local-${Date.now()}`;
-                const initialPaneId = Math.random().toString(36).substring(2);
-                setTabs([{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
-                setActiveTabId(initialId);
-                setActivePaneId(initialPaneId);
-              }
-            } else {
-              // Single host mode /#host
-              const host = hosts.find(h => h.name === hash || h.hostname === hash);
-              if (host) {
-                handleSelectHost(host.name);
-              } else {
-                const initialId = `local-${Date.now()}`;
-                const initialPaneId = Math.random().toString(36).substring(2);
-                setTabs([{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
-                setActiveTabId(initialId);
-                setActivePaneId(initialPaneId);
-                // Use a slight delay for alert to not block rendering
-                setTimeout(() => alert(`SSH server "${hash}" not found in config.`), 100);
-              }
-            }
-          })
-          .catch(e => {
-            console.error(e);
-            const initialId = `local-${Date.now()}`;
-            const initialPaneId = Math.random().toString(36).substring(2);
-            setTabs([{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
-            setActiveTabId(initialId);
-            setActivePaneId(initialPaneId);
-          });
-      } else if (!pinnedElsewhere) {
-        fetch('/api/tabs/pinned', { headers: { 'Authorization': `Bearer ${token}` } })
-          .then(r => r.json())
-          .then((pinned: any[]) => {
-            const pinnedTabs = pinned.map(p => {
-              const paneId = p.id;
-              return { id: p.id, panes: [{ id: paneId, host: p.host }], activePaneId: paneId, title: p.title, isPinned: true };
-            });
-            if (pinnedTabs.length > 0) {
-              setTabs(pinnedTabs);
-              setActiveTabId(pinnedTabs[0].id);
-              setActivePaneId(pinnedTabs[0].activePaneId);
+            const favs = filtered.filter(h => h.tags?.includes('fav')).sort(nameSorter);
+            const normals = filtered.filter(h => !h.tags?.includes('fav') && !h.is_auto).sort(nameSorter);
+            const autos = filtered.filter(h => !h.tags?.includes('fav') && h.is_auto).sort(hostNameSorter);
+
+            const targets = [...favs, ...normals, ...autos].slice(0, 4);
+            if (targets.length > 0) {
+              handleSelectTagAsSplit(tag, targets.map(h => h.name));
             } else {
               const initialId = `local-${Date.now()}`;
               const initialPaneId = Math.random().toString(36).substring(2);
@@ -399,25 +409,54 @@ export default function Dashboard() {
               setActiveTabId(initialId);
               setActivePaneId(initialPaneId);
             }
-          })
-          .catch(e => {
-            console.error(e);
+          } else {
+            // Single host mode /#host
+            const host = hostsData.find(h => h.name === hash || h.hostname === hash);
+            if (host) {
+              handleSelectHost(host.name);
+            } else {
+              const initialId = `local-${Date.now()}`;
+              const initialPaneId = Math.random().toString(36).substring(2);
+              setTabs([{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
+              setActiveTabId(initialId);
+              setActivePaneId(initialPaneId);
+              setTimeout(() => alert(`SSH server "${hash}" not found in config.`), 100);
+            }
+          }
+        } else if (!pinnedElsewhere) {
+          const pinnedTabsData: any[] = data.pinned || [];
+          // Only auto-open tabs that are not currently in use by any client
+          const availablePins = pinnedTabsData.filter((p: any) => !p.listenerCount || p.listenerCount === 0);
+          const pinnedTabs = availablePins.map((p: any) => {
+            const paneId = p.id;
+            return { id: p.id, panes: [{ id: paneId, host: p.host }], activePaneId: paneId, title: p.title, isPinned: true };
+          });
+          if (pinnedTabs.length > 0) {
+            setTabs(pinnedTabs);
+            setActiveTabId(pinnedTabs[0].id);
+            setActivePaneId(pinnedTabs[0].activePaneId);
+          } else {
             const initialId = `local-${Date.now()}`;
             const initialPaneId = Math.random().toString(36).substring(2);
             setTabs([{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
             setActiveTabId(initialId);
             setActivePaneId(initialPaneId);
-          });
-      } else {
-        const initialId = `local-${Date.now()}`;
-        const initialPaneId = Math.random().toString(36).substring(2);
-        setTabs([{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
-        setActiveTabId(initialId);
-        setActivePaneId(initialPaneId);
-      }
-    }, 150);
+          }
+        } else {
+          const initialId = `local-${Date.now()}`;
+          const initialPaneId = Math.random().toString(36).substring(2);
+          setTabs([{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
+          setActiveTabId(initialId);
+          setActivePaneId(initialPaneId);
+        }
+      }, 350);
+    };
 
-    return () => bc.close();
+    initAsync();
+
+    return () => {
+      if (bc) bc.close();
+    };
   }, []); // Run ONLY once on mount
 
   useEffect(() => {
@@ -773,6 +812,7 @@ export default function Dashboard() {
         term.focus?.();
       } else if (btn.payload === 'INPUT') {
         setInputValue('');
+        setSendScope(0);
         setInputDialogOpen(true);
       } else if (btn.payload === 'CLEAR') {
         term.clear?.();
@@ -883,11 +923,11 @@ export default function Dashboard() {
           activeTabs={tabs.map(t => t.id)}
           sysHostname={sysHostname}
           appVersion={appVersion}
-          onAttach={handleAttach}
-          onRefresh={handleRefresh}
+          onAttach={(id, host, title) => { handleAttach(id, host, title); setMobileOpen(false); }}
+          onRefresh={() => { handleRefresh(); setMobileOpen(false); }}
           hosts={hosts}
           fetchHosts={fetchHosts}
-          onOpenScratchpad={handleOpenScratchpad}
+          onOpenScratchpad={() => { handleOpenScratchpad(); setMobileOpen(false); }}
         />
         <Box component="main" sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           {tabs.length > 0 && (
@@ -926,19 +966,32 @@ export default function Dashboard() {
                       label={
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
                           {tab.isPinned && <PushPinIcon sx={{ fontSize: 14, mr: 0.5, color: 'primary.main' }} />}
-                          {tab.type === 'scratchpad' ? (
-                            <Box sx={{ mr: 1, display: 'flex', alignItems: 'center' }}>
-                              {scratchpadSyncState === 'offline' && <CloudOffIcon fontSize="small" color="error" />}
-                              {scratchpadSyncState === 'syncing' && <SyncIcon fontSize="small" color="warning" sx={{ animation: "spin 2s linear infinite", '@keyframes spin': { '0%': { transform: 'rotate(0deg)' }, '100%': { transform: 'rotate(360deg)' } } }} />}
-                              {scratchpadSyncState === 'synced' && <CloudDoneIcon fontSize="small" color="success" />}
-                            </Box>
-                          ) : (
-                            <Box sx={{
-                              width: 8, height: 8, borderRadius: '50%', mr: 1,
-                              bgcolor: (tab.panes.find(p => p.id === tab.activePaneId)?.state || 'disconnected') === 'connected' ? 'success.main' :
-                                ((tab.panes.find(p => p.id === tab.activePaneId)?.state || '').startsWith('connecting')) ? 'warning.main' : 'error.main'
-                            }} title={tab.panes.find(p => p.id === tab.activePaneId)?.state || 'disconnected'} />
-                          )}
+                          <Box sx={{ width: 16, mr: 0.5, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                            {tab.type === 'scratchpad' ? (
+                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                {scratchpadSyncState === 'offline' && <CloudOffIcon fontSize="small" color="error" />}
+                                {scratchpadSyncState === 'syncing' && <SyncIcon fontSize="small" color="info" sx={{ animation: "spin 2s linear infinite", '@keyframes spin': { '0%': { transform: 'rotate(0deg)' }, '100%': { transform: 'rotate(360deg)' } } }} />}
+                                {scratchpadSyncState === 'dirty' && <CloudUploadIcon fontSize="small" color="warning" />}
+                                {scratchpadSyncState === 'synced' && <CloudDoneIcon fontSize="small" color="success" />}
+                              </Box>
+                            ) : (() => {
+                              const state = tab.panes.find(p => p.id === tab.activePaneId)?.state || 'disconnected';
+                              const isConnected = state === 'connected';
+                              const isUnread = unreadTabIds.has(tab.id);
+
+                              if (isConnected && isUnread) {
+                                return <PriorityHighIcon sx={{ fontSize: 18, color: '#2196f3', fontWeight: 'bold' }} />;
+                              }
+
+                              return (
+                                <Box sx={{
+                                  width: 8, height: 8, borderRadius: '50%',
+                                  bgcolor: isConnected ? 'success.main' :
+                                    ((state.startsWith('connecting')) ? 'warning.main' : 'error.main')
+                                }} title={state} />
+                              );
+                            })()}
+                          </Box>
                           <span>{tab.title}</span>
                           <IconButton
                             size="small"
@@ -984,7 +1037,7 @@ export default function Dashboard() {
                         onClick={() => setActivePaneId(pane.id)}
                       >
                         {tab.type === 'scratchpad' ? (
-                          <Scratchpad 
+                          <Scratchpad
                             ref={el => { terminalRefs.current[pane.id] = el; }}
                             onSyncStateChange={setScratchpadSyncState}
                           />
@@ -1007,6 +1060,7 @@ export default function Dashboard() {
                             onCwdChange={(cwd) => {
                               setShellCwds(prev => ({ ...prev, [pane.id]: cwd }));
                             }}
+                            onDataReceived={() => handleTerminalData(tab.id)}
                             onStolen={() => {
                               setTabs(prev => prev.map(t => t.id === tab.id ? {
                                 ...t,
@@ -1135,6 +1189,7 @@ export default function Dashboard() {
                     onContextMenu={(e) => {
                       e.preventDefault();
                       setBtnMenuAnchor({ anchor: e.currentTarget, btn });
+                      setLastMenuBtn(btn);
                     }}
                     sx={{
                       minHeight: 28, minWidth: 'auto', p: '2px 12px',
@@ -1212,28 +1267,39 @@ export default function Dashboard() {
           return (
             <>
               {tab.type !== 'scratchpad' && (tab.isPinned ? (
-                <MenuItem onClick={() => handleUnpinTab(memoTabId)}>Unpin Tab</MenuItem>
+                <MenuItem onClick={() => handleUnpinTab(memoTabId)}>Unpin tab</MenuItem>
               ) : tab.panes.length === 1 ? (
-                <MenuItem onClick={() => handlePinTab(memoTabId)}>Pin Tab</MenuItem>
+                <MenuItem onClick={() => handlePinTab(memoTabId)}>Pin tab</MenuItem>
               ) : null)}
               {tab.panes.length === 1 && tab.type !== 'scratchpad' && (
                 <>
                   {tab.panes[0]?.host !== 'local' && (
-                    <MenuItem onClick={() => handleCloneSession(memoTabId)}>Clone Session</MenuItem>
+                    <MenuItem onClick={() => handleCloneSession(memoTabId)}>Clone session</MenuItem>
                   )}
                   <MenuItem onClick={handleToggleFiles}>
-                    {tab.showFiles ? 'Close Files' : (tab.panes[0]?.host === 'local' ? 'Open Files' : 'Open SFTP')}
+                    {tab.showFiles ? 'Close files' : (tab.panes[0]?.host === 'local' ? 'Open files' : 'Open SFTP')}
                   </MenuItem>
                 </>
               )}
               {tab.type !== 'scratchpad' && (
                 <>
                   <MenuItem onClick={() => handleReconnectTab(memoTabId)}>Reconnect</MenuItem>
-                  <MenuItem onClick={handleRename}>Rename Tab</MenuItem>
+                  <MenuItem onClick={handleRename}>Rename tab</MenuItem>
                 </>
               )}
-              <MenuItem onClick={handleCloseOther}>Close Other tabs</MenuItem>
+              <MenuItem onClick={handleCloseOther}>Close other tabs</MenuItem>
               <MenuItem onClick={handleCloseRight}>Close tabs to the right</MenuItem>
+              {tab.type === 'scratchpad' && (
+                <MenuItem onClick={() => {
+                  fetch('/api/scratchpad/reload', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('cozy_token')}` }
+                  }).then(() => {
+                    // csNotify("Reloading Scratchpad from disk...");
+                  });
+                  handleCloseMenu();
+                }}>Force sync</MenuItem>
+              )}
             </>
           );
         })()}
@@ -1258,6 +1324,17 @@ export default function Dashboard() {
           setBtnMenuAnchor(null);
           setButtonDialogOpen(true);
         }}>Edit Button</MenuItem>
+        <MenuItem
+          onClick={() => {
+            if (btnMenuAnchor) {
+              navigator.clipboard.writeText(btnMenuAnchor.btn.payload);
+              setBtnMenuAnchor(null);
+            }
+          }}
+          sx={{ display: lastMenuBtn?.type === 'send_string' ? 'flex' : 'none' }}
+        >
+          Copy Contents
+        </MenuItem>
         <MenuItem onClick={() => btnMenuAnchor && handleMoveButton(btnMenuAnchor.btn.id, -1)}>Move Button Left</MenuItem>
         <MenuItem onClick={() => btnMenuAnchor && handleMoveButton(btnMenuAnchor.btn.id, 1)}>Move Button Right</MenuItem>
         <MenuItem onClick={() => btnMenuAnchor && handleDeleteButton(btnMenuAnchor.btn.id, btnMenuAnchor.btn.name)} sx={{ color: 'error.main' }}>Delete Button</MenuItem>
@@ -1369,17 +1446,21 @@ export default function Dashboard() {
             }}
             autoFocus
           />
-          <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 1 }}>
             <FormControlLabel
               control={<Checkbox checked={appendNewLine} onChange={(e) => setAppendNewLine(e.target.checked)} size="small" />}
               label={<Typography variant="body2">Append new line (\n)</Typography>}
             />
             {tabs.find(t => t.id === activeTabId)?.panes.length! > 1 && (
               <FormControlLabel
-                control={<Checkbox checked={sendToAll} onChange={(e) => setSendToAll(e.target.checked)} size="small" />}
-                label={<Typography variant="body2">Send to all</Typography>}
+                control={<Checkbox checked={sendScope === 1} onChange={(e) => setSendScope(e.target.checked ? 1 : 0)} size="small" />}
+                label={<Typography variant="body2">Send to all panes</Typography>}
               />
             )}
+            <FormControlLabel
+              control={<Checkbox checked={sendScope === 2} onChange={(e) => setSendScope(e.target.checked ? 2 : 0)} size="small" />}
+              label={<Typography variant="body2">Send to all</Typography>}
+            />
           </Box>
         </DialogContent>
         <DialogActions>

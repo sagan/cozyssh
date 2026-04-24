@@ -9,7 +9,7 @@ const lightTheme = createTheme({
   },
 });
 
-export default function Login() {
+export default function Login({ onLoginSuccess }: { onLoginSuccess?: (data: any) => void }) {
   const [password, setPassword] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -22,7 +22,11 @@ export default function Login() {
     if (res.ok) {
       const data = await res.json();
       localStorage.setItem('cozy_token', data.token);
-      window.location.href = '/';
+      if (onLoginSuccess && data.fulldata) {
+        onLoginSuccess(data.fulldata);
+      } else {
+        window.location.href = '/';
+      }
     } else {
       alert('Login failed. Please check the terminal output for the correct App Password.');
     }

@@ -16,9 +16,9 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
 
 <details>
 
-<summary>Split Window</summary>
+<summary>Split Screen</summary>
 
-![CozySSH Split Window](./docs/screenshot-split-window.png)
+![CozySSH Split Screen](./docs/screenshot-split-screen.png)
 
 </details>
 
