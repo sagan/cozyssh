@@ -139,6 +139,10 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
       return true;
     });
 
+    term.onResize(({ cols, rows }) => {
+      window.dispatchEvent(new CustomEvent('cs:terminal-resize', { detail: { terminal: term, cols, rows, sessionId, host, is_active_terminal: isActive } }));
+    });
+
     // Use ResizeObserver for more reliable fitting
     const resizeObserver = new ResizeObserver(() => {
       if (terminalRef.current && terminalRef.current.offsetWidth > 0) {
@@ -200,6 +204,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
         if (isDisposed) { ws.close(); return; }
         // Send initial resize
         ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+        window.dispatchEvent(new CustomEvent('cs:terminal-connected', { detail: { terminal: term, sessionId, host, is_active_terminal: isActive } }));
       };
 
       ws.onmessage = (ev) => {
@@ -218,11 +223,12 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
                 ws.close();
                 if (msg.state === 'stolen') {
                   term.write('\r\n\x1b[31;1m*** Session stolen (attached by another client) *** (Press Enter to reconnect)\x1b[0m\r\n');
+                  onStolen?.();
                 } else {
                   term.write(`\r\n\x1b[31;1m*** ${msg.state} *** (Press Enter to reconnect)\x1b[0m\r\n`);
                 }
                 onStateChange?.(msg.state);
-                if (msg.state === 'stolen') onStolen?.();
+                window.dispatchEvent(new CustomEvent('cs:terminal-disconnected', { detail: { terminal: term, sessionId, host, is_active_terminal: isActive, reason: deathType } }));
                 return;
               }
               onStateChange?.(msg.state);
@@ -231,7 +237,10 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
           } catch (e) {
             // ignore
           }
-          if (!isRestoringHistory) onDataRef.current?.();
+          if (!isRestoringHistory) {
+            onDataRef.current?.();
+            window.dispatchEvent(new CustomEvent('cs:terminal-data', { detail: { terminal: term, sessionId, host, is_active_terminal: isActive } }));
+          }
           term.write(ev.data);
         } else {
           const buffer = new Uint8Array(ev.data);
@@ -242,7 +251,10 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
               isRestoringHistory = false;
             });
           } else {
-            if (!isRestoringHistory) onDataRef.current?.();
+            if (!isRestoringHistory) {
+              onDataRef.current?.();
+              window.dispatchEvent(new CustomEvent('cs:terminal-data', { detail: { terminal: term, sessionId, host, is_active_terminal: isActive } }));
+            }
             term.write(buffer);
           }
         }
@@ -251,6 +263,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
       ws.onclose = () => {
         if (isDisposed) return;
         onStateChange?.('disconnected to ssh server');
+        window.dispatchEvent(new CustomEvent('cs:terminal-disconnected', { detail: { terminal: term, sessionId, host, is_active_terminal: isActive, reason: 'normal' } }));
         reconnectTimer = setTimeout(connectWS, 2000);
       };
     };

@@ -99,6 +99,7 @@ func main() {
 			},
 			"hosts":   hosts,
 			"buttons": cfg.Buttons,
+			"vars":    cfg.Vars,
 			"pinned":  pinned,
 		}
 	}
@@ -375,6 +376,30 @@ func main() {
 			return
 		}
 		cfg.MoveButton(req.ID, req.Direction)
+		w.WriteHeader(http.StatusOK)
+	}))))
+
+	mux.Handle("/api/vars", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var updates map[string]*string
+		if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		for k, v := range updates {
+			if v == nil {
+				delete(cfg.Vars, k)
+			} else {
+				cfg.Vars[k] = *v
+			}
+		}
+		if err := cfg.Save(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 	}))))
 

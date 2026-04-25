@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, CssBaseline, ThemeProvider, createTheme, Tabs, Tab, IconButton, Menu, MenuItem, Typography, Button, ButtonGroup, useMediaQuery, useTheme, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, FormControlLabel, Checkbox } from '@mui/material';
+import { Box, CssBaseline, ThemeProvider, createTheme, Tabs, Tab, IconButton, Menu, MenuItem, Typography, Button, ButtonGroup, useMediaQuery, useTheme, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, FormControlLabel, Checkbox, Drawer } from '@mui/material';
 import Sidebar from './Sidebar';
 import type { Host } from './Sidebar';
 import TerminalComponent from './Terminal';
@@ -23,6 +23,8 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 import CodeMirror from '@uiw/react-codemirror';
 import { EditorView } from "@codemirror/view";
 import { javascript } from '@codemirror/lang-javascript';
@@ -61,6 +63,7 @@ interface ButtonData {
   type: string;
   payload: string;
   group?: string;
+  autorun?: number;
 }
 
 interface DashboardProps {
@@ -101,14 +104,18 @@ export interface AppletData {
   name: string;
   node: any;
   position: 'widget' | 'sidebar';
+  width?: number;
+  height?: number;
+  zIndex?: number;
 }
 
-const AppletWrapper = ({ applet, onClose, onSwitchPosition }: { applet: AppletData; onClose: () => void; onSwitchPosition: (pos: 'widget' | 'sidebar') => void; }) => {
+const AppletWrapper = ({ applet, onClose, onSwitchPosition, onFocus }: { applet: AppletData; index: number; onClose: () => void; onSwitchPosition: (pos: 'widget' | 'sidebar') => void; onFocus?: () => void; }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [position, setPosition] = useState(() => ({ 
-    x: window.innerWidth - 320, 
-    y: window.innerHeight - 250 
+  const [expanded, setExpanded] = useState(true);
+  const [position, setPosition] = useState(() => ({
+    x: window.innerWidth - (applet.width || 320),
+    y: window.innerHeight - (applet.height || 250)
   }));
   const dragStartRef = useRef({ x: 0, y: 0, pos: { x: 0, y: 0 } });
 
@@ -117,10 +124,11 @@ const AppletWrapper = ({ applet, onClose, onSwitchPosition }: { applet: AppletDa
       containerRef.current.innerHTML = '';
       containerRef.current.appendChild(applet.node);
     }
-  }, [applet.node]);
+  }, [applet.node, expanded]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (applet.position !== 'widget') return;
+    if ((e.target as HTMLElement).closest('button')) return;
     setIsDragging(true);
     dragStartRef.current = { x: e.clientX, y: e.clientY, pos: position };
   };
@@ -144,52 +152,92 @@ const AppletWrapper = ({ applet, onClose, onSwitchPosition }: { applet: AppletDa
     };
   }, [isDragging]);
 
-  const wrapperSx: any = applet.position === 'widget' ? {
-    position: 'fixed',
-    left: position.x,
-    top: position.y,
-    zIndex: 9999,
-    minWidth: 250,
-    minHeight: 150,
-    resize: 'both',
-    overflow: 'hidden',
-    boxShadow: 3,
-    display: 'flex',
-    flexDirection: 'column',
-    bgcolor: 'background.paper',
-    border: 1,
-    borderColor: 'divider',
-    borderRadius: 1
-  } : {
-    display: 'flex',
-    flexDirection: 'column',
-    flex: 1,
-    borderBottom: 1,
-    borderColor: 'divider',
-    minHeight: 150
-  };
+  if (applet.position === 'sidebar') {
+    return (
+      <Box sx={{
+        borderBottom: '2px solid #5d00ff',
+        bgcolor: 'background.paper',
+        display: 'flex',
+        flexDirection: 'column',
+        flex: expanded ? 1 : '0 0 auto',
+        minHeight: expanded ? 0 : 'auto'
+      }}>
+        <Box
+          onClick={() => setExpanded(!expanded)}
+          sx={{
+            display: 'flex', alignItems: 'center', px: 1, py: 1, bgcolor: '#00000014', color: 'text.primary',
+            cursor: 'pointer', userSelect: 'none', flexShrink: 0,
+            '&:hover': { bgcolor: '#00000028' }
+          }}
+        >
+          {expanded ? <KeyboardArrowDownIcon /> : <KeyboardArrowRightIcon />}
+          <Typography variant="subtitle2" sx={{ flexGrow: 1, fontWeight: 'bold' }}>{applet.name}</Typography>
+          <IconButton size="small" color="inherit" onClick={(e) => { e.stopPropagation(); onSwitchPosition('widget'); }}>
+            <OpenInNewIcon fontSize="small" />
+          </IconButton>
+          <IconButton size="small" color="inherit" onClick={(e) => { e.stopPropagation(); onClose(); }} sx={{ ml: 0.5 }}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Box>
+        <Box sx={{
+          display: expanded ? 'flex' : 'none',
+          flexDirection: 'column',
+          flex: 1,
+          minHeight: 0,
+          overflow: 'auto'
+        }}>
+          {!(applet.node instanceof Node) ? (
+            React.isValidElement(applet.node) ? applet.node : React.createElement(applet.node as React.ComponentType, {})
+          ) : (
+            <div ref={containerRef} style={{ width: '100%', minHeight: '150px' }} />
+          )}
+        </Box>
+      </Box>
+    );
+  }
 
   const isReactComponent = !(applet.node instanceof Node);
 
   return (
-    <Box sx={wrapperSx}>
-      <Box 
+    <Box
+      onMouseDown={onFocus}
+      sx={{
+        position: 'fixed',
+        left: position.x,
+        top: position.y,
+        zIndex: applet.zIndex || 9999,
+        width: applet.width || 320,
+        height: applet.height || 250,
+        minWidth: 250,
+        minHeight: 150,
+        resize: isDragging ? 'none' : 'both',
+        overflow: 'hidden',
+        boxShadow: 3,
+        display: 'flex',
+        flexDirection: 'column',
+        bgcolor: 'background.paper',
+        border: 1,
+        borderColor: 'divider',
+        borderRadius: 1,
+        userSelect: isDragging ? 'none' : 'auto'
+      }}>
+      <Box
         onMouseDown={handleMouseDown}
-        sx={{ 
+        sx={{
           display: 'flex', alignItems: 'center', px: 1, py: 0.5, bgcolor: '#f0f4f8', color: 'text.secondary',
           borderBottom: 1, borderColor: 'divider',
-          cursor: applet.position === 'widget' ? 'move' : 'default', flexShrink: 0 
+          cursor: 'move', flexShrink: 0
         }}
       >
         <Typography variant="subtitle2" sx={{ flexGrow: 1, fontWeight: 'bold' }}>{applet.name}</Typography>
-        <IconButton size="small" color="inherit" onClick={() => onSwitchPosition(applet.position === 'widget' ? 'sidebar' : 'widget')}>
-          {applet.position === 'widget' ? <ViewSidebarIcon fontSize="small" /> : <OpenInNewIcon fontSize="small" />}
+        <IconButton size="small" color="inherit" onClick={() => onSwitchPosition('sidebar')}>
+          <ViewSidebarIcon fontSize="small" />
         </IconButton>
         <IconButton size="small" color="inherit" onClick={onClose} sx={{ ml: 0.5 }}>
           <CloseIcon fontSize="small" />
         </IconButton>
       </Box>
-      <Box sx={{ flexGrow: 1, overflow: 'auto', p: applet.position === 'widget' ? 1 : 0, position: 'relative' }}>
+      <Box sx={{ flexGrow: 1, overflow: 'auto', p: 1, position: 'relative' }}>
         {isReactComponent ? (React.isValidElement(applet.node) ? applet.node : React.createElement(applet.node as React.ComponentType, {})) : <div ref={containerRef} style={{ width: '100%', height: '100%' }} />}
       </Box>
     </Box>
@@ -206,6 +254,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [activeTabId, setActiveTabId] = useState<string>(defaultTabId);
   const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number; targetTabId: string } | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileAppletsOpen, setMobileAppletsOpen] = useState(false);
   const terminalRefs = useRef<{ [key: string]: TerminalHandle | ScratchpadHandle | null }>({});
   const [viewportHeight, setViewportHeight] = useState('100dvh');
   const [isCtrlActive, setIsCtrlActive] = useState(false);
@@ -215,12 +264,14 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [activePaneId, setActivePaneId] = useState<string>('');
   const [unreadTabIds, setUnreadTabIds] = useState<Set<string>>(new Set());
   const [applets, setApplets] = useState<AppletData[]>([]);
+  const [vars, setVars] = useState<Record<string, string>>({});
+  const maxZIndexRef = useRef(10000);
 
   const [buttons, setButtons] = useState<ButtonData[]>([]);
   const [activeGroup, setActiveGroup] = useState<string>(localStorage.getItem('cozy_active_group') || 'Default');
   const [buttonDialogOpen, setButtonDialogOpen] = useState(false);
   const [editingButton, setEditingButton] = useState<ButtonData | null>(null);
-  const [buttonFormData, setButtonFormData] = useState({ name: '', type: 'send_string', payload: '', group: 'Default' });
+  const [buttonFormData, setButtonFormData] = useState({ name: '', type: 'send_string', payload: '', group: 'Default', autorun: 0 });
   const [initialBtnFormData, setInitialBtnFormData] = useState<any>(null);
   const [btnMenuAnchor, setBtnMenuAnchor] = useState<{ anchor: HTMLElement, btn: ButtonData } | null>(null);
   const [lastMenuBtn, setLastMenuBtn] = useState<ButtonData | null>(null);
@@ -232,6 +283,21 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [toasts, setToasts] = useState<{ id: number; msg: string }[]>([]);
   const toastIdRef = useRef(0);
   const [hosts, setHosts] = useState<Host[]>([]);
+  const varsRef = useRef<Record<string, string>>({});
+  useEffect(() => { varsRef.current = vars; }, [vars]);
+
+  const autoRunExecutedRef = useRef(false);
+  const scriptInvokeContextRef = useRef<{ isAutoRun: boolean } | null>(null);
+
+  const activePaneIdRef = useRef(activePaneId);
+  useEffect(() => { activePaneIdRef.current = activePaneId; }, [activePaneId]);
+
+  const hostsRef = useRef(hosts);
+  useEffect(() => { hostsRef.current = hosts; }, [hosts]);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('cs:terminal-change', { detail: { activePaneId } }));
+  }, [activePaneId]);
 
   const csNotify = (msg: string) => {
     toastIdRef.current++;
@@ -279,37 +345,86 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, [groups, buttonsLoaded, activeGroup]);
 
   useEffect(() => {
-    (window as any).csOpenApplet = (name: string, node: any, options: {position?: 'widget' | 'sidebar'} = {}) => {
+    (window as any).csGetApplet = (name?: string) => {
+      return name ? applets.find(a => a.name === name) : applets;
+    }
+    return () => {
+      delete (window as any).csGetApplet;
+    };
+  }, [applets]);
+
+  useEffect(() => {
+    (window as any).csOpenApplet = (name: string, node: any, options: { position?: 'widget' | 'sidebar'; width?: number; height?: number } = {}) => {
+      const parsedPos = options.position === 'sidebar' || isMobile ? 'sidebar' : 'widget';
+
+      if (isMobile && parsedPos === 'sidebar' && !scriptInvokeContextRef.current?.isAutoRun) {
+        setMobileAppletsOpen(true);
+      }
+
       setApplets(prev => {
-        const parsedPos = options.position === 'sidebar' ? 'sidebar' : 'widget';
         const existing = prev.find(a => a.name === name);
         if (existing) {
           return prev;
         }
-        return [...prev, { name, node, position: parsedPos }];
+        return [...prev, { name, node, position: parsedPos, width: options.width, height: options.height, zIndex: maxZIndexRef.current++ }];
       });
     };
     (window as any).csCloseApplet = (name: string) => {
       setApplets(prev => prev.filter(a => a.name !== name));
     };
+    (window as any).csGetVar = (name?: string) => {
+      if (name) return varsRef.current[name];
+      return { ...varsRef.current };
+    };
+    (window as any).csSetVar = async (nameOrVars: string | Record<string, string | undefined>, value?: string | undefined) => {
+      const token = localStorage.getItem('cozy_token');
+      let updates: Record<string, string | null> = {};
+      if (typeof nameOrVars === 'string') {
+        updates[nameOrVars] = value === undefined ? null : value;
+      } else {
+        for (const k in nameOrVars) {
+          const v = nameOrVars[k];
+          updates[k] = v === undefined ? null : v;
+        }
+      }
+
+      const r = await fetch('/api/vars', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updates)
+      });
+      if (!r.ok) throw new Error(await r.text());
+
+      const nextVars = { ...varsRef.current };
+      for (const k in updates) {
+        const v = updates[k];
+        if (v === null) delete nextVars[k];
+        else nextVars[k] = v;
+      }
+      varsRef.current = nextVars;
+      setVars(nextVars);
+    };
 
     (window as any).csGetTerminal = () => {
-      const term: any = terminalRefs.current[activePaneId];
+      const term: any = terminalRefs.current[activePaneIdRef.current];
       return term?.getXterm?.();
     };
     (window as any).csFocus = () => {
-      if (activePaneId) {
-        setTimeout(() => terminalRefs.current[activePaneId]?.focus(), 0);
+      if (activePaneIdRef.current) {
+        setTimeout(() => terminalRefs.current[activePaneIdRef.current]?.focus(), 0);
       }
     };
     (window as any).csNotify = (msg: string) => csNotify(msg);
-    (window as any).csGetHosts = () => hosts;
+    (window as any).csGetHosts = () => hostsRef.current;
     (window as any).csOpen = (target: any, options: { name?: string } = {}) => {
       const targets = Array.isArray(target) ? target.slice(0, 4) : [target];
       const hostNames = targets.map(t => {
         if (typeof t === 'string') {
           if (t === 'local') return 'local';
-          const known = hosts.find(h => h.name === t || h.hostname === t);
+          const known = hostsRef.current.find(h => h.name === t || h.hostname === t);
           return known ? known.name : t;
         }
         return t.name;
@@ -367,7 +482,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
     };
 
     return () => {
+      delete (window as any).csOpenApplet;
+      delete (window as any).csCloseApplet;
+      delete (window as any).csGetVar;
+      delete (window as any).csSetVar;
       delete (window as any).csGetTerminal;
+      delete (window as any).csFocus;
       delete (window as any).csNotify;
       delete (window as any).csGetHosts;
       delete (window as any).csOpen;
@@ -375,7 +495,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       delete (window as any).csExec;
       delete (window as any).csRefresh;
     };
-  }, [activePaneId, hosts]);
+  }, []);
 
   const handleCloseInputDialog = () => {
     setInputDialogOpen(false);
@@ -460,6 +580,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
     if (data.buttons) {
       setButtons(data.buttons || []);
       setButtonsLoaded(true);
+    }
+    if (data.vars) {
+      setVars(data.vars || {});
     }
   };
 
@@ -941,7 +1064,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeTabId, activePaneId, tabs, buttons, activeGroup]);
 
-  const handleButtonClick = async (btn: ButtonData) => {
+  const handleButtonClick = async (btn: ButtonData, isAutoRun = false) => {
     window.navigator.vibrate?.(VIBRATE_PATTERN);
     if (btn.type === 'send_string') {
       await sendParsedString(btn.payload);
@@ -993,6 +1116,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       }
       terminalRefs.current[activePaneId]?.focus();
     } else if (btn.type === 'run_script') {
+      scriptInvokeContextRef.current = { isAutoRun };
       let resolvedCode = btn.payload;
       for (const [moduleName, blobUrl] of Object.entries(virtualModules)) {
         const regex = new RegExp(`(from\\s+['"])${moduleName}(['"])`, 'g');
@@ -1011,6 +1135,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       } finally {
         // Always clean up the URL to prevent memory leaks
         URL.revokeObjectURL(url);
+        scriptInvokeContextRef.current = null;
       }
       terminalRefs.current[activePaneId]?.focus();
     }
@@ -1034,6 +1159,16 @@ export default function Dashboard({ initialData }: DashboardProps) {
         setButtonsLoaded(true);
       });
   };
+
+  useEffect(() => {
+    if (buttonsLoaded && !autoRunExecutedRef.current) {
+      autoRunExecutedRef.current = true;
+      const scriptsToRun = buttons.filter(b => b.type === 'run_script' && b.autorun === 1);
+      scriptsToRun.forEach(btn => {
+        handleButtonClick(btn, true);
+      });
+    }
+  }, [buttonsLoaded, buttons]);
 
   const handleDeleteButton = async (id: string, name: string) => {
     if (!confirm(`Delete button "${name}"?`)) return;
@@ -1171,6 +1306,15 @@ export default function Dashboard({ initialData }: DashboardProps) {
                   ))}
                 </Tabs>
               </Box>
+              {isMobile && applets.filter(a => a.position === 'sidebar').length > 0 && (
+                <IconButton
+                  color="inherit"
+                  onClick={() => setMobileAppletsOpen(!mobileAppletsOpen)}
+                  sx={{ mr: 1 }}
+                >
+                  <ViewSidebarIcon />
+                </IconButton>
+              )}
             </Box>
           )}
 
@@ -1370,7 +1514,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                 <IconButton
                   size="small"
                   onClick={() => {
-                    const data = { name: '', type: 'send_string', payload: '', group: activeGroup };
+                    const data = { name: '', type: 'send_string', payload: '', group: activeGroup, autorun: 0 };
                     setEditingButton(null);
                     setButtonFormData(data);
                     setInitialBtnFormData(data);
@@ -1419,16 +1563,56 @@ export default function Dashboard({ initialData }: DashboardProps) {
           )}
         </Box>
         {applets.filter(a => a.position === 'sidebar').length > 0 && (
-          <Box sx={{ width: 320, flexShrink: 0, borderLeft: 1, borderColor: 'divider', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper', overflowY: 'auto' }}>
-            {applets.filter(a => a.position === 'sidebar').map(applet => (
-               <AppletWrapper key={applet.name} applet={applet} onClose={() => setApplets(prev => prev.filter(a => a.name !== applet.name))} onSwitchPosition={(pos) => setApplets(prev => prev.map(a => a.name === applet.name ? { ...a, position: pos } : a))} />
-            ))}
-          </Box>
+          isMobile ? (
+            <Drawer
+              anchor="right"
+              open={mobileAppletsOpen}
+              onClose={() => setMobileAppletsOpen(false)}
+              sx={{ '& .MuiDrawer-paper': { width: 320, boxSizing: 'border-box' } }}
+            >
+              <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: 1, borderColor: 'divider' }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Applets</Typography>
+                <IconButton onClick={() => setMobileAppletsOpen(false)}>
+                  <CloseIcon />
+                </IconButton>
+              </Box>
+              <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
+                {applets.filter(a => a.position === 'sidebar').map((applet, idx) => (
+                  <AppletWrapper
+                    key={applet.name}
+                    applet={applet}
+                    index={idx}
+                    onClose={() => setApplets(prev => prev.filter(a => a.name !== applet.name))}
+                    onSwitchPosition={(pos) => setApplets(prev => prev.map(a => a.name === applet.name ? { ...a, position: pos } : a))}
+                  />
+                ))}
+              </Box>
+            </Drawer>
+          ) : (
+            <Box sx={{ width: 320, flexShrink: 0, borderLeft: 1, borderColor: 'divider', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper', overflow: 'hidden', height: '100%' }}>
+              {applets.filter(a => a.position === 'sidebar').map((applet, idx) => (
+                <AppletWrapper
+                  key={applet.name}
+                  applet={applet}
+                  index={idx}
+                  onClose={() => setApplets(prev => prev.filter(a => a.name !== applet.name))}
+                  onSwitchPosition={(pos) => setApplets(prev => prev.map(a => a.name === applet.name ? { ...a, position: pos } : a))}
+                />
+              ))}
+            </Box>
+          )
         )}
       </Box>
 
-      {applets.filter(a => a.position === 'widget').map(applet => (
-         <AppletWrapper key={applet.name} applet={applet} onClose={() => setApplets(prev => prev.filter(a => a.name !== applet.name))} onSwitchPosition={(pos) => setApplets(prev => prev.map(a => a.name === applet.name ? { ...a, position: pos } : a))} />
+      {applets.filter(a => a.position === 'widget').map((applet, idx) => (
+        <AppletWrapper
+          key={applet.name}
+          applet={applet}
+          index={idx}
+          onClose={() => setApplets(prev => prev.filter(a => a.name !== applet.name))}
+          onSwitchPosition={(pos) => setApplets(prev => prev.map(a => a.name === applet.name ? { ...a, position: pos } : a))}
+          onFocus={() => setApplets(prev => prev.map(a => a.name === applet.name ? { ...a, zIndex: maxZIndexRef.current++ } : a))}
+        />
       ))}
 
       <Menu
@@ -1492,7 +1676,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
             name: btnMenuAnchor.btn.name,
             type: btnMenuAnchor.btn.type,
             payload: btnMenuAnchor.btn.payload,
-            group: btnMenuAnchor.btn.group || 'Default'
+            group: btnMenuAnchor.btn.group || 'Default',
+            autorun: btnMenuAnchor.btn.autorun || 0
           };
           setEditingButton(btnMenuAnchor.btn);
           setButtonFormData(data);
@@ -1516,25 +1701,44 @@ export default function Dashboard({ initialData }: DashboardProps) {
         <MenuItem onClick={() => btnMenuAnchor && handleDeleteButton(btnMenuAnchor.btn.id, btnMenuAnchor.btn.name)} sx={{ color: 'error.main' }}>Delete Button</MenuItem>
       </Menu>
 
-      <Dialog open={buttonDialogOpen} onClose={handleCloseBtnDialog} fullWidth maxWidth="xs">
+      <Dialog open={buttonDialogOpen} onClose={handleCloseBtnDialog} fullWidth maxWidth="lg">
         <DialogTitle>{editingButton ? 'Edit Button' : 'Add Button'}</DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-          <TextField sx={{ mt: 1 }} fullWidth label="Button Name" size="small" value={buttonFormData.name} onChange={e => setButtonFormData({ ...buttonFormData, name: e.target.value })} />
-          <TextField fullWidth label="Button Group" size="small" value={buttonFormData.group} onChange={e => setButtonFormData({ ...buttonFormData, group: e.target.value })} placeholder="Default" />
-          <TextField
-            select
-            fullWidth
-            label="Button Type"
-            size="small"
-            value={buttonFormData.type}
-            onChange={e => setButtonFormData({ ...buttonFormData, type: e.target.value, payload: e.target.value === 'terminal_function' ? 'COPY' : e.target.value === 'misc' ? 'NEXT_BUTTON_GROUP' : '' })}
-            slotProps={{ select: { native: true } }}
-          >
-            <option value="send_string">Send String</option>
-            <option value="terminal_function">Terminal Function</option>
-            <option value="misc">Misc</option>
-            <option value="run_script">Run Script</option>
-          </TextField>
+          <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
+            <TextField fullWidth label="Button Name" size="small" value={buttonFormData.name} onChange={e => setButtonFormData({ ...buttonFormData, name: e.target.value })} />
+            <TextField fullWidth label="Button Group" size="small" value={buttonFormData.group} onChange={e => setButtonFormData({ ...buttonFormData, group: e.target.value })} placeholder="Default" />
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <TextField
+              select
+              fullWidth={buttonFormData.type !== 'run_script'}
+              label="Button Type"
+              size="small"
+              value={buttonFormData.type}
+              onChange={e => setButtonFormData({ ...buttonFormData, type: e.target.value, payload: e.target.value === 'terminal_function' ? 'COPY' : e.target.value === 'misc' ? 'NEXT_BUTTON_GROUP' : '' })}
+              slotProps={{ select: { native: true } }}
+              sx={{ flexGrow: 1 }}
+            >
+              <option value="send_string">Send String</option>
+              <option value="terminal_function">Terminal Function</option>
+              <option value="misc">Misc</option>
+              <option value="run_script">Run Script</option>
+            </TextField>
+
+            {buttonFormData.type === 'run_script' && (
+              <FormControlLabel
+                sx={{ flexShrink: 0, mr: 0, ml: 1, whiteSpace: 'nowrap' }}
+                control={
+                  <Checkbox
+                    checked={buttonFormData.autorun === 1}
+                    onChange={e => setButtonFormData({ ...buttonFormData, autorun: e.target.checked ? 1 : 0 })}
+                    size="small"
+                  />
+                }
+                label={<Typography variant="body2">Auto-run</Typography>}
+              />
+            )}
+          </Box>
 
           {buttonFormData.type === 'send_string' ? (
             <TextField
@@ -1580,15 +1784,19 @@ export default function Dashboard({ initialData }: DashboardProps) {
               <option value="OPEN_SCRATCHPAD">Open Scratchpad</option>
             </TextField>
           ) : (
-            <Box sx={{ border: '1px solid #ccc', borderRadius: 1, overflow: 'hidden' }}>
-              <Typography variant="body2">
-                Check <a target="_blank" rel="noopener noreferrer" href="https://github.com/sagan/cozyssh/blob/master/docs/SCRIPTS.md">help</a> about scripts.
-              </Typography>
+            <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden', flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
+              <Box sx={{ px: 1.5, py: 0.5, bgcolor: 'action.hover', borderBottom: '1px solid', borderColor: 'divider' }}>
+                <Typography variant="caption" color="text.secondary">
+                  Check <a target="_blank" rel="noopener noreferrer" style={{ color: '#1976d2' }} href="https://github.com/sagan/cozyssh/blob/master/docs/SCRIPTS.md">help</a> about scripts.
+                </Typography>
+              </Box>
               <CodeMirror
                 value={buttonFormData.payload}
                 height="200px"
+                theme="light"
                 extensions={[javascript({ typescript: true }), EditorView.lineWrapping]}
                 onChange={(value) => setButtonFormData({ ...buttonFormData, payload: value })}
+                style={{ fontSize: '12px' }}
               />
             </Box>
           )}

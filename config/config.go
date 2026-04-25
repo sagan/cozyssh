@@ -25,6 +25,7 @@ type Button struct {
 	Type    string `yaml:"type" json:"type"`
 	Payload string `yaml:"payload" json:"payload"`
 	Group   string `yaml:"group" json:"group"`
+	AutoRun int    `yaml:"autorun" json:"autorun"`
 }
 
 type Config struct {
@@ -32,8 +33,9 @@ type Config struct {
 	AppPasswordHash string      `yaml:"app_password_hash"`
 	PinnedTabs      []PinnedTab `yaml:"pinned_tabs"`
 	Buttons         []Button    `yaml:"buttons" json:"buttons"`
-	ConfigPath      string      `yaml:"-"` // internal use
-	ConfigDir       string      `yaml:"-"` // internal use
+	ConfigPath      string            `yaml:"-"` // internal use
+	ConfigDir       string            `yaml:"-"` // internal use
+	Vars            map[string]string `yaml:"vars" json:"vars"`
 }
 
 func LoadConfig(customDir string) (*Config, error) {
@@ -69,6 +71,9 @@ func LoadConfig(customDir string) (*Config, error) {
 
 	if cfg.Addr == "" {
 		cfg.Addr = "127.0.0.1:8022"
+	}
+	if cfg.Vars == nil {
+		cfg.Vars = make(map[string]string)
 	}
 	cfg.ConfigPath = configPath
 	cfg.ConfigDir = configDir
@@ -162,11 +167,15 @@ func (c *Config) ChangeAppPassword(newPassword string) error {
 }
 
 func (c *Config) Save() error {
-	data, err := yaml.Marshal(c)
+	f, err := os.OpenFile(c.ConfigPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(c.ConfigPath, data, 0600)
+	defer f.Close()
+
+	enc := yaml.NewEncoder(f)
+	enc.SetIndent(2)
+	return enc.Encode(c)
 }
 
 func (c *Config) ResetAppPassword() (string, error) {
