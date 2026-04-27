@@ -32,6 +32,23 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess?: (data: any)
     }
   };
 
+  const handleClearCache = async () => {
+    if (!confirm("This will unregister the Service Worker, clear all caches and reload. Proceed?")) return;
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      for (let registration of registrations) {
+        await registration.unregister();
+      }
+      if (window.caches) {
+        const cacheNames = await caches.keys();
+        for (let cacheName of cacheNames) {
+          await caches.delete(cacheName);
+        }
+      }
+      window.location.reload();
+    }
+  };
+
   return (
     <ThemeProvider theme={lightTheme}>
       <CssBaseline />
@@ -53,6 +70,15 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess?: (data: any)
               Sign In
             </Button>
           </Box>
+          <Button 
+            variant="text" 
+            size="small" 
+            color="error" 
+            onClick={handleClearCache}
+            sx={{ mt: 2, fontSize: '0.7rem', textTransform: 'none' }}
+          >
+            Force clear cache & unregister service worker
+          </Button>
         </Paper>
       </Box>
     </ThemeProvider>

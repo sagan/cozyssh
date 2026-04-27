@@ -185,7 +185,7 @@
 
 /* Target mobile devices only */
 @media (pointer: coarse) {
-  .xterm .xterm-viewport { 
+  .xterm .xterm-viewport {
     z-index: 99 !important; /* Force the scrollable container to the front */
     background-color: transparent !important;
     touch-action: pan-y !important; /* Explicitly tell the browser to handle vertical swipes */

@@ -15,6 +15,9 @@ export interface TerminalHandle {
   reset: () => void;
   reconnect: () => void;
   scrollLines: (amount: number) => void;
+  scrollToTop: () => void;
+  scrollToBottom: () => void;
+  scrollPages: (amount: number) => void;
   getXterm: () => Terminal | null;
 }
 
@@ -82,11 +85,23 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     scrollLines: (amount: number) => {
       xtermRef.current?.scrollLines(amount);
     },
+    scrollToTop: () => {
+      xtermRef.current?.scrollToTop();
+    },
+    scrollToBottom: () => {
+      xtermRef.current?.scrollToBottom();
+    },
+    scrollPages: (amount: number) => {
+      xtermRef.current?.scrollPages(amount);
+    },
     getXterm: () => xtermRef.current
   }));
 
   useEffect(() => {
     if (!terminalRef.current) return;
+
+    // Track the webgl addon
+    let webglAddon: WebglAddon | null = null;
 
     const term = new Terminal({
       cursorBlink: true,
@@ -108,9 +123,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
 
     // Load WebGL Addon
     try {
-      const webglAddon = new WebglAddon();
+      webglAddon = new WebglAddon();
       webglAddon.onContextLoss(() => {
-        webglAddon.dispose();
+        webglAddon?.dispose();
       });
       term.loadAddon(webglAddon);
     } catch (e) {
@@ -393,6 +408,16 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
         container.removeEventListener('contextmenu', handleContextMenu);
       }
       if (wsRef.current) wsRef.current.close();
+
+      // Explicitly kill the WebGL addon first
+      if (webglAddon) {
+        try {
+          webglAddon.dispose();
+        } catch (e) {
+          console.warn('Error disposing WebGL addon', e);
+        }
+      }
+
       term.dispose();
     };
   }, [host, sessionId]);

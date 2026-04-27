@@ -36,6 +36,23 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   const [pinnedSessions, setPinnedSessions] = useState<any[]>([]);
   const [dialogTab, setDialogTab] = useState(0);
 
+  const [swStatus, setSwStatus] = useState<string>('Unknown');
+
+  useEffect(() => {
+    if (settingsOpen && dialogTab === 1) {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistration().then(reg => {
+          if (!reg) setSwStatus('Not registered');
+          else if (reg.active) setSwStatus('Active');
+          else if (reg.waiting) setSwStatus('Waiting');
+          else if (reg.installing) setSwStatus('Installing');
+        }).catch(() => setSwStatus('Error checking status'));
+      } else {
+        setSwStatus('Not supported');
+      }
+    }
+  }, [settingsOpen, dialogTab]);
+
   useEffect(() => {
     if (settingsOpen) {
       const token = localStorage.getItem('cozy_token');
@@ -83,6 +100,23 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
       if (onLogout) onLogout();
     } else {
       alert('Failed to update password');
+    }
+  };
+
+  const handleClearCache = async () => {
+    if (!confirm("This will unregister the Service Worker, clear all caches and reload. Proceed?")) return;
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      for (let registration of registrations) {
+        await registration.unregister();
+      }
+      if (window.caches) {
+        const cacheNames = await caches.keys();
+        for (let cacheName of cacheNames) {
+          await caches.delete(cacheName);
+        }
+      }
+      window.location.reload();
     }
   };
 
@@ -552,6 +586,15 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
 
             {dialogTab === 1 && (
               <>
+                <Typography variant="subtitle2" gutterBottom>Service Worker & Cache</Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                  <Typography variant="body2" color="text.secondary">Status:</Typography>
+                  <Chip label={swStatus} size="small" color={swStatus === 'Active' ? 'success' : 'default'} variant="outlined" sx={{ fontWeight: 'bold' }} />
+                </Box>
+                <Button variant="outlined" color="error" size="small" onClick={handleClearCache} sx={{ mt: 1 }}>
+                  Force Clear Cache & Unregister SW
+                </Button>
+                <Divider sx={{ my: 2 }} />
                 <Typography variant="subtitle2" gutterBottom>Change App Password</Typography>
                 <TextField fullWidth label="New Password" type="password" size="small" margin="dense" value={newPwd} onChange={e => setNewPwd(e.target.value)} />
                 <TextField fullWidth label="Confirm Password" type="password" size="small" margin="dense" value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)} />
@@ -568,11 +611,13 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
                   <b>Alt + K</b> : Switch to previous tab<br />
                   <b>Alt + 1-9</b> : Switch to tab 1-9<br />
                   <b>Alt + 0</b> : Switch to last tab<br />
-                  <b>Alt + Shift + 1-9,0</b> : Click the button in button bar<br />
                   <b>Alt + W</b> : Close current tab<br />
                   <b>Alt + I</b> : Focus sidebar search filter, then Use ↑ ↓ to select, Enter to open<br />
                   <b>Alt + G</b> : Focus active terminal session<br />
-                  <b>Alt + ↑ / ↓</b> : Scroll terminal up / down
+                  <b>Alt + Shift + 1-9,0</b> : Click the button in button bar<br />
+                  <b>Alt + ↑ / ↓</b> : Scroll terminal up / down<br />
+                  <b>Mouse Select</b> in terminal to copy<br />
+                  <b>Mouse Right Click</b> in terminal to paste<br />
                 </Typography>
               </>
             )}

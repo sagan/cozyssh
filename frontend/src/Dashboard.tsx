@@ -561,7 +561,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     return () => vv.removeEventListener('resize', handleVVResize);
   }, []);
 
-  const [sysHostname, setSysHostname] = useState<string>('server');
+  const [sysHostname, setSysHostname] = useState<string>('');
   const [appVersion, setAppVersion] = useState<string>('dev');
 
   const tabsRef = useRef(tabs);
@@ -649,6 +649,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
           data = await r.json();
         } catch (e) {
           console.error(e);
+          const initialId = `local-${Date.now()}`;
+          const initialPaneId = Math.random().toString(36).substring(2);
+          setTabs([{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
+          setActiveTabId(initialId);
+          setActivePaneId(initialPaneId);
           return;
         }
       }
@@ -758,6 +763,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
     localStorage.removeItem('cozy_token');
     localStorage.removeItem('cozy_scratchpad_cache');
     localStorage.removeItem('cozy_scratchpad_sync_state');
+    if (window.caches) {
+      await caches.delete('api-data-cache');
+      await caches.delete('manifest-cache');
+    }
     window.location.href = '/login';
   };
 
@@ -1074,11 +1083,31 @@ export default function Dashboard({ initialData }: DashboardProps) {
       if (!term) return;
       if (btn.payload === 'COPY') {
         term.selectAll?.();
-        const text = term.getSelection?.();
+        const text = term.getSelection?.()?.trim();
         if (text) {
           navigator.clipboard.writeText(text);
         }
         term.clearSelection?.();
+        term.focus?.();
+      } else if (btn.payload === 'COPY_VISIBLE') {
+        const xterm = term?.getXterm?.();
+        if (!xterm) {
+          return;
+        }
+        const buffer = xterm.buffer.active;
+        const start = buffer.viewportY;
+        const end = start + xterm.rows;
+        let text = "";
+        for (let i = start; i < end; i++) {
+          const line = buffer.getLine(i);
+          if (line) {
+            text += line.translateToString().trim() + "\n";
+          }
+        }
+        text = text.trim();
+        if (text) {
+          navigator.clipboard.writeText(text);
+        }
         term.focus?.();
       } else if (btn.payload === 'COPY_SELECTION') {
         const text = term.getSelection?.();
@@ -1107,6 +1136,18 @@ export default function Dashboard({ initialData }: DashboardProps) {
         term.focus?.();
       } else if (btn.payload === 'CLOSE') {
         handleCloseCurrentPaneOrTab();
+      } else if (btn.payload === 'SCROLL_TO_TOP') {
+        term.scrollToTop?.();
+        term.focus?.();
+      } else if (btn.payload === 'SCROLL_TO_BOTTOM') {
+        term.scrollToBottom?.();
+        term.focus?.();
+      } else if (btn.payload === 'SCROLL_PAGE_UP') {
+        term.scrollPages?.(-1);
+        term.focus?.();
+      } else if (btn.payload === 'SCROLL_PAGE_DOWN') {
+        term.scrollPages?.(1);
+        term.focus?.();
       }
     } else if (btn.type === 'misc') {
       if (btn.payload === 'NEXT_BUTTON_GROUP') {
@@ -1460,79 +1501,77 @@ export default function Dashboard({ initialData }: DashboardProps) {
             )}
           </Box>
 
-          {tabs.length > 0 && (
-            <Box sx={{ borderTop: 1, borderColor: 'divider', bgcolor: '#f8f9fa', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-              <Box sx={{ px: 1, display: 'flex', alignItems: 'center', borderRight: 1, borderColor: 'divider', flexShrink: 0 }}>
-                <TextField
-                  select
-                  size="small"
-                  value={activeGroup}
-                  onChange={(e) => setActiveGroup(e.target.value)}
-                  slotProps={{ select: { native: true } }}
-                  sx={{
-                    minWidth: 80,
-                    '& .MuiInputBase-root': { fontSize: '0.8rem', height: 26 },
-                    '& select': { py: 0, pr: '18px !important' }
-                  }}
-                >
-                  {groups.map(g => (
-                    <option key={g} value={g}>{g}</option>
-                  ))}
-                </TextField>
-              </Box>
-              <Tabs
-                key={`tabs-${activeGroup}-${filteredButtons.length}`}
-                value={false}
-                variant="scrollable"
-                scrollButtons="auto"
-                allowScrollButtonsMobile
+          <Box sx={{ borderTop: 1, borderColor: 'divider', bgcolor: '#f8f9fa', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+            <Box sx={{ px: 1, display: 'flex', alignItems: 'center', borderRight: 1, borderColor: 'divider', flexShrink: 0 }}>
+              <TextField
+                select
+                size="small"
+                value={activeGroup}
+                onChange={(e) => setActiveGroup(e.target.value)}
+                slotProps={{ select: { native: true } }}
                 sx={{
-                  flexGrow: 1,
-                  minHeight: 40,
-                  minWidth: 0,
-                  '& .MuiTabs-flexContainer': { gap: 1, px: 2, alignItems: 'center' },
-                  '& .MuiTabs-indicator': { display: 'none' }
+                  minWidth: 80,
+                  '& .MuiInputBase-root': { fontSize: '0.8rem', height: 26 },
+                  '& select': { py: 0, pr: '18px !important' }
                 }}
               >
-                {filteredButtons.map(btn => (
-                  <Tab
-                    key={btn.id}
-                    label={btn.name}
-                    title={btn.type + ": " + btn.payload}
-                    component="div"
-                    onClick={() => handleButtonClick(btn)}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      setBtnMenuAnchor({ anchor: e.currentTarget, btn });
-                      setLastMenuBtn(btn);
-                    }}
-                    sx={{
-                      minHeight: 28, minWidth: 'auto', p: '2px 12px',
-                      textTransform: 'none', fontSize: '0.8rem', borderRadius: 1.5,
-                      border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper',
-                      color: 'text.primary', margin: '6px 4px', cursor: 'pointer',
-                      '&:hover': { bgcolor: 'primary.light', color: 'white' }
-                    }}
-                  />
+                {groups.map(g => (
+                  <option key={g} value={g}>{g}</option>
                 ))}
-              </Tabs>
-              <Box sx={{ flexShrink: 0, px: 1, borderLeft: 1, borderColor: 'divider' }}>
-                <IconButton
-                  size="small"
-                  onClick={() => {
-                    const data = { name: '', type: 'send_string', payload: '', group: activeGroup, autorun: 0 };
-                    setEditingButton(null);
-                    setButtonFormData(data);
-                    setInitialBtnFormData(data);
-                    setButtonDialogOpen(true);
-                  }}
-                  sx={{ p: 0.5 }}
-                >
-                  <AddIcon fontSize="small" />
-                </IconButton>
-              </Box>
+              </TextField>
             </Box>
-          )}
+            <Tabs
+              key={`tabs-${activeGroup}-${filteredButtons.length}`}
+              value={false}
+              variant="scrollable"
+              scrollButtons="auto"
+              allowScrollButtonsMobile
+              sx={{
+                flexGrow: 1,
+                minHeight: 40,
+                minWidth: 0,
+                '& .MuiTabs-flexContainer': { gap: 1, px: 2, alignItems: 'center' },
+                '& .MuiTabs-indicator': { display: 'none' }
+              }}
+            >
+              {filteredButtons.map(btn => (
+                <Tab
+                  key={btn.id}
+                  label={btn.name}
+                  title={btn.type + ": " + btn.payload}
+                  component="div"
+                  onClick={() => handleButtonClick(btn)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setBtnMenuAnchor({ anchor: e.currentTarget, btn });
+                    setLastMenuBtn(btn);
+                  }}
+                  sx={{
+                    minHeight: 28, minWidth: 'auto', p: '2px 12px',
+                    textTransform: 'none', fontSize: '0.8rem', borderRadius: 1.5,
+                    border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper',
+                    color: 'text.primary', margin: '6px 4px', cursor: 'pointer',
+                    '&:hover': { bgcolor: 'primary.light', color: 'white' }
+                  }}
+                />
+              ))}
+            </Tabs>
+            <Box sx={{ flexShrink: 0, px: 1, borderLeft: 1, borderColor: 'divider' }}>
+              <IconButton
+                size="small"
+                onClick={() => {
+                  const data = { name: '', type: 'send_string', payload: '', group: activeGroup, autorun: 0 };
+                  setEditingButton(null);
+                  setButtonFormData(data);
+                  setInitialBtnFormData(data);
+                  setButtonDialogOpen(true);
+                }}
+                sx={{ p: 0.5 }}
+              >
+                <AddIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          </Box>
 
           {(isMobile || isTouch) && tabs.length > 0 && (
             <Paper
@@ -1768,6 +1807,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               slotProps={{ select: { native: true } }}
             >
               <option value="COPY">COPY (Buffer)</option>
+              <option value="COPY_VISIBLE">COPY (Visible)</option>
               <option value="COPY_SELECTION">COPY (Selection)</option>
               <option value="PASTE">PASTE (Clipboard)</option>
               <option value="INPUT">INPUT (Prompt)</option>
@@ -1775,6 +1815,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
               <option value="RESET">RESET (Terminal)</option>
               <option value="RECONNECT">RECONNECT (Session)</option>
               <option value="CLOSE">CLOSE (Pane/Tab)</option>
+              <option value="SCROLL_TO_TOP">SCROLL (Top)</option>
+              <option value="SCROLL_TO_BOTTOM">SCROLL (Bottom)</option>
+              <option value="SCROLL_PAGE_UP">SCROLL (Page Up)</option>
+              <option value="SCROLL_PAGE_DOWN">SCROLL (Page Down)</option>
             </TextField>
           ) : buttonFormData.type === 'misc' ? (
             <TextField

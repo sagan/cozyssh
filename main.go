@@ -73,6 +73,10 @@ func main() {
 		if err != nil {
 			hostname = "unknown"
 		}
+		displayHostname := cfg.SiteName
+		if displayHostname == "" {
+			displayHostname = hostname
+		}
 		hosts, err := sshmanager.ListHosts()
 		if err != nil {
 			hosts = []sshmanager.HostInfo{}
@@ -92,7 +96,7 @@ func main() {
 		}
 		return map[string]any{
 			"sysinfo": map[string]any{
-				"hostname":         hostname,
+				"hostname":         displayHostname,
 				"version":          version,
 				"insecure_allowed": *allowInsecure,
 				"is_secure":        isSecureRequest(r),
@@ -485,6 +489,34 @@ func main() {
 	}
 
 	fileServer := http.FileServer(http.FS(distFS))
+	
+	mux.HandleFunc("/manifest.json", func(w http.ResponseWriter, r *http.Request) {
+		hostname, err := os.Hostname()
+		if err != nil {
+			hostname = "unknown"
+		}
+		displayHostname := cfg.SiteName
+		if displayHostname == "" {
+			displayHostname = hostname
+		}
+		manifest := map[string]any{
+			"name":             "CozySSH " + displayHostname,
+			"short_name":       "CozySSH",
+			"start_url":        "/",
+			"display":          "standalone",
+			"background_color": "#ffffff",
+			"theme_color":      "#1976d2",
+			"icons": []map[string]any{
+				{
+					"src":   "/favicon.svg",
+					"sizes": "any",
+					"type":  "image/svg+xml",
+				},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(manifest)
+	})
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Basic SPA routing fallback

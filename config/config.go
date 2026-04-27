@@ -30,6 +30,7 @@ type Button struct {
 
 type Config struct {
 	Addr            string      `yaml:"addr"`
+	SiteName        string      `yaml:"sitename"`
 	AppPasswordHash string      `yaml:"app_password_hash"`
 	PinnedTabs      []PinnedTab `yaml:"pinned_tabs"`
 	Buttons         []Button    `yaml:"buttons" json:"buttons"`
