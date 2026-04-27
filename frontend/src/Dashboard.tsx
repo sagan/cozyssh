@@ -1080,6 +1080,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
         }
         term.clearSelection?.();
         term.focus?.();
+      } else if (btn.payload === 'COPY_SELECTION') {
+        const text = term.getSelection?.();
+        if (text) {
+          navigator.clipboard.writeText(text);
+        }
+        term.focus?.();
       } else if (btn.payload === 'PASTE') {
         const text = await navigator.clipboard.readText();
         if (text) {
@@ -1762,6 +1768,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               slotProps={{ select: { native: true } }}
             >
               <option value="COPY">COPY (Buffer)</option>
+              <option value="COPY_SELECTION">COPY (Selection)</option>
               <option value="PASTE">PASTE (Clipboard)</option>
               <option value="INPUT">INPUT (Prompt)</option>
               <option value="CLEAR">CLEAR (Screen)</option>
