@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Box, Typography, IconButton, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, CircularProgress } from '@mui/material';
+import { Box, Typography, IconButton, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, CircularProgress } from '@mui/material';
 import FolderIcon from '@mui/icons-material/Folder';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
@@ -8,11 +8,14 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
-import { Menu, MenuItem, TableSortLabel } from '@mui/material';
 import TerminalIcon from '@mui/icons-material/Terminal';
 import NoteAddIcon from '@mui/icons-material/NoteAdd';
+import SearchIcon from '@mui/icons-material/Search';
+import PushPinIcon from '@mui/icons-material/PushPin';
+import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import TextEditor from './TextEditor';
+import { Menu, MenuItem, TableSortLabel, InputBase } from '@mui/material';
 
 interface FileInfo {
   name: string;
@@ -41,6 +44,10 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   const [editorContent, setEditorContent] = useState<string>('');
   const [isWindowsHost, setIsWindowsHost] = useState<boolean>(false);
 
+  const [isFilterOpen, setIsFilterOpen] = useState<boolean>(false);
+  const [filterValue, setFilterValue] = useState<string>('');
+  const [isFilterPinned, setIsFilterPinned] = useState<boolean>(false);
+
   const isWindowsPath = (path: string) => /^[a-zA-Z]:/.test(path) || path.includes('\\') || /^\/[a-zA-Z]:/.test(path);
 
   const getPathJoiner = (p: string) => {
@@ -50,7 +57,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
       // If child is an absolute Windows path (C:\) or absolute Unix path (/etc), return as-is
       if (/^[a-zA-Z]:/.test(child)) return child;
       if (child.startsWith('/') && !isWin) return child;
-      
+
       // Handle the case where child has a leading slash on Windows (from previous bugs)
       if (isWin && child.startsWith('/')) {
         const stripped = child.substring(1);
@@ -58,7 +65,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
       }
 
       if (!p || p === '') return child;
-      
+
       // If we are at the virtual root, don't use double slashes
       if (p === '/') return '/' + child;
 
@@ -80,6 +87,12 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
         setFiles(data.files || []);
         if (isWindowsPath(data.path) || (data.files && data.files.some((f: FileInfo) => isWindowsPath(f.name)))) {
           setIsWindowsHost(true);
+        }
+
+        // Reset filter if not pinned on directory change
+        if (!isFilterPinned && data.path !== currentPath) {
+          setIsFilterOpen(false);
+          setFilterValue('');
         }
       } else {
         alert('Failed to list files');
@@ -115,6 +128,10 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
     return sortOrder === 'asc' ? cmp : -cmp;
   });
 
+  const filteredFiles = sortedFiles.filter(f =>
+    f.name.toLowerCase().includes(filterValue.toLowerCase())
+  );
+
   const handleSort = (field: 'name' | 'size' | 'modTime') => {
     if (sortField === field) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -134,7 +151,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
       if (parts.length > 0) {
         parts.pop();
         if (parts.length === 0) {
-          nextPath = '/'; 
+          nextPath = '/';
         } else {
           nextPath = parts.join(sep);
           if (!isWindows) {
@@ -160,7 +177,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
-    
+
     setLoading(true);
     const formData = new FormData();
     formData.append('file', file);
@@ -421,23 +438,61 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
         <IconButton size="small" onClick={handleNewFile} disabled={loading} sx={{ mr: 1 }} title="New File">
           <NoteAddIcon fontSize="small" />
         </IconButton>
-        <IconButton 
-          size="small" 
-          onClick={() => shellCwd && fetchFiles(shellCwd)} 
-          disabled={loading || !shellCwd} 
-          sx={{ mr: 1 }} 
+        <IconButton
+          size="small"
+          onClick={() => shellCwd && fetchFiles(shellCwd)}
+          disabled={loading || !shellCwd}
+          sx={{ mr: 1 }}
           title={shellCwd ? `Go to Shell CWD: ${shellCwd}` : "Shell CWD not detected"}
         >
           <TerminalIcon fontSize="small" />
         </IconButton>
-        <Button size="small" startIcon={<CloudUploadIcon />} onClick={handleUploadClick} disabled={loading} sx={{ mr: 1 }}>
-          Upload
-        </Button>
+        <IconButton
+          size="small"
+          onClick={() => setIsFilterOpen(!isFilterOpen)}
+          color={isFilterOpen ? "primary" : "default"}
+          sx={{ mr: 1, bgcolor: isFilterOpen ? 'action.selected' : 'transparent' }}
+          title="Filter files"
+        >
+          <SearchIcon fontSize="small" />
+        </IconButton>
+        <IconButton size="small" title="Upload files" onClick={handleUploadClick} disabled={loading} sx={{ mr: 1 }} >
+          <CloudUploadIcon fontSize="small" />
+        </IconButton>
         <input type="file" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileChange} />
         <IconButton size="small" onClick={onClose} title="Close File Browser">
           <CloseIcon fontSize="small" />
         </IconButton>
       </Box>
+
+      {isFilterOpen && (
+        <Box sx={{ px: 1, py: 0.5, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', bgcolor: 'background.paper' }}>
+          <SearchIcon fontSize="small" sx={{ color: 'action.active', mr: 1 }} />
+          <InputBase
+            placeholder="Filter files..."
+            fullWidth
+            size="small"
+            autoFocus
+            value={filterValue}
+            onChange={(e) => setFilterValue(e.target.value)}
+            sx={{ fontSize: '0.875rem' }}
+          />
+          {filterValue && (
+            <IconButton size="small" onClick={() => setFilterValue('')} sx={{ p: '2px', mr: 0.5 }}>
+              <CloseIcon fontSize="inherit" />
+            </IconButton>
+          )}
+          <Box sx={{ width: '1px', height: '20px', bgcolor: 'divider', mx: 1 }} />
+          <IconButton
+            size="small"
+            onClick={() => setIsFilterPinned(!isFilterPinned)}
+            color={isFilterPinned ? "primary" : "default"}
+            title={isFilterPinned ? "Unpin filter" : "Pin filter"}
+          >
+            {isFilterPinned ? <PushPinIcon fontSize="small" /> : <PushPinOutlinedIcon fontSize="small" />}
+          </IconButton>
+        </Box>
+      )}
 
       <TableContainer component={Paper} sx={{ flexGrow: 1, overflow: 'auto', borderRadius: 0, boxShadow: 'none' }}>
         {loading ? (
@@ -480,10 +535,10 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
               </TableRow>
             </TableHead>
             <TableBody>
-              {sortedFiles.map((file, idx) => (
-                <TableRow 
-                  key={idx} 
-                  hover 
+              {filteredFiles.map((file, idx) => (
+                <TableRow
+                  key={idx}
+                  hover
                   onDoubleClick={() => file.isDir && handleNavigate(file.name)}
                   onContextMenu={(e) => handleContextMenu(e, file)}
                 >
@@ -502,16 +557,16 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
                   <TableCell padding="none" sx={{ pr: 1, textAlign: 'right' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                       {!file.isDir && (
-                        <IconButton 
-                          size="small" 
-                          title="Download securely" 
+                        <IconButton
+                          size="small"
+                          title="Download securely"
                           onClick={() => handleDownload(file.name)}
                         >
                           <CloudDownloadIcon fontSize="small" color="primary" />
                         </IconButton>
                       )}
-                      <IconButton 
-                        size="small" 
+                      <IconButton
+                        size="small"
                         onClick={(e) => handleContextMenu(e, file)}
                       >
                         <MoreVertIcon fontSize="small" />

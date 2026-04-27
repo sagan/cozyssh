@@ -165,17 +165,18 @@ const AppletWrapper = ({ applet, onClose, onSwitchPosition, onFocus }: { applet:
         <Box
           onClick={() => setExpanded(!expanded)}
           sx={{
-            display: 'flex', alignItems: 'center', px: 1, py: 1, bgcolor: '#00000014', color: 'text.primary',
+            display: 'flex', alignItems: 'center', px: 1, py: 0, minHeight: 40, bgcolor: '#00000014', color: 'text.primary',
+            borderBottom: 1, borderColor: 'divider',
             cursor: 'pointer', userSelect: 'none', flexShrink: 0,
             '&:hover': { bgcolor: '#00000028' }
           }}
         >
           {expanded ? <KeyboardArrowDownIcon /> : <KeyboardArrowRightIcon />}
           <Typography variant="subtitle2" sx={{ flexGrow: 1, fontWeight: 'bold' }}>{applet.name}</Typography>
-          <IconButton size="small" color="inherit" onClick={(e) => { e.stopPropagation(); onSwitchPosition('widget'); }}>
+          <IconButton size="small" color="inherit" onClick={(e) => { e.stopPropagation(); onSwitchPosition('widget'); }} sx={{ p: 0.5 }}>
             <OpenInNewIcon fontSize="small" />
           </IconButton>
-          <IconButton size="small" color="inherit" onClick={(e) => { e.stopPropagation(); onClose(); }} sx={{ ml: 0.5 }}>
+          <IconButton size="small" color="inherit" onClick={(e) => { e.stopPropagation(); onClose(); }} sx={{ ml: 0.5, p: 0.5 }}>
             <CloseIcon fontSize="small" />
           </IconButton>
         </Box>
@@ -1737,7 +1738,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               setBtnMenuAnchor(null);
             }
           }}
-          sx={{ display: lastMenuBtn?.type === 'send_string' ? 'flex' : 'none' }}
+          sx={{ display: lastMenuBtn?.type === 'send_string' || lastMenuBtn?.type === 'run_script' ? 'flex' : 'none' }}
         >
           Copy Contents
         </MenuItem>
