@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -108,7 +109,19 @@ func HandleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conn, err := upgrader.Upgrade(w, r, nil)
+	header := make(http.Header)
+	if protocols := r.Header.Get("Sec-WebSocket-Protocol"); protocols != "" {
+		parts := strings.Split(protocols, ",")
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if strings.HasPrefix(p, "cozy.") {
+				header.Set("Sec-WebSocket-Protocol", p)
+				break
+			}
+		}
+	}
+
+	conn, err := upgrader.Upgrade(w, r, header)
 	if err != nil {
 		log.Println("scratchpad ws upgrade error:", err)
 		return

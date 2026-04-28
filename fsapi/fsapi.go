@@ -273,15 +273,18 @@ func handleList(w http.ResponseWriter, path string, isLocal bool, sftpClient *sf
 	var infos []FileInfo
 
 	if isLocal {
-		if runtime.GOOS == "windows" {
-			path = filepath.Clean(path)
-			if strings.HasPrefix(path, "\\") && len(path) >= 3 && path[2] == ':' {
-				path = path[1:]
+		// Special case for Windows drives
+		if runtime.GOOS == "windows" && (path == "." || path == "" || path == "\\" || path == "/") {
+			infos = GetAvailableDrives()
+			path = "/"
+		} else {
+			if runtime.GOOS == "windows" {
+				path = filepath.Clean(path)
+				if strings.HasPrefix(path, "\\") && len(path) >= 3 && path[2] == ':' {
+					path = path[1:]
+				}
 			}
-			if path == "." || path == "" || path == "\\" || path == "/" {
-				infos = GetAvailableDrives()
-				path = "/"
-			} else {
+
 			entries, err := os.ReadDir(path)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -298,7 +301,6 @@ func handleList(w http.ResponseWriter, path string, isLocal bool, sftpClient *sf
 					Size:    info.Size(),
 					ModTime: info.ModTime().Format("2006-01-02 15:04:05"),
 				})
-			}
 			}
 		}
 	} else {

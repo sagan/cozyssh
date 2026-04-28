@@ -29,11 +29,11 @@ type Button struct {
 }
 
 type Config struct {
-	Addr            string      `yaml:"addr"`
-	SiteName        string      `yaml:"sitename"`
-	AppPasswordHash string      `yaml:"app_password_hash"`
-	PinnedTabs      []PinnedTab `yaml:"pinned_tabs"`
-	Buttons         []Button    `yaml:"buttons" json:"buttons"`
+	Addr            string            `yaml:"addr"`
+	SiteName        string            `yaml:"sitename"`
+	AppPasswordHash string            `yaml:"app_password_hash"`
+	PinnedTabs      []PinnedTab       `yaml:"pinned_tabs"`
+	Buttons         []Button          `yaml:"buttons" json:"buttons"`
 	ConfigPath      string            `yaml:"-"` // internal use
 	ConfigDir       string            `yaml:"-"` // internal use
 	Vars            map[string]string `yaml:"vars" json:"vars"`
@@ -144,7 +144,7 @@ func generateAndSaveConfig(path string) (*Config, error) {
 
 	// Print password to console
 	fmt.Println("=====================================================")
-	fmt.Println("  Welcome to Cozyssh!                                ")
+	fmt.Println("  Welcome to CozySSH!                                ")
 	fmt.Println("  A new app password has been generated for you:     ")
 	fmt.Printf("  ->  %s  <-                                     \n", password)
 	fmt.Println("  Store this safely or you'll have to delete your config to reset it.")

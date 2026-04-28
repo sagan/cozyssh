@@ -200,7 +200,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const token = localStorage.getItem('cozy_token');
-    let wsUrl = `${protocol}//${window.location.host}/api/ws?host=${encodeURIComponent(host)}&sessionId=${encodeURIComponent(sessionId || '')}&token=${encodeURIComponent(token || '')}`;
+    let wsUrl = `${protocol}//${window.location.host}/api/ws?host=${encodeURIComponent(host)}&sessionId=${encodeURIComponent(sessionId || '')}`;
     if (cloneFrom) {
       wsUrl += `&cloneFrom=${encodeURIComponent(cloneFrom)}`;
     }
@@ -230,7 +230,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
       isDead = false;
       deathType = null;
       onStateChange?.('connecting to host');
-      const ws = new WebSocket(finalUrl);
+      const ws = new WebSocket(finalUrl, token ? [token] : undefined);
       ws.binaryType = 'arraybuffer';
       wsRef.current = ws;
 

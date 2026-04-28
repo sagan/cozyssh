@@ -100,9 +100,9 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
     if (onSyncStateChange) onSyncStateChange('syncing');
     const token = localStorage.getItem('cozy_token');
     const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProto}//${window.location.host}/api/ws/scratchpad?token=${encodeURIComponent(token || '')}`;
+    const wsUrl = `${wsProto}//${window.location.host}/api/ws/scratchpad`;
 
-    const ws = new WebSocket(wsUrl);
+    const ws = new WebSocket(wsUrl, token ? [token] : undefined);
     wsRef.current = ws;
 
     ws.onopen = () => {

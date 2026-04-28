@@ -103,8 +103,8 @@ func Middleware(next http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := ""
 		authHeader := r.Header.Get("Authorization")
-		if strings.HasPrefix(authHeader, "Bearer ") {
-			token = strings.TrimPrefix(authHeader, "Bearer ")
+		if after, ok := strings.CutPrefix(authHeader, "Bearer "); ok {
+			token = after
 		} else {
 			token = r.URL.Query().Get("token")
 		}
@@ -117,9 +117,24 @@ func Middleware(next http.Handler) http.HandlerFunc {
 	}
 }
 
-// WSAuth verifies tokens from WebSocket URL queries securely
+// WSAuth verifies tokens from WebSocket URL queries or Sec-WebSocket-Protocol header securely
 func WSAuth(r *http.Request) bool {
 	token := r.URL.Query().Get("token")
+	if token == "" {
+		// Try Sec-WebSocket-Protocol header hack
+		protocols := r.Header.Get("Sec-WebSocket-Protocol")
+		if protocols != "" {
+			parts := strings.SplitSeq(protocols, ",")
+			for p := range parts {
+				p = strings.TrimSpace(p)
+				if strings.HasPrefix(p, "cozy.") {
+					token = p
+					break
+				}
+			}
+		}
+	}
+
 	if token == "" {
 		return false
 	}
