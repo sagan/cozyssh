@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"golang.org/x/crypto/bcrypt"
@@ -26,6 +27,7 @@ type Button struct {
 	Payload string `yaml:"payload" json:"payload"`
 	Group   string `yaml:"group" json:"group"`
 	AutoRun int    `yaml:"autorun" json:"autorun"`
+	Order   int    `yaml:"order" json:"order"`
 }
 
 type Config struct {
@@ -69,6 +71,8 @@ func LoadConfig(customDir string) (*Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
+
+	cfg.SortButtons()
 
 	if cfg.Addr == "" {
 		cfg.Addr = "127.0.0.1:8022"
@@ -224,7 +228,21 @@ func (c *Config) RemovePinnedTab(id string) error {
 }
 
 func (c *Config) AddButton(btn Button) error {
+	if btn.Order == 0 {
+		maxOrder := 0
+		for _, b := range c.Buttons {
+			if b.Order > maxOrder {
+				maxOrder = b.Order
+			}
+		}
+		if len(c.Buttons) == 0 {
+			btn.Order = 10
+		} else {
+			btn.Order = maxOrder + 10
+		}
+	}
 	c.Buttons = append(c.Buttons, btn)
+	c.SortButtons()
 	return c.Save()
 }
 
@@ -232,6 +250,7 @@ func (c *Config) UpdateButton(btn Button) error {
 	for i, b := range c.Buttons {
 		if b.ID == btn.ID {
 			c.Buttons[i] = btn
+			c.SortButtons()
 			return c.Save()
 		}
 	}
@@ -249,6 +268,7 @@ func (c *Config) RemoveButton(id string) error {
 }
 
 func (c *Config) MoveButton(id string, direction int) error {
+	c.SortButtons() // Ensure we starts from sorted
 	idx := -1
 	for i, b := range c.Buttons {
 		if b.ID == id {
@@ -259,10 +279,116 @@ func (c *Config) MoveButton(id string, direction int) error {
 	if idx == -1 {
 		return nil
 	}
-	newIdx := idx + direction
-	if newIdx < 0 || newIdx >= len(c.Buttons) {
+
+	// We only care about buttons in the same group as the target button
+	group := c.Buttons[idx].Group
+	var groupIndices []int
+	for i, b := range c.Buttons {
+		if b.Group == group {
+			groupIndices = append(groupIndices, i)
+		}
+	}
+
+	posInGroup := -1
+	for i, gIdx := range groupIndices {
+		if gIdx == idx {
+			posInGroup = i
+			break
+		}
+	}
+
+	if posInGroup == -1 {
 		return nil
 	}
-	c.Buttons[idx], c.Buttons[newIdx] = c.Buttons[newIdx], c.Buttons[idx]
+
+	newPosInGroup := posInGroup + direction
+	if newPosInGroup < 0 || newPosInGroup >= len(groupIndices) {
+		return nil
+	}
+
+	targetIdx := groupIndices[newPosInGroup]
+	targetBtn := c.Buttons[targetIdx]
+
+	// Reposition in slice first to reflect visual move
+	btnObj := c.Buttons[idx]
+	c.Buttons = append(c.Buttons[:idx], c.Buttons[idx+1:]...)
+
+	// Find new index for targetBtn after removal
+	finalTargetIdx := -1
+	for i, b := range c.Buttons {
+		if b.ID == targetBtn.ID {
+			finalTargetIdx = i
+			break
+		}
+	}
+
+	insertIdx := finalTargetIdx
+	if direction > 0 {
+		insertIdx++
+	}
+	if insertIdx < 0 {
+		insertIdx = 0
+	}
+	if insertIdx >= len(c.Buttons) {
+		c.Buttons = append(c.Buttons, btnObj)
+	} else {
+		c.Buttons = append(c.Buttons[:insertIdx], append([]Button{btnObj}, c.Buttons[insertIdx:]...)...)
+	}
+
+	// Update the order of the moved button
+	newOrder := targetBtn.Order
+	if direction > 0 {
+		newOrder++
+	} else {
+		newOrder--
+	}
+
+	// Find the moved button again in the slice
+	movedIdx := -1
+	for i, b := range c.Buttons {
+		if b.ID == id {
+			movedIdx = i
+			break
+		}
+	}
+	c.Buttons[movedIdx].Order = newOrder
+
+	// Check if we have any duplicate orders now
+	hasDuplicates := false
+	orderMap := make(map[int]bool)
+	for _, b := range c.Buttons {
+		if orderMap[b.Order] {
+			hasDuplicates = true
+			break
+		}
+		orderMap[b.Order] = true
+	}
+
+	if hasDuplicates {
+		c.ResequenceButtons()
+	} else {
+		c.SortButtons()
+	}
+
 	return c.Save()
+}
+
+func (c *Config) SortButtons() {
+	sort.Slice(c.Buttons, func(i, j int) bool {
+		if c.Buttons[i].Order != c.Buttons[j].Order {
+			return c.Buttons[i].Order < c.Buttons[j].Order
+		}
+		return c.Buttons[i].Name < c.Buttons[j].Name
+	})
+}
+
+func (c *Config) ResequenceButtons() {
+	for i := range c.Buttons {
+		c.Buttons[i].Order = (i + 1) * 10
+	}
+}
+
+func (c *Config) SortAndResequenceButtons() {
+	c.SortButtons()
+	c.ResequenceButtons()
 }

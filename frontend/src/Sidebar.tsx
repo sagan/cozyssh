@@ -425,7 +425,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
             onKeyDown={handleFilterKeyDown}
             sx={{ flexGrow: 1 }}
           />
-          <IconButton size="small" onClick={handleAddOpen} sx={{ bgcolor: 'action.hover', border: '1px solid #ccc' }}>
+          <IconButton size="small" title="New Server" onClick={handleAddOpen} sx={{ bgcolor: 'action.hover', border: '1px solid #ccc' }}>
             <AddIcon fontSize="small" />
           </IconButton>
         </Box>
@@ -550,26 +550,26 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
       </Menu>
 
       {/* Dashboard Dialog */}
-      <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} fullWidth maxWidth="sm">
+      <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} fullWidth maxWidth="sm" sx={{ '& .MuiDialog-paper': { overflow: 'hidden' } }}>
         <DialogTitle>Dashboard</DialogTitle>
-        <DialogContent sx={{ minHeight: 400 }}>
-          <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-            <Tabs
-              value={dialogTab}
-              onChange={(_, newVal) => setDialogTab(newVal)}
-              variant="scrollable"
-              scrollButtons="auto"
-              allowScrollButtonsMobile
-            >
-              <Tab label="Sessions" />
-              <Tab label="Settings" />
-              <Tab label="Shortcuts" />
-              <Tab label="About" />
-            </Tabs>
-          </Box>
-          <Box sx={{ mt: 2, minWidth: 0, minHeight: 200, overflowX: 'hidden' }}>
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 3 }}>
+          <Tabs
+            value={dialogTab}
+            onChange={(_, newVal) => setDialogTab(newVal)}
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
+          >
+            <Tab label="Sessions" />
+            <Tab label="Settings" />
+            <Tab label="Shortcuts" />
+            <Tab label="About" />
+          </Tabs>
+        </Box>
+        <DialogContent sx={{ p: 0 }}>
+          <Box sx={{ p: 3, pt: 1, minWidth: 0 }}>
             {dialogTab === 0 && (
-              <List dense sx={{ border: '1px solid #ddd', borderRadius: 1, maxHeight: 250, overflow: 'auto' }}>
+              <List dense sx={{ border: '1px solid #ddd', borderRadius: 1 }}>
                 {pinnedSessions.map(ps => {
                   const isLocal = activeTabs.includes(ps.id);
                   const canAttach = !isLocal;
@@ -606,7 +606,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
               <>
                 <Typography variant="subtitle2" gutterBottom>Keyboard Shortcuts</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
-                  <b>Alt + T</b> : Open new local shell tab<br />
+                  <b>Alt + T</b> : Open new tab<br />
                   <b>Alt + J</b> : Switch to next tab<br />
                   <b>Alt + K</b> : Switch to previous tab<br />
                   <b>Alt + 1-9</b> : Switch to tab 1-9<br />

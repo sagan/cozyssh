@@ -38,6 +38,14 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
 
 </details>
 
+<details>
+
+<summary>New Tab Dialog</summary>
+
+![CozySSH Text Editor](./docs/screenshot-new-tab-dialog.png)
+
+</details>
+
 ## Features
 
 - **Use Host SSH Config**: It uses the host OpenSSH client config files (`~/.ssh/id_ed25519`, `~/.ssh/known_hosts`, `~/.ssh/config`) directly for ssh auth & server management.
@@ -63,7 +71,7 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
     export PS1="$PS1\[\e]7;CurrentDir="'$(pwd)\a\]'
     ```
 - **Full keyboard Shortcuts**: It supports a complete set of keyboard shortcuts.
-  - `Alt + T` : Open new local shell tab
+  - `Alt + T` : Open new tab
   - `Alt + J` : Switch to next tab
   - `Alt + K` : Switch to previous tab
   - `Alt + 1-9` : Switch to tab 1-9

@@ -29,6 +29,8 @@ import CodeMirror from '@uiw/react-codemirror';
 import { EditorView } from "@codemirror/view";
 import { javascript } from '@codemirror/lang-javascript';
 import { transform } from 'sucrase';
+import { useLocalStorage } from './useLocalStorage';
+import NewTabDialog from './NewTabDialog';
 
 const VIBRATE_PATTERN = 100;
 
@@ -64,6 +66,7 @@ interface ButtonData {
   payload: string;
   group?: string;
   autorun?: number;
+  order?: number;
 }
 
 interface DashboardProps {
@@ -111,13 +114,27 @@ export interface AppletData {
 
 const AppletWrapper = ({ applet, onClose, onSwitchPosition, onFocus }: { applet: AppletData; index: number; onClose: () => void; onSwitchPosition: (pos: 'widget' | 'sidebar') => void; onFocus?: () => void; }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [expanded, setExpanded] = useState(true);
+  const [size, setSize] = useState(() => ({
+    width: applet.width || 320,
+    height: applet.height || 250
+  }));
   const [position, setPosition] = useState(() => ({
-    x: window.innerWidth - (applet.width || 320),
-    y: window.innerHeight - (applet.height || 250)
+    x: Math.max(0, window.innerWidth - (applet.width || 320) - 20),
+    y: Math.max(0, window.innerHeight - (applet.height || 250) - 20)
   }));
   const dragStartRef = useRef({ x: 0, y: 0, pos: { x: 0, y: 0 } });
+
+  useEffect(() => {
+    if (applet.width !== undefined || applet.height !== undefined) {
+      setSize(prev => ({
+        width: applet.width ?? prev.width,
+        height: applet.height ?? prev.height
+      }));
+    }
+  }, [applet.width, applet.height]);
 
   useEffect(() => {
     if (applet.node instanceof Node && containerRef.current) {
@@ -125,6 +142,41 @@ const AppletWrapper = ({ applet, onClose, onSwitchPosition, onFocus }: { applet:
       containerRef.current.appendChild(applet.node);
     }
   }, [applet.node, expanded]);
+
+  useEffect(() => {
+    const handleWindowResize = () => {
+      if (applet.position !== 'widget' || !wrapperRef.current) return;
+      const winW = window.innerWidth;
+      const winH = window.innerHeight;
+
+      setPosition(prev => ({
+        x: Math.max(0, Math.min(prev.x, winW - (wrapperRef.current?.offsetWidth || 0))),
+        y: Math.max(0, Math.min(prev.y, winH - (wrapperRef.current?.offsetHeight || 0)))
+      }));
+    };
+
+    window.addEventListener('resize', handleWindowResize);
+    return () => window.removeEventListener('resize', handleWindowResize);
+  }, [applet.position]);
+
+  useEffect(() => {
+    if (applet.position !== 'widget' || !wrapperRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const target = entry.target as HTMLElement;
+        const w = target.offsetWidth;
+        const h = target.offsetHeight;
+        if (w > 0 && h > 0) {
+          setSize(prev => {
+            if (Math.abs(prev.width - w) < 1 && Math.abs(prev.height - h) < 1) return prev;
+            return { width: w, height: h };
+          });
+        }
+      }
+    });
+    observer.observe(wrapperRef.current);
+    return () => observer.disconnect();
+  }, [applet.position]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (applet.position !== 'widget') return;
@@ -201,16 +253,19 @@ const AppletWrapper = ({ applet, onClose, onSwitchPosition, onFocus }: { applet:
 
   return (
     <Box
+      ref={wrapperRef}
       onMouseDown={onFocus}
       sx={{
         position: 'fixed',
         left: position.x,
         top: position.y,
         zIndex: applet.zIndex || 9999,
-        width: applet.width || 320,
-        height: applet.height || 250,
+        width: size.width,
+        height: size.height,
         minWidth: 250,
         minHeight: 150,
+        maxWidth: '100vw',
+        maxHeight: '100vh',
         resize: isDragging ? 'none' : 'both',
         overflow: 'hidden',
         boxShadow: 3,
@@ -272,7 +327,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [activeGroup, setActiveGroup] = useState<string>(localStorage.getItem('cozy_active_group') || 'Default');
   const [buttonDialogOpen, setButtonDialogOpen] = useState(false);
   const [editingButton, setEditingButton] = useState<ButtonData | null>(null);
-  const [buttonFormData, setButtonFormData] = useState({ name: '', type: 'send_string', payload: '', group: 'Default', autorun: 0 });
+  const [buttonFormData, setButtonFormData] = useState({ name: '', type: 'send_string', payload: '', group: 'Default', autorun: 0, order: 0 });
   const [initialBtnFormData, setInitialBtnFormData] = useState<any>(null);
   const [btnMenuAnchor, setBtnMenuAnchor] = useState<{ anchor: HTMLElement, btn: ButtonData } | null>(null);
   const [lastMenuBtn, setLastMenuBtn] = useState<ButtonData | null>(null);
@@ -284,6 +339,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [toasts, setToasts] = useState<{ id: number; msg: string }[]>([]);
   const toastIdRef = useRef(0);
   const [hosts, setHosts] = useState<Host[]>([]);
+  const [recents, setRecents] = useLocalStorage<{ host: string, last_used: number }[]>('cozy_recents', []);
+  const [newTabDialogOpen, setNewTabDialogOpen] = useState(false);
+
   const varsRef = useRef<Record<string, string>>({});
   useEffect(() => { varsRef.current = vars; }, [vars]);
 
@@ -365,7 +423,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       setApplets(prev => {
         const existing = prev.find(a => a.name === name);
         if (existing) {
-          return prev;
+          return prev.map(a => a.name === name ? { ...a, node, width: options.width ?? a.width, height: options.height ?? a.height } : a);
         }
         return [...prev, { name, node, position: parsedPos, width: options.width, height: options.height, zIndex: maxZIndexRef.current++ }];
       });
@@ -585,6 +643,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
     if (data.vars) {
       setVars(data.vars || {});
     }
+    if (data.recents) {
+      setRecents(data.recents);
+    }
   };
 
   const fetchHosts = async () => {
@@ -793,7 +854,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setTimeout(() => terminalRefs.current[tabId]?.focus(), 50);
   };
 
-  const handleSelectHost = (host: string, customTitle?: string) => {
+  const handleSelectHost = async (host: string, customTitle?: string) => {
     const id = Math.random().toString(36).substring(2);
     const newTab: TabData = {
       id: id,
@@ -804,6 +865,36 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setTabs(prev => [...prev, newTab]);
     setActiveTabId(newTab.id);
     setActivePaneId(id);
+
+    // Record recent
+    if (host !== 'local') {
+      const token = localStorage.getItem('cozy_token');
+      try {
+        fetch('/api/recents', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ host })
+        });
+
+        // Optimistic update for local recents
+        setRecents(prev => {
+          const now = Math.floor(Date.now() / 1000);
+          const idx = prev.findIndex(r => r.host === host);
+          const next = [...prev];
+          if (idx >= 0) {
+            next[idx] = { ...next[idx], last_used: now };
+          } else {
+            next.push({ host, last_used: now });
+          }
+          return next.sort((a, b) => b.last_used - a.last_used).slice(0, 50);
+        });
+      } catch (e) {
+        console.error('Failed to record recent:', e);
+      }
+    }
   };
 
   const handleSelectTagAsSplit = (tag: string, hosts: string[]) => {
@@ -1033,7 +1124,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         handleCloseCurrentPaneOrTab();
       } else if (e.altKey && (e.key === 't' || e.key === 'T')) {
         e.preventDefault();
-        handleSelectHost('local');
+        setNewTabDialogOpen(true);
       } else if (e.altKey && e.key >= '1' && e.key <= '9') {
         e.preventDefault();
         const idx = parseInt(e.key) - 1;
@@ -1354,6 +1445,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
                   ))}
                 </Tabs>
               </Box>
+              <IconButton
+                size="small" title='New Tab'
+                onClick={() => setNewTabDialogOpen(true)}
+                sx={{ mr: 1, ml: 0.5, bgcolor: 'action.hover', '&:hover': { bgcolor: 'action.selected' } }}
+              >
+                <AddIcon fontSize="small" />
+              </IconButton>
               {isMobile && applets.filter(a => a.position === 'sidebar').length > 0 && (
                 <IconButton
                   color="inherit"
@@ -1539,7 +1637,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                 <Tab
                   key={btn.id}
                   label={btn.name}
-                  title={btn.type + ": " + btn.payload}
+                  title={`${btn.type} (${btn.order || 0})${btn.autorun ? " (autorun)" : ""}: ${btn.payload}`}
                   component="div"
                   onClick={() => handleButtonClick(btn)}
                   onContextMenu={(e) => {
@@ -1559,9 +1657,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
             </Tabs>
             <Box sx={{ flexShrink: 0, px: 1, borderLeft: 1, borderColor: 'divider' }}>
               <IconButton
-                size="small"
+                size="small" title="New Button"
                 onClick={() => {
-                  const data = { name: '', type: 'send_string', payload: '', group: activeGroup, autorun: 0 };
+                  const maxOrder = buttons.length > 0 ? Math.max(...buttons.map(b => b.order || 0)) : 0;
+                  const data = { name: '', type: 'send_string', payload: '', group: activeGroup, autorun: 0, order: maxOrder + 10 || 10 };
                   setEditingButton(null);
                   setButtonFormData(data);
                   setInitialBtnFormData(data);
@@ -1723,7 +1822,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
             type: btnMenuAnchor.btn.type,
             payload: btnMenuAnchor.btn.payload,
             group: btnMenuAnchor.btn.group || 'Default',
-            autorun: btnMenuAnchor.btn.autorun || 0
+            autorun: btnMenuAnchor.btn.autorun || 0,
+            order: btnMenuAnchor.btn.order || 0
           };
           setEditingButton(btnMenuAnchor.btn);
           setButtonFormData(data);
@@ -1757,7 +1857,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <TextField
               select
-              fullWidth={buttonFormData.type !== 'run_script'}
               label="Button Type"
               size="small"
               value={buttonFormData.type}
@@ -1770,6 +1869,15 @@ export default function Dashboard({ initialData }: DashboardProps) {
               <option value="misc">Misc</option>
               <option value="run_script">Run Script</option>
             </TextField>
+
+            <TextField
+              label="Order"
+              type="number"
+              size="small"
+              value={buttonFormData.order}
+              onChange={e => setButtonFormData({ ...buttonFormData, order: parseInt(e.target.value) || 0 })}
+              sx={{ width: 100 }}
+            />
 
             {buttonFormData.type === 'run_script' && (
               <FormControlLabel
@@ -1915,6 +2023,49 @@ export default function Dashboard({ initialData }: DashboardProps) {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <NewTabDialog
+        open={newTabDialogOpen}
+        onClose={() => setNewTabDialogOpen(false)}
+        hosts={hosts}
+        recents={recents}
+        onSelect={async (host) => {
+          // Check if it's a direct connection and not in known hosts
+          if (host.includes('.') || host.includes(':') || host === 'localhost') {
+            const known = hosts.find(h => h.name === host || h.hostname === host);
+            if (!known) {
+              // Automatically add to ~/.ssh/config
+              const token = localStorage.getItem('cozy_token');
+              let user = 'root';
+              let hostname = host;
+              if (host.includes('@')) {
+                const parts = host.split('@');
+                user = parts[0];
+                hostname = parts[1];
+              }
+              try {
+                await fetch('/api/hosts', {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({
+                    alias: host,
+                    hostname: hostname,
+                    user: user,
+                    port: '22'
+                  })
+                });
+                handleRefresh(); // Refresh hosts list
+              } catch (e) {
+                console.error('Failed to auto-add host:', e);
+              }
+            }
+          }
+          handleSelectHost(host);
+        }}
+      />
 
       <Box sx={{ position: 'fixed', top: 20, right: 20, zIndex: 10000, display: 'flex', flexDirection: 'column', gap: 1 }}>
         {toasts.map(t => (

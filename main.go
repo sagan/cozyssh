@@ -21,6 +21,7 @@ import (
 	"cozyssh/sshmanager"
 	"cozyssh/ws"
 	"cozyssh/scratchpad"
+	"cozyssh/recents"
 )
 
 //go:embed all:frontend/dist
@@ -63,6 +64,7 @@ func main() {
 	auth.Init(cfg)
 	ws.SetConfig(cfg)
 	scratchpad.Init(cfg.ConfigDir)
+	recents.Init(cfg.ConfigDir)
 
 	// 2. Set up HTTP router
 	mux := http.NewServeMux()
@@ -105,6 +107,7 @@ func main() {
 			"buttons": cfg.Buttons,
 			"vars":    cfg.Vars,
 			"pinned":  pinned,
+			"recents": recents.Get(),
 		}
 	}
 
@@ -142,6 +145,23 @@ func main() {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(getFullData(r))
+	}))))
+
+	mux.Handle("/api/recents", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			Host string `json:"host"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		recents.Add(req.Host)
+		recents.Save()
+		w.Write([]byte(`{"success":true}`))
 	}))))
 
 	mux.Handle("/api/hosts", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
