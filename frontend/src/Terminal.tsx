@@ -34,9 +34,10 @@ interface TerminalProps {
   onDataReceived?: () => void;
   cloneFrom?: string;
   isTouch?: boolean;
+  localVars: Record<string, string | undefined>;
 }
 
-const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, sessionId, isActive, isCtrlActive, onCtrlDone, onStateChange, onStolen, onManualReconnect, onCwdChange, onDataReceived, cloneFrom, isTouch }, ref) => {
+const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, sessionId, isActive, isCtrlActive, onCtrlDone, onStateChange, onStolen, onManualReconnect, onCwdChange, onDataReceived, cloneFrom, isTouch, localVars }, ref) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -122,14 +123,16 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     xtermRef.current = term;
 
     // Load WebGL Addon
-    try {
-      webglAddon = new WebglAddon();
-      webglAddon.onContextLoss(() => {
-        webglAddon?.dispose();
-      });
-      term.loadAddon(webglAddon);
-    } catch (e) {
-      console.warn('WebGL addon failed to load, falling back to canvas', e);
+    if (localVars["local_cs_nowebgl"] !== "1") {
+      try {
+        webglAddon = new WebglAddon();
+        webglAddon.onContextLoss(() => {
+          webglAddon?.dispose();
+        });
+        term.loadAddon(webglAddon);
+      } catch (e) {
+        console.warn('WebGL addon failed to load, falling back to canvas', e);
+      }
     }
 
     document.fonts.ready.then(() => {
@@ -351,35 +354,6 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
         }
       }, 200);
     });
-
-    // Concept for long-press word selection
-    let touchTimer: number;
-    term.element?.addEventListener('touchstart', (e) => {
-      if (e.touches.length !== 1) return;
-
-      touchTimer = setTimeout(() => {
-        if (!term.element) {
-          return;
-        }
-        // 1. Get touch coordinates relative to the terminal bounds
-        const rect = term.element.getBoundingClientRect();
-        const x = e.touches[0].clientX - rect.left;
-        const y = e.touches[0].clientY - rect.top;
-
-        // 2. Map pixels to terminal columns/rows
-        const col = Math.floor(x / (rect.width / term.cols));
-        const row = Math.floor(y / (rect.height / term.rows));
-
-        // 3. xterm doesn't have a native "select word at coords", 
-        // but you can trigger a selection programmatically:
-        term.select(col, row, 10); // Selects 10 chars starting at touch
-
-        // Note: To perfectly select a word, you'd need to read the buffer 
-        // at that row/col and find the word boundaries (spaces).
-      }, 500); // 500ms long press
-    }, { passive: true });
-    term.element?.addEventListener('touchend', () => clearTimeout(touchTimer));
-    term.element?.addEventListener('touchmove', () => clearTimeout(touchTimer));
 
     const handleContextMenu = (e: MouseEvent) => {
       if (isTouch) return;

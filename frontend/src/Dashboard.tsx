@@ -322,6 +322,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [applets, setApplets] = useState<AppletData[]>([]);
   const [vars, setVars] = useState<Record<string, string>>({});
   const maxZIndexRef = useRef(10000);
+  const swipeStartRef = useRef<{ x: number, y: number, time: number } | null>(null);
+
 
   const [buttons, setButtons] = useState<ButtonData[]>([]);
   const [activeGroup, setActiveGroup] = useState<string>(localStorage.getItem('cozy_active_group') || 'Default');
@@ -341,9 +343,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [hosts, setHosts] = useState<Host[]>([]);
   const [recents, setRecents] = useLocalStorage<{ host: string, last_used: number }[]>('cozy_recents', []);
   const [newTabDialogOpen, setNewTabDialogOpen] = useState(false);
-
+  const [serverPinned, setServerPinned] = useState<any[]>([]);
+  // local (this browser side) vars, all variable names has "local" (case insensitive) prefix.
+  const [localVars, setLocalVars] = useLocalStorage<Record<string, string | undefined>>("cozy_localvars", {});
   const varsRef = useRef<Record<string, string>>({});
+  const localVarsRef = useRef<Record<string, string | undefined>>({});
   useEffect(() => { varsRef.current = vars; }, [vars]);
+  useEffect(() => { localVarsRef.current = localVars; }, [localVars]);
 
   const autoRunExecutedRef = useRef(false);
   const scriptInvokeContextRef = useRef<{ isAutoRun: boolean } | null>(null);
@@ -432,21 +438,43 @@ export default function Dashboard({ initialData }: DashboardProps) {
       setApplets(prev => prev.filter(a => a.name !== name));
     };
     (window as any).csGetVar = (name?: string) => {
-      if (name) return varsRef.current[name];
-      return { ...varsRef.current };
+      if (name) {
+        if (name.toLowerCase().startsWith("local")) {
+          return localVarsRef.current[name];
+        } else {
+          return varsRef.current[name];
+        }
+      }
+      return { ...varsRef.current, ...localVarsRef.current };
     };
     (window as any).csSetVar = async (nameOrVars: string | Record<string, string | undefined>, value?: string | undefined) => {
       const token = localStorage.getItem('cozy_token');
       let updates: Record<string, string | null> = {};
+      let localUpdates: Record<string, string | undefined> = {};
       if (typeof nameOrVars === 'string') {
-        updates[nameOrVars] = value === undefined ? null : value;
+        if (nameOrVars.toLowerCase().startsWith("local")) {
+          localUpdates[nameOrVars] = value;
+        } else {
+          updates[nameOrVars] = value === undefined ? null : value;
+        }
       } else {
         for (const k in nameOrVars) {
           const v = nameOrVars[k];
-          updates[k] = v === undefined ? null : v;
+          if (k.toLowerCase().startsWith("local")) {
+            localUpdates[k] = v;
+          } else {
+            updates[k] = v === undefined ? null : v;
+          }
         }
       }
 
+      // known problem: local vars update are async and not finished when csSetVar returns
+      if (Object.keys(localUpdates).length > 0) {
+        setLocalVars({ ...localVarsRef.current, ...localUpdates });
+      }
+      if (Object.keys(updates).length === 0) {
+        return;
+      }
       const r = await fetch('/api/vars', {
         method: 'PUT',
         headers: {
@@ -604,7 +632,45 @@ export default function Dashboard({ initialData }: DashboardProps) {
     }
   };
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (!isTouch || !isMobile) return;
+    const touch = e.touches[0];
+    swipeStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!isTouch || !isMobile || !swipeStartRef.current) return;
+    const touch = e.changedTouches[0];
+    const diffX = touch.clientX - swipeStartRef.current.x;
+    const diffY = touch.clientY - swipeStartRef.current.y;
+    const diffTime = Date.now() - swipeStartRef.current.time;
+
+    swipeStartRef.current = null;
+
+    // Thresholds: move at least 100px, mostly horizontal, within 500ms
+    if (Math.abs(diffX) > 100 && Math.abs(diffX) > Math.abs(diffY) * 2 && diffTime < 500) {
+      const currentIndex = tabs.findIndex(t => t.id === activeTabId);
+      if (diffX > 0 && currentIndex > 0) {
+        // Swipe Right -> Previous Tab
+        const newTab = tabs[currentIndex - 1];
+        window.navigator.vibrate?.(VIBRATE_PATTERN);
+        setActiveTabId(newTab.id);
+        setActivePaneId(newTab.activePaneId);
+        setTimeout(() => terminalRefs.current[newTab.activePaneId]?.focus(), 50);
+      } else if (diffX < 0 && currentIndex < tabs.length - 1) {
+        // Swipe Left -> Next Tab
+        const newTab = tabs[currentIndex + 1];
+        window.navigator.vibrate?.(VIBRATE_PATTERN);
+        setActiveTabId(newTab.id);
+        setActivePaneId(newTab.activePaneId);
+        setTimeout(() => terminalRefs.current[newTab.activePaneId]?.focus(), 50);
+      }
+
+    }
+  };
+
   const tabId = useRef(sessionStorage.getItem('cozy_tab_id') || Math.random().toString());
+
   useEffect(() => {
     sessionStorage.setItem('cozy_tab_id', tabId.current);
   }, []);
@@ -645,6 +711,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
     }
     if (data.recents) {
       setRecents(data.recents);
+    }
+    if (data.pinned) {
+      setServerPinned(data.pinned);
     }
   };
 
@@ -768,6 +837,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
           }
         } else if (!pinnedElsewhere) {
           const pinnedTabsData: any[] = data.pinned || [];
+          setServerPinned(pinnedTabsData);
           // Only auto-open tabs that are not currently in use by any client
           const availablePins = pinnedTabsData.filter((p: any) => !p.listenerCount || p.listenerCount === 0);
           const pinnedTabs = availablePins.map((p: any) => {
@@ -822,9 +892,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     if (token) {
       await fetch('/api/logout', { headers: { 'Authorization': `Bearer ${token}` } });
     }
-    localStorage.removeItem('cozy_token');
-    localStorage.removeItem('cozy_scratchpad_cache');
-    localStorage.removeItem('cozy_scratchpad_sync_state');
+    localStorage.clear();
     if (window.caches) {
       await caches.delete('api-data-cache');
       await caches.delete('manifest-cache');
@@ -1303,9 +1371,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
     if (buttonsLoaded && !autoRunExecutedRef.current) {
       autoRunExecutedRef.current = true;
       const scriptsToRun = buttons.filter(b => b.type === 'run_script' && b.autorun === 1);
-      scriptsToRun.forEach(btn => {
-        handleButtonClick(btn, true);
-      });
+      try {
+        scriptsToRun.forEach(btn => {
+          handleButtonClick(btn, true);
+        });
+      } catch (e) {
+        console.error('Autorun scripts error:', e);
+      }
     }
   }, [buttonsLoaded, buttons]);
 
@@ -1464,7 +1536,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
             </Box>
           )}
 
-          <Box sx={{ flexGrow: 1, bgcolor: '#ffffff', overflow: 'hidden', position: 'relative' }}>
+          <Box
+            sx={{ flexGrow: 1, bgcolor: '#ffffff', overflow: 'hidden', position: 'relative' }}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          >
+
             {tabs.map((tab) => (
               <Box
                 key={tab.id}
@@ -1534,6 +1611,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                                 setActivePaneId(newId);
                               }
                             }}
+                            localVars={localVars}
                             isTouch={isTouch}
                           />
                         )}
@@ -1881,7 +1959,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
             {buttonFormData.type === 'run_script' && (
               <FormControlLabel
-                sx={{ flexShrink: 0, mr: 0, ml: 1, whiteSpace: 'nowrap' }}
+                title="Automatically run this script when the page loads"
+                sx={{ flexShrink: 0, mr: 0, ml: 0, whiteSpace: 'nowrap' }}
                 control={
                   <Checkbox
                     checked={buttonFormData.autorun === 1}
@@ -1889,7 +1968,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                     size="small"
                   />
                 }
-                label={<Typography variant="body2">Auto-run</Typography>}
+                label={<Typography variant="body2">Autorun</Typography>}
               />
             )}
           </Box>
@@ -2029,6 +2108,23 @@ export default function Dashboard({ initialData }: DashboardProps) {
         onClose={() => setNewTabDialogOpen(false)}
         hosts={hosts}
         recents={recents}
+        tabs={tabs}
+        serverPinned={serverPinned}
+        buttons={buttons}
+        activeGroup={activeGroup}
+        onExecuteButton={(btn) => {
+          handleButtonClick(btn);
+          setNewTabDialogOpen(false);
+        }}
+        onSelectTab={(tabId) => {
+          setActiveTabId(tabId);
+          const t = tabs.find(x => x.id === tabId);
+          if (t) {
+            setActivePaneId(t.activePaneId);
+            setTimeout(() => terminalRefs.current[t.activePaneId]?.focus(), 50);
+          }
+        }}
+        onAttachPinned={(id, host, title) => { handleAttach(id, host, title); setNewTabDialogOpen(false); }}
         onSelect={async (host) => {
           // Check if it's a direct connection and not in known hosts
           if (host.includes('.') || host.includes(':') || host === 'localhost') {

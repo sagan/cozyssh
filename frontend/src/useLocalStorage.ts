@@ -1,58 +1,69 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
-/**
- * useLocalStorage hook that syncs across multiple tabs/windows via the 'storage' event.
- */
 export function useLocalStorage<T>(key: string, initialValue: T) {
-  // Get from local storage then parse stored json or return initialValue
+  // 1. Prevent infinite loops by storing initialValue in a ref
+  const initialValueRef = useRef(initialValue);
+
   const readValue = useCallback((): T => {
     if (typeof window === 'undefined') {
-      return initialValue;
+      return initialValueRef.current;
     }
-
     try {
       const item = window.localStorage.getItem(key);
-      return item ? (JSON.parse(item) as T) : initialValue;
+      return item ? (JSON.parse(item) as T) : initialValueRef.current;
     } catch (error) {
       console.warn(`Error reading localStorage key “${key}”:`, error);
-      return initialValue;
+      return initialValueRef.current;
     }
-  }, [initialValue, key]);
+  }, [key]);
 
-  const [storedValue, setStoredValue] = useState<T>(readValue);
+  // 2. Prevent SSR hydration errors by always starting with initial value
+  const [storedValue, setStoredValue] = useState<T>(initialValueRef.current);
 
-  // Return a wrapped version of useState's setter function that
-  // persists the new value to localStorage.
   const setValue = useCallback((value: T | ((val: T) => T)) => {
     try {
-      // Allow value to be a function so we have same API as useState
-      const valueToStore = value instanceof Function ? value(storedValue) : value;
-      setStoredValue(valueToStore);
-
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem(key, JSON.stringify(valueToStore));
-      }
+      // 3. Fix stale closures by using the functional update form
+      setStoredValue((prev) => {
+        const valueToStore = value instanceof Function ? value(prev) : value;
+        
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(key, JSON.stringify(valueToStore));
+          // 4. Dispatch a custom event so other components in the SAME tab sync up
+          window.dispatchEvent(new Event('local-storage-sync'));
+        }
+        
+        return valueToStore;
+      });
     } catch (error) {
       console.warn(`Error setting localStorage key “${key}”:`, error);
     }
-  }, [key, storedValue]);
+  }, [key]);
+
+  // Hydrate state from localStorage on initial client mount
+  useEffect(() => {
+    setStoredValue(readValue());
+  }, [readValue]);
 
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === key && e.newValue) {
-        setStoredValue(JSON.parse(e.newValue));
+      if (e.key === key) {
+        // 5. Handle deletion by falling back to initial value if e.newValue is null
+        setStoredValue(e.newValue ? JSON.parse(e.newValue) : initialValueRef.current);
       }
     };
 
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, [key]);
-
-  // Handle in-memory updates for the same page (above state handles it, 
-  // but we might want to refresh from storage if something else changed it)
-  useEffect(() => {
+    const handleSameTabSync = () => {
       setStoredValue(readValue());
-  }, [readValue]);
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('local-storage-sync', handleSameTabSync);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('local-storage-sync', handleSameTabSync);
+    };
+  }, [key, readValue]);
 
   return [storedValue, setValue] as const;
 }
