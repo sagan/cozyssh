@@ -31,6 +31,7 @@ import { javascript } from '@codemirror/lang-javascript';
 import { transform } from 'sucrase';
 import { useLocalStorage } from './useLocalStorage';
 import NewTabDialog from './NewTabDialog';
+import { TERMINAL_FUNCTIONS, MISC_FUNCTIONS } from './constants';
 
 const VIBRATE_PATTERN = 100;
 
@@ -73,30 +74,42 @@ interface DashboardProps {
   initialData?: any;
 }
 
-// Expose those objects to custom scripts
-const exposeObjects = {
-  "react": React,
+// Importable modules for custom scripting
+import * as react from "react";
+import * as dompurify from 'dompurify';
+import * as marked from 'marked';
+
+// Expose those modules to custom scripts
+const exposeModules = {
+  "react": react,
+  "dompurify": dompurify,
+  "marked": marked,
 };
 
 // Generate Blob URLs for each exposed module
 const virtualModules: Record<string, string> = {};
 
-for (const [moduleName, moduleObj] of Object.entries(exposeObjects)) {
+for (const [moduleName, moduleObj] of Object.entries(exposeModules)) {
   // Attach safely to window
   const safeName = `__plugin_expose_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
   (window as any)[safeName] = moduleObj;
 
-  // Generate the named exports string (e.g., "useState, useEffect, useMemo")
-  const exportKeys = Object.keys(moduleObj)
-    .filter(key => key !== 'default')
-    .join(', ');
+  // Identify named exports (everything except 'default')
+  const namedExports = Object.keys(moduleObj).filter(k => k !== 'default');
 
-  // Create the actual ES Module code
+  // Determine what the 'default' export should be
+  // If the module already has a .default, use that. Otherwise, use the whole object.
   const shimCode = `
-    const mod = window["${safeName}"];
-    export default mod;
-    export const { ${exportKeys} } = mod;
-  `;
+  const mod = window["${safeName}"];
+
+  // Export the named members
+  export const { ${namedExports.join(', ')} } = mod;
+
+  // Export the default member
+  // If 'default' exists in the namespace, export that, otherwise the namespace itself
+  const defaultExport = mod.default !== undefined ? mod.default : mod;
+  export default defaultExport;
+`;
 
   // Turn it into a Blob URL
   const blob = new Blob([shimCode], { type: 'application/javascript' });
@@ -499,6 +512,22 @@ export default function Dashboard({ initialData }: DashboardProps) {
       const term: any = terminalRefs.current[activePaneIdRef.current];
       return term?.getXterm?.();
     };
+    (window as any).csGetTerminalContents = (lineCount = 100) => {
+      const term: any = terminalRefs.current[activePaneIdRef.current];
+      const xterm = term?.getXterm?.();
+      if (!xterm) return "";
+
+      const buffer = xterm.buffer.active;
+      const lines = [];
+      const end = buffer.baseY + buffer.cursorY;
+      const start = lineCount <= 0 ? 0 : Math.max(0, end - lineCount);
+
+      for (let i = start; i <= end; i++) {
+        const line = buffer.getLine(i);
+        if (line) lines.push(line.translateToString().trimEnd());
+      }
+      return lines.join('\n');
+    }
     (window as any).csFocus = () => {
       if (activePaneIdRef.current) {
         setTimeout(() => terminalRefs.current[activePaneIdRef.current]?.focus(), 0);
@@ -1793,7 +1822,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               onClose={() => setMobileAppletsOpen(false)}
               sx={{ '& .MuiDrawer-paper': { width: 320, boxSizing: 'border-box' } }}
             >
-              <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: 1, borderColor: 'divider' }}>
+              <Box sx={{ px: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: 1, borderColor: 'divider' }}>
                 <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Applets</Typography>
                 <IconButton onClick={() => setMobileAppletsOpen(false)}>
                   <CloseIcon />
@@ -1994,19 +2023,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
               onChange={e => setButtonFormData({ ...buttonFormData, payload: e.target.value })}
               slotProps={{ select: { native: true } }}
             >
-              <option value="COPY">COPY (Buffer)</option>
-              <option value="COPY_VISIBLE">COPY (Visible)</option>
-              <option value="COPY_SELECTION">COPY (Selection)</option>
-              <option value="PASTE">PASTE (Clipboard)</option>
-              <option value="INPUT">INPUT (Prompt)</option>
-              <option value="CLEAR">CLEAR (Screen)</option>
-              <option value="RESET">RESET (Terminal)</option>
-              <option value="RECONNECT">RECONNECT (Session)</option>
-              <option value="CLOSE">CLOSE (Pane/Tab)</option>
-              <option value="SCROLL_TO_TOP">SCROLL (Top)</option>
-              <option value="SCROLL_TO_BOTTOM">SCROLL (Bottom)</option>
-              <option value="SCROLL_PAGE_UP">SCROLL (Page Up)</option>
-              <option value="SCROLL_PAGE_DOWN">SCROLL (Page Down)</option>
+              {TERMINAL_FUNCTIONS.map(f => (
+                <option key={f.value} value={f.value}>{f.label}</option>
+              ))}
             </TextField>
           ) : buttonFormData.type === 'misc' ? (
             <TextField
@@ -2018,9 +2037,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
               onChange={e => setButtonFormData({ ...buttonFormData, payload: e.target.value })}
               slotProps={{ select: { native: true } }}
             >
-              <option value="NEXT_BUTTON_GROUP">Next Button Group</option>
-              <option value="PREV_BUTTON_GROUP">Prev Button Group</option>
-              <option value="OPEN_SCRATCHPAD">Open Scratchpad</option>
+              {MISC_FUNCTIONS.map(f => (
+                <option key={f.value} value={f.value}>{f.label}</option>
+              ))}
             </TextField>
           ) : (
             <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden', flexShrink: 0, display: 'flex', flexDirection: 'column' }}>

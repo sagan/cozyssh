@@ -25,6 +25,7 @@ import TabIcon from '@mui/icons-material/Tab';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import SmartButtonIcon from '@mui/icons-material/SmartButton';
 import type { Host } from './Sidebar';
+import { BUILTIN_BUTTONS } from './constants';
 
 interface Recent {
   host: string;
@@ -101,24 +102,40 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
     return serverPinned.filter(p => !tabs.some(t => t.id === p.id) && (p.title?.toLowerCase().includes(f) || p.host?.toLowerCase().includes(f)));
   }, [serverPinned, tabs, filter, viewMode]);
 
-  const filteredButtons = useMemo(() => {
-    if (viewMode !== 'buttons') return [];
+  const allFilteredButtons = useMemo(() => {
+    if (viewMode !== 'buttons') return { matchedUser: [], matchedBuiltin: [] };
     const f = filter.toLowerCase();
-    return buttons.filter(b => b.name.toLowerCase().includes(f));
+
+    const matchedUser = buttons.filter(b =>
+      b.name.toLowerCase().includes(f) ||
+      (b.payload && b.payload.toLowerCase().includes(f))
+    );
+
+    const matchedBuiltin = BUILTIN_BUTTONS.filter(b =>
+      b.name.toLowerCase().includes(f) ||
+      b.payload.toLowerCase().includes(f)
+    );
+
+    return { matchedUser, matchedBuiltin };
   }, [buttons, filter, viewMode]);
 
   const activeGroupButtons = useMemo(() => {
     if (viewMode !== 'buttons') return [];
-    return filteredButtons.filter(b => (b.group || 'Default') === (activeGroup || 'Default'));
-  }, [filteredButtons, activeGroup, viewMode]);
+    return allFilteredButtons.matchedUser.filter(b => (b.group || 'Default') === (activeGroup || 'Default'));
+  }, [allFilteredButtons, activeGroup, viewMode]);
 
   const otherGroupButtons = useMemo(() => {
     if (viewMode !== 'buttons') return [];
-    return filteredButtons.filter(b => (b.group || 'Default') !== (activeGroup || 'Default'));
-  }, [filteredButtons, activeGroup, viewMode]);
+    return allFilteredButtons.matchedUser.filter(b => (b.group || 'Default') !== (activeGroup || 'Default'));
+  }, [allFilteredButtons, activeGroup, viewMode]);
+
+  const builtinButtons = useMemo(() => {
+    if (viewMode !== 'buttons') return [];
+    return allFilteredButtons.matchedBuiltin;
+  }, [allFilteredButtons, viewMode]);
 
   const items = useMemo(() => {
-    const res: { type: 'recent' | 'host' | 'direct' | 'local' | 'tab' | 'pinned_tab' | 'button' | 'other_button', value: string, label: string, subtitle?: string, isFav?: boolean, id?: string, host?: string, btn?: any }[] = [];
+    const res: { type: 'recent' | 'host' | 'direct' | 'local' | 'tab' | 'pinned_tab' | 'button' | 'other_button' | 'builtin_button', value: string, label: string, subtitle?: string, isFav?: boolean, id?: string, host?: string, btn?: any }[] = [];
 
     if (viewMode === 'servers') {
       filteredRecents.forEach(r => {
@@ -190,14 +207,24 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
           id: b.id,
           value: b.id,
           label: b.name,
-          subtitle: `Group: ${b.group || 'Default'}`,
+          subtitle: `Group: ${b.group || 'Default'} | Type: ${b.type}${b.type !== "send_string" && b.type !== "run_script" ? ' | Payload: ' + b.payload : ''}`,
+          btn: b
+        });
+      });
+      builtinButtons.forEach(b => {
+        res.push({
+          type: 'builtin_button',
+          id: b.id,
+          value: b.id,
+          label: b.name,
+          subtitle: `Built-in | Type: ${b.type} | Payload: ${b.payload}`,
           btn: b
         });
       });
     }
 
     return res;
-  }, [filteredRecents, filteredHosts, directConnect, hosts, filter, viewMode, activeTabsList, attachablePinnedTabs, activeGroupButtons, otherGroupButtons]);
+  }, [filteredRecents, filteredHosts, directConnect, hosts, filter, viewMode, activeTabsList, attachablePinnedTabs, activeGroupButtons, otherGroupButtons, builtinButtons]);
 
   useEffect(() => {
     if (open) {
@@ -264,7 +291,7 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
     } else if (item.type === 'pinned_tab') {
       onAttachPinned?.(item.id, item.host, item.label);
       onClose();
-    } else if (item.type === 'button' || item.type === 'other_button') {
+    } else if (item.type === 'button' || item.type === 'other_button' || item.type === 'builtin_button') {
       onExecuteButton?.(item.btn);
       onClose();
     } else {
@@ -330,6 +357,7 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
           inputRef={inputRef}
           size="small"
           autoComplete="off"
+          type="search"
           sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
           slotProps={{
             input: {
@@ -390,6 +418,11 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
                   <Typography variant="overline" sx={{ lineHeight: 1.5, fontWeight: 'bold' }} color="text.secondary">Other Groups</Typography>
                 </ListItem>
               )}
+              {((index === 0 && item.type === 'builtin_button') || (index > 0 && item.type === 'builtin_button' && (items[index - 1].type === 'button' || items[index - 1].type === 'other_button'))) && (
+                <ListItem sx={{ py: 0.25, px: 2, bgcolor: 'action.hover' }}>
+                  <Typography variant="overline" sx={{ lineHeight: 1.5, fontWeight: 'bold' }} color="text.secondary">Built-in Functions</Typography>
+                </ListItem>
+              )}
 
               <ListItemButton
                 selected={selectedIndex === index}
@@ -419,7 +452,7 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
                       item.type === 'local' ? <ComputerIcon fontSize="small" /> :
                         item.type === 'tab' ? <TabIcon fontSize="small" color="primary" sx={{ color: selectedIndex === index ? 'white' : 'primary.main' }} /> :
                           item.type === 'pinned_tab' ? <PushPinIcon fontSize="small" color="primary" sx={{ color: selectedIndex === index ? 'white' : 'primary.main' }} /> :
-                            item.type === 'button' || item.type === 'other_button' ? <SmartButtonIcon fontSize="small" color="primary" sx={{ color: selectedIndex === index ? 'white' : 'primary.main' }} /> :
+                            item.type === 'button' || item.type === 'other_button' || item.type === 'builtin_button' ? <SmartButtonIcon fontSize="small" color="primary" sx={{ color: selectedIndex === index ? 'white' : 'primary.main' }} /> :
                               item.isFav ? <StarIcon fontSize="small" color="primary" sx={{ color: selectedIndex === index ? 'white' : 'primary.main' }} /> : <DnsIcon fontSize="small" />}
                 </ListItemIcon>
                 <ListItemText
