@@ -225,16 +225,6 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 		s.Steal()
 	}
 
-	// Always sync pinned status from config if possible
-	if globalConfig != nil {
-		for _, pt := range globalConfig.PinnedTabs {
-			if pt.ID == sessionID {
-				s.Pinned = true
-				break
-			}
-		}
-	}
-
 	session.GlobalManager.CancelDisconnectTimer(sessionID)
 	listener, history := s.AddListener()
 	defer session.GlobalManager.RemoveListener(sessionID, listener)
@@ -246,6 +236,9 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 		conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"history_start"}`))
 		conn.WriteMessage(websocket.BinaryMessage, history)
 	}
+
+	stateMsg := fmt.Sprintf(`{"type":"tab_state","is_pinned":%t,"is_locked":%t}`, s.IsPinned, s.IsLocked)
+	conn.WriteMessage(websocket.TextMessage, []byte(stateMsg))
 
 	// Session internal read loop handles writing to listeners
 	go func() {

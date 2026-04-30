@@ -28,6 +28,7 @@ interface TerminalProps {
   isCtrlActive?: boolean;
   onCtrlDone?: () => void;
   onStateChange?: (state: string) => void;
+  onTabStateChange?: (state: { isPinned: boolean, isLocked: boolean }) => void;
   onStolen?: () => void;
   onManualReconnect?: (wasStolen: boolean) => void;
   onCwdChange?: (cwd: string) => void;
@@ -37,7 +38,7 @@ interface TerminalProps {
   localVars: Record<string, string | undefined>;
 }
 
-const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, sessionId, isActive, isCtrlActive, onCtrlDone, onStateChange, onStolen, onManualReconnect, onCwdChange, onDataReceived, cloneFrom, isTouch, localVars }, ref) => {
+const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, sessionId, isActive, isCtrlActive, onCtrlDone, onStateChange, onTabStateChange, onStolen, onManualReconnect, onCwdChange, onDataReceived, cloneFrom, isTouch, localVars }, ref) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -250,6 +251,10 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
             const msg = JSON.parse(ev.data);
             if (msg.type === 'history_start') {
               expectingHistory = true;
+              return;
+            }
+            if (msg.type === 'tab_state') {
+              onTabStateChange?.({ isPinned: msg.is_pinned, isLocked: msg.is_locked });
               return;
             }
             if (msg.type === 'state') {

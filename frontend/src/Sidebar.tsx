@@ -22,7 +22,7 @@ export interface Host {
   is_favourite?: boolean;
 }
 
-export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, onSelect, onSelectTagAsSplit, onLogout, onOpenScratchpad, activeTabs, onAttach, onRefresh, hosts, fetchHosts }: { sysHostname: string, appVersion: string, mobileOpen: boolean, onClose: () => void, onSelect: (host: string) => void, onSelectTagAsSplit?: (tag: string, hosts: string[]) => void, onLogout?: () => void, onOpenScratchpad?: () => void, activeTabs: string[], onAttach: (id: string, host: string, title: string) => void, onRefresh?: () => void, hosts: Host[], fetchHosts: () => void }) {
+export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, onSelect, onSelectTagAsSplit, onLogout, onOpenScratchpad, activeTabs, onAttach, onRefresh, hosts, fetchHosts }: { sysHostname: string, appVersion: string, mobileOpen: boolean, onClose: () => void, onSelect: (host: string) => void, onSelectTagAsSplit?: (tag: string, hosts: string[]) => void, onLogout?: () => void, onOpenScratchpad?: () => void, activeTabs: string[], onAttach: (id: string, host: string, title: string, isLocked: boolean) => void, onRefresh?: () => void, hosts: Host[], fetchHosts: () => void }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -576,7 +576,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
                   return (
                     <ListItem key={ps.id} divider>
                       <ListItemText primary={ps.title} secondary={`${ps.host} (Listeners: ${ps.listenerCount})`} />
-                      {canAttach && <Button size="small" variant="outlined" onClick={() => onAttach(ps.id, ps.host, ps.title)}>Attach</Button>}
+                      {canAttach && <Button size="small" variant="outlined" onClick={() => onAttach(ps.id, ps.host, ps.title, !!ps.isLocked)}>Attach</Button>}
                     </ListItem>
                   );
                 })}

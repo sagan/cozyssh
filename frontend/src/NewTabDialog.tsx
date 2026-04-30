@@ -38,22 +38,34 @@ interface NewTabDialogProps {
   hosts: Host[];
   recents: Recent[];
   tabs?: any[];
-  serverPinned?: any[];
+
   buttons?: any[];
   activeGroup?: string;
   onSelect: (host: string) => void;
   onSelectTab?: (tabId: string) => void;
-  onAttachPinned?: (id: string, host: string, title: string) => void;
+  onAttachPinned?: (id: string, host: string, title: string, isLocked: boolean) => void;
   onExecuteButton?: (btn: any) => void;
 }
 
-export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [], serverPinned = [], buttons = [], activeGroup, onSelect, onSelectTab, onAttachPinned, onExecuteButton }: NewTabDialogProps) {
+export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [], buttons = [], activeGroup, onSelect, onSelectTab, onAttachPinned, onExecuteButton }: NewTabDialogProps) {
   const [filter, setFilter] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [viewMode, setViewMode] = useState<'servers' | 'tabs' | 'buttons'>('servers');
   const inputRef = useRef<HTMLInputElement>(null);
   const selectedItemRef = useRef<HTMLDivElement>(null);
   const swipeStartRef = useRef<{ x: number, y: number, time: number } | null>(null);
+
+  const [localPinned, setLocalPinned] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (open) {
+      const token = localStorage.getItem('cozy_token');
+      fetch('/api/sessions/pinned', { headers: { 'Authorization': `Bearer ${token}` } })
+        .then(r => r.json())
+        .then(data => setLocalPinned(data || []))
+        .catch(e => console.error(e));
+    }
+  }, [open]);
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -99,8 +111,8 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
   const attachablePinnedTabs = useMemo(() => {
     if (viewMode !== 'tabs') return [];
     const f = filter.toLowerCase();
-    return serverPinned.filter(p => !tabs.some(t => t.id === p.id) && (p.title?.toLowerCase().includes(f) || p.host?.toLowerCase().includes(f)));
-  }, [serverPinned, tabs, filter, viewMode]);
+    return localPinned.filter(p => !tabs.some(t => t.panes.some((pane: any) => (pane.sessionId || pane.id) === p.id && pane.state !== 'stolen')) && (p.title?.toLowerCase().includes(f) || p.host?.toLowerCase().includes(f)));
+  }, [localPinned, tabs, filter, viewMode]);
 
   const allFilteredButtons = useMemo(() => {
     if (viewMode !== 'buttons') return { matchedUser: [], matchedBuiltin: [] };
@@ -135,7 +147,7 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
   }, [allFilteredButtons, viewMode]);
 
   const items = useMemo(() => {
-    const res: { type: 'recent' | 'host' | 'direct' | 'local' | 'tab' | 'pinned_tab' | 'button' | 'other_button' | 'builtin_button', value: string, label: string, subtitle?: string, isFav?: boolean, id?: string, host?: string, btn?: any }[] = [];
+    const res: { type: 'recent' | 'host' | 'direct' | 'local' | 'tab' | 'pinned_tab' | 'button' | 'other_button' | 'builtin_button', value: string, label: string, subtitle?: string, isFav?: boolean, id?: string, host?: string, isLocked?: boolean, btn?: any }[] = [];
 
     if (viewMode === 'servers') {
       filteredRecents.forEach(r => {
@@ -187,7 +199,8 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
           value: p.id,
           host: p.host,
           label: p.title || p.host,
-          subtitle: `Attach to pinned session`
+          subtitle: `Attach to pinned session`,
+          isLocked: p.isLocked
         });
       });
     } else if (viewMode === 'buttons') {
@@ -289,7 +302,7 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
       onSelectTab?.(item.id);
       onClose();
     } else if (item.type === 'pinned_tab') {
-      onAttachPinned?.(item.id, item.host, item.label);
+      onAttachPinned?.(item.id, item.host, item.label, !!item.isLocked);
       onClose();
     } else if (item.type === 'button' || item.type === 'other_button' || item.type === 'builtin_button') {
       onExecuteButton?.(item.btn);

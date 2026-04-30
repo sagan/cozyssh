@@ -45,7 +45,9 @@ func (b *CircularBuffer) Bytes() []byte {
 type Session struct {
 	ID        string
 	Host      string
-	Pinned    bool
+	Title     string
+	IsPinned  bool
+	IsLocked  bool
 	Reader     io.Reader
 	Writer     io.Writer
 	CloseFunc  func() error
@@ -177,6 +179,25 @@ func (s *Session) Broadcast(data []byte) {
 	}
 }
 
+func (s *Session) BroadcastTabState() {
+	s.mu.Lock()
+	stateMsg := append([]byte("STATE:"), []byte(`{"type":"tab_state","is_pinned":`+boolToStr(s.IsPinned)+`,"is_locked":`+boolToStr(s.IsLocked)+`}`)...)
+	for _, l := range s.listeners {
+		select {
+		case l <- stateMsg:
+		default:
+		}
+	}
+	s.mu.Unlock()
+}
+
+func boolToStr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
+}
+
 func (s *Session) Close() error {
 	return s.CloseFunc()
 }
@@ -229,6 +250,32 @@ func (m *SessionManager) Remove(id string) {
 	}
 }
 
+func (m *SessionManager) CloseIfNotLocked(id string) {
+	m.mu.Lock()
+	s, ok := m.sessions[id]
+	m.mu.Unlock()
+	if ok && !s.IsLocked {
+		s.Close()
+		m.Remove(id)
+	}
+}
+
+func (m *SessionManager) CloseAllNormal() {
+	m.mu.Lock()
+	var toClose []*Session
+	for _, s := range m.sessions {
+		if !s.IsLocked {
+			toClose = append(toClose, s)
+		}
+	}
+	m.mu.Unlock()
+
+	for _, s := range toClose {
+		s.Close()
+		m.Remove(s.ID)
+	}
+}
+
 func (m *SessionManager) Add(s *Session) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -253,7 +300,7 @@ func (m *SessionManager) ClearInactive(id string) {
 	if s, ok := m.sessions[id]; ok {
 		s.mu.Lock()
 		listenerCount := len(s.listeners)
-		isPinned := s.Pinned
+		isPinned := s.IsPinned || s.IsLocked
 		s.mu.Unlock()
 		
 		if !isPinned && listenerCount == 0 {
@@ -286,4 +333,24 @@ func (m *SessionManager) CancelDisconnectTimer(id string) {
 		timer.Stop()
 		delete(m.disconnectTimers, id)
 	}
+}
+
+func (m *SessionManager) GetPinned() []map[string]any {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var pinned []map[string]any
+	for _, s := range m.sessions {
+		s.mu.Lock()
+		if s.IsPinned || s.IsLocked {
+			pinned = append(pinned, map[string]any{
+				"id":            s.ID,
+				"host":          s.Host,
+				"title":         s.Title,
+				"isLocked":      s.IsLocked,
+				"listenerCount": len(s.listeners),
+			})
+		}
+		s.mu.Unlock()
+	}
+	return pinned
 }

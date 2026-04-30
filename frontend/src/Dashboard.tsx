@@ -25,6 +25,7 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
+import LockIcon from '@mui/icons-material/Lock';
 import CodeMirror from '@uiw/react-codemirror';
 import { EditorView } from "@codemirror/view";
 import { javascript } from '@codemirror/lang-javascript';
@@ -45,6 +46,7 @@ const lightTheme = createTheme({
 
 interface PaneData {
   id: string;
+  sessionId?: string;
   host: string;
   state?: string;
   cloneFrom?: string;
@@ -56,6 +58,7 @@ interface TabData {
   panes: PaneData[];
   activePaneId: string;
   isPinned?: boolean;
+  isLocked?: boolean;
   showFiles?: boolean;
   type?: 'terminal' | 'scratchpad';
 }
@@ -115,6 +118,19 @@ for (const [moduleName, moduleObj] of Object.entries(exposeModules)) {
   const blob = new Blob([shimCode], { type: 'application/javascript' });
   virtualModules[moduleName] = URL.createObjectURL(blob);
 }
+
+const escapeRegExp = (string: string) => {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
+
+const virtualModulesImportRegex = (() => {
+  const moduleNames = Object.keys(virtualModules).map(escapeRegExp).join('|');
+  return new RegExp(
+    `((?:from|import)\\s+['"])(${moduleNames})(['"])|(import\\s*\\(\\s*['"])(${moduleNames})(['"]\\))`,
+    'g'
+  );
+})();
+
 
 export interface AppletData {
   name: string;
@@ -356,7 +372,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [hosts, setHosts] = useState<Host[]>([]);
   const [recents, setRecents] = useLocalStorage<{ host: string, last_used: number }[]>('cozy_recents', []);
   const [newTabDialogOpen, setNewTabDialogOpen] = useState(false);
-  const [serverPinned, setServerPinned] = useState<any[]>([]);
+
   // local (this browser side) vars, all variable names has "local" (case insensitive) prefix.
   const [localVars, setLocalVars] = useLocalStorage<Record<string, string | undefined>>("cozy_localvars", {});
   const varsRef = useRef<Record<string, string>>({});
@@ -741,9 +757,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     if (data.recents) {
       setRecents(data.recents);
     }
-    if (data.pinned) {
-      setServerPinned(data.pinned);
-    }
+
   };
 
   const fetchHosts = async () => {
@@ -810,10 +824,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
         } catch (e) {
           console.error(e);
           const initialId = `local-${Date.now()}`;
-          const initialPaneId = Math.random().toString(36).substring(2);
-          setTabs([{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
+          setTabs([{ id: initialId, panes: [{ id: initialId, host: 'local' }], activePaneId: initialId, title: 'local' }]);
           setActiveTabId(initialId);
-          setActivePaneId(initialPaneId);
+          setActivePaneId(initialId);
           return;
         }
       }
@@ -823,6 +836,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       bc!.postMessage('probe_pinned');
 
       setTimeout(() => {
+        const pinnedTabsData: any[] = data.pinned || [];
         if (hash) {
           const hostsData: any[] = data.hosts || [];
           if (hash.startsWith('#')) {
@@ -865,13 +879,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
             }
           }
         } else if (!pinnedElsewhere) {
-          const pinnedTabsData: any[] = data.pinned || [];
-          setServerPinned(pinnedTabsData);
           // Only auto-open tabs that are not currently in use by any client
           const availablePins = pinnedTabsData.filter((p: any) => !p.listenerCount || p.listenerCount === 0);
           const pinnedTabs = availablePins.map((p: any) => {
             const paneId = p.id;
-            return { id: p.id, panes: [{ id: paneId, host: p.host }], activePaneId: paneId, title: p.title, isPinned: true };
+            return { id: p.id, panes: [{ id: paneId, host: p.host }], activePaneId: paneId, title: p.title, isPinned: true, isLocked: p.isLocked };
           });
           if (pinnedTabs.length > 0) {
             setTabs(pinnedTabs);
@@ -879,17 +891,15 @@ export default function Dashboard({ initialData }: DashboardProps) {
             setActivePaneId(pinnedTabs[0].activePaneId);
           } else {
             const initialId = `local-${Date.now()}`;
-            const initialPaneId = Math.random().toString(36).substring(2);
-            setTabs([{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
+            setTabs([{ id: initialId, panes: [{ id: initialId, host: 'local' }], activePaneId: initialId, title: 'local' }]);
             setActiveTabId(initialId);
-            setActivePaneId(initialPaneId);
+            setActivePaneId(initialId);
           }
         } else {
           const initialId = `local-${Date.now()}`;
-          const initialPaneId = Math.random().toString(36).substring(2);
-          setTabs([{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
+          setTabs([{ id: initialId, panes: [{ id: initialId, host: 'local' }], activePaneId: initialId, title: 'local' }]);
           setActiveTabId(initialId);
-          setActivePaneId(initialPaneId);
+          setActivePaneId(initialId);
         }
       }, 350);
     };
@@ -919,6 +929,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     }
     const token = localStorage.getItem('cozy_token');
     if (token) {
+      await fetch('/api/sessions/close_all_normal', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
       await fetch('/api/logout', { headers: { 'Authorization': `Bearer ${token}` } });
     }
     localStorage.clear();
@@ -1014,8 +1025,20 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const handleCloseTab = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     const targetTab = tabs.find(t => t.id === id);
-    if (targetTab?.isPinned) {
+    if (targetTab?.isPinned && !targetTab?.isLocked) {
       handleUnpinTab(id);
+    }
+    if (targetTab && !targetTab.isLocked) {
+      const token = localStorage.getItem('cozy_token');
+      targetTab.panes.forEach(p => {
+        if (p.state !== 'stolen') {
+          fetch('/api/sessions/close', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: p.sessionId || p.id })
+          }).catch(e => console.error(e));
+        }
+      });
     }
 
     setTabs(prev => {
@@ -1041,6 +1064,18 @@ export default function Dashboard({ initialData }: DashboardProps) {
       const paneIdx = currentTab.panes.findIndex(p => p.id === activePaneId);
       const newPanes = currentTab.panes.filter(p => p.id !== activePaneId);
       const nextPaneId = newPanes[Math.max(0, paneIdx - 1)].id;
+      
+      if (!currentTab.isLocked) {
+        const paneToClose = currentTab.panes.find(p => p.id === activePaneId);
+        if (paneToClose && paneToClose.state !== 'stolen') {
+          const token = localStorage.getItem('cozy_token');
+          fetch('/api/sessions/close', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: paneToClose.sessionId || paneToClose.id })
+          }).catch(e => console.error(e));
+        }
+      }
       setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, panes: newPanes, activePaneId: nextPaneId } : t));
       setActivePaneId(nextPaneId);
     } else {
@@ -1055,44 +1090,96 @@ export default function Dashboard({ initialData }: DashboardProps) {
       alert("Only single-pane tabs can be pinned.");
       return;
     }
+    const pane = tab.panes[0];
+    if (!pane) return;
+    const backendSessionId = pane.sessionId || pane.id;
     const token = localStorage.getItem('cozy_token');
     // Pinning only supports single-pane tabs for now (backend requirement)
-    const host = tab.panes[0]?.host || 'local';
+    const host = pane.host || 'local';
     await fetch('/api/tabs/pin', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: tab.id, host, title: tab.title })
+      body: JSON.stringify({ id: backendSessionId, host, title: tab.title })
     });
     setTabs(prev => prev.map(t => t.id === id ? { ...t, isPinned: true } : t));
     setContextMenu(null);
   };
 
   const handleUnpinTab = async (id: string) => {
+    const tab = tabs.find(t => t.id === id);
+    if (!tab) return;
+    const backendSessionId = tab.panes[0]?.sessionId || tab.panes[0]?.id || id;
     const token = localStorage.getItem('cozy_token');
     await fetch('/api/tabs/unpin', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id })
+      body: JSON.stringify({ id: backendSessionId })
     });
-    setTabs(prev => prev.map(t => t.id === id ? { ...t, isPinned: false } : t));
     setContextMenu(null);
   };
 
-  const handleAttach = async (id: string, host: string, title: string) => {
+  const handleLockTab = async (id: string) => {
+    const tab = tabs.find(t => t.id === id);
+    if (!tab) return;
+    if (tab.panes.length > 1) {
+      alert("Only single-pane tabs can be locked.");
+      return;
+    }
+    const pane = tab.panes[0];
+    if (!pane) return;
+    const backendSessionId = pane.sessionId || pane.id;
+    const token = localStorage.getItem('cozy_token');
+    const host = pane.host || 'local';
+    await fetch('/api/tabs/lock', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: backendSessionId, host, title: tab.title })
+    });
+    setTabs(prev => prev.map(t => t.id === id ? { ...t, isLocked: true } : t));
+    setContextMenu(null);
+  };
+
+  const handleUnlockTab = async (id: string) => {
+    const tab = tabs.find(t => t.id === id);
+    if (!tab) return;
+    if (tab.panes.length > 1) {
+      alert("Only single-pane tabs can be unlocked.");
+      return;
+    }
+    const pane = tab.panes[0];
+    if (!pane) return;
+    const paneId = pane.sessionId || pane.id;
+    const token = localStorage.getItem('cozy_token');
+    const host = pane.host || 'local';
+    await fetch('/api/tabs/pin', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: paneId, host, title: tab.title })
+    });
+    setTabs(prev => prev.map(t => t.id === id ? { ...t, isLocked: false } : t));
+    if (activeTabId === id) setActiveTabId(paneId);
+    setContextMenu(null);
+  };
+
+  const handleAttach = async (id: string, host: string, title: string, isLocked: boolean = false) => {
+    const existing = tabs.find(t => t.panes.some(p => (p.sessionId || p.id) === id && p.state !== 'stolen'));
+    if (existing) {
+      setActiveTabId(existing.id);
+      setActivePaneId(existing.panes.find(p => (p.sessionId || p.id) === id && p.state !== 'stolen')?.id || existing.activePaneId);
+      return;
+    }
+
     const token = localStorage.getItem('cozy_token');
     await fetch('/api/sessions/attach', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ id })
     });
-    setTabs(prev => {
-      if (!prev.find(t => t.id === id)) {
-        return [...prev, { id, panes: [{ id, host }], activePaneId: id, title, isPinned: true }];
-      }
-      return prev;
-    });
-    setActiveTabId(id);
-    // Note: panes[0].id will be active
+
+    const frontendId = `${id}-${Date.now()}`;
+    setTabs(prev => [...prev, { id: frontendId, panes: [{ id: frontendId, sessionId: id, host }], activePaneId: frontendId, title, isPinned: true, isLocked }]);
+    setActiveTabId(frontendId);
+    setActivePaneId(frontendId);
   };
 
   const handleRename = async () => {
@@ -1105,10 +1192,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
     if (newTitle && newTitle.trim() !== "") {
       if (targetTab.isPinned) {
         const token = localStorage.getItem('cozy_token');
+        const backendSessionId = targetTab.panes[0]?.sessionId || targetTab.panes[0]?.id || targetId;
         await fetch('/api/tabs/rename', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: targetId, title: newTitle })
+          body: JSON.stringify({ id: backendSessionId, title: newTitle })
         });
       }
       setTabs(prev => prev.map(t => t.id === targetId ? { ...t, title: newTitle } : t));
@@ -1123,10 +1211,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const pane = targetTab.panes[0];
     const newPaneId = Math.random().toString(36).substring(2);
     const newId = `${pane.host}-${Date.now()}`;
+    const backendSessionId = pane.sessionId || pane.id;
     setTabs(prev => [...prev, {
       id: newId,
       title: targetTab.title + ' (1)',
-      panes: [{ id: newPaneId, host: pane.host, cloneFrom: pane.id, state: pane.state }],
+      panes: [{ id: newPaneId, host: pane.host, cloneFrom: backendSessionId, state: pane.state }],
       activePaneId: newPaneId,
       showFiles: targetTab.showFiles
     }]);
@@ -1353,14 +1442,22 @@ export default function Dashboard({ initialData }: DashboardProps) {
       terminalRefs.current[activePaneId]?.focus();
     } else if (btn.type === 'run_script') {
       scriptInvokeContextRef.current = { isAutoRun };
-      let resolvedCode = btn.payload;
-      for (const [moduleName, blobUrl] of Object.entries(virtualModules)) {
-        const regex = new RegExp(`(from\\s+['"])${moduleName}(['"])`, 'g');
-        resolvedCode = resolvedCode.replace(regex, `$1${blobUrl}$2`);
-      }
-      const jsCode = transform(resolvedCode, { transforms: ['typescript', 'jsx'] }).code;
+      let scriptCode = btn.payload;
+      // Do a single replace pass
+      scriptCode = scriptCode.replace(virtualModulesImportRegex, (match, p1, p2, p3, p4, p5, p6) => {
+        // Determine which capture group caught the module name
+        const matchedModule = p2 || p5;
+        const blobUrl = virtualModules[matchedModule];
 
-      const blob = new Blob([jsCode], { type: 'application/javascript' });
+        // Reconstruct the string using the mapped Blob URL
+        if (p1 && p3) return `${p1}${blobUrl}${p3}`; // Standard & Side-effect import
+        if (p4 && p6) return `${p4}${blobUrl}${p6}`; // Dynamic import
+
+        return match; // Fallback
+      });
+      scriptCode = transform(scriptCode, { transforms: ['typescript', 'jsx'] }).code;
+
+      const blob = new Blob([scriptCode], { type: 'application/javascript' });
       // Create a temporary URL pointing to that Blob
       const url = URL.createObjectURL(blob);
       try {
@@ -1460,10 +1557,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
           onSelect={(host) => { handleSelectHost(host); setMobileOpen(false); }}
           onSelectTagAsSplit={(tag, hosts) => { handleSelectTagAsSplit(tag, hosts); setMobileOpen(false); }}
           onLogout={handleLogout}
-          activeTabs={tabs.map(t => t.id)}
+          activeTabs={tabs.flatMap(t => t.panes.filter((p: any) => p.state !== 'stolen').map((p: any) => p.sessionId || p.id))}
           sysHostname={sysHostname}
           appVersion={appVersion}
-          onAttach={(id, host, title) => { handleAttach(id, host, title); setMobileOpen(false); }}
+          onAttach={(id, host, title, isLocked) => { handleAttach(id, host, title, isLocked); setMobileOpen(false); }}
           onRefresh={() => { handleRefresh(); setMobileOpen(false); }}
           hosts={hosts}
           fetchHosts={fetchHosts}
@@ -1505,7 +1602,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                       sx={{ minHeight: 40, py: 0, textTransform: 'none', minWidth: 'auto' }}
                       label={
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          {tab.isPinned && <PushPinIcon sx={{ fontSize: 14, mr: 0.5, color: 'primary.main' }} />}
+                          {tab.isLocked ? <LockIcon sx={{ fontSize: 14, mr: 0.5, color: 'primary.main' }} /> : (tab.isPinned && <PushPinIcon sx={{ fontSize: 14, mr: 0.5, color: 'primary.main' }} />)}
                           <Box sx={{ width: 16, mr: 0.5, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                             {tab.type === 'scratchpad' ? (
                               <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -1607,7 +1704,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                             key={pane.id}
                             ref={el => { terminalRefs.current[pane.id] = el; }}
                             host={pane.host}
-                            sessionId={pane.id}
+                            sessionId={pane.sessionId || pane.id}
                             cloneFrom={pane.cloneFrom}
                             isActive={activeTabId === tab.id && activePaneId === pane.id}
                             isCtrlActive={isCtrlActive}
@@ -1622,10 +1719,14 @@ export default function Dashboard({ initialData }: DashboardProps) {
                               setShellCwds(prev => ({ ...prev, [pane.id]: cwd }));
                             }}
                             onDataReceived={() => handleTerminalData(tab.id)}
+                            onTabStateChange={(state) => {
+                              setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, isPinned: state.isPinned, isLocked: state.isLocked } : t));
+                            }}
                             onStolen={() => {
                               setTabs(prev => prev.map(t => t.id === tab.id ? {
                                 ...t,
                                 isPinned: false,
+                                isLocked: false,
                                 panes: t.panes.map(p => p.id === pane.id ? { ...p, state: 'stolen' } : p)
                               } : t));
                             }}
@@ -1635,7 +1736,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                                 setTabs(prev => prev.map(t => t.id === tab.id ? {
                                   ...t,
                                   activePaneId: newId,
-                                  panes: t.panes.map(p => p.id === pane.id ? { ...p, id: newId, state: 'connecting' } : p)
+                                  panes: t.panes.map(p => p.id === pane.id ? { ...p, id: newId, sessionId: newId, state: 'connecting' } : p)
                                 } : t));
                                 setActivePaneId(newId);
                               }
@@ -1688,7 +1789,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                 {tab.showFiles && (
                   <Box sx={{ height: '50%', minHeight: 200, borderTop: 1, borderColor: 'divider' }}>
                     <FileBrowser
-                      sessionId={tab.activePaneId}
+                      sessionId={tab.panes.find((p: any) => p.id === tab.activePaneId)?.sessionId || tab.activePaneId}
                       isActive={activeTabId === tab.id && tab.showFiles}
                       shellCwd={shellCwds[tab.activePaneId]}
                       onClose={() => setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, showFiles: false } : t))}
@@ -1878,11 +1979,22 @@ export default function Dashboard({ initialData }: DashboardProps) {
           if (!tab) return null;
           return (
             <>
-              {tab.type !== 'scratchpad' && (tab.isPinned ? (
-                <MenuItem onClick={() => handleUnpinTab(memoTabId)}>Unpin tab</MenuItem>
-              ) : tab.panes.length === 1 ? (
-                <MenuItem onClick={() => handlePinTab(memoTabId)}>Pin tab</MenuItem>
-              ) : null)}
+              {tab.type !== 'scratchpad' && (
+                <>
+                  {tab.isPinned ? (
+                    <MenuItem onClick={() => handleUnpinTab(memoTabId)}>Unpin tab</MenuItem>
+                  ) : tab.panes.length === 1 ? (
+                    <MenuItem onClick={() => handlePinTab(memoTabId)}>Pin tab</MenuItem>
+                  ) : null}
+                  {tab.isPinned && (
+                    tab.isLocked ? (
+                      <MenuItem onClick={() => handleUnlockTab(memoTabId)}>Unlock tab</MenuItem>
+                    ) : (
+                      <MenuItem onClick={() => handleLockTab(memoTabId)}>Lock tab</MenuItem>
+                    )
+                  )}
+                </>
+              )}
               {tab.panes.length === 1 && tab.type !== 'scratchpad' && (
                 <>
                   {tab.panes[0]?.host !== 'local' && (
@@ -2128,7 +2240,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         hosts={hosts}
         recents={recents}
         tabs={tabs}
-        serverPinned={serverPinned}
+
         buttons={buttons}
         activeGroup={activeGroup}
         onExecuteButton={(btn) => {
@@ -2143,7 +2255,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             setTimeout(() => terminalRefs.current[t.activePaneId]?.focus(), 50);
           }
         }}
-        onAttachPinned={(id, host, title) => { handleAttach(id, host, title); setNewTabDialogOpen(false); }}
+        onAttachPinned={(id, host, title, isLocked) => { handleAttach(id, host, title, isLocked); setNewTabDialogOpen(false); }}
         onSelect={async (host) => {
           // Check if it's a direct connection and not in known hosts
           if (host.includes('.') || host.includes(':') || host === 'localhost') {

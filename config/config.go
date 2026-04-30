@@ -14,12 +14,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type PinnedTab struct {
-	ID    string `yaml:"id" json:"id"`
-	Host  string `yaml:"host" json:"host"`
-	Title string `yaml:"title" json:"title"`
-}
-
 type Button struct {
 	ID      string `yaml:"id" json:"id"`
 	Name    string `yaml:"name" json:"name"`
@@ -34,7 +28,6 @@ type Config struct {
 	Addr            string            `yaml:"addr"`
 	SiteName        string            `yaml:"sitename"`
 	AppPasswordHash string            `yaml:"app_password_hash"`
-	PinnedTabs      []PinnedTab       `yaml:"pinned_tabs"`
 	Buttons         []Button          `yaml:"buttons" json:"buttons"`
 	ConfigPath      string            `yaml:"-"` // internal use
 	ConfigDir       string            `yaml:"-"` // internal use
@@ -194,37 +187,6 @@ func (c *Config) ResetAppPassword() (string, error) {
 		return "", err
 	}
 	return password, nil
-}
-
-func (c *Config) AddPinnedTab(tab PinnedTab) error {
-	for i, t := range c.PinnedTabs {
-		if t.ID == tab.ID {
-			c.PinnedTabs[i] = tab
-			return c.Save()
-		}
-	}
-	c.PinnedTabs = append(c.PinnedTabs, tab)
-	return c.Save()
-}
-
-func (c *Config) RenamePinnedTab(id string, title string) error {
-	for i, t := range c.PinnedTabs {
-		if t.ID == id {
-			c.PinnedTabs[i].Title = title
-			return c.Save()
-		}
-	}
-	return nil
-}
-
-func (c *Config) RemovePinnedTab(id string) error {
-	for i, t := range c.PinnedTabs {
-		if t.ID == id {
-			c.PinnedTabs = append(c.PinnedTabs[:i], c.PinnedTabs[i+1:]...)
-			return c.Save()
-		}
-	}
-	return nil
 }
 
 func (c *Config) AddButton(btn Button) error {

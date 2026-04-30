@@ -83,19 +83,7 @@ func main() {
 		if err != nil {
 			hosts = []sshmanager.HostInfo{}
 		}
-		pinned := make([]map[string]any, 0)
-		for _, pt := range cfg.PinnedTabs {
-			lc := 0
-			if s := session.GlobalManager.Get(pt.ID); s != nil {
-				lc = s.ListenerCount()
-			}
-			pinned = append(pinned, map[string]any{
-				"id":            pt.ID,
-				"host":          pt.Host,
-				"title":         pt.Title,
-				"listenerCount": lc,
-			})
-		}
+		pinned := session.GlobalManager.GetPinned()
 		return map[string]any{
 			"sysinfo": map[string]any{
 				"hostname":         displayHostname,
@@ -241,7 +229,7 @@ func main() {
 
 	mux.Handle("/api/tabs/pinned", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(cfg.PinnedTabs)
+		json.NewEncoder(w).Encode(session.GlobalManager.GetPinned())
 	}))))
 
 	mux.Handle("/api/tabs/pin", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -249,14 +237,43 @@ func main() {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		var tab config.PinnedTab
-		if err := json.NewDecoder(r.Body).Decode(&tab); err != nil {
+		var req struct {
+			ID    string `json:"id"`
+			Host  string `json:"host"`
+			Title string `json:"title"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
 			return
 		}
-		cfg.AddPinnedTab(tab)
-		if s := session.GlobalManager.Get(tab.ID); s != nil {
-			s.Pinned = true
+		if s := session.GlobalManager.Get(req.ID); s != nil {
+			s.IsPinned = true
+			s.IsLocked = false
+			s.Title = req.Title
+			s.BroadcastTabState()
+		}
+		w.WriteHeader(http.StatusOK)
+	}))))
+
+	mux.Handle("/api/tabs/lock", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			ID    string `json:"id"`
+			Host  string `json:"host"`
+			Title string `json:"title"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		if s := session.GlobalManager.Get(req.ID); s != nil {
+			s.IsPinned = true
+			s.IsLocked = true
+			s.Title = req.Title
+			s.BroadcastTabState()
 		}
 		w.WriteHeader(http.StatusOK)
 	}))))
@@ -273,9 +290,10 @@ func main() {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
 			return
 		}
-		cfg.RemovePinnedTab(req.ID)
 		if s := session.GlobalManager.Get(req.ID); s != nil {
-			s.Pinned = false
+			s.IsPinned = false
+			s.IsLocked = false
+			s.BroadcastTabState()
 			session.GlobalManager.ClearInactive(req.ID)
 		}
 		w.WriteHeader(http.StatusOK)
@@ -292,22 +310,8 @@ func main() {
 	}))))
 
 	mux.Handle("/api/sessions/pinned", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		type PinnedSessionResponse struct {
-			ID            string `json:"id"`
-			Host          string `json:"host"`
-			Title         string `json:"title"`
-			ListenerCount int    `json:"listenerCount"`
-		}
-		res := make([]PinnedSessionResponse, 0)
-		for _, pt := range cfg.PinnedTabs {
-			ps := PinnedSessionResponse{ID: pt.ID, Host: pt.Host, Title: pt.Title, ListenerCount: 0}
-			if s := session.GlobalManager.Get(pt.ID); s != nil {
-				ps.ListenerCount = s.ListenerCount()
-			}
-			res = append(res, ps)
-		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(res)
+		json.NewEncoder(w).Encode(session.GlobalManager.GetPinned())
 	}))))
 
 	mux.Handle("/api/sessions/attach", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -328,6 +332,31 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	}))))
 
+	mux.Handle("/api/sessions/close", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			ID string `json:"id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		session.GlobalManager.CloseIfNotLocked(req.ID)
+		w.WriteHeader(http.StatusOK)
+	}))))
+
+	mux.Handle("/api/sessions/close_all_normal", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		session.GlobalManager.CloseAllNormal()
+		w.WriteHeader(http.StatusOK)
+	}))))
+
 	mux.Handle("/api/tabs/rename", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -341,7 +370,9 @@ func main() {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
 			return
 		}
-		cfg.RenamePinnedTab(req.ID, req.Title)
+		if s := session.GlobalManager.Get(req.ID); s != nil {
+			s.Title = req.Title
+		}
 		w.WriteHeader(http.StatusOK)
 	}))))
 
