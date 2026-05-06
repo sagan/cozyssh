@@ -139,6 +139,13 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
           });
           setSyncState('synced');
           if (onSyncStateChange) onSyncStateChange('synced');
+        } else if (msg.type === 'delete' && msg.id) {
+          setData(prev => ({
+            ...prev,
+            pages: prev.pages.filter(p => p.id !== msg.id)
+          }));
+          setSyncState('synced');
+          if (onSyncStateChange) onSyncStateChange('synced');
         } else if (msg.type === 'force_sync' && msg.data) {
           setData(msg.data);
           setSyncState('synced');
@@ -279,13 +286,9 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
         pages: data.pages.filter(p => p.id !== contextMenu.pageId)
       };
       setData(newData);
-      // For deletions, we currently send full state because backend merge logic 
-      // depends on the full list to detect deletions (or we should add a delete type)
-      // The requirement asks for partial updates for changes, but for simplicity of deletion 
-      // we'll trigger a full sync.
       setSyncState('syncing');
       if (onSyncStateChange) onSyncStateChange('syncing');
-      wsRef.current?.send(JSON.stringify({ type: 'sync', data: newData }));
+      wsRef.current?.send(JSON.stringify({ type: 'delete', id: contextMenu.pageId }));
       if (activePageId === contextMenu.pageId) {
         setActivePageId(newData.pages[0].id);
       }

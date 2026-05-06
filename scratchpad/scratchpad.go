@@ -37,6 +37,11 @@ type SyncMsg struct {
 	Data ScratchpadData `json:"data"`
 }
 
+type DeleteMsg struct {
+	Type string `json:"type"`
+	ID   string `json:"id"`
+}
+
 var (
 	globalData ScratchpadData
 	dataMu     sync.RWMutex
@@ -204,6 +209,34 @@ func HandleWS(w http.ResponseWriter, r *http.Request) {
 					// so they know the sync is complete and can update UI.
 					syncBytes, _ := json.Marshal(SyncMsg{Type: "sync", Data: ScratchpadData{Pages: updatedPages}})
 					broadcast(syncBytes, nil)
+				} else {
+					// Even if nothing changed, acknowledge the sync so the client stops "syncing" state
+					syncBytes, _ := json.Marshal(SyncMsg{Type: "sync", Data: ScratchpadData{Pages: []ScratchpadPage{}}})
+					conn.WriteMessage(websocket.TextMessage, syncBytes)
+				}
+				dataMu.Unlock()
+			}
+		} else if base.Type == "delete" {
+			var dm DeleteMsg
+			if err := json.Unmarshal(msg, &dm); err == nil {
+				dataMu.Lock()
+				found := false
+				for i := range globalData.Pages {
+					if globalData.Pages[i].ID == dm.ID {
+						// Remove page
+						globalData.Pages = append(globalData.Pages[:i], globalData.Pages[i+1:]...)
+						found = true
+						break
+					}
+				}
+				if found {
+					save()
+					// Broadcast the deletion to everyone
+					broadcast(msg, nil)
+				} else {
+					// Acknowledge anyway
+					ack, _ := json.Marshal(DeleteMsg{Type: "delete", ID: dm.ID})
+					conn.WriteMessage(websocket.TextMessage, ack)
 				}
 				dataMu.Unlock()
 			}
