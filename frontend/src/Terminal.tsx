@@ -5,6 +5,30 @@ import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
 import { Box } from '@mui/material';
 
+export interface CommandHistoryEntry {
+  commandId: string;
+  command?: string;
+  exitStatus?: number;
+  exitSignal?: string;
+  timestamp: number;
+}
+
+export interface ShellIntegration {
+  cwd?: string;
+  user?: string;
+  hostname?: string;
+  machineId?: string;
+  bootId?: string;
+  pid?: string;
+  shellId?: string;
+  commandId?: string;
+  command?: string;
+  exitStatus?: number;
+  exitSignal?: string;
+  isExecuting?: boolean;
+  recentCommands?: CommandHistoryEntry[];
+}
+
 export interface TerminalHandle {
   sendData: (data: string) => void;
   focus: () => void;
@@ -32,20 +56,50 @@ interface TerminalProps {
   onStolen?: () => void;
   onManualReconnect?: (wasStolen: boolean) => void;
   onCwdChange?: (cwd: string) => void;
+  onShellIntegrationChange?: (info: ShellIntegration) => void;
   onDataReceived?: () => void;
   cloneFrom?: string;
   isTouch?: boolean;
   localVars: Record<string, string | undefined>;
 }
 
-const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, sessionId, isActive, isCtrlActive, onCtrlDone, onStateChange, onTabStateChange, onStolen, onManualReconnect, onCwdChange, onDataReceived, cloneFrom, isTouch, localVars }, ref) => {
+const RECENT_COMMANDS_NUM = 10;
+
+const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, sessionId, isActive, isCtrlActive, onCtrlDone, onStateChange, onTabStateChange, onStolen, onManualReconnect, onCwdChange, onShellIntegrationChange, onDataReceived, cloneFrom, isTouch, localVars }, ref) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const ctrlRef = useRef(isCtrlActive);
+  const isActiveRef = useRef(isActive);
   const reconnectFuncRef = useRef<(() => void) | null>(null);
   const forceReconnectRef = useRef(false);
+  const shellIntegrationRef = useRef<ShellIntegration>({});
+
+  const updateShellIntegration = (updates: Partial<ShellIntegration>) => {
+    shellIntegrationRef.current = { ...shellIntegrationRef.current, ...updates };
+    onShellIntegrationChange?.(shellIntegrationRef.current);
+    window.dispatchEvent(new CustomEvent('cs:shell-integration', {
+      detail: {
+        terminal: xtermRef.current,
+        sessionId,
+        host,
+        is_active_terminal: isActiveRef.current,
+        ...shellIntegrationRef.current
+      }
+    }));
+    if (updates.cwd) {
+      onCwdChange?.(updates.cwd);
+    }
+  };
+
+  const unescapeOsc3008 = (s: string): string => {
+    return s.replace(/\\x5c/g, '\\').replace(/\\x3b/g, ';');
+  };
+
+  useEffect(() => {
+    isActiveRef.current = isActive;
+  }, [isActive]);
 
   const onDataRef = useRef(onDataReceived);
   useEffect(() => {
@@ -169,10 +223,117 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
         path = path.replace(/^['"]+|['"]+$/g, '').trim();
 
         if (path && (path.startsWith('/') || path.includes('\\') || /^[a-zA-Z]:/.test(path))) {
-          onCwdChange?.(path);
+          updateShellIntegration({ cwd: path });
         }
       } catch (e) {
         console.error('Error parsing OSC 7:', e);
+      }
+      return true;
+    });
+
+    term.parser.registerOscHandler(3008, (data) => {
+      try {
+        const parts = data.split(';');
+        const info: Record<string, string> = {};
+        parts.forEach(part => {
+          const equalsIdx = part.indexOf('=');
+          if (equalsIdx !== -1) {
+            const k = part.substring(0, equalsIdx);
+            const v = part.substring(equalsIdx + 1);
+            info[k] = unescapeOsc3008(v);
+          }
+        });
+
+        const updates: Partial<ShellIntegration> = {};
+        if (info.cwd) updates.cwd = info.cwd;
+        if (info.user) updates.user = info.user;
+        if (info.hostname) updates.hostname = info.hostname;
+        if (info.machineid) updates.machineId = info.machineid;
+        if (info.bootid) updates.bootId = info.bootid;
+        if (info.pid) updates.pid = info.pid;
+        if (info.cmd) updates.command = info.cmd;
+        if (info.start) {
+          const type = info.type || 'shell';
+          if (type === 'command') {
+            updates.commandId = info.start;
+            updates.isExecuting = true;
+            // Initialize/Reset command string for new command execution
+            updates.command = info.cmd || '';
+
+            // Fallback: if no command string provided via OSC, try to read from buffer
+            if (!updates.command) {
+              const buffer = term.buffer.active;
+              // PS0 is usually printed right after the command is submitted.
+              // The command is likely on the current or previous line.
+              let line = buffer.getLine(buffer.cursorY + buffer.baseY);
+              let text = line?.translateToString(true).trim();
+              if (!text) {
+                line = buffer.getLine(buffer.cursorY + buffer.baseY - 1);
+                text = line?.translateToString(true).trim();
+              }
+              if (text) {
+                // Heuristic to strip prompt: find last #, $, or >
+                const lastPromptChar = Math.max(text.lastIndexOf('#'), text.lastIndexOf('$'), text.lastIndexOf('>'));
+                if (lastPromptChar !== -1) {
+                  updates.command = text.substring(lastPromptChar + 1).trim();
+                } else {
+                  updates.command = text;
+                }
+              }
+            }
+          } else if (type === 'shell') {
+            updates.shellId = info.start;
+            updates.isExecuting = false;
+          }
+        }
+
+        if (info.end) {
+          if (info.end === shellIntegrationRef.current.commandId) {
+            updates.isExecuting = false;
+
+            const exitStatus = info.status ? parseInt(info.status) : (info.exit === 'success' ? 0 : 1);
+            const entry: CommandHistoryEntry = {
+              commandId: info.end,
+              command: shellIntegrationRef.current.command,
+              exitStatus,
+              exitSignal: info.signal,
+              timestamp: Date.now()
+            };
+
+            const oldHistory = shellIntegrationRef.current.recentCommands || [];
+            updates.recentCommands = [entry, ...oldHistory].slice(0, RECENT_COMMANDS_NUM);
+
+            updates.exitStatus = exitStatus;
+            if (info.signal) {
+              updates.exitSignal = info.signal;
+            }
+          }
+        }
+
+        updateShellIntegration(updates);
+      } catch (e) {
+        console.error('Error parsing OSC 3008:', e);
+      }
+      return true;
+    });
+
+    term.onTitleChange((title) => {
+      // Often shells set the window title to the running command.
+      // If we are executing, this is likely the command name or full command.
+      if (shellIntegrationRef.current.isExecuting) {
+        updateShellIntegration({ command: title });
+      }
+    });
+
+    term.parser.registerOscHandler(633, (data) => {
+      try {
+        const parts = data.split(';');
+        const type = parts[0];
+        if (type === 'E' && parts[1]) {
+          updateShellIntegration({ command: parts[1] });
+        }
+      } catch (e) {
+        console.error('Error parsing OSC 633:', e);
       }
       return true;
     });

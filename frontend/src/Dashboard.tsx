@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, CssBaseline, ThemeProvider, createTheme, Tabs, Tab, IconButton, Menu, MenuItem, Typography, Button, ButtonGroup, useMediaQuery, useTheme, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, FormControlLabel, Checkbox, Drawer } from '@mui/material';
+import { Box, CssBaseline, ThemeProvider, createTheme, Tabs, Tab, IconButton, Menu, MenuItem, Typography, Button, ButtonGroup, useMediaQuery, useTheme, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, FormControlLabel, Checkbox, Drawer, Tooltip } from '@mui/material';
 import Sidebar from './Sidebar';
 import type { Host } from './Sidebar';
 import TerminalComponent from './Terminal';
-import type { TerminalHandle } from './Terminal';
+import type { TerminalHandle, ShellIntegration } from './Terminal';
 import FileBrowser from './FileBrowser';
 import Scratchpad from './Scratchpad';
 import type { ScratchpadHandle } from './Scratchpad';
@@ -344,7 +344,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [viewportHeight, setViewportHeight] = useState('100dvh');
   const [isCtrlActive, setIsCtrlActive] = useState(false);
   const [scratchpadSyncState, setScratchpadSyncState] = useState<'offline' | 'syncing' | 'synced' | 'dirty'>('offline');
-  const [shellCwds, setShellCwds] = useState<{ [key: string]: string }>({});
+  const [shellIntegrations, setShellIntegrations] = useState<{ [key: string]: ShellIntegration }>({});
   const [memoTabId, setMemoTabId] = useState<string | null>(null);
   const [activePaneId, setActivePaneId] = useState<string>('');
   const [unreadTabIds, setUnreadTabIds] = useState<Set<string>>(new Set());
@@ -377,8 +377,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [localVars, setLocalVars] = useLocalStorage<Record<string, string | undefined>>("cozy_localvars", {});
   const varsRef = useRef<Record<string, string>>({});
   const localVarsRef = useRef<Record<string, string | undefined>>({});
+  const shellIntegrationRef = useRef<Record<string, ShellIntegration>>({});
   useEffect(() => { varsRef.current = vars; }, [vars]);
   useEffect(() => { localVarsRef.current = localVars; }, [localVars]);
+  useEffect(() => { shellIntegrationRef.current = shellIntegrations; }, [shellIntegrations]);
 
   const autoRunExecutedRef = useRef(false);
   const scriptInvokeContextRef = useRef<{ isAutoRun: boolean } | null>(null);
@@ -527,6 +529,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
     (window as any).csGetTerminal = () => {
       const term: any = terminalRefs.current[activePaneIdRef.current];
       return term?.getXterm?.();
+    };
+    (window as any).csGetTerminalIntegration = () => {
+      return shellIntegrationRef.current[activePaneIdRef.current];
+    }
+    (window as any).csSendData = (data: string) => {
+      const term: any = terminalRefs.current[activePaneIdRef.current];
+      term?.sendData?.(data);
     };
     (window as any).csGetTerminalContents = (lineCount = 100) => {
       const term: any = terminalRefs.current[activePaneIdRef.current];
@@ -1064,7 +1073,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       const paneIdx = currentTab.panes.findIndex(p => p.id === activePaneId);
       const newPanes = currentTab.panes.filter(p => p.id !== activePaneId);
       const nextPaneId = newPanes[Math.max(0, paneIdx - 1)].id;
-      
+
       if (!currentTab.isLocked) {
         const paneToClose = currentTab.panes.find(p => p.id === activePaneId);
         if (paneToClose && paneToClose.state !== 'stolen') {
@@ -1545,6 +1554,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       return;
     }
     setButtonDialogOpen(false);
+    setTimeout(() => (window as any).csFocus?.(), 0);
   };
 
   return (
@@ -1644,7 +1654,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                 </Tabs>
               </Box>
               <IconButton
-                size="small" title='New Tab'
+                size="small" title='New Tab (Alt+T)'
                 onClick={() => setNewTabDialogOpen(true)}
                 sx={{ mr: 1, ml: 0.5, bgcolor: 'action.hover', '&:hover': { bgcolor: 'action.selected' } }}
               >
@@ -1715,8 +1725,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
                                 panes: t.panes.map(p => p.id === pane.id ? { ...p, state } : p)
                               } : t));
                             }}
-                            onCwdChange={(cwd) => {
-                              setShellCwds(prev => ({ ...prev, [pane.id]: cwd }));
+                            onShellIntegrationChange={(info) => {
+                              setShellIntegrations(prev => ({ ...prev, [pane.id]: info }));
                             }}
                             onDataReceived={() => handleTerminalData(tab.id)}
                             onTabStateChange={(state) => {
@@ -1791,7 +1801,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                     <FileBrowser
                       sessionId={tab.panes.find((p: any) => p.id === tab.activePaneId)?.sessionId || tab.activePaneId}
                       isActive={activeTabId === tab.id && tab.showFiles}
-                      shellCwd={shellCwds[tab.activePaneId]}
+                      shellCwd={shellIntegrations[tab.activePaneId]?.cwd}
                       onClose={() => setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, showFiles: false } : t))}
                     />
                   </Box>
@@ -1799,11 +1809,49 @@ export default function Dashboard({ initialData }: DashboardProps) {
               </Box>
             ))}
             {tabs.length === 0 && (
-              <Box sx={{ p: 4, textAlign: 'center', mt: 10 }}>
-                <IconButton onClick={() => setMobileOpen(true)} sx={{ display: { md: 'none' }, mb: 4 }}>
-                  <MenuIcon fontSize="large" />
-                </IconButton>
-                <Typography color="text.secondary">Select a server from the sidebar to open a terminal interface.</Typography>
+              <Box sx={{
+                p: 4,
+                textAlign: 'center',
+                mt: 10,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center'
+              }}>
+                <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, mb: 4 }}>
+                  <Tooltip title="Open Sidebar">
+                    <IconButton
+                      onClick={() => setMobileOpen(true)}
+                      sx={{
+                        display: { md: 'none' },
+                        width: 64,
+                        height: 64,
+                        bgcolor: 'background.paper',
+                        boxShadow: 2,
+                        '&:hover': { bgcolor: 'action.hover' }
+                      }}
+                    >
+                      <MenuIcon sx={{ fontSize: 32 }} />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="New Tab (Alt+T)">
+                    <IconButton
+                      onClick={() => setNewTabDialogOpen(true)}
+                      color="primary"
+                      sx={{
+                        width: 64,
+                        height: 64,
+                        bgcolor: 'background.paper',
+                        boxShadow: 2,
+                        '&:hover': { bgcolor: 'action.hover' }
+                      }}
+                    >
+                      <AddIcon sx={{ fontSize: 32 }} />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+                <Typography color="text.secondary" variant="body1" sx={{ maxWidth: 400, fontWeight: 500 }}>
+                  Select a server from the sidebar or open a new tab to start.
+                </Typography>
               </Box>
             )}
           </Box>
@@ -1845,7 +1893,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                 <Tab
                   key={btn.id}
                   label={btn.name}
-                  title={`${btn.type} (${btn.order || 0})${btn.autorun ? " (autorun)" : ""}: ${btn.payload}`}
+                  title={`${btn.type} (${btn.order || 0})${btn.autorun ? " (autorun)" : ""}${btn.type != "run_script" ? ": " + btn.payload : ""}`}
                   component="div"
                   onClick={() => handleButtonClick(btn)}
                   onContextMenu={(e) => {
@@ -2236,7 +2284,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
       <NewTabDialog
         open={newTabDialogOpen}
-        onClose={() => setNewTabDialogOpen(false)}
+        onClose={() => {
+          setNewTabDialogOpen(false);
+          setTimeout(() => (window as any).csFocus?.(), 0);
+        }}
         hosts={hosts}
         recents={recents}
         tabs={tabs}

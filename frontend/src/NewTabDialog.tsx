@@ -382,7 +382,7 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
                       inputRef.current?.focus();
                     }}
                     color={viewMode !== 'servers' ? 'primary' : 'default'}
-                    title={`Toggle View (Currently: ${viewMode})`}
+                    title={`Toggle View (Currently: ${viewMode}) (←, →)`}
                   >
                     {viewMode === 'servers' ? <DnsIcon /> : viewMode === 'tabs' ? <TabIcon /> : <SmartButtonIcon />}
                   </IconButton>

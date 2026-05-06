@@ -62,13 +62,13 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
 - **Split-Screen Layouts**: View up to 4 terminal panes in a single tab.
   - **Split View**: Access the file browser via the terminal tab's context menu without losing your shell session.
   - **Text File Editor**: Edit text file of SFTP / local server directly in Browser.
-  - **Shell CWD Follow**: An button to navigate to shell cwd (`$PWD`) directly. It uses standard OSC 7 escape sequence. Requires adding the below line to `~/.bashrc` :
-    ```sh
-    # Standard OSC 7 (Recommended for most cases)
-    export PS1="$PS1"'\[\e]7;file://$HOSTNAME$PWD\a\]'
+- **Shell Integration**: Built-in Shell Integration features like cwd detection. An button in File Browser to navigate to shell cwd (`$PWD`) directly. It works for newer Linux systems (Ubuntu 26.04+) out of the box using OSC 3008 sequence detection. For older Linux systems, you can add OSC 7 escape sequence to `~/.bashrc` to enable this feature:
+  ```sh
+  # Standard OSC 7 (Recommended for most cases)
+  export PS1="$PS1"'\[\e]7;file://$HOSTNAME$PWD\a\]'
 
-    # Alternative OSC 7 (Used by some older terminal software)
-    export PS1="$PS1\[\e]7;CurrentDir="'$(pwd)\a\]'
+  # Alternative OSC 7 (Used by some older terminal software)
+  export PS1="$PS1\[\e]7;CurrentDir="'$(pwd)\a\]'
     ```
 - **Full keyboard Shortcuts**: It supports a complete set of keyboard shortcuts.
   - `Alt + T` : Open new tab

@@ -281,6 +281,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
       return;
     }
     setDialogOpen(false);
+    setTimeout(() => (window as any).csFocus?.(), 0);
   };
 
   const filteredHosts = useMemo(() => {
@@ -550,7 +551,10 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
       </Menu>
 
       {/* Dashboard Dialog */}
-      <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} fullWidth maxWidth="sm" sx={{ '& .MuiDialog-paper': { overflow: 'hidden' } }}>
+      <Dialog open={settingsOpen} onClose={() => {
+        setSettingsOpen(false);
+        setTimeout(() => (window as any).csFocus?.(), 0);
+      }} fullWidth maxWidth="sm" sx={{ '& .MuiDialog-paper': { overflow: 'hidden' } }}>
         <DialogTitle>Dashboard</DialogTitle>
         <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 3 }}>
           <Tabs

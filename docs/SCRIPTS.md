@@ -12,6 +12,8 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
     - [`csGetVar(name: string): string | undefined`, `csGetVar(): Record<string, string>`](#csgetvarname-string-string--undefined-csgetvar-recordstring-string)
     - [`csSetVar(name: string, value: string | undefined): Promise<void>`, `csSetVar(vars: Record<string, string | undefined>): Promise<void>`](#cssetvarname-string-value-string--undefined-promisevoid-cssetvarvars-recordstring-string--undefined-promisevoid)
     - [`csGetTerminal(): Terminal | undefined`](#csgetterminal-terminal--undefined)
+    - [`csGetTerminalIntegration(): ShellIntegration | undefined`](#csgetterminalintegration-shellintegration--undefined)
+    - [`csSendData(data: string): void`](#cssenddatadata-string-void)
     - [`csGetTerminalContents(lines = 100) : string`](#csgetterminalcontentslines--100--string)
     - [`csFocus(): void`](#csfocus-void)
     - [`csNotify(msg: string): void`](#csnotifymsg-string-void)
@@ -26,6 +28,7 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
     - [`cs:terminal-disconnected`](#csterminal-disconnected)
     - [`cs:terminal-resize`](#csterminal-resize)
     - [`cs:terminal-data`](#csterminal-data)
+    - [`cs:shell-integration`](#csshell-integration)
   - [Example Snippets](#example-snippets)
     - [Display current terminal info](#display-current-terminal-info)
     - [Open a local shell](#open-a-local-shell)
@@ -36,6 +39,7 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
     - [Custom UI Applet](#custom-ui-applet)
     - [Variable Manager](#variable-manager)
     - [AI Assistant](#ai-assistant)
+    - [Cmd History Sidebar Applet](#cmd-history-sidebar-applet)
 
 ## General Usage
 
@@ -111,6 +115,33 @@ Variables which name starts with `local` (case insensitive) are saved only in th
 ### `csGetTerminal(): Terminal | undefined`
 
 Returns the currently active `xterm.js` Terminal instance. Returns `undefined` if no terminal is active.
+
+### `csGetTerminalIntegration(): ShellIntegration | undefined`
+
+Returns the shell integration state for the currently active terminal. This includes CWD, user, hostname, and command history.
+
+Sample `ShellIntegration` object:
+```json
+{
+  "cwd": "/root/files",
+  "user": "root",
+  "hostname": "robot-dev",
+  "machineId": "...",
+  "isExecuting": false,
+  "recentCommands": [
+    {
+      "commandId": "...",
+      "command": "ls -la",
+      "exitStatus": 0,
+      "timestamp": 1625097600000
+    }
+  ]
+}
+```
+
+### `csSendData(data: string): void`
+
+Sends raw string data to the currently active terminal. Useful for automating commands.
 
 ### `csGetTerminalContents(lines = 100) : string`
 
@@ -197,6 +228,11 @@ Fired when a terminal is resized.
 
 ### `cs:terminal-data`
 Fired when data is received from the backend (excluding history restoration).
+- `detail.terminal`, `detail.sessionId`, `detail.host`, `detail.is_active_terminal`.
+
+### `cs:shell-integration`
+Fired when any property of the shell integration state (CWD, command status, history) changes.
+- `detail.cwd`, `detail.user`, `detail.hostname`, `detail.isExecuting`, `detail.recentCommands`.
 - `detail.terminal`, `detail.sessionId`, `detail.host`, `detail.is_active_terminal`.
 
 ---
@@ -790,5 +826,163 @@ if( csGetApplet(AI_ASSISTANT_NAME) ) {
   csCloseApplet(AI_ASSISTANT_NAME);
 } else {
   csOpenApplet(AI_ASSISTANT_NAME, AIAssistant, { position: 'sidebar' });
+}
+```
+
+### Cmd History Sidebar Applet
+
+This script creates a sidebar applet that tracks the command history of the active terminal. It allows you to click a command to copy it to the clipboard, or use a "Resend" button to execute it again.
+
+```tsx
+import React, { useState, useEffect } from 'react';
+
+/**
+ * Cmd History Applet for CozySSH
+ */
+const CmdHistoryApplet = () => {
+  // Initialize state with the current terminal's integration data
+  const [history, setHistory] = useState(() => {
+    return window.csGetTerminalIntegration?.()?.recentCommands || [];
+  });
+
+  useEffect(() => {
+    // Listener for shell integration updates (command finished, etc.)
+    const handleIntegration = (e) => {
+      if (e.detail.is_active_terminal) {
+        setHistory(e.detail.recentCommands || []);
+      }
+    };
+
+    // Listener for switching between terminal tabs/panes
+    const handleTerminalChange = () => {
+      setHistory(window.csGetTerminalIntegration?.()?.recentCommands || []);
+    };
+
+    window.addEventListener('cs:shell-integration', handleIntegration);
+    window.addEventListener('cs:terminal-change', handleTerminalChange);
+
+    return () => {
+      window.removeEventListener('cs:shell-integration', handleIntegration);
+      window.removeEventListener('cs:terminal-change', handleTerminalChange);
+    };
+  }, []);
+
+  const handleCopy = (cmd) => {
+    if (cmd) {
+      navigator.clipboard.writeText(cmd);
+      csNotify("Command copied to clipboard");
+    }
+  };
+
+  const handleResend = (e, cmd) => {
+    e.stopPropagation(); // Prevent the parent click (copy) from triggering
+    if (cmd && window.csSendData) {
+      window.csSendData(cmd + '\n');
+      window.csFocus?.();
+    }
+  };
+
+  return (
+    <div style={{ 
+      padding: '12px', 
+      height: '100%', 
+      display: 'flex', 
+      flexDirection: 'column',
+      gap: '8px',
+      fontFamily: 'system-ui, -apple-system, sans-serif'
+    }}>
+      <div style={{ 
+        fontWeight: 'bold', 
+        fontSize: '0.75rem', 
+        color: '#888', 
+        letterSpacing: '0.05em',
+        borderBottom: '1px solid #eee', 
+        paddingBottom: '6px',
+        marginBottom: '4px'
+      }}>
+        RECENT COMMANDS
+      </div>
+      <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {history.length === 0 ? (
+          <div style={{ textAlign: 'center', color: '#999', marginTop: '30px', fontSize: '0.9rem', fontStyle: 'italic' }}>
+            No history detected.
+          </div>
+        ) : (
+          history.map((entry, i) => (
+            <div
+              key={entry.commandId || i}
+              onClick={() => handleCopy(entry.command)}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '10px',
+                borderRadius: '8px',
+                background: entry.exitStatus === 0 ? '#f0fdf4' : (entry.exitStatus !== undefined ? '#fef2f2' : '#f8f9fa'),
+                border: '1px solid',
+                borderColor: entry.exitStatus === 0 ? '#dcfce7' : (entry.exitStatus !== undefined ? '#fee2e2' : '#e5e7eb'),
+                cursor: 'pointer',
+                transition: 'background 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = '#edf2f7'}
+              onMouseLeave={(e) => e.currentTarget.style.background = entry.exitStatus === 0 ? '#f0fdf4' : (entry.exitStatus !== undefined ? '#fef2f2' : '#f8f9fa')}
+            >
+              <div style={{ flex: 1, minWidth: 0, marginRight: '8px' }}>
+                <div style={{ 
+                  fontFamily: '"JetBrains Mono", "Fira Code", monospace', 
+                  fontSize: '0.85rem', 
+                  fontWeight: '600', 
+                  wordBreak: 'break-all',
+                  color: '#1a202c'
+                }}>
+                  {entry.command || '(empty)'}
+                </div>
+                <div style={{ 
+                  display: 'flex', 
+                  gap: '8px',
+                  marginTop: '6px', 
+                  fontSize: '0.7rem', 
+                  color: '#718096' 
+                }}>
+                  <span>{new Date(entry.timestamp).toLocaleTimeString()}</span>
+                  <span style={{ 
+                    color: entry.exitStatus === 0 ? '#059669' : '#dc2626',
+                    fontWeight: 'bold'
+                  }}>
+                    {entry.exitStatus === 0 ? '✓' : `✗ (${entry.exitStatus})`}
+                  </span>
+                </div>
+              </div>
+              
+              <button
+                onClick={(e) => handleResend(e, entry.command)}
+                style={{
+                  background: '#5d00ff',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '0.7rem',
+                  fontWeight: 'bold',
+                  flexShrink: 0
+                }}
+              >
+                Resend
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Toggle behavior: Close if already open, otherwise open in sidebar.
+const APPLET_ID = "CmdHistory";
+if (window.csGetApplet?.(APPLET_ID)) {
+  window.csCloseApplet?.(APPLET_ID);
+} else {
+  window.csOpenApplet?.(APPLET_ID, CmdHistoryApplet, { position: 'sidebar' });
 }
 ```
