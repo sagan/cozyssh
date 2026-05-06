@@ -152,9 +152,54 @@ func HandleFS(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		handleMkdir(w, r, path, isLocal, sftpClient)
+	case "stat":
+		handleStat(w, path, isLocal, sftpClient)
 	default:
 		http.Error(w, "Not found", http.StatusNotFound)
 	}
+}
+
+func handleStat(w http.ResponseWriter, path string, isLocal bool, sftpClient *sftp.Client) {
+	if isLocal {
+		if path == "" || path == "." || path == "~" {
+			home, _ := os.UserHomeDir()
+			path = home
+		}
+	} else {
+		if path == "" || path == "." || path == "~" {
+			lookup := path
+			if lookup == "" || lookup == "~" {
+				lookup = "."
+			}
+			if realPath, err := sftpClient.RealPath(lookup); err == nil {
+				path = realPath
+			} else {
+				path = "."
+			}
+		}
+	}
+
+	var info os.FileInfo
+	var err error
+	if isLocal {
+		info, err = os.Stat(path)
+	} else {
+		info, err = sftpClient.Stat(path)
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	res := FileInfo{
+		Name:    info.Name(),
+		IsDir:   info.IsDir(),
+		Size:    info.Size(),
+		ModTime: info.ModTime().Format("2006-01-02 15:04:05"),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(res)
 }
 
 func handleRename(w http.ResponseWriter, r *http.Request, oldPath string, isLocal bool, sftpClient *sftp.Client) {

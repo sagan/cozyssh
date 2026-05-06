@@ -285,29 +285,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   };
 
   const filteredHosts = useMemo(() => {
-    const tokens = filterStr.toLowerCase().split(/\s+/).filter(t => t.trim() !== '');
-    const requiredTags = tokens.filter(t => t.startsWith('#')).map(t => t.substring(1));
-    const searchWords = tokens.filter(t => !t.startsWith('#')).map(t => t.toLowerCase());
-
-    const filtered = hosts.filter(h => {
-      if (requiredTags.length > 0) {
-        if (!h.tags) return false;
-        const lowerTags = h.tags.map(t => t.toLowerCase());
-        for (const reqTag of requiredTags) {
-          if (!lowerTags.includes(reqTag)) return false;
-        }
-      }
-
-      if (searchWords.length > 0) {
-        return searchWords.every(word =>
-          h.name.toLowerCase().includes(word) ||
-          h.hostname.toLowerCase().includes(word) ||
-          (h.user && h.user.toLowerCase().includes(word))
-        );
-      }
-
-      return true;
-    });
+    const filtered = filterHosts(hosts, filterStr);
 
     const favs = filtered.filter(h => h.is_favourite);
     const normals = filtered.filter(h => !h.is_favourite && !h.is_auto);
@@ -498,21 +476,21 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
 
           {filteredHosts.favourite.map((host, idx) => {
             const absIdx = idx;
-            return <HostListItem key={`fav-${idx}`} host={host} onSelect={onSelect} onContextMenu={handleContextMenu} isSelected={selectedIndex === absIdx} />;
+            return <HostListItem key={`fav-${idx}`} filter={filterStr} host={host} onSelect={onSelect} onContextMenu={handleContextMenu} isSelected={selectedIndex === absIdx} />;
           })}
 
           {filteredHosts.favourite.length > 0 && (filteredHosts.normal.length > 0 || filteredHosts.auto.length > 0) && <Divider sx={{ my: 1 }} />}
 
           {filteredHosts.normal.map((host, idx) => {
             const absIdx = filteredHosts.favourite.length + idx;
-            return <HostListItem key={`normal-${idx}`} host={host} onSelect={onSelect} onContextMenu={handleContextMenu} isSelected={selectedIndex === absIdx} />;
+            return <HostListItem key={`normal-${idx}`} filter={filterStr} host={host} onSelect={onSelect} onContextMenu={handleContextMenu} isSelected={selectedIndex === absIdx} />;
           })}
 
           {filteredHosts.normal.length > 0 && filteredHosts.auto.length > 0 && <Divider sx={{ my: 1 }} />}
 
           {filteredHosts.auto.map((host, idx) => {
             const absIdx = filteredHosts.favourite.length + filteredHosts.normal.length + idx;
-            return <HostListItem key={`auto-${idx}`} host={host} onSelect={onSelect} onContextMenu={handleContextMenu} isSelected={selectedIndex === absIdx} />;
+            return <HostListItem key={`auto-${idx}`} filter={filterStr} host={host} onSelect={onSelect} onContextMenu={handleContextMenu} isSelected={selectedIndex === absIdx} />;
           })}
         </List>
       </Box>
@@ -670,8 +648,13 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   );
 }
 
-function HostListItem({ host, onSelect, onContextMenu, isSelected }: { host: Host, onSelect: (name: string) => void, onContextMenu: (e: React.MouseEvent, host: Host) => void, isSelected?: boolean }) {
+function HostListItem({ filter, host, onSelect, onContextMenu, isSelected }: { filter: string, host: Host, onSelect: (name: string) => void, onContextMenu: (e: React.MouseEvent, host: Host) => void, isSelected?: boolean }) {
   const isFavourite = host.is_favourite;
+  let secondaryText = `${host.user || 'root'}@${host.hostname}`;
+  if (filter && host.comment) {
+    const matchedComment = searchString(host.comment, filter);
+    if (matchedComment) secondaryText += ` // ${matchedComment}`;
+  }
   return (
     <ListItem
       disablePadding
@@ -714,7 +697,7 @@ function HostListItem({ host, onSelect, onContextMenu, isSelected }: { host: Hos
           secondary={
             (!host.is_auto || host.name !== `${host.user || 'root'}@${host.hostname}`) && (
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.7rem' }}>
-                {`${host.user || 'root'}@${host.hostname}`}
+                {secondaryText}
               </Typography>
             )
           }
@@ -722,4 +705,118 @@ function HostListItem({ host, onSelect, onContextMenu, isSelected }: { host: Hos
       </ListItemButton>
     </ListItem>
   );
+}
+
+/**
+ * Filter hosts by tags and search text.
+ * @param hosts - Array of hosts to filter
+ * @param filterStr - Filter string. Put "#tag" syntax(es) at the beginning to filter by tags. E.g. "#foo #bar git server".
+ * @returns Filtered array of hosts.
+ */
+export function filterHosts(hosts: Host[], filterStr: string): Host[] {
+  filterStr = filterStr.trim().toLowerCase();
+  if (!filterStr) {
+    return hosts;
+  }
+
+  const tokens = filterStr.split(/\s+/);
+  const requiredTags: string[] = [];
+  let textStartIndex = 0;
+
+  // Extract tags from the beginning
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token.startsWith('#') && token.length > 1) {
+      // Remove the '#' and add to required tags
+      requiredTags.push(token.substring(1));
+      textStartIndex = i + 1;
+    } else {
+      // Stop extracting tags as soon as a non-tag word appears
+      break;
+    }
+  }
+
+  // The rest of the string is the search text (case-insensitive)
+  const searchText = tokens.slice(textStartIndex).join(' ');
+
+  return hosts.filter(host => {
+    // 1. Tag Filtering
+    // If the filter contains tags, the host MUST have all of them
+    if (requiredTags.length > 0) {
+      if (!host.tags || host.tags.length === 0) {
+        return false;
+      }
+
+      const hasAllTags = requiredTags.every(tag => host.tags!.includes(tag));
+      if (!hasAllTags) {
+        return false;
+      }
+    }
+
+    // 2. Text Filtering
+    // If there is remaining text, it must match name, hostname, or comment
+    if (searchText) {
+      const matchName = host.name.toLowerCase().includes(searchText);
+      const matchHostname = host.hostname.toLowerCase().includes(searchText);
+      const matchComment = !!(host.comment && host.comment.toLowerCase().includes(searchText));
+
+      if (!matchName && !matchHostname && !matchComment) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+}
+
+/**
+ * Search needle in input and returns a snippet with the needle highlighted and centered.
+ * For example, if it searchs "Liberty" in "Declaration of Independence", it returns "that among these are Life, Liberty and the pursuit of Happiness."
+ * @param input - Input string
+ * @param needle - Needle to search for
+ * @returns Snippet with the needle highlighted and centered
+ */
+export function searchString(input: string, needle: string): string {
+  if (!input || !needle) return "";
+
+  const lowerInput = input.toLowerCase();
+  const lowerNeedle = needle.toLowerCase();
+  const matchIndex = lowerInput.indexOf(lowerNeedle);
+
+  // Return empty string if no match is found
+  if (matchIndex === -1) {
+    return "";
+  }
+
+  // Define the number of characters of context to grab around the match
+  const contextLength = 40;
+
+  // Calculate initial start and end bounds
+  let start = Math.max(0, matchIndex - contextLength);
+  let end = Math.min(input.length, matchIndex + needle.length + contextLength);
+
+  // If we aren't at the beginning of the string, snap to the nearest subsequent whitespace 
+  // to avoid returning a partially truncated word at the start of the snippet.
+  if (start > 0) {
+    const nextSpace = input.substring(start, matchIndex).indexOf(" ");
+    if (nextSpace !== -1) {
+      start = start + nextSpace + 1;
+    }
+  }
+
+  // If we aren't at the end of the string, snap to the nearest preceding whitespace 
+  // to avoid returning a partially truncated word at the end of the snippet.
+  if (end < input.length) {
+    const trailingContext = input.substring(matchIndex + needle.length, end);
+    const lastSpace = trailingContext.lastIndexOf(" ");
+    if (lastSpace !== -1) {
+      end = matchIndex + needle.length + lastSpace;
+    }
+  }
+
+  // Extract the snippet
+  let snippet = input.substring(start, end);
+
+  // Replace multi-line breaks, tabs, or consecutive spaces with a single space
+  return snippet.replace(/\s+/g, " ").trim();
 }

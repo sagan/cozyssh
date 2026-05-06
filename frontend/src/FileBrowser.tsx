@@ -13,6 +13,7 @@ import NoteAddIcon from '@mui/icons-material/NoteAdd';
 import SearchIcon from '@mui/icons-material/Search';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import TextEditor from './TextEditor';
 import { Menu, MenuItem, TableSortLabel, InputBase } from '@mui/material';
@@ -41,6 +42,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [editingFile, setEditingFile] = useState<FileInfo | null>(null);
+  const [editingPath, setEditingPath] = useState<string>('');
   const [editorContent, setEditorContent] = useState<string>('');
   const [isWindowsHost, setIsWindowsHost] = useState<boolean>(false);
 
@@ -170,6 +172,50 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
     fetchFiles(nextPath);
   };
 
+  const handleGoTo = async () => {
+    const val = filterValue.trim();
+    if (!val) return;
+
+    const join = getPathJoiner(currentPath);
+    let targetPath = val;
+
+    // If it's not an absolute path, join it with currentPath
+    const isWin = isWindowsHost || isWindowsPath(currentPath);
+    const isAbs = isWindowsPath(val) || val.startsWith('/') || (isWin && val.startsWith('\\')) || val.startsWith('~');
+
+    if (!isAbs) {
+      targetPath = join(val);
+    }
+
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('cozy_token');
+      const res = await fetch(`/api/fs/stat?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(targetPath)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        const fileInfo: FileInfo = await res.json();
+        if (fileInfo.isDir) {
+          fetchFiles(targetPath);
+        } else {
+          if (fileInfo.size <= 1048576) {
+            handleEditAsText(fileInfo, targetPath);
+          } else {
+            alert(`File is too large to open (${formatSize(fileInfo.size)}). Max limit is 1MB.`);
+          }
+        }
+      } else {
+        alert('Path not found or error accessing path');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error accessing path');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleUploadClick = () => {
     fileInputRef.current?.click();
   };
@@ -232,9 +278,8 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
     setContextMenu(null);
   };
 
-  const handleEditAsText = async (file: FileInfo) => {
-    const join = getPathJoiner(currentPath);
-    const targetPath = join(file.name);
+  const handleEditAsText = async (file: FileInfo, fullPath?: string) => {
+    const targetPath = fullPath || getPathJoiner(currentPath)(file.name);
     const token = localStorage.getItem('cozy_token');
     setLoading(true);
     try {
@@ -250,6 +295,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
           const text = await dlRes.text();
           setEditorContent(text);
           setEditingFile(file);
+          setEditingPath(targetPath);
         } else {
           alert("Failed to download file for editing.");
         }
@@ -266,15 +312,25 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   };
 
   const handleSaveTextFile = async (newContent: string) => {
-    if (!editingFile) return;
+    if (!editingFile || !editingPath) return;
     setLoading(true);
     const token = localStorage.getItem('cozy_token');
     try {
+      // Get the parent directory of editingPath
+      const isWin = isWindowsHost || isWindowsPath(editingPath);
+      let parentDir = '';
+      const lastSep = Math.max(editingPath.lastIndexOf('/'), editingPath.lastIndexOf('\\'));
+      if (lastSep !== -1) {
+        parentDir = editingPath.substring(0, lastSep);
+        if (parentDir === '' && !isWin) parentDir = '/';
+        if (isWin && parentDir.endsWith(':')) parentDir += '\\';
+      }
+
       const blob = new Blob([newContent], { type: 'text/plain' });
       const formData = new FormData();
       formData.append('file', blob, editingFile.name);
 
-      const res = await fetch(`/api/fs/upload?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(currentPath)}`, {
+      const res = await fetch(`/api/fs/upload?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(parentDir)}`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
         body: formData,
@@ -282,7 +338,9 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
 
       if (res.ok) {
         setEditorContent(newContent);
-        fetchFiles(currentPath);
+        if (parentDir === currentPath) {
+          fetchFiles(currentPath);
+        }
       } else {
         alert('Save failed');
       }
@@ -475,6 +533,11 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
             autoFocus
             value={filterValue}
             onChange={(e) => setFilterValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleGoTo();
+              }
+            }}
             sx={{ fontSize: '0.875rem' }}
           />
           {filterValue && (
@@ -482,6 +545,15 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
               <CloseIcon fontSize="inherit" />
             </IconButton>
           )}
+          <IconButton
+            size="small"
+            onClick={handleGoTo}
+            disabled={loading || !filterValue.trim()}
+            title="Go to path"
+            sx={{ mr: 0.5 }}
+          >
+            <ArrowForwardIcon fontSize="small" />
+          </IconButton>
           <Box sx={{ width: '1px', height: '20px', bgcolor: 'divider', mx: 1 }} />
           <IconButton
             size="small"
@@ -605,7 +677,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
 
       {editingFile && (
         <TextEditor
-          fileName={getPathJoiner(currentPath)(editingFile.name)}
+          fileName={editingPath}
           initialContent={editorContent}
           onSave={handleSaveTextFile}
           onClose={() => setEditingFile(null)}
