@@ -526,19 +526,30 @@ export default function Dashboard({ initialData }: DashboardProps) {
       setVars(nextVars);
     };
 
-    (window as any).csGetTerminal = () => {
-      const term: any = terminalRefs.current[activePaneIdRef.current];
+    (window as any).csGetTerminal = (paneId?: string) => {
+      const term: any = terminalRefs.current[paneId || activePaneIdRef.current];
       return term?.getXterm?.();
     };
-    (window as any).csGetTerminalIntegration = () => {
-      return shellIntegrationRef.current[activePaneIdRef.current];
+    (window as any).csGetShellIntegration = (paneId?: string) => {
+      return shellIntegrationRef.current[paneId || activePaneIdRef.current];
     }
-    (window as any).csSendData = (data: string) => {
-      const term: any = terminalRefs.current[activePaneIdRef.current];
+    (window as any).csGetAll = () => {
+      return {
+        activePaneId: activePaneIdRef.current,
+        terminals: terminalRefs.current,
+        shellIntegrations: shellIntegrationRef.current,
+        tabs: tabsRef.current,
+        hosts: hostsRef.current,
+        vars: varsRef.current,
+        localVars: localVarsRef.current,
+      };
+    }
+    (window as any).csSendData = (data: string, paneId?: string) => {
+      const term: any = terminalRefs.current[paneId || activePaneIdRef.current];
       term?.sendData?.(data);
     };
-    (window as any).csGetTerminalContents = (lineCount = 100) => {
-      const term: any = terminalRefs.current[activePaneIdRef.current];
+    (window as any).csGetTerminalContents = (lineCount = 100, paneId?: string) => {
+      const term: any = terminalRefs.current[paneId || activePaneIdRef.current];
       const xterm = term?.getXterm?.();
       if (!xterm) return "";
 
@@ -553,13 +564,20 @@ export default function Dashboard({ initialData }: DashboardProps) {
       }
       return lines.join('\n');
     }
-    (window as any).csFocus = () => {
-      if (activePaneIdRef.current) {
+    (window as any).csFocus = (paneId?: string) => {
+      if (paneId) {
+        const allPanes = tabsRef.current.flatMap(t => t.panes.map(p => ({ tabId: t.id, paneId: p.id })));
+        if (allPanes.length === 0) return;
+        const idx = allPanes.findIndex(p => p.paneId === paneId);
+        if (idx < 0) return;
+        const target = allPanes[idx];
+        setActiveTabId(target.tabId);
+        setTimeout(() => terminalRefs.current[target.paneId]?.focus(), 10);
+      } else if (activePaneIdRef.current) {
         setTimeout(() => terminalRefs.current[activePaneIdRef.current]?.focus(), 0);
       }
     };
     (window as any).csNotify = (msg: string) => csNotify(msg);
-    (window as any).csGetHosts = () => hostsRef.current;
     (window as any).csOpen = (target: any, options: { name?: string } = {}) => {
       const targets = Array.isArray(target) ? target.slice(0, 4) : [target];
       const hostNames = targets.map(t => {
@@ -628,9 +646,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
       delete (window as any).csGetVar;
       delete (window as any).csSetVar;
       delete (window as any).csGetTerminal;
+      delete (window as any).csGetShellIntegration;
+      delete (window as any).csSendData;
+      delete (window as any).csGetTerminalContents;
       delete (window as any).csFocus;
       delete (window as any).csNotify;
-      delete (window as any).csGetHosts;
+      delete (window as any).csGetAll;
       delete (window as any).csOpen;
       delete (window as any).csFetch;
       delete (window as any).csExec;
@@ -2098,6 +2119,20 @@ export default function Dashboard({ initialData }: DashboardProps) {
           setBtnMenuAnchor(null);
           setButtonDialogOpen(true);
         }}>Edit Button</MenuItem>
+        <MenuItem
+          onClick={() => {
+            if (btnMenuAnchor) {
+              setInputValue(btnMenuAnchor.btn.payload);
+              setSendScope(2);
+              setAppendNewLine(false);
+              setInputDialogOpen(true);
+              setBtnMenuAnchor(null);
+            }
+          }}
+          sx={{ display: lastMenuBtn?.type === 'send_string' ? 'flex' : 'none' }}
+        >
+          Send To All
+        </MenuItem>
         <MenuItem
           onClick={() => {
             if (btnMenuAnchor) {

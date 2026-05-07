@@ -54,15 +54,27 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
     Host *
       HashKnownHosts no
     ```
-- **Multi-Tab Interface**: Run multiple concurrent SSH sessions and local shells in a single browser tab.
-- **Modern UI**: A sleek, concise, yet full-fledged high-contrast Light Theme, designed for readability.
-- **SFTP & Local File Management**: 📁 🆕
-  - **SFTP & Local File Browser**: Browse, upload, download, and edit files directly from your terminal tabs.
-- **Custom Scripting (JS/TS)**: Fully programmable automation via a built-in TypeScript-capable scripting engine. See [Scripts Documentation](docs/SCRIPTS.md).
-- **Split-Screen Layouts**: View up to 4 terminal panes in a single tab.
+- **Modern UI**: A sleek, concise, yet full-fledged UI based on React and [Material UI](https://github.com/mui/material-ui).
+  - **High-contrast Light Theme**: Designed for readability.
+  - **Multi-Tab Interface**: Run multiple concurrent SSH sessions and local shells in a single browser tab.
+  - **Split Screen Window**: Display multiple ssh servers of a `#tag` in single split-screen tab. View up to 4 terminal panes in a single tab.
+  - **Button Bar**: A scrollable toolbar at the bottom of the terminal window for quickly sending string to terminal or executing custom function.
+    - **Custom Snippets**: Send custom string to current terminal.
+    - **Special Syntax**: Full support for control keys via `<ctrl-x>` syntax (e.g., `<ctrl-c>` for SIGINT), which are sent with precise timing to ensure they reach the shell correctly.
+    - **Management**: Add, edit, delete, and reorder buttons directly from the UI context menu.
+    - **Hover Tooltips**: Instant preview of the command payload.
+    - **Common Terminal Functions**: Custom the button function to common terminal action, like copy terminal buffer, paste to terminal.
+    - **Shortcut Invocation** : Use `<alt + shift + 1-9,0>` keyboard shortcut to invoke button directly.
+  - **Mobile-Friendly**: All features can be accessed from mobile browsers.
+    - **Responsive sidebar and layout**.
+    - **Mobile Input Toolbar**: Quick access to Esc, Tab, Arrow keys, and a stateful **Ctrl toggle** for mobile touch keyboards.
+    - **Keyboard-Aware Viewport**: Automatically resizes to fit your visible mobile screen perfectly even when the on-screen keyboard is active.
+    - **Gesture Support** : Swipe left / right to switch tab in mobile browsers.
+- **SFTP & Local File Management**: 📁
+  - **SFTP & Local File Browser**: Browse, upload, download, filter or edit files directly from your terminal tabs.
   - **Split View**: Access the file browser via the terminal tab's context menu without losing your shell session.
   - **Text File Editor**: Edit text file of SFTP / local server directly in Browser.
-- **Shell Integration**: Built-in Shell Integration features like cwd detection. An button in File Browser to navigate to shell cwd (`$PWD`) directly. It works for newer Linux systems (Ubuntu 26.04+) out of the box using OSC 3008 sequence detection. For older Linux systems, you can add OSC 7 escape sequence to `~/.bashrc` to enable this feature:
+- **Shell Integration**: Built-in Shell Integration features like cwd detection. An button in File Browser to navigate to shell cwd (`$PWD`) directly. It works for newer Linux systems (Ubuntu 26.04+) out of the box using OSC 3008 sequence detection. For older Linux systems, you can add OSC 7 escape sequence to `~/.bashrc` to enable basic feature:
   ```sh
   # Standard OSC 7 (Recommended for most cases)
   export PS1="$PS1"'\[\e]7;file://$HOSTNAME$PWD\a\]'
@@ -81,16 +93,8 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
   - `Alt + G` : Focus active terminal session
   - `Alt + Shift + 1-9,0` : Click the button in button bar
   - `Alt + ↑ / ↓` : Scroll terminal up / down
-- **Mobile-Friendly**:
-  - Responsive sidebar and layout.
-  - **Mobile Input Toolbar**: Quick access to Esc, Tab, Arrow keys, and a stateful **Ctrl toggle** for mobile touch keyboards.
-  - **Keyboard-Aware Viewport**: Automatically resizes to fit your visible mobile screen perfectly even when the on-screen keyboard is active.
-- **Terminal Button Bar**: 💻
-  - **Custom Snippets**: A scrollable toolbar at the bottom of the terminal window for quick command execution.
-  - **Special Syntax**: Full support for control keys via `<ctrl-x>` syntax (e.g., `<ctrl-c>` for SIGINT), which are sent with precise timing to ensure they reach the shell correctly.
-  - **Management**: Add, edit, delete, and **reorder buttons** directly from the UI context menu.
-  - **Hover Tooltips**: Instant preview of the command payload.
-  - **Custom Terminal Function Button**: Custom the button function to common terminal action, like copy terminal buffer, paste to terminal.
+  - `Mouse Select` in terminal to copy
+  - `Mouse Right Click` in terminal to paste
 - **Advanced SSH Management**: 🔑
   - **ProxyJump Support**: Full support for OpenSSH standard `ProxyJump` configuration, allowing you to connect to hosts via intermediate jump servers.
   - **Tagging System**: Organize your hosts using `### #tag` comments in your `~/.ssh/config`. Tags are fully filterable in the sidebar.
@@ -105,16 +109,17 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
   - **Auto-copy**: Selected text is automatically copied to your clipboard.
   - **Right-click Paste**: Quickly paste clipboard contents into any active terminal session.
   - **Selection Highlighting**: Clear visual feedback for selected text.
-- **Split Screen Window**: Display multiple ssh servers of a `#tag` in single split-screen tab.
 - **Tab Pinning & Persistence**:
   - **Persistent Sessions**: Right-click any tab and select **"Pin Tab"** to keep the terminal session (PTY or SSH) running in the background even if you close your browser or navigate away.
   - **Output Buffering**: Pinned sessions maintain a circular output buffer (approx. 50KB), ensuring you see the most recent activity immediately upon reconnection.
   - **Usage-Aware Auto-Restore**: Pinned tabs automatically resume when you re-open CozySSH, but only in the primary window to prevent duplicate UI clutter.
+  - **Lock Tab**: Pinned tabs can be further locked to prevent accidental closing.
 - **Scratchpad feature**: Open a "Scratchpad" text editor tab to write your notes or paste some configuration commands or other text. All data is auto-saving and cached in browser localStorage and automatically synced with and persisted in backend host.
 - **Secure by Default**: 
-  - Stateless HMAC-SHA256 token-based authentication with a simple App Password.
+  - **Stateless Authentication**: HMAC-SHA256 token-based authentication with a simple App Password.
   - **Non-Local Restriction**: Automatically blocks access from non-local, non-HTTPS environments to prevent credential sniffing.
   - **Password Management**: Reset your application password anytime via the CLI using the `-do-reset-password` flag.
+- **Custom Scripting (JS/TS)**: Fully programmable / extendable via a built-in powerful & TypeScript-capable scripting engine. See [Scripts Documentation](docs/SCRIPTS.md).
 - **Self-Hosted**: Distributed as a single Go binary that embeds the entire React frontend.
 
 ## Getting Started
@@ -130,11 +135,13 @@ Run the CozySSH binary:
 ./cozyssh
 ```
 
-On first run, CozySSH will generate a default configuration and an **App Password**. Check the terminal output to secure your credentials. The app password can be changed in UI. If you forget your app password, you can reset it to a new random value by running `cozyssh -do-reset-password`.
+On first run, CozySSH will generate a default configuration file at `~/.config/cozyssh/config.yaml` with an initial random **App Password**. Check the terminal output to find the initial password. The app password can be changed in UI. If you forget your app password, you can reset it to a new random value by running `cozyssh -do-reset-password`.
 
 CozySSH listens on `127.0.0.1:8022` by default. By default, CozySSH can only be accessed from `localhost` hostname (e.g. http://localhost:8022 ) or from a `https` origin via running CozySSH behind a TLS enabled a reverse proxy (like [Traefik](https://github.com/traefik/traefik) or Nginx) and / or CDN provider (like Cloudflare). Start cozyssh with `--allow-insecure-http` flag to lift the restriction.
 
-Example Traefik config to run as a reverse proxy for CozySSH (toml):
+<details>
+
+<summary>Example Traefik config to run as a reverse proxy for CozySSH (toml)</summary>
 
 ```toml
 [core]
@@ -159,11 +166,14 @@ service = "cozyssh"
           url = "http://127.0.0.1:8022/"
 ```
 
+</details>
+
 ### Configuration
 
 CozySSH stores its settings in `~/.config/cozyssh/config.yaml`. You can customize:
+
 - `addr`: The address and port the server binds to (default: `127.0.0.1:8022`).
-- `password`: The BCrypt hashed app password.
+- `password`: The BCrypt hashed app password. Run `cozyssh -do-reset-password` to reset it.
 
 The default `~/.config/cozyssh` config dir path can be changed by `-config` command line flag.
 

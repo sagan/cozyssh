@@ -11,13 +11,13 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
     - [`csGetApplet(name?: string): AppletData | AppletData[]`](#csgetappletname-string-appletdata--appletdata)
     - [`csGetVar(name: string): string | undefined`, `csGetVar(): Record<string, string>`](#csgetvarname-string-string--undefined-csgetvar-recordstring-string)
     - [`csSetVar(name: string, value: string | undefined): Promise<void>`, `csSetVar(vars: Record<string, string | undefined>): Promise<void>`](#cssetvarname-string-value-string--undefined-promisevoid-cssetvarvars-recordstring-string--undefined-promisevoid)
-    - [`csGetTerminal(): Terminal | undefined`](#csgetterminal-terminal--undefined)
-    - [`csGetTerminalIntegration(): ShellIntegration | undefined`](#csgetterminalintegration-shellintegration--undefined)
-    - [`csSendData(data: string): void`](#cssenddatadata-string-void)
-    - [`csGetTerminalContents(lines = 100) : string`](#csgetterminalcontentslines--100--string)
-    - [`csFocus(): void`](#csfocus-void)
+    - [`csGetTerminal(paneId?: string): Terminal | undefined`](#csgetterminalpaneid-string-terminal--undefined)
+    - [`csGetShellIntegration(paneId?: string): ShellIntegration | undefined`](#csgetshellintegrationpaneid-string-shellintegration--undefined)
+    - [`csSendData(data: string, paneId?: string): void`](#cssenddatadata-string-paneid-string-void)
+    - [`csGetTerminalContents(lines = 100, paneId?: string) : string`](#csgetterminalcontentslines--100-paneid-string--string)
+    - [`csFocus(paneId?: string): void`](#csfocuspaneid-string-void)
     - [`csNotify(msg: string): void`](#csnotifymsg-string-void)
-    - [`csGetHosts(): Host[]`](#csgethosts-host)
+    - [`csGetAll(): AllObject`](#csgetall-allobject)
     - [`csOpen(target: Host | string | (Host | string)[], options?: { name?: string }): void`](#csopentarget-host--string--host--string-options--name-string--void)
     - [`csFetch(url: string, options?: RequestInit): Promise<Response>`](#csfetchurl-string-options-requestinit-promiseresponse)
     - [`csExec(cmdline: string): Promise<{ error: any, stdout: string, stderr: string }>`](#csexeccmdline-string-promise-error-any-stdout-string-stderr-string-)
@@ -112,13 +112,13 @@ Sets one or more persistent variables. These variables are saved to the backend 
 
 Variables which name starts with `local` (case insensitive) are saved only in the current browser localStorage, not synced to the server. All other variables are saved on the server and synced to all browser instances.
 
-### `csGetTerminal(): Terminal | undefined`
+### `csGetTerminal(paneId?: string): Terminal | undefined`
 
-Returns the currently active `xterm.js` Terminal instance. Returns `undefined` if no terminal is active.
+Returns the `xterm.js` [Terminal](https://xtermjs.org/docs/api/terminal/classes/terminal/) instance if `paneId` is provided, the active instance otherwise. Returns `undefined` if the specified terminal is not found.
 
-### `csGetTerminalIntegration(): ShellIntegration | undefined`
+### `csGetShellIntegration(paneId?: string): ShellIntegration | undefined`
 
-Returns the shell integration state for the currently active terminal. This includes CWD, user, hostname, and command history.
+Returns the shell integration state for the specified terminal if `paneId` is provided, the active instance otherwise. Returns `undefined` if the specified terminal is not found.
 
 Sample `ShellIntegration` object:
 ```json
@@ -139,43 +139,59 @@ Sample `ShellIntegration` object:
 }
 ```
 
-### `csSendData(data: string): void`
+### `csSendData(data: string, paneId?: string): void`
 
-Sends raw string data to the currently active terminal. Useful for automating commands.
+Sends raw string data to the specified terminal if `paneId` is provided, the active instance otherwise. Useful for automating commands.
 
-### `csGetTerminalContents(lines = 100) : string`
+### `csGetTerminalContents(lines = 100, paneId?: string) : string`
 
-Returns the contents of the currently active terminal buffer as a string.
+Returns the contents of the specified terminal buffer as a string.
 
 - `lines`: The number of lines to return. Defaults to 100. If 0 or negative, all lines will be returned.
+- `paneId`: The ID of the terminal to return the contents of. If not provided, the currently active terminal is used.
 
-### `csFocus(): void`
+### `csFocus(paneId?: string): void`
 
-Focuses the currently active terminal session. This is the programmatic equivalent of the `Alt + G` global shortcut.
+Focuses the specified terminal session if `paneId` is provided, the active instance otherwise.
 
 ### `csNotify(msg: string): void`
 
 Displays a toast notification in the top-right corner. Up to 3 messages can be displayed simultaneously.
 
-### `csGetHosts(): Host[]`
+- `msg`: The message to display.
 
-Returns the list of all configured server objects. Sample Host object:
+### `csGetAll(): AllObject`
+
+Returns an object containing all the data from the CozySSH application. Sample object:
 
 ```json
 {
-  "name": "host50",
-  "hostname": "192.168.1.50",
-  "port": "22",
-  "user": "root",
-  "proxy_jump": "",
-  "tags": [
-    "fav"
-  ],
-  "comment": "",
-  "source": "config",
-  "is_auto": false,
-  "is_favourite": true
-},
+  "activePaneId": "local-123456",
+  "terminals": {
+    "local-123456": {}
+  },
+  "shellIntegrations": {
+    "local-123456": {
+      "cwd": "/root"
+    }
+  },
+  "tabs": [
+    {
+      "id": "local-123456",
+      "panes": [
+        {
+          "id": "local-123456",
+          "host": "local",
+          "state": "connected"
+        }
+      ],
+      "activePaneId": "local-123456",
+      "title": "local",
+      "isPinned": false,
+      "isLocked": false
+    }
+  ]
+}
 ```
 
 ### `csOpen(target: Host | string | (Host | string)[], options?: { name?: string }): void`
@@ -268,7 +284,8 @@ if (!result.error) {
 ### Open all servers with a specific tag in split-screen
 
 ```typescript
-const productionHosts = csGetHosts().filter(h => h.tags?.includes('prod'));
+const { hosts } = csGetAll();
+const productionHosts = hosts.filter(h => h.tags?.includes('prod'));
 if (productionHosts.length > 0) {
   csOpen(productionHosts.slice(0, 4), { name: "PROD CLUSTER" });
 }
@@ -842,7 +859,7 @@ import React, { useState, useEffect } from 'react';
 const CmdHistoryApplet = () => {
   // Initialize state with the current terminal's integration data
   const [history, setHistory] = useState(() => {
-    return window.csGetTerminalIntegration?.()?.recentCommands || [];
+    return window.csGetShellIntegration?.()?.recentCommands || [];
   });
 
   useEffect(() => {
@@ -855,7 +872,7 @@ const CmdHistoryApplet = () => {
 
     // Listener for switching between terminal tabs/panes
     const handleTerminalChange = () => {
-      setHistory(window.csGetTerminalIntegration?.()?.recentCommands || []);
+      setHistory(window.csGetShellIntegration?.()?.recentCommands || []);
     };
 
     window.addEventListener('cs:shell-integration', handleIntegration);
