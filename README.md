@@ -58,7 +58,7 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
   - **High-contrast Light Theme**: Designed for readability.
   - **Multi-Tab Interface**: Run multiple concurrent SSH sessions and local shells in a single browser tab.
   - **Split Screen Window**: Display multiple ssh servers of a `#tag` in single split-screen tab. View up to 4 terminal panes in a single tab.
-  - **Button Bar**: A scrollable toolbar at the bottom of the terminal window for quickly sending string to terminal or executing custom function.
+  - **Button Bar**: A scrollable toolbar at the bottom of the terminal window for quickly sending string to terminal or executing custom function. Inspired by [SecureCRT Button Bar](https://www.vandyke.com/support/tips/button_bar.html).
     - **Custom Snippets**: Send custom string to current terminal.
     - **Special Syntax**: Full support for control keys via `<ctrl-x>` syntax (e.g., `<ctrl-c>` for SIGINT), which are sent with precise timing to ensure they reach the shell correctly.
     - **Management**: Add, edit, delete, and reorder buttons directly from the UI context menu.

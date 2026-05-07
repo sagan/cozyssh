@@ -1,6 +1,6 @@
 # CozySSH Custom Scripting API
 
-CozySSH allows you to extend its functionality by writing custom scripts (JavaScript or TypeScript). Scripts are executed in the browser environment and have access to powerful `cs*` prefix functions and `cs:*` custom events to interact with the terminal, the backend, and the application state. It's also possible to import some modules (like `react`) in your custom script.
+CozySSH allows you to extend its functionality by writing custom scripts (JavaScript or TypeScript). Scripts are executed in the browser environment and have access to powerful `cs*` prefix functions and `cs:*` custom events to interact with the terminal, the backend, and the application state. It's also possible to import some CozySSH frontend bundled ES modules (like `react`) in your custom script.
 
 - [CozySSH Custom Scripting API](#cozyssh-custom-scripting-api)
   - [General Usage](#general-usage)
@@ -59,11 +59,13 @@ Use standard ES module import syntax to import modules. For example:
 import React, { useState } from "react";
 ```
 
-Available modules:
+Available modules that's bundled in CozySSH frontend:
 
 - `react`: https://github.com/facebook/react
 - `dompurify`: https://github.com/cure53/DOMPurify
 - `marked`: https://github.com/markedjs/marked
+
+You can also import any external module, for example from a CDN url.
 
 ## Available global functions
 
