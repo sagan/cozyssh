@@ -1423,6 +1423,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
           navigator.clipboard.writeText(text);
         }
         term.focus?.();
+      } else if (btn.payload == 'COPY_LAST_COMMAND_OUTPUT') {
+        const text = term.getLastCommandOutput?.();
+        if (text) {
+          navigator.clipboard.writeText(text);
+        }
+        term.focus?.();
       } else if (btn.payload === 'PASTE') {
         const text = await navigator.clipboard.readText();
         if (text) {

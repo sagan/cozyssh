@@ -1,5 +1,5 @@
 import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
-import { Terminal } from '@xterm/xterm';
+import { Terminal, type IMarker } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
@@ -42,6 +42,7 @@ export interface TerminalHandle {
   scrollToTop: () => void;
   scrollToBottom: () => void;
   scrollPages: (amount: number) => void;
+  getLastCommandOutput: () => void;
   getXterm: () => Terminal | null;
 }
 
@@ -75,6 +76,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
   const reconnectFuncRef = useRef<(() => void) | null>(null);
   const forceReconnectRef = useRef(false);
   const shellIntegrationRef = useRef<ShellIntegration>({});
+  const markersRef = useRef<{ start?: IMarker, end?: IMarker }>({});
 
   const updateShellIntegration = (updates: Partial<ShellIntegration>) => {
     shellIntegrationRef.current = { ...shellIntegrationRef.current, ...updates };
@@ -150,7 +152,40 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     scrollPages: (amount: number) => {
       xtermRef.current?.scrollPages(amount);
     },
-    getXterm: () => xtermRef.current
+    getLastCommandOutput: () => {
+      const { start, end } = markersRef.current;
+      const buffer = xtermRef.current?.buffer.active;
+
+      if (!buffer || !start || !end || start.isDisposed || end.isDisposed) {
+        console.warn('Cannot copy: markers are missing or have scrolled out of the buffer.');
+        return;
+      }
+
+      const outputLines: string[] = [];
+
+      // Fix: The start marker is placed exactly where the output begins.
+      // The end marker is placed on the line where the new shell prompt is drawn.
+      const startLine = start.line;
+      const endLine = end.line - 1; // Exclude the new prompt line
+
+      for (let i = startLine; i <= endLine; i++) {
+        const line = buffer.getLine(i);
+        if (line) {
+          // translateToString(true) trims right-side whitespace from the line
+          outputLines.push(line.translateToString(true));
+        }
+      }
+
+      // Remove any trailing empty lines caused by the cursor resting on a new line
+      while (outputLines.length > 0 && outputLines[outputLines.length - 1] === '') {
+        outputLines.pop();
+      }
+
+      const textToCopy = outputLines.join('\n');
+
+      return textToCopy;
+    },
+    getXterm: () => xtermRef.current,
   }));
 
   useEffect(() => {
@@ -260,6 +295,11 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
             // Initialize/Reset command string for new command execution
             updates.command = info.cmd || '';
 
+            // <-- Dispose old markers and set the start marker right before command runs
+            markersRef.current.start?.dispose();
+            markersRef.current.end?.dispose();
+            markersRef.current.start = term.registerMarker(0);
+
             // Fallback: if no command string provided via OSC, try to read from buffer
             if (!updates.command) {
               const buffer = term.buffer.active;
@@ -290,6 +330,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
         if (info.end) {
           if (info.end === shellIntegrationRef.current.commandId) {
             updates.isExecuting = false;
+
+            // <-- Set the end marker right after the command finishes, before the new prompt
+            markersRef.current.end = term.registerMarker(0);
 
             const exitStatus = info.status ? parseInt(info.status) : (info.exit === 'success' ? 0 : 1);
             const entry: CommandHistoryEntry = {
@@ -548,6 +591,10 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
         container.removeEventListener('contextmenu', handleContextMenu);
       }
       if (wsRef.current) wsRef.current.close();
+
+      // <-- Dispose of markers
+      markersRef.current.start?.dispose();
+      markersRef.current.end?.dispose();
 
       // Explicitly kill the WebGL addon first
       if (webglAddon) {

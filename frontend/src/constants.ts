@@ -2,6 +2,7 @@ export const TERMINAL_FUNCTIONS = [
   { value: 'COPY', label: 'COPY (Buffer)' },
   { value: 'COPY_VISIBLE', label: 'COPY (Visible)' },
   { value: 'COPY_SELECTION', label: 'COPY (Selection)' },
+  { value: 'COPY_LAST_COMMAND_OUTPUT', label: 'COPY (Last Cmd Output)' },
   { value: 'PASTE', label: 'PASTE (Clipboard)' },
   { value: 'INPUT', label: 'INPUT (Prompt)' },
   { value: 'CLEAR', label: 'CLEAR (Screen)' },
