@@ -1,10 +1,12 @@
-package main
+package cozyssh
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
@@ -17,11 +19,11 @@ import (
 	"cozyssh/auth"
 	"cozyssh/config"
 	"cozyssh/fsapi"
+	"cozyssh/recents"
+	"cozyssh/scratchpad"
 	"cozyssh/session"
 	"cozyssh/sshmanager"
 	"cozyssh/ws"
-	"cozyssh/scratchpad"
-	"cozyssh/recents"
 )
 
 //go:embed all:frontend/dist
@@ -34,35 +36,43 @@ var (
 	date    = "unknown"
 )
 
-func main() {
-	configDir := flag.String("config", "", "Custom configuration directory (defaults to ~/.config/cozyssh)")
-	allowInsecure := flag.Bool("allow-insecure-http", false, "Lift the security restriction for non-local HTTP environments")
-	resetPwd := flag.Bool("do-reset-password", false, "Reset the app password to a random one and exit")
-	flag.Parse()
+func Run(ctx context.Context, args []string) error {
+	flags := flag.NewFlagSet("cozyssh", flag.ContinueOnError)
+	configDir := flags.String("config", "", "Custom configuration directory (defaults to ~/.config/cozyssh)")
+	listenAddr := flags.String("addr", "", "Listen address (overrides config file)")
+	allowInsecure := flags.Bool("allow-insecure-http", false, "Lift the security restriction for non-local HTTP environments")
+	resetPwd := flags.Bool("do-reset-password", false, "Reset the app password to a random one and exit")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
 
 	if *resetPwd {
 		cfg, err := config.LoadConfig(*configDir)
 		if err != nil {
-			log.Fatalf("Failed to load config: %v", err)
+			return fmt.Errorf("failed to load config: %w", err)
 		}
 		newPwd, err := cfg.ResetAppPassword()
 		if err != nil {
-			log.Fatalf("Failed to reset password: %v", err)
+			return fmt.Errorf("failed to reset password: %w", err)
 		}
 		log.Printf("App password has been reset to a new random one.")
 		log.Printf("New app password: %s", newPwd)
-		os.Exit(0)
+		return nil
 	}
 
 	// 1. Load config and ensure App Password is created
 	cfg, err := config.LoadConfig(*configDir)
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+	if *listenAddr != "" {
+		cfg.Addr = *listenAddr
 	}
 	log.Printf("CozySSH %s; Config file: %s", version, cfg.ConfigPath)
 
 	auth.Init(cfg)
 	ws.SetConfig(cfg)
+	sshmanager.SetConfig(cfg)
 	scratchpad.Init(cfg.ConfigDir)
 	recents.Init(cfg.ConfigDir)
 
@@ -536,11 +546,11 @@ func main() {
 	// 4. Serve embedded frontend
 	distFS, err := fs.Sub(frontendFS, "frontend/dist")
 	if err != nil {
-		log.Fatal("Failed to resolve frontend/dist inside embedded FS")
+		return fmt.Errorf("failed to resolve frontend/dist inside embedded FS")
 	}
 
 	fileServer := http.FileServer(http.FS(distFS))
-	
+
 	mux.HandleFunc("/manifest.json", func(w http.ResponseWriter, r *http.Request) {
 		hostname, err := os.Hostname()
 		if err != nil {
@@ -581,10 +591,22 @@ func main() {
 	})
 
 	addr := cfg.Addr
-	log.Printf("Starting cozyssh on http://%s", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
-		log.Fatal(err)
+	server := &http.Server{
+		Addr:    addr,
+		Handler: mux,
 	}
+
+	go func() {
+		<-ctx.Done()
+		log.Printf("Shutting down cozyssh...")
+		server.Shutdown(context.Background())
+	}()
+
+	log.Printf("Starting cozyssh on http://%s", addr)
+	if err := server.ListenAndServe(); err != http.ErrServerClosed {
+		return err
+	}
+	return context.Cause(ctx)
 }
 
 func isSecureRequest(r *http.Request) bool {

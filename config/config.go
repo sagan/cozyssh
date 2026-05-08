@@ -28,6 +28,7 @@ type Config struct {
 	Addr            string            `yaml:"addr"`
 	SiteName        string            `yaml:"sitename"`
 	AppPasswordHash string            `yaml:"app_password_hash"`
+	SSHDir          string            `yaml:"sshdir"` // openssh config dir, defaults to ~/.ssh
 	Buttons         []Button          `yaml:"buttons" json:"buttons"`
 	ConfigPath      string            `yaml:"-"` // internal use
 	ConfigDir       string            `yaml:"-"` // internal use
@@ -69,6 +70,10 @@ func LoadConfig(customDir string) (*Config, error) {
 
 	if cfg.Addr == "" {
 		cfg.Addr = "127.0.0.1:8022"
+	}
+	if cfg.SSHDir == "" {
+		home, _ := os.UserHomeDir()
+		cfg.SSHDir = filepath.Join(home, ".ssh")
 	}
 	if cfg.Vars == nil {
 		cfg.Vars = make(map[string]string)

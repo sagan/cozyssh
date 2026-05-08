@@ -14,7 +14,23 @@ import (
 	"github.com/kevinburke/ssh_config"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
+
+	"cozyssh/config"
 )
+
+var globalConfig *config.Config
+
+func SetConfig(cfg *config.Config) {
+	globalConfig = cfg
+}
+
+func getSSHDir() string {
+	if globalConfig != nil && globalConfig.SSHDir != "" {
+		return globalConfig.SSHDir
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".ssh")
+}
 
 type PooledClient struct {
 	Client  *ssh.Client
@@ -53,8 +69,7 @@ type HostConfig struct {
 }
 
 func getSSHConfigPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".ssh", "config")
+	return filepath.Join(getSSHDir(), "config")
 }
 
 func readConfigLines() ([]string, error) {
@@ -189,12 +204,7 @@ type HostInfo struct {
 
 // ListHosts reads the standard ~/.ssh/config and ~/.ssh/known_hosts and returns a list of configured and auto-discovered aliases
 func ListHosts() ([]HostInfo, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, err
-	}
-
-	configPath := filepath.Join(home, ".ssh", "config")
+	configPath := filepath.Join(getSSHDir(), "config")
 	f, err := os.Open(configPath)
 	var cfg *ssh_config.Config
 	if err == nil {
@@ -297,12 +307,7 @@ func ListHosts() ([]HostInfo, error) {
 
 // ListKnownHosts reads ~/.ssh/known_hosts and returns plain-name entries
 func ListKnownHosts() ([]HostInfo, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, err
-	}
-
-	knownHostsPath := filepath.Join(home, ".ssh", "known_hosts")
+	knownHostsPath := filepath.Join(getSSHDir(), "known_hosts")
 	data, err := os.ReadFile(knownHostsPath)
 	if err != nil {
 		return nil, err
@@ -402,12 +407,7 @@ func DialSSH(alias string, term TerminalUI) (*PooledClient, *ssh.Session, error)
 }
 
 func getSSHClient(alias string, term TerminalUI) (*ssh.Client, []io.Closer, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	configPath := filepath.Join(home, ".ssh", "config")
+	configPath := filepath.Join(getSSHDir(), "config")
 	f, err := os.Open(configPath)
 	var cfg *ssh_config.Config
 	if err == nil {
@@ -449,12 +449,13 @@ func getSSHClient(alias string, term TerminalUI) (*ssh.Client, []io.Closer, erro
 	}
 
 	if identityFile == "" || identityFile == "~/.ssh/identity" {
-		identityFile = filepath.Join(home, ".ssh", "id_ed25519")
+		identityFile = filepath.Join(getSSHDir(), "id_ed25519")
 		if _, err := os.Stat(identityFile); os.IsNotExist(err) {
-			identityFile = filepath.Join(home, ".ssh", "id_rsa")
+			identityFile = filepath.Join(getSSHDir(), "id_rsa")
 		}
 	} else {
 		if len(identityFile) > 2 && identityFile[:2] == "~/" {
+			home, _ := os.UserHomeDir()
 			identityFile = filepath.Join(home, identityFile[2:])
 		}
 	}
@@ -492,7 +493,7 @@ func getSSHClient(alias string, term TerminalUI) (*ssh.Client, []io.Closer, erro
 		return answers, nil
 	}))
 
-	knownHostsFile := filepath.Join(home, ".ssh", "known_hosts")
+	knownHostsFile := filepath.Join(getSSHDir(), "known_hosts")
 	os.MkdirAll(filepath.Dir(knownHostsFile), 0700)
 	if _, err := os.Stat(knownHostsFile); os.IsNotExist(err) {
 		os.WriteFile(knownHostsFile, []byte(""), 0600)

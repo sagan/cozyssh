@@ -16,10 +16,12 @@ builds:
     goarch:
       - amd64
       - arm64
-    main: ./main.go
+    main: ./cmd/cozyssh/main.go
     binary: cozyssh
     flags:
       - -trimpath
+    ldflags:
+      - -s -w -X cozyssh.version={{.Version}} -X cozyssh.commit={{.Commit}} -X cozyssh.date={{.Date}}
 archives:
   - format: zip
     name_template: >-
