@@ -3,3 +3,4 @@ node_modules
 
 # By default ignore all files in root dir
 /*.*
+/cozyssh
