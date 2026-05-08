@@ -13,6 +13,7 @@ export const TERMINAL_FUNCTIONS = [
   { value: 'SCROLL_TO_BOTTOM', label: 'SCROLL (Bottom)' },
   { value: 'SCROLL_PAGE_UP', label: 'SCROLL (Page Up)' },
   { value: 'SCROLL_PAGE_DOWN', label: 'SCROLL (Page Down)' },
+  { value: 'SEARCH', label: 'SEARCH' },
 ];
 
 export const MISC_FUNCTIONS = [

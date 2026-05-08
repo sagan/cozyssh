@@ -17,6 +17,8 @@ import EastIcon from '@mui/icons-material/East';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import AddIcon from '@mui/icons-material/Add';
 import SyncIcon from '@mui/icons-material/Sync';
+import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
+import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import CloudDoneIcon from '@mui/icons-material/CloudDone';
 import CloudOffIcon from '@mui/icons-material/CloudOff';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
@@ -372,6 +374,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [hosts, setHosts] = useState<Host[]>([]);
   const [recents, setRecents] = useLocalStorage<{ host: string, last_used: number }[]>('cozy_recents', []);
   const [newTabDialogOpen, setNewTabDialogOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // local (this browser side) vars, all variable names has "local" (case insensitive) prefix.
   const [localVars, setLocalVars] = useLocalStorage<Record<string, string | undefined>>("cozy_localvars", {});
@@ -664,6 +669,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setTimeout(() => {
       terminalRefs.current[activePaneId]?.focus();
     }, 50);
+  };
+
+  const handleCloseSearch = () => {
+    setSearchOpen(false);
+    const term = terminalRefs.current[activePaneId] as any;
+    term?.clearSearchDecorations?.();
+    setTimeout(() => term?.focus?.(), 50);
   };
 
   const handleSendKey = (key: string) => {
@@ -1085,6 +1097,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       }
       return newTabs;
     });
+    setTimeout(() => terminalRefs.current[activePaneIdRef.current]?.focus(), 50);
   };
 
   const handleCloseCurrentPaneOrTab = () => {
@@ -1375,6 +1388,15 @@ export default function Dashboard({ initialData }: DashboardProps) {
             handleButtonClick(filteredButtons[idx]);
           }
         }
+      } else if (e.ctrlKey && (e.key === 'f' || e.key === 'F')) {
+        // Open terminal search box only if current tab is a terminal and no dialog is open
+        if (!document.querySelector("body > div.MuiDialog-root")
+          && terminalRefs.current[activePaneId]
+          && 'clear' in terminalRefs.current[activePaneId]) {
+          e.preventDefault();
+          setSearchOpen(true);
+          setTimeout(() => searchInputRef.current?.focus(), 100);
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -1462,6 +1484,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
       } else if (btn.payload === 'SCROLL_PAGE_DOWN') {
         term.scrollPages?.(1);
         term.focus?.();
+      } else if (btn.payload === 'SEARCH') {
+        setSearchOpen(true);
+        setTimeout(() => searchInputRef.current?.focus(), 100);
       }
     } else if (btn.type === 'misc') {
       if (btn.payload === 'NEXT_BUTTON_GROUP') {
@@ -1605,7 +1630,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         />
         <Box component="main" sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           {tabs.length > 0 && (
-            <Box sx={{ bgcolor: '#f4f6f8', display: 'flex', alignItems: 'center', borderBottom: 1, borderColor: 'divider', flexShrink: 0, overflow: 'hidden' }}>
+            <Box sx={{ bgcolor: '#f4f6f8', display: 'flex', alignItems: 'center', borderBottom: 1, borderColor: 'divider', flexShrink: 0, overflow: 'hidden', position: 'relative' }}>
               <IconButton
                 color="inherit"
                 aria-label="open drawer"
@@ -1695,6 +1720,85 @@ export default function Dashboard({ initialData }: DashboardProps) {
                 >
                   <ViewSidebarIcon />
                 </IconButton>
+              )}
+              {searchOpen && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: 0,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    zIndex: 2000,
+                    bgcolor: 'background.paper',
+                    boxShadow: 3,
+                    display: 'flex',
+                    alignItems: 'center',
+                    px: 1,
+                    py: 0.5,
+                    borderRadius: '0 0 8px 8px',
+                    border: 1,
+                    borderColor: 'divider',
+                    borderTop: 0,
+                  }}
+                >
+                  <TextField
+                    inputRef={searchInputRef}
+                    size="small"
+                    placeholder="Find"
+                    value={searchQuery}
+                    autoComplete="off"
+                    onFocus={(e) => e.target.select()}
+                    onBlur={() => {
+                      const term = terminalRefs.current[activePaneId] as any;
+                      term?.clearSearchActiveDecoration?.();
+                    }}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      if (e.target.value) {
+                        const term = terminalRefs.current[activePaneId] as any;
+                        term?.findNext?.(e.target.value, { incremental: true });
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const term = terminalRefs.current[activePaneId] as any;
+                        if (e.shiftKey) {
+                          term?.findPrevious?.(searchQuery);
+                        } else {
+                          term?.findNext?.(searchQuery);
+                        }
+                      } else if (e.key === 'Escape') {
+                        handleCloseSearch();
+                      }
+                    }}
+                    sx={{
+                      width: 200,
+                      '& .MuiInputBase-root': { height: 32, fontSize: '0.875rem' },
+                    }}
+                  />
+                  <IconButton
+                    size="small"
+                    onClick={() => (terminalRefs.current[activePaneId] as any)?.findPrevious?.(searchQuery)}
+                    title="Previous"
+                  >
+                    <NavigateBeforeIcon fontSize="small" />
+                  </IconButton>
+                  <IconButton
+                    size="small"
+                    onClick={() => (terminalRefs.current[activePaneId] as any)?.findNext?.(searchQuery)}
+                    title="Next"
+                  >
+                    <NavigateNextIcon fontSize="small" />
+                  </IconButton>
+                  <IconButton
+                    size="small"
+                    onClick={handleCloseSearch}
+                    title="Close"
+                  >
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </Box>
               )}
             </Box>
           )}

@@ -2,6 +2,8 @@ import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { Terminal, type IMarker } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
+import { ImageAddon } from '@xterm/addon-image';
+import { SearchAddon } from '@xterm/addon-search';
 import '@xterm/xterm/css/xterm.css';
 import { Box } from '@mui/material';
 
@@ -42,6 +44,10 @@ export interface TerminalHandle {
   scrollToTop: () => void;
   scrollToBottom: () => void;
   scrollPages: (amount: number) => void;
+  findNext: (term: string, searchOptions?: any) => boolean;
+  findPrevious: (term: string, searchOptions?: any) => boolean;
+  clearSearchDecorations: () => void;
+  clearSearchActiveDecoration: () => void;
   getLastCommandOutput: () => void;
   getXterm: () => Terminal | null;
 }
@@ -70,6 +76,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const searchAddonRef = useRef<SearchAddon | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const ctrlRef = useRef(isCtrlActive);
   const isActiveRef = useRef(isActive);
@@ -152,6 +159,18 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     scrollPages: (amount: number) => {
       xtermRef.current?.scrollPages(amount);
     },
+    findNext: (term: string, searchOptions?: any) => {
+      return searchAddonRef.current?.findNext(term, searchOptions) || false;
+    },
+    findPrevious: (term: string, searchOptions?: any) => {
+      return searchAddonRef.current?.findPrevious(term, searchOptions) || false;
+    },
+    clearSearchDecorations: () => {
+      searchAddonRef.current?.clearDecorations();
+    },
+    clearSearchActiveDecoration: () => {
+      searchAddonRef.current?.clearActiveDecoration();
+    },
     getLastCommandOutput: () => {
       const { start, end } = markersRef.current;
       const buffer = xtermRef.current?.buffer.active;
@@ -209,8 +228,17 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     term.loadAddon(fitAddon);
     fitAddonRef.current = fitAddon;
 
+    const searchAddon = new SearchAddon();
+    term.loadAddon(searchAddon);
+    searchAddonRef.current = searchAddon;
+
     term.open(terminalRef.current);
     xtermRef.current = term;
+
+    if (localVars["local_cs_noimage"] !== "1") {
+      const imageAddon = new ImageAddon();
+      term.loadAddon(imageAddon);
+    }
 
     // Load WebGL Addon
     if (localVars["local_cs_nowebgl"] !== "1") {
@@ -401,6 +429,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
 
     term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
       if (e.altKey && (e.key === 'j' || e.key === 'k' || e.key === 'i' || e.key === 'g' || e.key === 'J' || e.key === 'K' || e.key === 'I' || e.key === 'G' || e.key === 'w' || e.key === 'W' || e.key === 't' || e.key === 'T' || (e.key >= '0' && e.key <= '9') || (e.shiftKey && e.code.startsWith('Digit')) || e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        return false;
+      }
+      if (e.ctrlKey && (e.key === 'f' || e.key === 'F')) {
         return false;
       }
       return true;

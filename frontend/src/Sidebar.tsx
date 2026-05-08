@@ -399,6 +399,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
             size="small"
             type="search"
             placeholder="Filter hosts or #tag..."
+            title="<Alt + I>"
             value={filterStr}
             onChange={(e) => setFilterStr(e.target.value)}
             onKeyDown={handleFilterKeyDown}
@@ -598,6 +599,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
                   <b>Alt + G</b> : Focus active terminal session<br />
                   <b>Alt + Shift + 1-9,0</b> : Click the button in button bar<br />
                   <b>Alt + ↑ / ↓</b> : Scroll terminal up / down<br />
+                  <b>Ctrl + F</b> : Open terminal search box<br />
                   <b>Mouse Select</b> in terminal to copy<br />
                   <b>Mouse Right Click</b> in terminal to paste<br />
                 </Typography>
