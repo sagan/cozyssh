@@ -336,9 +336,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const isTouch = useMediaQuery('(pointer: coarse)');
-  const defaultTabId = `local-${Date.now()}`;
   const [tabs, setTabs] = useState<TabData[]>([]);
-  const [activeTabId, setActiveTabId] = useState<string>(defaultTabId);
+  const [activeTabId, setActiveTabId] = useState<string>('');
   const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number; targetTabId: string } | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileAppletsOpen, setMobileAppletsOpen] = useState(false);
@@ -391,7 +390,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const scriptInvokeContextRef = useRef<{ isAutoRun: boolean } | null>(null);
 
   const activePaneIdRef = useRef(activePaneId);
+  const activeTabIdRef = useRef(activeTabId);
   useEffect(() => { activePaneIdRef.current = activePaneId; }, [activePaneId]);
+  useEffect(() => { activeTabIdRef.current = activeTabId; }, [activeTabId]);
 
   const hostsRef = useRef(hosts);
   useEffect(() => { hostsRef.current = hosts; }, [hosts]);
@@ -453,6 +454,67 @@ export default function Dashboard({ initialData }: DashboardProps) {
       delete (window as any).csGetApplet;
     };
   }, [applets]);
+
+  const handleSelectHost = React.useCallback(async (host: string, customTitle?: string) => {
+    const id = Math.random().toString(36).substring(2);
+    console.log('handleSelectHost called for:', host, customTitle, 'ID:', id, new Error().stack);
+    const newTab: TabData = {
+      id: id,
+      title: customTitle || host,
+      panes: [{ id: id, host }],
+      activePaneId: id,
+    };
+    setTabs(prev => [...prev, newTab]);
+    setActiveTabId(newTab.id);
+    setActivePaneId(id);
+
+    // Record recent
+    if (host !== 'local') {
+      const token = localStorage.getItem('cozy_token');
+      try {
+        fetch('/api/recents', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ host })
+        });
+
+        // Optimistic update for local recents
+        setRecents(prev => {
+          const now = Math.floor(Date.now() / 1000);
+          const idx = prev.findIndex(r => r.host === host);
+          const next = [...prev];
+          if (idx >= 0) {
+            next[idx] = { ...next[idx], last_used: now };
+          } else {
+            next.push({ host, last_used: now });
+          }
+          return next.sort((a, b) => b.last_used - a.last_used).slice(0, 50);
+        });
+      } catch (e) {
+        console.error('Failed to record recent:', e);
+      }
+    }
+  }, [setRecents]);
+
+  const handleSelectTagAsSplit = React.useCallback((tag: string, hosts: string[]) => {
+    const tabId = Math.random().toString(36).substring(2);
+    const panes = hosts.map(host => ({
+      id: Math.random().toString(36).substring(2),
+      host
+    }));
+    const newTab: TabData = {
+      id: tabId,
+      title: tag,
+      panes: panes,
+      activePaneId: panes[0].id,
+    };
+    setTabs(prev => [...prev, newTab]);
+    setActiveTabId(newTab.id);
+    setActivePaneId(panes[0].id);
+  }, []);
 
   useEffect(() => {
     (window as any).csOpenApplet = (name: string, node: any, options: { position?: 'widget' | 'sidebar'; width?: number; height?: number } = {}) => {
@@ -584,6 +646,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     };
     (window as any).csNotify = (msg: string) => csNotify(msg);
     (window as any).csOpen = (target: any, options: { name?: string } = {}) => {
+      console.log('csOpen called:', target, options);
       const targets = Array.isArray(target) ? target.slice(0, 4) : [target];
       const hostNames = targets.map(t => {
         if (typeof t === 'string') {
@@ -662,7 +725,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       delete (window as any).csExec;
       delete (window as any).csRefresh;
     };
-  }, []);
+  }, [handleSelectHost, handleSelectTagAsSplit, isMobile]);
 
   const handleCloseInputDialog = () => {
     setInputDialogOpen(false);
@@ -853,6 +916,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
         if (e.data === 'pinned_present') pinnedElsewhere = true;
       };
 
+      const hash = window.location.hash.substring(1);
+      console.log('initAsync starting, hash:', hash);
       let data = initialData;
       if (!data) {
         try {
@@ -928,20 +993,22 @@ export default function Dashboard({ initialData }: DashboardProps) {
             return { id: p.id, panes: [{ id: paneId, host: p.host }], activePaneId: paneId, title: p.title, isPinned: true, isLocked: p.isLocked };
           });
           if (pinnedTabs.length > 0) {
-            setTabs(pinnedTabs);
-            setActiveTabId(pinnedTabs[0].id);
-            setActivePaneId(pinnedTabs[0].activePaneId);
+            setTabs(prev => prev.length > 0 ? prev : pinnedTabs);
+            setActiveTabId(prev => prev || pinnedTabs[0].id);
+            setActivePaneId(prev => prev || pinnedTabs[0].activePaneId);
           } else {
             const initialId = `local-${Date.now()}`;
-            setTabs([{ id: initialId, panes: [{ id: initialId, host: 'local' }], activePaneId: initialId, title: 'local' }]);
-            setActiveTabId(initialId);
-            setActivePaneId(initialId);
+            const initialPaneId = Math.random().toString(36).substring(2);
+            setTabs(prev => prev.length > 0 ? prev : [{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
+            setActiveTabId(prev => prev || initialId);
+            setActivePaneId(prev => prev || initialPaneId);
           }
         } else {
           const initialId = `local-${Date.now()}`;
-          setTabs([{ id: initialId, panes: [{ id: initialId, host: 'local' }], activePaneId: initialId, title: 'local' }]);
-          setActiveTabId(initialId);
-          setActivePaneId(initialId);
+          const initialPaneId = Math.random().toString(36).substring(2);
+          setTabs(prev => prev.length > 0 ? prev : [{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
+          setActiveTabId(prev => prev || initialId);
+          setActivePaneId(prev => prev || initialPaneId);
         }
       }, 350);
     };
@@ -1004,65 +1071,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setTimeout(() => terminalRefs.current[tabId]?.focus(), 50);
   };
 
-  const handleSelectHost = async (host: string, customTitle?: string) => {
-    const id = Math.random().toString(36).substring(2);
-    const newTab: TabData = {
-      id: id,
-      title: customTitle || host,
-      panes: [{ id: id, host }],
-      activePaneId: id,
-    };
-    setTabs(prev => [...prev, newTab]);
-    setActiveTabId(newTab.id);
-    setActivePaneId(id);
-
-    // Record recent
-    if (host !== 'local') {
-      const token = localStorage.getItem('cozy_token');
-      try {
-        fetch('/api/recents', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ host })
-        });
-
-        // Optimistic update for local recents
-        setRecents(prev => {
-          const now = Math.floor(Date.now() / 1000);
-          const idx = prev.findIndex(r => r.host === host);
-          const next = [...prev];
-          if (idx >= 0) {
-            next[idx] = { ...next[idx], last_used: now };
-          } else {
-            next.push({ host, last_used: now });
-          }
-          return next.sort((a, b) => b.last_used - a.last_used).slice(0, 50);
-        });
-      } catch (e) {
-        console.error('Failed to record recent:', e);
-      }
-    }
-  };
-
-  const handleSelectTagAsSplit = (tag: string, hosts: string[]) => {
-    const tabId = Math.random().toString(36).substring(2);
-    const panes = hosts.map(host => ({
-      id: Math.random().toString(36).substring(2),
-      host
-    }));
-    const newTab: TabData = {
-      id: tabId,
-      title: tag,
-      panes: panes,
-      activePaneId: panes[0].id,
-    };
-    setTabs(prev => [...prev, newTab]);
-    setActiveTabId(newTab.id);
-    setActivePaneId(panes[0].id);
-  };
 
   const handleCloseTab = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
@@ -1823,6 +1831,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                   {(() => {
                     const renderPaneInner = (pane: PaneData) => (
                       <Box
+                        data-pane-id={pane.id}
                         sx={{
                           flex: 1,
                           height: '100%',
@@ -1843,7 +1852,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
                         ) : (
                           <TerminalComponent
                             key={pane.id}
-                            ref={el => { terminalRefs.current[pane.id] = el; }}
+                            ref={el => {
+                              console.log('Terminal ref for', pane.id, 'is', el ? 'set' : 'deleted');
+                              if (el) terminalRefs.current[pane.id] = el;
+                              else delete terminalRefs.current[pane.id];
+                            }}
                             host={pane.host}
                             sessionId={pane.sessionId || pane.id}
                             cloneFrom={pane.cloneFrom}

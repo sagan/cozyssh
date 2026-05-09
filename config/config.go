@@ -25,14 +25,15 @@ type Button struct {
 }
 
 type Config struct {
-	Addr            string            `yaml:"addr"`
-	SiteName        string            `yaml:"sitename"`
-	AppPasswordHash string            `yaml:"app_password_hash"`
-	SSHDir          string            `yaml:"sshdir"` // openssh config dir, defaults to ~/.ssh
-	Buttons         []Button          `yaml:"buttons" json:"buttons"`
-	ConfigPath      string            `yaml:"-"` // internal use
-	ConfigDir       string            `yaml:"-"` // internal use
-	Vars            map[string]string `yaml:"vars" json:"vars"`
+	Addr                  string            `yaml:"addr"`
+	SiteName              string            `yaml:"sitename"`
+	AppPasswordHash       string            `yaml:"app_password_hash"`
+	SSHDir                string            `yaml:"sshdir"` // openssh config dir, defaults to ~/.ssh
+	Buttons               []Button          `yaml:"buttons" json:"buttons"`
+	ConfigPath            string            `yaml:"-"` // internal use
+	ConfigDir             string            `yaml:"-"` // internal use
+	Vars                  map[string]string `yaml:"vars" json:"vars"`
+	InsecureIgnoreHostKey bool              `yaml:"insecure_ignore_host_key"`
 }
 
 func LoadConfig(customDir string) (*Config, error) {

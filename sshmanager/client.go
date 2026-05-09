@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -382,6 +383,7 @@ type TerminalUI interface {
 // DialSSH resolves standard configs and connects via id_ed25519
 // It always returns a new independent connection.
 func DialSSH(alias string, term TerminalUI) (*PooledClient, *ssh.Session, error) {
+	log.Printf("DialSSH: dialing %s", alias)
 	client, closers, err := getSSHClient(alias, term)
 	if err != nil {
 		return nil, nil, err
@@ -407,6 +409,7 @@ func DialSSH(alias string, term TerminalUI) (*PooledClient, *ssh.Session, error)
 }
 
 func getSSHClient(alias string, term TerminalUI) (*ssh.Client, []io.Closer, error) {
+	log.Printf("getSSHClient: alias=%s", alias)
 	configPath := filepath.Join(getSSHDir(), "config")
 	f, err := os.Open(configPath)
 	var cfg *ssh_config.Config
@@ -421,12 +424,34 @@ func getSSHClient(alias string, term TerminalUI) (*ssh.Client, []io.Closer, erro
 	if user == "" {
 		user = "root"
 	}
+	var password string
 
-	// Handle user@host alias format (common for auto-discovered hosts)
+	// Handle user:pass@host:port or user@host:port format
 	if strings.Contains(alias, "@") {
 		parts := strings.SplitN(alias, "@", 2)
-		user = parts[0]
-		host = parts[1]
+		userPart := parts[0]
+		hostPart := parts[1]
+
+		if strings.Contains(userPart, ":") {
+			up := strings.SplitN(userPart, ":", 2)
+			user = up[0]
+			password = up[1]
+		} else {
+			user = userPart
+		}
+
+		if strings.Contains(hostPart, ":") {
+			hp := strings.SplitN(hostPart, ":", 2)
+			host = hp[0]
+			port = hp[1]
+		} else {
+			host = hostPart
+		}
+	} else if strings.Contains(alias, ":") {
+		// handle host:port format
+		hp := strings.SplitN(alias, ":", 2)
+		host = hp[0]
+		port = hp[1]
 	}
 
 	if cfg != nil {
@@ -461,6 +486,9 @@ func getSSHClient(alias string, term TerminalUI) (*ssh.Client, []io.Closer, erro
 	}
 
 	var authMethods []ssh.AuthMethod
+	if password != "" {
+		authMethods = append(authMethods, ssh.Password(password))
+	}
 	keyData, err := os.ReadFile(identityFile)
 	if err == nil {
 		signer, err := ssh.ParsePrivateKey(keyData)
@@ -542,6 +570,9 @@ func getSSHClient(alias string, term TerminalUI) (*ssh.Client, []io.Closer, erro
 	}
 
 	hostKeyCallback := func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		if globalConfig != nil && globalConfig.InsecureIgnoreHostKey {
+			return nil
+		}
 		var keyErr2 *knownhosts.KeyError
 		err = khCallback(hostname, remote, key)
 		if err == nil {
@@ -621,7 +652,9 @@ func getSSHClient(alias string, term TerminalUI) (*ssh.Client, []io.Closer, erro
 		return ssh.Dial("tcp", addr, config)
 	}
 
+	log.Printf("getSSHClient: dialing %s:%s as %s", host, port, user)
 	client, err = dialFunc(sshConfig)
+	log.Printf("getSSHClient: dialFunc returned err=%v", err)
 	if err != nil && strings.Contains(err.Error(), "no supported methods remain") && term != nil {
 		// Try password fallback
 		pass, perr := term.PromptMasked(fmt.Sprintf("%s@%s's password: ", user, host))

@@ -232,7 +232,8 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     term.loadAddon(searchAddon);
     searchAddonRef.current = searchAddon;
 
-    term.open(terminalRef.current);
+    console.log('Opening xterm for', host, 'on', terminalRef.current);
+    term.open(terminalRef.current!);
     xtermRef.current = term;
 
     if (localVars["local_cs_noimage"] !== "1") {

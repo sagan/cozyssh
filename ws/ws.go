@@ -117,6 +117,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	cloneFrom := r.URL.Query().Get("cloneFrom")
 	host := r.URL.Query().Get("host")
 	sessionID := r.URL.Query().Get("sessionId")
+	log.Printf("WS: New connection. host=%s, sessionId=%s, reconnect=%v, cloneFrom=%s", host, sessionID, reconnect, cloneFrom)
 	if sessionID == "" {
 		sessionID = host // Fallback to host if no unique ID provided
 	}
@@ -168,11 +169,13 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			}
 			stdout, _ := sshSession.StdoutPipe()
 			stdin, _ := sshSession.StdinPipe()
+			log.Printf("WS: Requesting shell for %s", sessionID)
 			if err := sshSession.Shell(); err != nil {
 				log.Println("Shell err:", err)
 				pClient.Release()
 				return
 			}
+			log.Printf("WS: Shell started for %s", sessionID)
 			s = session.NewSession(sessionID, host, stdout, stdin, func() error {
 				sshSession.Close()
 				pClient.Release()

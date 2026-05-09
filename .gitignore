@@ -4,3 +4,6 @@ node_modules
 # By default ignore all files in root dir
 /*.*
 /cozyssh
+
+# screenshots saved during e2e test
+/test/e2e/*.png
