@@ -566,14 +566,28 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
       }
       const ws = wsRef.current;
       if (ws && ws.readyState === WebSocket.OPEN) {
-        if (ctrlRef.current && data.length === 1) {
-          const code = data.toUpperCase().charCodeAt(0);
-          if (code >= 64 && code <= 90) { // @ to Z
-            const ctrlCode = String.fromCharCode(code - 64);
+        if (ctrlRef.current && data && !data.startsWith('\x1b')) {
+          // Mobile IMEs often send composition artifacts. We extract the first valid char.
+          // This regex matches a-z, A-Z, and the symbols @, [, \, ], ^, _, ?
+          const match = data.match(/[a-zA-Z@[\\\]^_?]/);
+          if (match) {
+            const code = match[0].toUpperCase().charCodeAt(0);
+            let ctrlCode = String.fromCharCode(code - 64);
+            // Special case for Ctrl + ? (often maps to DEL)
+            if (match[0] === '?') {
+              ctrlCode = '\x7F';
+            }
             ws.send(new TextEncoder().encode(ctrlCode));
             onCtrlDone?.();
             return;
+          } else if (data.includes(' ')) {
+            // Handle Ctrl + Space
+            ws.send(new TextEncoder().encode('\x00'));
+            onCtrlDone?.();
+            return;
           }
+          // Optional: Release Ctrl lock if an unmappable key was pressed to avoid getting stuck
+          onCtrlDone?.();
         }
         ws.send(new TextEncoder().encode(data));
       }

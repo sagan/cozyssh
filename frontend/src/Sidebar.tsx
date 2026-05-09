@@ -5,6 +5,7 @@ import DnsIcon from '@mui/icons-material/Dns';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import AddIcon from '@mui/icons-material/Add';
 import StarIcon from '@mui/icons-material/Star';
+import { version as PACKAGE_JSON_VERSION } from '../package.json';
 
 const drawerWidth = 260;
 
@@ -615,7 +616,8 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
               <Box sx={{ textAlign: 'center', mt: 4 }}>
                 <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold' }}>CozySSH</Typography>
                 <Typography variant="body1" color="text.secondary" gutterBottom>
-                  Version: <b>{appVersion}</b>
+                  Version: <b>{appVersion}</b><br />
+                  Frontend: <b>{PACKAGE_JSON_VERSION}</b>
                 </Typography>
                 <Typography variant="body2" sx={{ mt: 3 }}>
                   <a href="https://github.com/sagan/cozyssh" target="_blank" rel="noopener noreferrer" style={{ color: theme.palette.primary.main, textDecoration: 'none' }}>
