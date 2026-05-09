@@ -516,25 +516,44 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setActivePaneId(panes[0].id);
   }, []);
 
-  useEffect(() => {
-    (window as any).csOpenApplet = (name: string, node: any, options: { position?: 'widget' | 'sidebar'; width?: number; height?: number } = {}) => {
-      const parsedPos = options.position === 'sidebar' || isMobile ? 'sidebar' : 'widget';
+  const handleAttach = React.useCallback(async (id: string, host: string, title: string, isLocked: boolean = false) => {
+    const existing = tabs.find(t => t.panes.some(p => (p.sessionId || p.id) === id && p.state !== 'stolen'));
+    if (existing) {
+      setActiveTabId(existing.id);
+      setActivePaneId(existing.panes.find(p => (p.sessionId || p.id) === id && p.state !== 'stolen')?.id || existing.activePaneId);
+      return;
+    }
+    const token = localStorage.getItem('cozy_token');
+    await fetch('/api/sessions/attach', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
+    const frontendId = `${id}-${Date.now()}`;
+    setTabs(prev => [...prev, { id: frontendId, panes: [{ id: frontendId, sessionId: id, host }], activePaneId: frontendId, title, isPinned: true, isLocked }]);
+    setActiveTabId(frontendId);
+    setActivePaneId(frontendId);
+  }, [tabs]);
 
-      if (isMobile && parsedPos === 'sidebar' && !scriptInvokeContextRef.current?.isAutoRun) {
-        setMobileAppletsOpen(true);
+  const handleRefresh = React.useCallback(async () => {
+    const token = localStorage.getItem('cozy_token');
+    try {
+      const r = await fetch('/api/fulldata', { headers: { 'Authorization': `Bearer ${token}` } });
+      if (r.status === 401) {
+        localStorage.removeItem('cozy_token');
+        window.location.href = '/login';
+        return;
       }
+      const data = await r.json();
+      loadFullData(data);
+    } catch (e) {
+      console.error(e);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-      setApplets(prev => {
-        const existing = prev.find(a => a.name === name);
-        if (existing) {
-          return prev.map(a => a.name === name ? { ...a, node, width: options.width ?? a.width, height: options.height ?? a.height } : a);
-        }
-        return [...prev, { name, node, position: parsedPos, width: options.width, height: options.height, zIndex: maxZIndexRef.current++ }];
-      });
-    };
-    (window as any).csCloseApplet = (name: string) => {
-      setApplets(prev => prev.filter(a => a.name !== name));
-    };
+  // --- Scripting API: stable functions (refs + stable setters only — never re-assigned) ---
+  useEffect(() => {
     (window as any).csGetVar = (name?: string) => {
       if (name) {
         if (name.toLowerCase().startsWith("local")) {
@@ -599,7 +618,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     };
     (window as any).csGetShellIntegration = (paneId?: string) => {
       return shellIntegrationRef.current[paneId || activePaneIdRef.current];
-    }
+    };
     (window as any).csGetAll = () => {
       return {
         activePaneId: activePaneIdRef.current,
@@ -610,7 +629,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         vars: varsRef.current,
         localVars: localVarsRef.current,
       };
-    }
+    };
     (window as any).csSendData = (data: string, paneId?: string) => {
       const term: any = terminalRefs.current[paneId || activePaneIdRef.current];
       term?.sendData?.(data);
@@ -630,7 +649,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         if (line) lines.push(line.translateToString().trimEnd());
       }
       return lines.join('\n');
-    }
+    };
     (window as any).csFocus = (paneId?: string) => {
       if (paneId) {
         const allPanes = tabsRef.current.flatMap(t => t.panes.map(p => ({ tabId: t.id, paneId: p.id })));
@@ -645,27 +664,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
       }
     };
     (window as any).csNotify = (msg: string) => csNotify(msg);
-    (window as any).csOpen = (target: any, options: { name?: string } = {}) => {
-      console.log('csOpen called:', target, options);
-      const targets = Array.isArray(target) ? target.slice(0, 4) : [target];
-      const hostNames = targets.map(t => {
-        if (typeof t === 'string') {
-          if (t === 'local') return 'local';
-          const known = hostsRef.current.find(h => h.name === t || h.hostname === t);
-          return known ? known.name : t;
-        }
-        return t.name;
-      });
-
-      const title = options.name || hostNames[0];
-
-      if (hostNames.length > 1) {
-        handleSelectTagAsSplit(title, hostNames);
-      } else {
-        handleSelectHost(hostNames[0], options.name);
-      }
-    };
-
     (window as any).csFetch = async (url: string, options: any = {}) => {
       const token = localStorage.getItem('cozy_token');
       const proxyUrl = `/api/fetch?url=${encodeURIComponent(url)}`;
@@ -689,7 +687,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
         body: options.body
       });
     };
-
     (window as any).csExec = async (cmdline: string) => {
       const token = localStorage.getItem('cozy_token');
       const res = await fetch('/api/exec', {
@@ -704,28 +701,88 @@ export default function Dashboard({ initialData }: DashboardProps) {
       return res.json();
     };
 
-    (window as any).csRefresh = async () => {
-      await handleRefresh();
-    };
-
     return () => {
-      delete (window as any).csOpenApplet;
-      delete (window as any).csCloseApplet;
       delete (window as any).csGetVar;
       delete (window as any).csSetVar;
       delete (window as any).csGetTerminal;
       delete (window as any).csGetShellIntegration;
+      delete (window as any).csGetAll;
       delete (window as any).csSendData;
       delete (window as any).csGetTerminalContents;
       delete (window as any).csFocus;
       delete (window as any).csNotify;
-      delete (window as any).csGetAll;
-      delete (window as any).csOpen;
       delete (window as any).csFetch;
       delete (window as any).csExec;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // --- Scripting API: applet functions (re-assigned when isMobile changes) ---
+  useEffect(() => {
+    (window as any).csOpenApplet = (name: string, node: any, options: { position?: 'widget' | 'sidebar'; width?: number; height?: number } = {}) => {
+      const parsedPos = options.position === 'sidebar' || isMobile ? 'sidebar' : 'widget';
+
+      if (isMobile && parsedPos === 'sidebar' && !scriptInvokeContextRef.current?.isAutoRun) {
+        setMobileAppletsOpen(true);
+      }
+
+      setApplets(prev => {
+        const existing = prev.find(a => a.name === name);
+        if (existing) {
+          return prev.map(a => a.name === name ? { ...a, node, width: options.width ?? a.width, height: options.height ?? a.height } : a);
+        }
+        return [...prev, { name, node, position: parsedPos, width: options.width, height: options.height, zIndex: maxZIndexRef.current++ }];
+      });
+    };
+    (window as any).csCloseApplet = (name: string) => {
+      setApplets(prev => prev.filter(a => a.name !== name));
+    };
+    return () => {
+      delete (window as any).csOpenApplet;
+      delete (window as any).csCloseApplet;
+    };
+  }, [isMobile]);
+
+  // --- Scripting API: navigation functions (re-assigned when callbacks change) ---
+  useEffect(() => {
+    (window as any).csOpen = (target: any, options: { name?: string } = {}) => {
+      console.log('csOpen called:', target, options);
+      const targets = Array.isArray(target) ? target.slice(0, 4) : [target];
+      const hostNames = targets.map(t => {
+        if (typeof t === 'string') {
+          if (t === 'local') return 'local';
+          const known = hostsRef.current.find(h => h.name === t || h.hostname === t);
+          return known ? known.name : t;
+        }
+        return t.name;
+      });
+
+      const title = options.name || hostNames[0];
+
+      if (hostNames.length > 1) {
+        handleSelectTagAsSplit(title, hostNames);
+      } else {
+        handleSelectHost(hostNames[0], options.name);
+      }
+    };
+    (window as any).csAttach = (id: string, host: string, title: string, isLocked = false) => {
+      handleAttach(id, host, title, isLocked);
+    };
+    return () => {
+      delete (window as any).csOpen;
+      delete (window as any).csAttach;
+    };
+  }, [handleSelectHost, handleSelectTagAsSplit, handleAttach]);
+
+  // --- Scripting API: refresh (re-assigned when handleRefresh changes — which is never) ---
+  useEffect(() => {
+    (window as any).csRefresh = async () => {
+      await handleRefresh();
+    };
+    return () => {
       delete (window as any).csRefresh;
     };
-  }, [handleSelectHost, handleSelectTagAsSplit, isMobile]);
+  }, [handleRefresh]);
 
   const handleCloseInputDialog = () => {
     setInputDialogOpen(false);
@@ -881,21 +938,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
     }
   };
 
-  const handleRefresh = async () => {
-    const token = localStorage.getItem('cozy_token');
-    try {
-      const r = await fetch('/api/fulldata', { headers: { 'Authorization': `Bearer ${token}` } });
-      if (r.status === 401) {
-        localStorage.removeItem('cozy_token');
-        window.location.href = '/login';
-        return;
-      }
-      const data = await r.json();
-      loadFullData(data);
-    } catch (e) {
-      console.error(e);
-    }
-  };
 
   useEffect(() => {
     const token = localStorage.getItem('cozy_token');
@@ -916,7 +958,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
         if (e.data === 'pinned_present') pinnedElsewhere = true;
       };
 
-      const hash = window.location.hash.substring(1);
       console.log('initAsync starting, hash:', hash);
       let data = initialData;
       if (!data) {
@@ -973,7 +1014,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             }
           } else {
             // Single host mode /#host
-            const host = hostsData.find(h => h.name === hash || h.hostname === hash);
+            const host = hash !== "local" ? hostsData.find(h => h.name === hash || h.hostname === hash) : { name: "local" };
             if (host) {
               handleSelectHost(host.name);
             } else {
@@ -1212,27 +1253,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setContextMenu(null);
   };
 
-  const handleAttach = async (id: string, host: string, title: string, isLocked: boolean = false) => {
-    const existing = tabs.find(t => t.panes.some(p => (p.sessionId || p.id) === id && p.state !== 'stolen'));
-    if (existing) {
-      setActiveTabId(existing.id);
-      setActivePaneId(existing.panes.find(p => (p.sessionId || p.id) === id && p.state !== 'stolen')?.id || existing.activePaneId);
-      return;
-    }
-
-    const token = localStorage.getItem('cozy_token');
-    await fetch('/api/sessions/attach', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id })
-    });
-
-    const frontendId = `${id}-${Date.now()}`;
-    setTabs(prev => [...prev, { id: frontendId, panes: [{ id: frontendId, sessionId: id, host }], activePaneId: frontendId, title, isPinned: true, isLocked }]);
-    setActiveTabId(frontendId);
-    setActivePaneId(frontendId);
-  };
-
   const handleRename = async () => {
     if (!contextMenu) return;
     const targetId = contextMenu.targetTabId;
@@ -1328,7 +1348,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.altKey && (e.key === 'j' || e.key === 'J')) {
+      const k = e.key.toLowerCase();
+      if (e.altKey && (k === 'j' || e.code === 'KeyJ')) {
         e.preventDefault();
         const allPanes = tabs.flatMap(t => t.panes.map(p => ({ tabId: t.id, paneId: p.id })));
         if (allPanes.length === 0) return;
@@ -1337,8 +1358,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
         const target = allPanes[nextIdx];
         setActiveTabId(target.tabId);
         setActivePaneId(target.paneId);
-        setTimeout(() => terminalRefs.current[target.paneId]?.focus(), 10);
-      } else if (e.altKey && (e.key === 'k' || e.key === 'K')) {
+        (document.activeElement as HTMLElement)?.blur?.();
+        terminalRefs.current[target.paneId]?.focus();
+        setTimeout(() => terminalRefs.current[target.paneId]?.focus(), 100);
+      } else if (e.altKey && (k === 'k' || e.code === 'KeyK')) {
         e.preventDefault();
         const allPanes = tabs.flatMap(t => t.panes.map(p => ({ tabId: t.id, paneId: p.id })));
         if (allPanes.length === 0) return;
@@ -1347,19 +1370,21 @@ export default function Dashboard({ initialData }: DashboardProps) {
         const target = allPanes[nextIdx];
         setActiveTabId(target.tabId);
         setActivePaneId(target.paneId);
-        setTimeout(() => terminalRefs.current[target.paneId]?.focus(), 10);
-      } else if (e.altKey && (e.key === 'g' || e.key === 'G')) {
+        (document.activeElement as HTMLElement)?.blur?.();
+        terminalRefs.current[target.paneId]?.focus();
+        setTimeout(() => terminalRefs.current[target.paneId]?.focus(), 100);
+      } else if (e.altKey && (k === 'g' || e.code === 'KeyG')) {
         e.preventDefault();
         const currentTab = tabs.find(t => t.id === activeTabId);
         if (currentTab && currentTab.panes.length > 0) {
           const pid = currentTab.panes[0].id;
           setActivePaneId(pid);
-          setTimeout(() => terminalRefs.current[pid]?.focus(), 0);
+          setTimeout(() => terminalRefs.current[pid]?.focus(), 100);
         }
-      } else if (e.altKey && (e.key === 'w' || e.key === 'W')) {
+      } else if (e.altKey && (k === 'w' || e.code === 'KeyW')) {
         e.preventDefault();
         handleCloseCurrentPaneOrTab();
-      } else if (e.altKey && (e.key === 't' || e.key === 'T')) {
+      } else if (e.altKey && (k === 't' || e.code === 'KeyT')) {
         e.preventDefault();
         setNewTabDialogOpen(true);
       } else if (e.altKey && e.key >= '1' && e.key <= '9') {
@@ -1369,7 +1394,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
           const target = tabs[idx];
           setActiveTabId(target.id);
           setActivePaneId(target.activePaneId);
-          setTimeout(() => terminalRefs.current[target.activePaneId]?.focus(), 10);
+          (document.activeElement as HTMLElement)?.blur?.();
+          terminalRefs.current[target.activePaneId]?.focus();
+          setTimeout(() => terminalRefs.current[target.activePaneId]?.focus(), 100);
         }
       } else if (e.altKey && e.key === '0') {
         e.preventDefault();
@@ -1377,7 +1404,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
           const last = tabs[tabs.length - 1];
           setActiveTabId(last.id);
           setActivePaneId(last.activePaneId);
-          setTimeout(() => terminalRefs.current[last.activePaneId]?.focus(), 10);
+          (document.activeElement as HTMLElement)?.blur?.();
+          terminalRefs.current[last.activePaneId]?.focus();
+          setTimeout(() => terminalRefs.current[last.activePaneId]?.focus(), 100);
         }
       } else if (e.altKey && e.key === 'ArrowUp') {
         e.preventDefault();
@@ -1396,7 +1425,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             handleButtonClick(filteredButtons[idx]);
           }
         }
-      } else if (e.ctrlKey && (e.key === 'f' || e.key === 'F')) {
+      } else if (e.ctrlKey && e.shiftKey && (k === 'f' || e.code === 'KeyF')) {
         // Open terminal search box only if current tab is a terminal and no dialog is open
         if (!document.querySelector("body > div.MuiDialog-root")
           && terminalRefs.current[activePaneId]

@@ -93,7 +93,8 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
   - `Alt + G` : Focus active terminal session
   - `Alt + Shift + 1-9,0` : Click the button in button bar
   - `Alt + ↑ / ↓` : Scroll terminal up / down
-  - `Ctrl + F` : Open terminal search box
+  - `Ctrl + Shift + F` : Open terminal search box
+  - `Ctrl + Shift + V (Windows) / Cmd + V (Mac)` : Paste into terminal
   - `Mouse Select` in terminal to copy
   - `Mouse Right Click` in terminal to paste
 - **Advanced SSH Management**: 🔑

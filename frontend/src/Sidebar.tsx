@@ -77,7 +77,9 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   const [initialHostFormData, setInitialHostFormData] = useState<any>(null);
 
   // Context Menu State
+  const [contextMenuOpen, setContextMenuOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number; target: Host } | null>(null);
+  const [tagContextMenuOpen, setTagContextMenuOpen] = useState(false);
   const [tagContextMenu, setTagContextMenu] = useState<{ mouseX: number; mouseY: number; tag: string } | null>(null);
 
   useEffect(() => {
@@ -123,14 +125,16 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   const handleContextMenu = (e: React.MouseEvent, host: Host) => {
     e.preventDefault();
     setContextMenu({ mouseX: e.clientX - 2, mouseY: e.clientY - 4, target: host });
+    setContextMenuOpen(true);
   };
 
-  const closeMenu = () => setContextMenu(null);
-  const closeTagMenu = () => setTagContextMenu(null);
+  const closeMenu = () => setContextMenuOpen(false);
+  const closeTagMenu = () => setTagContextMenuOpen(false);
 
   const handleTagContextMenu = (e: React.MouseEvent, tag: string) => {
     e.preventDefault();
     setTagContextMenu({ mouseX: e.clientX - 2, mouseY: e.clientY - 4, tag });
+    setTagContextMenuOpen(true);
   };
 
   const handleOpenAllServers = () => {
@@ -139,7 +143,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
     setFilterStr(`#${tag} `);
     const targets = hosts.filter(h => h.tags && h.tags.includes(tag));
     targets.forEach(h => onSelect(h.name));
-    setTagContextMenu(null);
+    closeTagMenu();
   };
 
   const handleOpenSplitServers = () => {
@@ -161,14 +165,14 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
     if (targets.length > 0) {
       onSelectTagAsSplit(tag, targets.map(h => h.name));
     }
-    setTagContextMenu(null);
+    closeTagMenu();
   };
 
   const handleCopyTagUrl = () => {
     if (!tagContextMenu) return;
     const url = `${window.location.origin}/##${tagContextMenu.tag}`;
     navigator.clipboard.writeText(url);
-    setTagContextMenu(null);
+    closeTagMenu();
   };
 
   const handleAddOpen = () => {
@@ -498,7 +502,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
 
       {/* Host Context Menu */}
       <Menu
-        open={contextMenu !== null}
+        open={contextMenuOpen}
         onClose={closeMenu}
         anchorReference="anchorPosition"
         anchorPosition={contextMenu ? { top: contextMenu.mouseY, left: contextMenu.mouseX } : undefined}
@@ -519,7 +523,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
       </Menu>
 
       <Menu
-        open={tagContextMenu !== null}
+        open={tagContextMenuOpen}
         onClose={closeTagMenu}
         anchorReference="anchorPosition"
         anchorPosition={tagContextMenu ? { top: tagContextMenu.mouseY, left: tagContextMenu.mouseX } : undefined}
@@ -599,7 +603,8 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
                   <b>Alt + G</b> : Focus active terminal session<br />
                   <b>Alt + Shift + 1-9,0</b> : Click the button in button bar<br />
                   <b>Alt + ↑ / ↓</b> : Scroll terminal up / down<br />
-                  <b>Ctrl + F</b> : Open terminal search box<br />
+                  <b>Ctrl + Shift + F</b> : Open terminal search box<br />
+                  <b>Ctrl + Shift + V (Windows) / Cmd + V (Mac)</b> : Paste into terminal<br />
                   <b>Mouse Select</b> in terminal to copy<br />
                   <b>Mouse Right Click</b> in terminal to paste<br />
                 </Typography>

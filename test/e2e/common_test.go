@@ -6,16 +6,18 @@ package e2e
 
 import (
 	"context"
+	"cozyssh"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
-
-	"cozyssh"
 
 	"github.com/ory/dockertest/v4"
 	"github.com/playwright-community/playwright-go"
@@ -203,6 +205,7 @@ func StartSSHContainer(t *testing.T, user, password string) (string, string) {
 }
 
 func waitForTerminalText(t *testing.T, page playwright.Page, text string, timeout time.Duration) {
+	t.Helper()
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		content, err := page.Evaluate("() => csGetTerminalContents(50)")
@@ -215,4 +218,97 @@ func waitForTerminalText(t *testing.T, page playwright.Page, text string, timeou
 		time.Sleep(200 * time.Millisecond)
 	}
 	t.Fatalf("timed out waiting for terminal text: %s", text)
+}
+
+// waitForTerminalTextInPane polls a specific pane (by its frontend pane ID) for
+// the given text, bypassing the active-pane lookup. Use this when multiple tabs
+// are open and the desired terminal is not necessarily the active one.
+// The terminal content is stripped of newlines before matching because the
+// headless xterm may wrap long lines in a very narrow viewport.
+func waitForTerminalTextInPane(t *testing.T, page playwright.Page, paneId, text string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	var lastContent string
+	for time.Now().Before(deadline) {
+		content, err := page.Evaluate(fmt.Sprintf("() => csGetTerminalContents(50, %q)", paneId))
+		if err != nil {
+			t.Fatalf("failed to get terminal contents for pane %s: %v", paneId, err)
+		}
+		if content != nil {
+			lastContent = content.(string)
+			// Strip whitespace/newlines so that wrapping doesn't prevent matching.
+			normalized := strings.ReplaceAll(lastContent, "\n", "")
+			normalized = strings.ReplaceAll(normalized, " ", "")
+			textNorm := strings.ReplaceAll(text, " ", "")
+			if strings.Contains(normalized, textNorm) {
+				return
+			}
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for terminal text %q in pane %s\nlast content: %q", text, paneId, lastContent)
+}
+
+// apiPost is a helper to POST JSON to a protected API endpoint.
+func apiPost(t *testing.T, baseURL, token, path string, body any) *http.Response {
+	t.Helper()
+	b, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("apiPost marshal: %v", err)
+	}
+	req, err := http.NewRequest(http.MethodPost, baseURL+path, strings.NewReader(string(b)))
+	if err != nil {
+		t.Fatalf("apiPost request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("apiPost do: %v", err)
+	}
+	return resp
+}
+
+// apiGet GETs a protected API endpoint and returns the decoded JSON.
+func apiGet(t *testing.T, baseURL, token, path string) any {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, baseURL+path, nil)
+	if err != nil {
+		t.Fatalf("apiGet request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("apiGet do: %v", err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		t.Fatalf("apiGet unmarshal: %v (body: %s)", err, raw)
+	}
+	return v
+}
+
+// getToken extracts the cozy_token from a logged-in page's localStorage.
+func getToken(t *testing.T, page playwright.Page) string {
+	t.Helper()
+	tok, err := page.Evaluate("() => localStorage.getItem('cozy_token')")
+	if err != nil || tok == nil {
+		t.Fatal("could not get cozy_token from localStorage")
+	}
+	return tok.(string)
+}
+
+// pinnedSessions fetches /api/sessions/pinned and returns the parsed slice.
+func pinnedSessions(t *testing.T, baseURL, token string) []map[string]any {
+	t.Helper()
+	v := apiGet(t, baseURL, token, "/api/sessions/pinned")
+	if v == nil {
+		return nil
+	}
+	raw, _ := json.Marshal(v)
+	var result []map[string]any
+	json.Unmarshal(raw, &result)
+	return result
 }

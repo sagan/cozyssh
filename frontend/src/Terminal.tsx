@@ -429,10 +429,11 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     resizeObserver.observe(terminalRef.current);
 
     term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
-      if (e.altKey && (e.key === 'j' || e.key === 'k' || e.key === 'i' || e.key === 'g' || e.key === 'J' || e.key === 'K' || e.key === 'I' || e.key === 'G' || e.key === 'w' || e.key === 'W' || e.key === 't' || e.key === 'T' || (e.key >= '0' && e.key <= '9') || (e.shiftKey && e.code.startsWith('Digit')) || e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      const k = e.key.toLowerCase();
+      if (e.altKey && (k === 'j' || e.code === 'KeyJ' || k === 'k' || e.code === 'KeyK' || k === 'i' || e.code === 'KeyI' || k === 'g' || e.code === 'KeyG' || k === 'w' || e.code === 'KeyW' || k === 't' || e.code === 'KeyT' || (e.key >= '0' && e.key <= '9') || (e.shiftKey && e.code.startsWith('Digit')) || e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
         return false;
       }
-      if (e.ctrlKey && (e.key === 'f' || e.key === 'F')) {
+      if (e.ctrlKey && e.shiftKey && (k === 'f' || e.code === 'KeyF')) {
         return false;
       }
       return true;

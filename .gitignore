@@ -7,3 +7,6 @@ node_modules
 
 # screenshots saved during e2e test
 /test/e2e/*.png
+
+# AI experiment area
+/scratch
