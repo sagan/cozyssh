@@ -605,6 +605,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
                   <b>Alt + Shift + 1-9,0</b> : Click the button in button bar<br />
                   <b>Alt + ↑ / ↓</b> : Scroll terminal up / down<br />
                   <b>Ctrl + Shift + F</b> : Open terminal search box<br />
+                  <b>Ctrl + Shift + C (Windows) / Cmd + C (Mac)</b> : Copy from terminal<br />
                   <b>Ctrl + Shift + V (Windows) / Cmd + V (Mac)</b> : Paste into terminal<br />
                   <b>Mouse Select</b> in terminal to copy<br />
                   <b>Mouse Right Click</b> in terminal to paste<br />

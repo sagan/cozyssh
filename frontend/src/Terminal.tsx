@@ -236,6 +236,16 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     term.open(terminalRef.current!);
     xtermRef.current = term;
 
+    if (localVars["local_cs_nocompletions"] === "1") {
+      const textarea = term.textarea;
+      if (textarea) {
+        textarea.setAttribute('autocomplete', 'off');
+        textarea.setAttribute('autocorrect', 'off');
+        textarea.setAttribute('autocapitalize', 'off');
+        textarea.setAttribute('spellcheck', 'false');
+      }
+    }
+
     if (localVars["local_cs_noimage"] !== "1") {
       const imageAddon = new ImageAddon();
       term.loadAddon(imageAddon);

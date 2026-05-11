@@ -86,7 +86,11 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
     if (!f) {
       return hosts.filter(h => h.is_favourite).sort((a, b) => a.name.localeCompare(b.name));
     }
-    return filterHosts(hosts, f);
+    return filterHosts(hosts, f).sort((a, b) => {
+      if (a.is_favourite && !b.is_favourite) return -1;
+      if (!a.is_favourite && b.is_favourite) return 1;
+      return a.name.localeCompare(b.name);
+    });
   }, [hosts, filter, viewMode]);
 
   const directConnect = useMemo(() => {

@@ -457,7 +457,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   const handleSelectHost = React.useCallback(async (host: string, customTitle?: string) => {
     const id = Math.random().toString(36).substring(2);
-    console.log('handleSelectHost called for:', host, customTitle, 'ID:', id, new Error().stack);
+    console.log('handleSelectHost called for:', host, customTitle, 'ID:', id);
     const newTab: TabData = {
       id: id,
       title: customTitle || host,
@@ -2021,6 +2021,23 @@ export default function Dashboard({ initialData }: DashboardProps) {
                       <AddIcon sx={{ fontSize: 32 }} />
                     </IconButton>
                   </Tooltip>
+                  {isMobile && applets.filter(a => a.position === 'sidebar').length > 0 && (
+                    <Tooltip title="Open Applets">
+                      <IconButton
+                        color="inherit"
+                        onClick={() => setMobileAppletsOpen(!mobileAppletsOpen)}
+                        sx={{
+                          width: 64,
+                          height: 64,
+                          bgcolor: 'background.paper',
+                          boxShadow: 2,
+                          '&:hover': { bgcolor: 'action.hover' }
+                        }}
+                      >
+                        <ViewSidebarIcon />
+                      </IconButton>
+                    </Tooltip>
+                  )}
                 </Box>
                 <Typography color="text.secondary" variant="body1" sx={{ maxWidth: 400, fontWeight: 500 }}>
                   Select a server from the sidebar or open a new tab to start.
