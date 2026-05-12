@@ -3,6 +3,7 @@ import { Terminal, type IMarker } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { ImageAddon } from '@xterm/addon-image';
+import { WebLinksAddon } from "@xterm/addon-web-links"
 import { SearchAddon } from '@xterm/addon-search';
 import '@xterm/xterm/css/xterm.css';
 import { Box } from '@mui/material';
@@ -249,6 +250,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     if (localVars["local_cs_noimage"] !== "1") {
       const imageAddon = new ImageAddon();
       term.loadAddon(imageAddon);
+    }
+    if (localVars["local_cs_noweblinks"] !== "1") {
+      term.loadAddon(new WebLinksAddon());
     }
 
     // Load WebGL Addon

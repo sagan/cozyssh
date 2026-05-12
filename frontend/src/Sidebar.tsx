@@ -517,14 +517,18 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
         anchorPosition={contextMenu ? { top: contextMenu.mouseY, left: contextMenu.mouseX } : undefined}
       >
         <MenuItem onClick={handleEditOpen}>Edit {contextMenu?.target.name}</MenuItem>
-        {contextMenu?.target.source !== 'known_hosts' && (
-          <MenuItem onClick={() => {
-            if (!contextMenu) return;
-            const url = `${window.location.origin}/#${contextMenu.target.name}`;
-            navigator.clipboard.writeText(url);
-            closeMenu();
-          }}>Copy URL</MenuItem>
-        )}
+        <MenuItem onClick={() => {
+          if (!contextMenu) return;
+          const url = `${window.location.origin}/#${contextMenu?.target.source !== 'known_hosts' ? contextMenu.target.name : `${contextMenu.target.user || "root"}@${contextMenu.target.hostname}`}`;
+          navigator.clipboard.writeText(url);
+          closeMenu();
+        }}>Copy URL</MenuItem>
+        <MenuItem onClick={() => {
+          if (!contextMenu) return;
+          const command = `ssh ${contextMenu.target.identity_file ? `-i "${contextMenu.target.identity_file}" ` : ""}${contextMenu.target.user}@${contextMenu.target.hostname}`;
+          navigator.clipboard.writeText(command);
+          closeMenu();
+        }}>Copy SSH Command</MenuItem>
         <MenuItem onClick={handleToggleFavourite}>
           {contextMenu?.target.is_favourite ? 'Remove From Favourite' : 'Add To Favourite'}
         </MenuItem>
@@ -666,7 +670,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleSaveHost} disabled={!formData.hostname}>Save Changes</Button>
+          <Button variant="contained" onClick={handleSaveHost} disabled={!formData.hostname}>Save</Button>
         </DialogActions>
       </Dialog>
     </Drawer>

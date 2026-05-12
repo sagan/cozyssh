@@ -397,6 +397,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const hostsRef = useRef(hosts);
   useEffect(() => { hostsRef.current = hosts; }, [hosts]);
 
+  const buttonsRef = useRef(buttons);
+  useEffect(() => { buttonsRef.current = buttons; }, [buttons]);
+
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('cs:terminal-change', { detail: { activePaneId } }));
   }, [activePaneId]);
@@ -456,14 +459,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, [applets]);
 
   const handleSelectHost = React.useCallback(async (host: string, customTitle?: string) => {
-    // Re-use existing tab if it's a single-pane tab for this host
-    const existing = tabs.find(t => t.panes.length === 1 && t.panes[0].host === host && t.type !== 'scratchpad');
-    if (existing) {
-      setActiveTabId(existing.id);
-      setActivePaneId(existing.panes[0].id);
-      return;
-    }
-
     const id = Math.random().toString(36).substring(2);
     console.log('handleSelectHost called for:', host, customTitle, 'ID:', id);
     const newTab: TabData = {
@@ -634,6 +629,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         shellIntegrations: shellIntegrationRef.current,
         tabs: tabsRef.current,
         hosts: hostsRef.current,
+        buttons: buttonsRef.current,
         vars: varsRef.current,
         localVars: localVarsRef.current,
       };
@@ -1022,7 +1018,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             }
           } else {
             // Single host mode /#host
-            const host = hash !== "local" ? hostsData.find(h => h.name === hash || h.hostname === hash) : { name: "local" };
+            const host = hash !== "local" ? hostsData.find(h => hash.includes("@") ? hash == `${h.user || "root"}@${h.hostname}` : h.name === hash || h.hostname === hash) : { name: "local" };
             if (host) {
               handleSelectHost(host.name);
             } else {

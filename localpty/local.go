@@ -3,6 +3,7 @@ package localpty
 import (
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/aymanbagabas/go-pty"
 )
@@ -11,21 +12,42 @@ type LocalSession struct {
 	Pty pty.Pty
 }
 
-func Start() (*LocalSession, error) {
-	// Shell defaults to bash or user's env SHELL on linux.
-	// On Windows development, we fallback to powershell.
-	shell := os.Getenv("SHELL")
-	args := []string{}
-	if shell == "" {
-		if os.PathSeparator == '\\' {
-			shell = "powershell"
-		} else {
-			shell = "bash"
+var (
+	DefaultShell                   string // Default system shell full path, e.g. "/bin/bash"
+	DefaultShellIsLegacyPowershell bool   // True if default shell is legacy Windows "powershell.exe"
+)
+
+func init() {
+	DefaultShell = (func() string {
+		// Try to use user's default shell
+		if shell := os.Getenv("SHELL"); shell != "" {
+			if path, err := exec.LookPath(shell); err == nil {
+				return path
+			}
 		}
+
+		// Windows: try common shells
+		if os.PathSeparator == '\\' {
+			for _, shell := range []string{"pwsh", "powershell"} {
+				if path, err := exec.LookPath(shell); err == nil {
+					return path
+				}
+			}
+		}
+
+		// Linux/macOS: default to bash
+		return "bash"
+	})()
+
+	if strings.HasSuffix(DefaultShell, "/powershell.exe") {
+		DefaultShellIsLegacyPowershell = true
 	}
-	shell, _ = exec.LookPath(shell)
-	if os.PathSeparator == '/' {
-		args = append(args, "-l") // most non-Windows shells has -l flag to set up a login shell
+}
+
+func Start() (*LocalSession, error) {
+	args := []string{}
+	if !DefaultShellIsLegacyPowershell {
+		args = append(args, "-l") // linux shell / pwsh has -l flag to set up a login shell
 	}
 
 	p, err := pty.New()
@@ -33,7 +55,7 @@ func Start() (*LocalSession, error) {
 		return nil, err
 	}
 
-	cmd := p.Command(shell, args...)
+	cmd := p.Command(DefaultShell, args...)
 
 	// Set standard xterm env
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color")

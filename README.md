@@ -108,6 +108,7 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
   - **Heartbeat & Keep-Alive**: Background heartbeat (`keepalive@openssh.com`) every 30 seconds ensures stable connections and prevents idle timeouts.
   - **Interactive Verification**: Full support for interactive Host Key verification and Keyboard-Interactive (Password) authentication.
   - **Smart Resize logic**: Optimized terminal resizing that preserves shell prompt integrity when switching between multiple active tabs.
+- **Local Shell**: Open local shell tab. It uses `$SHELL`. If not set, on Linux it fallbacks to `bash`; on Windows it fallbacks to `pwsh.exe` (if present) or `powershell.exe`.
 - **Terminal UX Enhancements**:
   - **Manual Reconnection**: If a terminal session is lost or "stolen" by another browser instance, simply press **Enter** to instantly reconnect.
   - **Auto-copy**: Selected text is automatically copied to your clipboard.

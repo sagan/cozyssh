@@ -177,6 +177,8 @@ Returns an object containing all the data from the CozySSH application. Sample o
       "cwd": "/root"
     }
   },
+  "hosts": [],
+  "buttons": [],
   "tabs": [
     {
       "id": "local-123456",
@@ -192,7 +194,9 @@ Returns an object containing all the data from the CozySSH application. Sample o
       "isPinned": false,
       "isLocked": false
     }
-  ]
+  ],
+  "vars": {},
+  "localVars": {}
 }
 ```
 
@@ -210,8 +214,9 @@ Performs an HTTP request via the CozySSH backend proxy to bypass browser CORS re
 ### `csExec(cmdline: string): Promise<{ error: any, stdout: string, stderr: string }>`
 
 Executes a shell command on the CozySSH backend server.
+
 - **Linux/macOS**: Uses `bash -l -c`.
-- **Windows**: Uses `powershell -Command`.
+- **Windows**: Uses `pwsh -l -c` (if `pwsh` is present) or `powershell -Command`.
 
 ### `csRefresh(): Promise<void>`
 
@@ -224,10 +229,12 @@ Asynchronously refreshes all application data (server list, buttons, system info
 CozySSH dispatches various `cs:*` events to the `window` object. You can listen for these events in your scripts (especially those with **Auto-run** enabled) to react to application state changes.
 
 ### `cs:terminal-change`
+
 Fired when the active terminal pane changes.
 - `detail.activePaneId`: The ID of the newly activated pane.
 
 ### `cs:terminal-connected`
+
 Fired when a terminal successfully connects to the backend.
 - `detail.terminal`: The `xterm.js` instance.
 - `detail.sessionId`: The session ID.
@@ -235,20 +242,24 @@ Fired when a terminal successfully connects to the backend.
 - `detail.is_active_terminal`: Whether this is the active terminal.
 
 ### `cs:terminal-disconnected`
+
 Fired when a terminal connection is closed.
 - `detail.reason`: `'normal' | 'stolen' | 'fatal'`.
 - `detail.terminal`, `detail.sessionId`, `detail.host`, `detail.is_active_terminal`.
 
 ### `cs:terminal-resize`
+
 Fired when a terminal is resized.
 - `detail.cols`, `detail.rows`: New dimensions.
 - `detail.terminal`, `detail.sessionId`, `detail.host`, `detail.is_active_terminal`.
 
 ### `cs:terminal-data`
+
 Fired when data is received from the backend (excluding history restoration).
 - `detail.terminal`, `detail.sessionId`, `detail.host`, `detail.is_active_terminal`.
 
 ### `cs:shell-integration`
+
 Fired when any property of the shell integration state (CWD, command status, history) changes.
 - `detail.cwd`, `detail.user`, `detail.hostname`, `detail.isExecuting`, `detail.recentCommands`.
 - `detail.terminal`, `detail.sessionId`, `detail.host`, `detail.is_active_terminal`.
@@ -851,6 +862,8 @@ if( csGetApplet(AI_ASSISTANT_NAME) ) {
 ### Cmd History Sidebar Applet
 
 This script creates a sidebar applet that tracks the command history of the active terminal. It allows you to click a command to copy it to the clipboard, or use a "Resend" button to execute it again.
+
+Note: Command History tracking uses OSC 3008 sequence and is only supported in systemd 258+, included in recent version Linux such as Ubuntu 26.04+.
 
 ```tsx
 import React, { useState, useEffect } from 'react';

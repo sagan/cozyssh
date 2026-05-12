@@ -19,6 +19,7 @@ import (
 	"cozyssh/auth"
 	"cozyssh/config"
 	"cozyssh/fsapi"
+	"cozyssh/localpty"
 	"cozyssh/recents"
 	"cozyssh/scratchpad"
 	"cozyssh/session"
@@ -522,10 +523,13 @@ func Run(ctx context.Context, args []string) error {
 		}
 
 		var cmd *os_exec.Cmd
-		if os.PathSeparator == '/' {
-			cmd = os_exec.Command("bash", "-l", "-c", req.Cmdline)
+		if !localpty.DefaultShellIsLegacyPowershell {
+			cmd = os_exec.Command(localpty.DefaultShell, "-l", "-c", req.Cmdline)
 		} else {
-			cmd = os_exec.Command("powershell", "-Command", req.Cmdline)
+			cmd = os_exec.Command(localpty.DefaultShell, "-Command", req.Cmdline)
+		}
+		if home, err := os.UserHomeDir(); err == nil {
+			cmd.Dir = home
 		}
 
 		var stdoutBuf, stderrBuf bytes.Buffer
