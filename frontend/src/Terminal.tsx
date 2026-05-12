@@ -469,8 +469,11 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
         wsRef.current.close();
       }
       clearTimeout(reconnectTimer);
+      if (fitAddonRef.current) {
+        fitAddonRef.current.fit();
+      }
 
-      let finalUrl = wsUrl;
+      let finalUrl = wsUrl + `&cols=${term.cols}&rows=${term.rows}`;
       if (forceReconnectRef.current) {
         finalUrl += '&reconnect=true';
         forceReconnectRef.current = false;
@@ -558,7 +561,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     };
 
     reconnectFuncRef.current = connectWS;
-    connectWS();
+    setTimeout(connectWS, 50);
 
     term.onData((data) => {
       if (isRestoringHistory) return;

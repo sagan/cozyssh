@@ -34,10 +34,11 @@ func getSSHDir() string {
 }
 
 type PooledClient struct {
-	Client  *ssh.Client
-	Closers []io.Closer
-	Mu      sync.Mutex
-	Refs    int
+	Client        *ssh.Client
+	Closers       []io.Closer
+	RemoteCommand string
+	Mu            sync.Mutex
+	Refs          int
 }
 
 func (p *PooledClient) AddRef() {
@@ -59,14 +60,15 @@ func (p *PooledClient) Release() {
 }
 
 type HostConfig struct {
-	Alias        string   `json:"alias"`
-	HostName     string   `json:"hostname"`
-	User         string   `json:"user"`
-	Port         string   `json:"port"`
-	IdentityFile string   `json:"identity_file"`
-	ProxyJump    string   `json:"proxy_jump"`
-	Tags         []string `json:"tags"`
-	Comment      string   `json:"comment"`
+	Alias         string   `json:"alias"`
+	HostName      string   `json:"hostname"`
+	User          string   `json:"user"`
+	Port          string   `json:"port"`
+	IdentityFile  string   `json:"identity_file"`
+	ProxyJump     string   `json:"proxy_jump"`
+	RemoteCommand string   `json:"remote_command"`
+	Tags          []string `json:"tags"`
+	Comment       string   `json:"comment"`
 }
 
 func getSSHConfigPath() string {
@@ -156,6 +158,9 @@ func SaveHost(oldAlias string, h HostConfig) error {
 	if h.ProxyJump != "" {
 		block = append(block, fmt.Sprintf("    ProxyJump %s", h.ProxyJump))
 	}
+	if h.RemoteCommand != "" {
+		block = append(block, fmt.Sprintf("    RemoteCommand %s", h.RemoteCommand))
+	}
 	block = append(block, "")
 
 	if oldAlias != "" && oldAlias != h.Alias {
@@ -191,16 +196,17 @@ func DeleteHost(alias string) error {
 }
 
 type HostInfo struct {
-	Name        string   `json:"name"`
-	HostName    string   `json:"hostname"`
-	Port        string   `json:"port"`
-	User        string   `json:"user"`
-	ProxyJump   string   `json:"proxy_jump"`
-	Tags        []string `json:"tags"`
-	Comment     string   `json:"comment"`
-	Source      string   `json:"source"`  // "config" or "known_hosts"
-	IsAuto      bool     `json:"is_auto"` // true if from known_hosts and not config
-	IsFavourite bool     `json:"is_favourite"`
+	Name          string   `json:"name"`
+	HostName      string   `json:"hostname"`
+	Port          string   `json:"port"`
+	User          string   `json:"user"`
+	ProxyJump     string   `json:"proxy_jump"`
+	RemoteCommand string   `json:"remote_command"`
+	Tags          []string `json:"tags"`
+	Comment       string   `json:"comment"`
+	Source        string   `json:"source"`  // "config" or "known_hosts"
+	IsAuto        bool     `json:"is_auto"` // true if from known_hosts and not config
+	IsFavourite   bool     `json:"is_favourite"`
 }
 
 // ListHosts reads the standard ~/.ssh/config and ~/.ssh/known_hosts and returns a list of configured and auto-discovered aliases
@@ -236,6 +242,7 @@ func ListHosts() ([]HostInfo, error) {
 				}
 				user, _ := cfg.Get(name, "User")
 				proxyJump, _ := cfg.Get(name, "ProxyJump")
+				remoteCommand, _ := cfg.Get(name, "RemoteCommand")
 
 				var tags []string
 				var commentParts []string
@@ -278,16 +285,17 @@ func ListHosts() ([]HostInfo, error) {
 				}
 
 				hosts = append(hosts, HostInfo{
-					Name:        name,
-					HostName:    hostname,
-					Port:        port,
-					User:        user,
-					ProxyJump:   proxyJump,
-					Tags:        tags,
-					Comment:     comment,
-					Source:      "config",
-					IsAuto:      false,
-					IsFavourite: isFav,
+					Name:          name,
+					HostName:      hostname,
+					Port:          port,
+					User:          user,
+					ProxyJump:     proxyJump,
+					RemoteCommand: remoteCommand,
+					Tags:          tags,
+					Comment:       comment,
+					Source:        "config",
+					IsAuto:        false,
+					IsFavourite:   isFav,
 				})
 				seenHosts[name] = true
 				break // only one alias rep per block needed for sidebar
@@ -382,33 +390,33 @@ type TerminalUI interface {
 
 // DialSSH resolves standard configs and connects via id_ed25519
 // It always returns a new independent connection.
-func DialSSH(alias string, term TerminalUI) (*PooledClient, *ssh.Session, error) {
+func DialSSH(alias string, term TerminalUI, rows, cols int) (*PooledClient, *ssh.Session, string, error) {
 	log.Printf("DialSSH: dialing %s", alias)
-	client, closers, err := getSSHClient(alias, term)
+	client, closers, remoteCommand, err := getSSHClient(alias, term)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 
-	pClient := &PooledClient{Client: client, Refs: 1, Closers: closers}
+	pClient := &PooledClient{Client: client, Refs: 1, Closers: closers, RemoteCommand: remoteCommand}
 
 	session, err := client.NewSession()
 	if err != nil {
 		pClient.Release()
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 
-	if err := setupSession(session); err != nil {
+	if err := setupSession(session, rows, cols); err != nil {
 		session.Close()
 		pClient.Release()
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 
 	go startKeepAlive(client)
 
-	return pClient, session, nil
+	return pClient, session, remoteCommand, nil
 }
 
-func getSSHClient(alias string, term TerminalUI) (*ssh.Client, []io.Closer, error) {
+func getSSHClient(alias string, term TerminalUI) (*ssh.Client, []io.Closer, string, error) {
 	log.Printf("getSSHClient: alias=%s", alias)
 	configPath := filepath.Join(getSSHDir(), "config")
 	f, err := os.Open(configPath)
@@ -468,9 +476,11 @@ func getSSHClient(alias string, term TerminalUI) (*ssh.Client, []io.Closer, erro
 
 	proxyJumpAlias := ""
 	identityFile := ""
+	remoteCommand := ""
 	if cfg != nil {
 		identityFile, _ = cfg.Get(alias, "IdentityFile")
 		proxyJumpAlias, _ = cfg.Get(alias, "ProxyJump")
+		remoteCommand, _ = cfg.Get(alias, "RemoteCommand")
 	}
 
 	if identityFile == "" || identityFile == "~/.ssh/identity" {
@@ -532,7 +542,7 @@ func getSSHClient(alias string, term TerminalUI) (*ssh.Client, []io.Closer, erro
 		if term != nil {
 			term.Print(fmt.Sprintf("\r\nknown_hosts error: %v\r\n", err))
 		}
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 
 	probeAddr := fmt.Sprintf("%s:%s", host, port)
@@ -631,7 +641,7 @@ func getSSHClient(alias string, term TerminalUI) (*ssh.Client, []io.Closer, erro
 
 	dialFunc := func(config *ssh.ClientConfig) (*ssh.Client, error) {
 		if proxyJumpAlias != "" {
-			proxyClient, proxyClosers, err := getSSHClient(proxyJumpAlias, term)
+			proxyClient, proxyClosers, _, err := getSSHClient(proxyJumpAlias, term)
 			if err != nil {
 				return nil, fmt.Errorf("failed to connect to ProxyJump %s: %w", proxyJumpAlias, err)
 			}
@@ -672,39 +682,67 @@ func getSSHClient(alias string, term TerminalUI) (*ssh.Client, []io.Closer, erro
 		for _, c := range closers {
 			c.Close()
 		}
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 
-	return client, closers, nil
+	return client, closers, remoteCommand, nil
 }
 
 // CloneSSH creates a new terminal session from an existing PooledClient.
-func CloneSSH(pClient *PooledClient) (*ssh.Session, error) {
+func CloneSSH(pClient *PooledClient, rows, cols int) (*ssh.Session, string, error) {
 	pClient.AddRef()
 	session, err := pClient.Client.NewSession()
 	if err != nil {
 		pClient.Release()
-		return nil, err
+		return nil, "", err
 	}
-	if err := setupSession(session); err != nil {
+	if err := setupSession(session, rows, cols); err != nil {
 		session.Close()
 		pClient.Release()
-		return nil, err
+		return nil, "", err
 	}
-	return session, nil
+	return session, pClient.RemoteCommand, nil
 }
 
-func setupSession(session *ssh.Session) error {
+func setupSession(session *ssh.Session, rows, cols int) error {
 	modes := ssh.TerminalModes{
 		ssh.ECHO:          1,
 		ssh.TTY_OP_ISPEED: 14400,
 		ssh.TTY_OP_OSPEED: 14400,
 	}
 
-	if err := session.RequestPty("xterm-256color", 24, 80, modes); err != nil {
+	if rows <= 0 {
+		rows = 24
+	}
+	if cols <= 0 {
+		cols = 80
+	}
+
+	if err := session.RequestPty("xterm-256color", rows, cols, modes); err != nil {
 		return fmt.Errorf("request for pseudo terminal failed: %s", err)
 	}
 	return nil
+}
+
+func ExpandTokens(cmd, host, port, user, alias string) string {
+	r := strings.NewReplacer(
+		"%%", "%",
+		"%h", host,
+		"%p", port,
+		"%r", user,
+		"%n", alias,
+	)
+
+	// %u is local user
+	localUser := os.Getenv("USER")
+	if localUser == "" {
+		localUser = os.Getenv("USERNAME") // Windows
+	}
+	if localUser != "" {
+		cmd = strings.ReplaceAll(cmd, "%u", localUser)
+	}
+
+	return r.Replace(cmd)
 }
 
 func startKeepAlive(client *ssh.Client) {

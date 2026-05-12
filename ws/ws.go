@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gorilla/websocket"
@@ -117,7 +118,10 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	cloneFrom := r.URL.Query().Get("cloneFrom")
 	host := r.URL.Query().Get("host")
 	sessionID := r.URL.Query().Get("sessionId")
-	log.Printf("WS: New connection. host=%s, sessionId=%s, reconnect=%v, cloneFrom=%s", host, sessionID, reconnect, cloneFrom)
+	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
+	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
+
+	log.Printf("WS: New connection. host=%s, sessionId=%s, reconnect=%v, cloneFrom=%s, size=%dx%d", host, sessionID, reconnect, cloneFrom, cols, rows)
 	if sessionID == "" {
 		sessionID = host // Fallback to host if no unique ID provided
 	}
@@ -144,19 +148,21 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 
 			var pClient *sshmanager.PooledClient
 			var sshSession *ssh.Session
+			var remoteCommand string
 			var err error
+
 
 			if cloneFrom != "" {
 				if parent := session.GlobalManager.Get(cloneFrom); parent != nil {
 					if pc, ok := parent.SSHClient.(*sshmanager.PooledClient); ok {
 						pClient = pc
-						sshSession, err = sshmanager.CloneSSH(pClient)
+						sshSession, remoteCommand, err = sshmanager.CloneSSH(pClient, rows, cols)
 					}
 				}
 			}
 
 			if pClient == nil {
-				pClient, sshSession, err = sshmanager.DialSSH(host, term)
+				pClient, sshSession, remoteCommand, err = sshmanager.DialSSH(host, term, rows, cols)
 			}
 
 			if err != nil {
@@ -169,13 +175,29 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			}
 			stdout, _ := sshSession.StdoutPipe()
 			stdin, _ := sshSession.StdinPipe()
-			log.Printf("WS: Requesting shell for %s", sessionID)
-			if err := sshSession.Shell(); err != nil {
-				log.Println("Shell err:", err)
-				pClient.Release()
-				return
+
+			if remoteCommand != "" {
+				// Expand tokens
+				// We need host, port, user from the client
+				// The pClient doesn't directly expose them but we have the 'host' alias and we can guess or use what was used.
+				// Actually, it's better if getSSHClient returns them or we store them.
+				// For now, let's just use the host alias for expansion.
+				expanded := sshmanager.ExpandTokens(remoteCommand, host, "22", "root", host)
+				log.Printf("WS: Starting remote command: %s", expanded)
+				if err := sshSession.Start(expanded); err != nil {
+					log.Println("RemoteCommand err:", err)
+					pClient.Release()
+					return
+				}
+			} else {
+				log.Printf("WS: Requesting shell for %s", sessionID)
+				if err := sshSession.Shell(); err != nil {
+					log.Println("Shell err:", err)
+					pClient.Release()
+					return
+				}
 			}
-			log.Printf("WS: Shell started for %s", sessionID)
+			log.Printf("WS: Session started for %s", sessionID)
 			s = session.NewSession(sessionID, host, stdout, stdin, func() error {
 				sshSession.Close()
 				pClient.Release()
@@ -188,7 +210,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			s.RetryFunc = func() (io.Reader, io.Writer, error) {
 				s.Broadcast(append([]byte("STATE:"), []byte(`{"type":"state","state":"disconnected to ssh server"}`)...))
 
-				newPClient, newSess, err := sshmanager.DialSSH(host, nil)
+				newPClient, newSess, newRC, err := sshmanager.DialSSH(host, nil, rows, cols)
 				if err != nil {
 					errStr := strings.ToLower(err.Error())
 					if strings.Contains(errStr, "mismatch") || strings.Contains(errStr, "auth") || strings.Contains(errStr, "interactive") {
@@ -198,10 +220,20 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 				}
 				nr, _ := newSess.StdoutPipe()
 				nw, _ := newSess.StdinPipe()
-				if err := newSess.Shell(); err != nil {
-					newSess.Close()
-					newPClient.Release()
-					return nil, nil, err
+
+				if newRC != "" {
+					expanded := sshmanager.ExpandTokens(newRC, host, "22", "root", host)
+					if err := newSess.Start(expanded); err != nil {
+						newSess.Close()
+						newPClient.Release()
+						return nil, nil, err
+					}
+				} else {
+					if err := newSess.Shell(); err != nil {
+						newSess.Close()
+						newPClient.Release()
+						return nil, nil, err
+					}
 				}
 				s.CloseFunc = func() error {
 					newSess.Close()
@@ -226,6 +258,9 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// Taking over an existing session
 		s.Steal()
+		if cols > 0 && rows > 0 {
+			s.Resize(uint16(rows), uint16(cols))
+		}
 	}
 
 	session.GlobalManager.CancelDisconnectTimer(sessionID)

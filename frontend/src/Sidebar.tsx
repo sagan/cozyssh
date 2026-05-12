@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { List, ListItem, ListItemButton, ListItemIcon, ListItemText, Drawer, Toolbar, Typography, Box, CircularProgress, IconButton, Menu, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button, useMediaQuery, useTheme, Tabs, Tab, Chip, Divider } from '@mui/material';
+import { Autocomplete, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Drawer, Toolbar, Typography, Box, CircularProgress, IconButton, Menu, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button, useMediaQuery, useTheme, Tabs, Tab, Chip, Divider } from '@mui/material';
 import ComputerIcon from '@mui/icons-material/Computer';
 import DnsIcon from '@mui/icons-material/Dns';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
@@ -9,6 +9,11 @@ import { version as PACKAGE_JSON_VERSION } from '../package.json';
 
 const drawerWidth = 260;
 
+const remoteCommandOptions = [
+  'tmux attach || tmux new', // Linux + tmux
+  'tmux attach -or (tmux new)', // Windows PowerShell + psmux ( https://github.com/psmux/psmux ). Use "-or ()" so it works with PowerShell 5.1+
+];
+
 export interface Host {
   name: string;
   hostname: string;
@@ -16,6 +21,7 @@ export interface Host {
   user: string;
   identity_file?: string;
   proxy_jump?: string;
+  remote_command?: string;
   tags?: string[];
   comment?: string;
   source?: string;
@@ -74,7 +80,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   // Host CRUD State
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAlias, setEditingAlias] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ alias: '', hostname: '', user: '', port: '', identity_file: '', proxy_jump: '', tags: '', comment: '' });
+  const [formData, setFormData] = useState({ alias: '', hostname: '', user: '', port: '', identity_file: '', proxy_jump: '', remote_command: '', tags: '', comment: '' });
   const [initialHostFormData, setInitialHostFormData] = useState<any>(null);
 
   // Context Menu State
@@ -177,7 +183,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   };
 
   const handleAddOpen = () => {
-    const data = { alias: '', hostname: '', user: 'root', port: '22', identity_file: '', proxy_jump: '', tags: '', comment: '' };
+    const data = { alias: '', hostname: '', user: 'root', port: '22', identity_file: '', proxy_jump: '', remote_command: '', tags: '', comment: '' };
     setEditingAlias(null);
     setFormData(data);
     setInitialHostFormData(data);
@@ -194,6 +200,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
       port: contextMenu.target.port || '22',
       identity_file: contextMenu.target.identity_file || '',
       proxy_jump: contextMenu.target.proxy_jump || '',
+      remote_command: contextMenu.target.remote_command || '',
       tags: contextMenu.target.tags ? contextMenu.target.tags.join(' ') : '',
       comment: contextMenu.target.comment || ''
     };
@@ -238,6 +245,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
       port: host.port || '22',
       identity_file: host.identity_file || '',
       proxy_jump: host.proxy_jump || '',
+      remote_command: host.remote_command || '',
       tags: newTags
     };
 
@@ -594,18 +602,17 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
               <>
                 <Typography variant="subtitle2" gutterBottom>Keyboard Shortcuts</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
-                  <b>Alt + T</b> : Open new tab<br />
+                  <b>Alt + T</b> : Open new tab dialog, then use ← → to switch view, ↑ ↓ to select, Enter to open<br />
                   <b>Alt + J</b> : Switch to next tab<br />
                   <b>Alt + K</b> : Switch to previous tab<br />
                   <b>Alt + 1-9</b> : Switch to tab 1-9<br />
                   <b>Alt + 0</b> : Switch to last tab<br />
-                  <b>Alt + W</b> : Close current tab<br />
-                  <b>Alt + I</b> : Focus sidebar search filter, then Use ↑ ↓ to select, Enter to open<br />
+                  <b>Alt + W</b> : Close current tab / pane<br />
+                  <b>Alt + I</b> : Focus sidebar search filter, then use ↑ ↓ to select, Enter to open<br />
                   <b>Alt + G</b> : Focus active terminal session<br />
                   <b>Alt + Shift + 1-9,0</b> : Click the button in button bar<br />
                   <b>Alt + ↑ / ↓</b> : Scroll terminal up / down<br />
                   <b>Ctrl + Shift + F</b> : Open terminal search box<br />
-                  <b>Ctrl + Shift + C (Windows) / Cmd + C (Mac)</b> : Copy from terminal<br />
                   <b>Ctrl + Shift + V (Windows) / Cmd + V (Mac)</b> : Paste into terminal<br />
                   <b>Mouse Select</b> in terminal to copy<br />
                   <b>Mouse Right Click</b> in terminal to paste<br />
@@ -646,6 +653,14 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
             <TextField fullWidth label="Tags (Optional)" size="small" value={formData.tags} onChange={e => setFormData({ ...formData, tags: e.target.value })} placeholder="e.g. production web" />
             <TextField fullWidth label="IdentityFile (Optional)" size="small" value={formData.identity_file} onChange={e => setFormData({ ...formData, identity_file: e.target.value })} placeholder="~/.ssh/id_ed25519" />
             <TextField fullWidth label="ProxyJump (Optional)" size="small" value={formData.proxy_jump} onChange={e => setFormData({ ...formData, proxy_jump: e.target.value })} placeholder="e.g. jump-host-alias" />
+            <Autocomplete freeSolo options={remoteCommandOptions} value={formData.remote_command}
+              onInputChange={(_event, newValue) => {
+                setFormData({ ...formData, remote_command: newValue })
+              }}
+              renderInput={(params) => (
+                <TextField {...params} fullWidth label="RemoteCommand (Optional)" size="small" placeholder="e.g. tmux attach || tmux new" />
+              )}
+            />
             <TextField fullWidth label="Comment (Optional)" size="small" multiline rows={2} value={formData.comment} onChange={e => setFormData({ ...formData, comment: e.target.value })} placeholder="Host description..." />
           </Box>
         </DialogContent>

@@ -2,7 +2,7 @@
 
 CozySSH includes integrated (e2e) Go test files. E2E tests use Docker to spawn real "ssh servers" and use [Playwright](https://playwright.dev/) to control real browser instances (Chromium) for UI testing.
 
-To run those test files you need a Linux test server.
+To run these tests you need a Linux test server.
 
 ## Test Server Requirement
 
@@ -23,5 +23,8 @@ To run those test files you need a Linux test server.
 To run tests on Test Server workspace dir:
 
 ```bash
+# build frontend once
+npm --prefix frontend run build
+
 go test -v -tags=integration ./test/e2e/...
 ```

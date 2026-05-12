@@ -58,6 +58,7 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
   - **High-contrast Light Theme**: Designed for readability.
   - **Multi-Tab Interface**: Run multiple concurrent SSH sessions and local shells in a single browser tab.
   - **Split Screen Window**: Display multiple ssh servers of a `#tag` in single split-screen tab. View up to 4 terminal panes in a single tab.
+  - **New Tab Dialog** : Powerful "New Tab Dialog" (shortcut: `Alt + T`) to quickly create new session, navigate opened tabs, or execute custom button. Inspired by Notion New Tab dialog.
   - **Button Bar**: A scrollable toolbar at the bottom of the terminal window for quickly sending string to terminal or executing custom function. Inspired by [SecureCRT Button Bar](https://www.vandyke.com/support/tips/button_bar.html).
     - **Custom Snippets**: Send custom string to current terminal.
     - **Special Syntax**: Full support for control keys via `<ctrl-x>` syntax (e.g., `<ctrl-c>` for SIGINT), which are sent with precise timing to ensure they reach the shell correctly.
@@ -65,11 +66,12 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
     - **Hover Tooltips**: Instant preview of the command payload.
     - **Common Terminal Functions**: Custom the button function to common terminal action, like copy terminal buffer, paste to terminal.
     - **Shortcut Invocation** : Use `<alt + shift + 1-9,0>` keyboard shortcut to invoke button directly.
-  - **Mobile-Friendly**: All features can be accessed from mobile browsers.
+  - **Mobile-Friendly**: All features can be accessed seamlessly from mobile browser.
     - **Responsive sidebar and layout**.
     - **Mobile Input Toolbar**: Quick access to Esc, Tab, Arrow keys, and a stateful **Ctrl toggle** for mobile touch keyboards.
     - **Keyboard-Aware Viewport**: Automatically resizes to fit your visible mobile screen perfectly even when the on-screen keyboard is active.
-    - **Gesture Support** : Swipe left / right to switch tab in mobile browsers.
+    - **Gesture Support** : Swipe left / right to switch tab in mobile browser.
+  - **Accident-Proof Forms**: All "Add / Edit" dialogs prevent accidental closure via backdrop click if any data has been modified.
 - **SFTP & Local File Management**: 📁
   - **SFTP & Local File Browser**: Browse, upload, download, filter or edit files directly from your terminal tabs.
   - **Split View**: Access the file browser via the terminal tab's context menu without losing your shell session.
@@ -83,30 +85,29 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
   export PS1="$PS1\[\e]7;CurrentDir="'$(pwd)\a\]'
     ```
 - **Full keyboard Shortcuts**: It supports a complete set of keyboard shortcuts.
-  - `Alt + T` : Open new tab
+  - `Alt + T` : Open new tab dialog, then use `← →` to switch view, `↑ ↓` to select, `Enter` to open
   - `Alt + J` : Switch to next tab
   - `Alt + K` : Switch to previous tab
   - `Alt + 1-9` : Switch to tab 1-9
   - `Alt + 0` : Switch to last tab
-  - `Alt + W` : Close current tab
-  - `Alt + I` : Focus sidebar search filter, then Use `↑ ↓` to select, `Enter` to open
+  - `Alt + W` : Close current tab / pane
+  - `Alt + I` : Focus sidebar search filter, then use `↑ ↓` to select, `Enter` to open
   - `Alt + G` : Focus active terminal session
   - `Alt + Shift + 1-9,0` : Click the button in button bar
   - `Alt + ↑ / ↓` : Scroll terminal up / down
   - `Ctrl + Shift + F` : Open terminal search box
-  - `Ctrl + Shift + C (Windows) / Cmd + C (Mac)` : Copy from terminal
   - `Ctrl + Shift + V (Windows) / Cmd + V (Mac)` : Paste into terminal
   - `Mouse Select` in terminal to copy
   - `Mouse Right Click` in terminal to paste
 - **Advanced SSH Management**: 🔑
   - **ProxyJump Support**: Full support for OpenSSH standard `ProxyJump` configuration, allowing you to connect to hosts via intermediate jump servers.
+  - **RemoteCommand Support**: Support ssh_config `RemoteCommand` configuration, execute a custom command on the remote ssh server after successfully connecting to it.
   - **Tagging System**: Organize your hosts using `### #tag` comments in your `~/.ssh/config`. Tags are fully filterable in the sidebar.
   - **Tag Context Menu**: Right-click any sidebar tag to **"Open All"** hosts associated with that tag simultaneously.
   - **Sidebar Tooltips**: General `###` comments in your config are automatically displayed as tooltips when hovering over hosts in the sidebar.
   - **Heartbeat & Keep-Alive**: Background heartbeat (`keepalive@openssh.com`) every 30 seconds ensures stable connections and prevents idle timeouts.
   - **Interactive Verification**: Full support for interactive Host Key verification and Keyboard-Interactive (Password) authentication.
   - **Smart Resize logic**: Optimized terminal resizing that preserves shell prompt integrity when switching between multiple active tabs.
-  - **Accident-Proof Forms**: All "Add / Edit" dialogs prevent accidental closure via backdrop click if any data has been modified.
 - **Terminal UX Enhancements**:
   - **Manual Reconnection**: If a terminal session is lost or "stolen" by another browser instance, simply press **Enter** to instantly reconnect.
   - **Auto-copy**: Selected text is automatically copied to your clipboard.
