@@ -177,8 +177,10 @@ service = "cozyssh"
 
 CozySSH stores its settings in `~/.config/cozyssh/config.yaml`. You can customize:
 
-- `addr`: The address and port the server binds to (default: `127.0.0.1:8022`).
-- `password`: The BCrypt hashed app password. Run `cozyssh -do-reset-password` to reset it.
+- `app_password_hash`: The BCrypt hashed app password. Run `cozyssh -do-reset-password` to reset it.
+- `addr`: (optional) The address and port the server binds to. Defaults to `127.0.0.1:8022`.
+- `sitename`: (optional) The sitename. Defaults to the backend `hostname`. Note it will be visible to everyone who can access the frontend, even unauthenticated.
+- `sshdir`: (optional) The OpenSSH client config dir. Defaults to `~/.ssh`.
 
 The default `~/.config/cozyssh` config dir path can be changed by `-config` command line flag.
 

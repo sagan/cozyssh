@@ -718,6 +718,17 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
 }
 
 function HostListItem({ filter, host, onSelect, onContextMenu, isSelected }: { filter: string, host: Host, onSelect: (name: string) => void, onContextMenu: (e: React.MouseEvent, host: Host) => void, isSelected?: boolean }) {
+  const itemRef = useRef<HTMLLIElement>(null);
+
+  useEffect(() => {
+    if (isSelected && itemRef.current) {
+      itemRef.current.scrollIntoView({
+        behavior: 'auto',
+        block: 'nearest',
+      });
+    }
+  }, [isSelected]);
+
   const isFavourite = host.is_favourite;
   let secondaryText = `${host.user || 'root'}@${host.hostname}`;
   if (filter && host.comment) {
@@ -726,6 +737,7 @@ function HostListItem({ filter, host, onSelect, onContextMenu, isSelected }: { f
   }
   return (
     <ListItem
+      ref={itemRef}
       disablePadding
       onContextMenu={(e) => onContextMenu(e, host)}
       sx={{

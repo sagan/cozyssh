@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Box, Button, TextField, Typography, Paper, ThemeProvider, createTheme, CssBaseline } from '@mui/material';
+import { version as PACKAGE_JSON_VERSION } from '../package.json';
 
 const lightTheme = createTheme({
   palette: {
     mode: 'light',
-    primary: { main: '#1976d2' }, 
+    primary: { main: '#1976d2' },
     background: { default: '#f4f6f8', paper: '#ffffff' },
   },
 });
@@ -12,8 +13,20 @@ const lightTheme = createTheme({
 export default function Login({ onLoginSuccess }: { onLoginSuccess?: (data: any) => void }) {
   const [password, setPassword] = useState('');
 
+  const [sitename, setSitename] = useState("CozySSH");
+  useEffect(() => {
+    fetch("/manifest.json").then((res) => res.json()).then((data) => {
+      setSitename(data.name);
+      document.title = data.name;
+    }).catch(e => console.log(e))
+  }, [])
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!password) {
+      alert('Please enter the App Password.');
+      return;
+    }
     const res = await fetch('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -28,7 +41,7 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess?: (data: any)
         window.location.href = '/';
       }
     } else {
-      alert('Login failed. Please check the terminal output for the correct App Password.');
+      alert('Login failed. Check the terminal output for the initial App Password.');
     }
   };
 
@@ -54,7 +67,7 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess?: (data: any)
       <CssBaseline />
       <Box sx={{ height: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Paper elevation={3} sx={{ p: 4, width: 350, textAlign: 'center' }}>
-          <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold' }}>CozySSH</Typography>
+          <Typography variant="h5" gutterBottom sx={{ textAlign: "left", fontWeight: 'bold' }}>{sitename}</Typography>
           <Box component="form" onSubmit={handleLogin} sx={{ mt: 2 }}>
             <TextField
               fullWidth
@@ -70,15 +83,18 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess?: (data: any)
               Sign In
             </Button>
           </Box>
-          <Button 
-            variant="text" 
-            size="small" 
-            color="error" 
+          <Button
+            variant="text"
+            size="small"
+            color="error"
             onClick={handleClearCache}
             sx={{ mt: 2, fontSize: '0.7rem', textTransform: 'none' }}
           >
             Force clear cache & unregister service worker
           </Button>
+          <Typography variant="body2" sx={{ mt: 2, fontSize: '0.7rem' }}>
+            v{PACKAGE_JSON_VERSION}&nbsp;|&nbsp;<a rel="noopener noreferrer" style={{ color: '#1976d2' }} href="https://github.com/sagan/cozyssh">GitHub</a>
+          </Typography>
         </Paper>
       </Box>
     </ThemeProvider>

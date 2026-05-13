@@ -2239,9 +2239,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               )}
               {tab.panes.length === 1 && tab.type !== 'scratchpad' && (
                 <>
-                  {tab.panes[0]?.host !== 'local' && (
-                    <MenuItem onClick={() => handleCloneSession(memoTabId)}>Clone session</MenuItem>
-                  )}
+                  <MenuItem onClick={() => handleCloneSession(memoTabId)}>Clone session</MenuItem>
                   <MenuItem onClick={handleToggleFiles}>
                     {tab.showFiles ? 'Close files' : (tab.panes[0]?.host === 'local' ? 'Open files' : 'Open SFTP')}
                   </MenuItem>
