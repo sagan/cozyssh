@@ -525,10 +525,50 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
         }}>Copy URL</MenuItem>
         <MenuItem onClick={() => {
           if (!contextMenu) return;
-          const command = `ssh ${contextMenu.target.identity_file ? `-i "${contextMenu.target.identity_file}" ` : ""}${contextMenu.target.user}@${contextMenu.target.hostname}`;
+          let command = `ssh`;
+          if (contextMenu.target.identity_file) {
+            command += ` -i "${contextMenu.target.identity_file}"`;
+          }
+          if (contextMenu.target.proxy_jump) {
+            const jumpServers = contextMenu.target.proxy_jump.split(',').map(name => {
+              name = name.trim();
+              const server = hosts.find(h => h.name === name);
+              if (!server) {
+                return name;
+              }
+              if (server.port !== "22") {
+                return `${server.user}@${server.hostname}:${server.port}`;
+              }
+              return `${server.user}@${server.hostname}`;
+            });
+            command += ` -J ${jumpServers.join(',')}`;
+          }
+          if (contextMenu.target.remote_command) {
+            if (/\b(?:sudo|vim|vi|nano|top|htop|btop|tmux|screen)\b/.test(contextMenu.target.remote_command)) {
+              command += ` -t`;
+            }
+            command += ` -o "RemoteCommand=${contextMenu.target.remote_command}"`;
+          }
+          if (contextMenu.target.port !== "22") {
+            command += ` -p ${contextMenu.target.port}`;
+          }
+          command += ` ${contextMenu.target.user}@${contextMenu.target.hostname}`;
           navigator.clipboard.writeText(command);
           closeMenu();
         }}>Copy SSH Command</MenuItem>
+        <MenuItem onClick={() => {
+          if (!contextMenu) return;
+          let command = `ssh-copy-id`;
+          if (contextMenu.target.identity_file) {
+            command += ` -i "${contextMenu.target.identity_file}"`;
+          }
+          if (contextMenu.target.port !== "22") {
+            command += ` -p ${contextMenu.target.port}`;
+          }
+          command += ` ${contextMenu.target.user}@${contextMenu.target.hostname}`;
+          navigator.clipboard.writeText(command);
+          closeMenu();
+        }}>Copy ssh-copy-id Command</MenuItem>
         <MenuItem onClick={handleToggleFavourite}>
           {contextMenu?.target.is_favourite ? 'Remove From Favourite' : 'Add To Favourite'}
         </MenuItem>
@@ -656,7 +696,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
             <TextField fullWidth label="Port" size="small" value={formData.port} onChange={e => setFormData({ ...formData, port: e.target.value })} placeholder="default: 22" />
             <TextField fullWidth label="Tags (Optional)" size="small" value={formData.tags} onChange={e => setFormData({ ...formData, tags: e.target.value })} placeholder="e.g. production web" />
             <TextField fullWidth label="IdentityFile (Optional)" size="small" value={formData.identity_file} onChange={e => setFormData({ ...formData, identity_file: e.target.value })} placeholder="~/.ssh/id_ed25519" />
-            <TextField fullWidth label="ProxyJump (Optional)" size="small" value={formData.proxy_jump} onChange={e => setFormData({ ...formData, proxy_jump: e.target.value })} placeholder="e.g. jump-host-alias" />
+            <TextField fullWidth label="ProxyJump (Optional)" size="small" value={formData.proxy_jump} onChange={e => setFormData({ ...formData, proxy_jump: e.target.value })} placeholder="e.g. server-foo,server-bar" />
             <Autocomplete freeSolo options={remoteCommandOptions} value={formData.remote_command}
               onInputChange={(_event, newValue) => {
                 setFormData({ ...formData, remote_command: newValue })
