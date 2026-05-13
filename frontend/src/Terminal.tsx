@@ -444,7 +444,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
 
     term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
-      if (e.altKey && (k === 'j' || e.code === 'KeyJ' || k === 'k' || e.code === 'KeyK' || k === 'i' || e.code === 'KeyI' || k === 'g' || e.code === 'KeyG' || k === 'w' || e.code === 'KeyW' || k === 't' || e.code === 'KeyT' || (e.key >= '0' && e.key <= '9') || (e.shiftKey && e.code.startsWith('Digit')) || e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      if (e.altKey && (k === 'h' || e.code === 'KeyH' || k === 'l' || e.code === 'KeyL' || k === 'j' || e.code === 'KeyJ' || k === 'k' || e.code === 'KeyK' || k === 'i' || e.code === 'KeyI' || k === 'g' || e.code === 'KeyG' || k === 'w' || e.code === 'KeyW' || k === 't' || e.code === 'KeyT' || (e.key >= '0' && e.key <= '9') || (e.shiftKey && e.code.startsWith('Digit')))) {
         return false;
       }
       if (e.ctrlKey && e.shiftKey && (k === 'f' || e.code === 'KeyF')) {

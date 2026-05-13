@@ -1353,7 +1353,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
-      if (e.altKey && (k === 'j' || e.code === 'KeyJ')) {
+      if (e.altKey && (k === 'l' || e.code === 'KeyL')) {
         e.preventDefault();
         const allPanes = tabs.flatMap(t => t.panes.map(p => ({ tabId: t.id, paneId: p.id })));
         if (allPanes.length === 0) return;
@@ -1365,7 +1365,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         (document.activeElement as HTMLElement)?.blur?.();
         terminalRefs.current[target.paneId]?.focus();
         setTimeout(() => terminalRefs.current[target.paneId]?.focus(), 100);
-      } else if (e.altKey && (k === 'k' || e.code === 'KeyK')) {
+      } else if (e.altKey && (k === 'h' || e.code === 'KeyH')) {
         e.preventDefault();
         const allPanes = tabs.flatMap(t => t.panes.map(p => ({ tabId: t.id, paneId: p.id })));
         if (allPanes.length === 0) return;
@@ -1412,10 +1412,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
           terminalRefs.current[last.activePaneId]?.focus();
           setTimeout(() => terminalRefs.current[last.activePaneId]?.focus(), 100);
         }
-      } else if (e.altKey && e.key === 'ArrowUp') {
+      } else if (e.altKey && (k === 'k' || e.code === 'KeyK')) {
         e.preventDefault();
         (terminalRefs.current[activePaneId] as any)?.scrollLines?.(-3);
-      } else if (e.altKey && e.key === 'ArrowDown') {
+      } else if (e.altKey && (k === 'j' || e.code === 'KeyJ')) {
         e.preventDefault();
         (terminalRefs.current[activePaneId] as any)?.scrollLines?.(3);
       } else if (e.altKey && e.shiftKey) {
