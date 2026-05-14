@@ -293,22 +293,22 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') {
+    if (e.key === 'ArrowDown' || (e.altKey && e.key === 'j')) {
       e.preventDefault();
+      e.stopPropagation();
       setSelectedIndex(prev => Math.min(prev + 1, items.length - 1));
-    } else if (e.key === 'ArrowUp') {
+    } else if (e.key === 'ArrowUp' || (e.altKey && e.key === 'k')) {
       e.preventDefault();
+      e.stopPropagation();
       setSelectedIndex(prev => Math.max(prev - 1, 0));
-    } else if (e.key === 'ArrowLeft') {
-      if (filter === '') {
-        e.preventDefault();
-        cycleViewMode('prev');
-      }
-    } else if (e.key === 'ArrowRight') {
-      if (filter === '') {
-        e.preventDefault();
-        cycleViewMode('next');
-      }
+    } else if (e.key === 'ArrowLeft' || (e.altKey && e.key === 'h')) {
+      e.stopPropagation();
+      e.preventDefault();
+      cycleViewMode('prev');
+    } else if (e.key === 'ArrowRight' || (e.altKey && e.key === 'l')) {
+      e.stopPropagation();
+      e.preventDefault();
+      cycleViewMode('next');
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (items[selectedIndex]) {
@@ -318,6 +318,18 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
       onClose();
     }
   };
+
+  useEffect(() => {
+    const handleGlobalKeydown = (e: KeyboardEvent) => {
+      if (e.altKey && e.key === 't') {
+        e.preventDefault();
+        e.stopPropagation();
+        inputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeydown);
+    return () => window.removeEventListener('keydown', handleGlobalKeydown);
+  }, []);
 
   const handleSelect = (item: any) => {
     if (item.type === 'tab') {
@@ -404,7 +416,7 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
                       inputRef.current?.focus();
                     }}
                     color={viewMode !== 'servers' ? 'primary' : 'default'}
-                    title={`Toggle View (Currently: ${viewMode}) (←, →)`}
+                    title={`Toggle View (Currently: ${viewMode}) (←, →) (or Alt+H / Alt+L)`}
                   >
                     {viewMode === 'servers' ? <DnsIcon /> : viewMode === 'tabs' ? <TabIcon /> : <SmartButtonIcon />}
                   </IconButton>

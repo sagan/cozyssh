@@ -7,6 +7,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links"
 import { SearchAddon } from '@xterm/addon-search';
 import '@xterm/xterm/css/xterm.css';
 import { Box } from '@mui/material';
+import { getIntVar } from './common';
 
 export interface CommandHistoryEntry {
   commandId: string;
@@ -68,12 +69,13 @@ interface TerminalProps {
   onDataReceived?: () => void;
   cloneFrom?: string;
   isTouch?: boolean;
+  vars: Record<string, string | undefined>;
   localVars: Record<string, string | undefined>;
 }
 
 const RECENT_COMMANDS_NUM = 10;
 
-const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, sessionId, isActive, isCtrlActive, onCtrlDone, onStateChange, onTabStateChange, onStolen, onManualReconnect, onCwdChange, onShellIntegrationChange, onDataReceived, cloneFrom, isTouch, localVars }, ref) => {
+const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, sessionId, isActive, isCtrlActive, onCtrlDone, onStateChange, onTabStateChange, onStolen, onManualReconnect, onCwdChange, onShellIntegrationChange, onDataReceived, cloneFrom, isTouch, vars, localVars }, ref) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -237,7 +239,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     term.open(terminalRef.current!);
     xtermRef.current = term;
 
-    if (localVars["local_cs_nocompletions"] === "1") {
+    if (getIntVar(vars, localVars, "cs_nocompletions") === 1) {
       const textarea = term.textarea;
       if (textarea) {
         textarea.setAttribute('autocomplete', 'off');
@@ -247,16 +249,16 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
       }
     }
 
-    if (localVars["local_cs_noimage"] !== "1") {
+    if (getIntVar(vars, localVars, "cs_noimage") !== 1) {
       const imageAddon = new ImageAddon();
       term.loadAddon(imageAddon);
     }
-    if (localVars["local_cs_noweblinks"] !== "1") {
+    if (getIntVar(vars, localVars, "cs_noweblinks") !== 1) {
       term.loadAddon(new WebLinksAddon());
     }
 
     // Load WebGL Addon
-    if (localVars["local_cs_nowebgl"] !== "1") {
+    if (getIntVar(vars, localVars, "cs_nowebgl") !== 1) {
       try {
         webglAddon = new WebglAddon();
         webglAddon.onContextLoss(() => {

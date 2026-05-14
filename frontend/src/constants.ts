@@ -36,3 +36,5 @@ export const BUILTIN_BUTTONS = [
     payload: f.value
   }))
 ];
+
+export const DEFAULT_SCROLL_LINES = 3;

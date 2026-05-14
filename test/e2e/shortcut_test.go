@@ -69,20 +69,20 @@ func TestKeyboardShortcuts(t *testing.T) {
 		t.Fatalf("expected active pane to be second one (%v), got %v", secondPaneId, activePaneId)
 	}
 
-	// 2. Alt + K : Switch to previous tab
-	if err := page.Keyboard().Press("Alt+k"); err != nil {
-		t.Fatalf("failed to press Alt+k: %v", err)
+	// 2. Alt + H : Switch to previous tab
+	if err := page.Keyboard().Press("Alt+h"); err != nil {
+		t.Fatalf("failed to press Alt+h: %v", err)
 	}
 	time.Sleep(100 * time.Millisecond)
 
 	activePaneId, _ = page.Evaluate(`() => csGetAll().activePaneId`)
 	if activePaneId != firstPaneId {
-		t.Fatalf("expected active pane to be first one (%v) after Alt+k, got %v", firstPaneId, activePaneId)
+		t.Fatalf("expected active pane to be first one (%v) after Alt+h, got %v", firstPaneId, activePaneId)
 	}
 
-	// 3. Alt + J : Switch to next tab
-	if err := page.Keyboard().Press("Alt+j"); err != nil {
-		t.Fatalf("failed to press Alt+j: %v", err)
+	// 3. Alt + L : Switch to next tab
+	if err := page.Keyboard().Press("Alt+l"); err != nil {
+		t.Fatalf("failed to press Alt+l: %v", err)
 	}
 	time.Sleep(100 * time.Millisecond)
 
@@ -95,15 +95,15 @@ func TestKeyboardShortcuts(t *testing.T) {
 	page.Locator("text=CozySSH").Click()
 	time.Sleep(100 * time.Millisecond)
 
-	// Alt + k when focus is outside terminal
-	if err := page.Keyboard().Press("Alt+k"); err != nil {
-		t.Fatalf("failed to press Alt+k outside: %v", err)
+	// Alt + h when focus is outside terminal
+	if err := page.Keyboard().Press("Alt+h"); err != nil {
+		t.Fatalf("failed to press Alt+h outside: %v", err)
 	}
 	time.Sleep(100 * time.Millisecond)
 
 	activePaneId, _ = page.Evaluate(`() => csGetAll().activePaneId`)
 	if activePaneId != firstPaneId {
-		t.Fatalf("expected active pane to be first one (%v) after Alt+k outside, got %v", firstPaneId, activePaneId)
+		t.Fatalf("expected active pane to be first one (%v) after Alt+h outside, got %v", firstPaneId, activePaneId)
 	}
 
 	// Verify terminal actually has focus

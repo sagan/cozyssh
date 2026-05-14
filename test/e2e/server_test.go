@@ -37,8 +37,8 @@ func TestServerManagement(t *testing.T) {
 	page.GetByLabel("User").Fill("ubuntu")
 	page.GetByLabel("Port").Fill("2222")
 
-	if err := page.GetByRole("button", playwright.PageGetByRoleOptions{Name: "Save Changes"}).Click(); err != nil {
-		t.Fatalf("failed to click save changes: %v", err)
+	if err := page.GetByRole("button", playwright.PageGetByRoleOptions{Name: "Save"}).Click(); err != nil {
+		t.Fatalf("failed to click save: %v", err)
 	}
 
 	// Wait for the dialog to close and list to update
@@ -70,8 +70,8 @@ func TestServerManagement(t *testing.T) {
 
 	// Add a tag
 	page.GetByLabel("Tags (Optional)").Fill("database")
-	if err := page.GetByRole("button", playwright.PageGetByRoleOptions{Name: "Save Changes"}).Click(); err != nil {
-		t.Fatalf("failed to click save changes: %v", err)
+	if err := page.GetByRole("button", playwright.PageGetByRoleOptions{Name: "Save"}).Click(); err != nil {
+		t.Fatalf("failed to click save: %v", err)
 	}
 
 	time.Sleep(500 * time.Millisecond)

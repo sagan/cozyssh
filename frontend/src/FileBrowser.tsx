@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Box, Typography, IconButton, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, CircularProgress } from '@mui/material';
 import FolderIcon from '@mui/icons-material/Folder';
+import HomeIcon from '@mui/icons-material/Home';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import CloseIcon from '@mui/icons-material/Close';
@@ -504,6 +505,15 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
           title={shellCwd ? `Go to Shell CWD: ${shellCwd}` : "Shell CWD not detected"}
         >
           <TerminalIcon fontSize="small" />
+        </IconButton>
+        <IconButton
+          size="small"
+          onClick={() => fetchFiles("~")}
+          disabled={loading}
+          sx={{ mr: 1 }}
+          title="Go To Home"
+        >
+          <HomeIcon fontSize="small" />
         </IconButton>
         <IconButton
           size="small"

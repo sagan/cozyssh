@@ -34,7 +34,8 @@ import { javascript } from '@codemirror/lang-javascript';
 import { transform } from 'sucrase';
 import { useLocalStorage } from './useLocalStorage';
 import NewTabDialog from './NewTabDialog';
-import { TERMINAL_FUNCTIONS, MISC_FUNCTIONS } from './constants';
+import { TERMINAL_FUNCTIONS, MISC_FUNCTIONS, DEFAULT_SCROLL_LINES } from './constants';
+import { getIntVar } from './common';
 
 const VIBRATE_PATTERN = 100;
 
@@ -1350,8 +1351,15 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setContextMenu(null);
   };
 
+  const scrollLines = getIntVar(vars, localVars, "cs_scroll_lines", DEFAULT_SCROLL_LINES);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // standalone alt key pressed
+      if (e.key === 'Alt' && !e.ctrlKey && !e.shiftKey && !e.metaKey) {
+        e.preventDefault();
+        return;
+      }
       const k = e.key.toLowerCase();
       if (e.altKey && (k === 'l' || e.code === 'KeyL')) {
         e.preventDefault();
@@ -1414,10 +1422,18 @@ export default function Dashboard({ initialData }: DashboardProps) {
         }
       } else if (e.altKey && (k === 'k' || e.code === 'KeyK')) {
         e.preventDefault();
-        (terminalRefs.current[activePaneId] as any)?.scrollLines?.(-3);
+        if (e.shiftKey) {
+          (terminalRefs.current[activePaneId] as any)?.scrollPages?.(-1);
+        } else {
+          (terminalRefs.current[activePaneId] as any)?.scrollLines?.(-scrollLines);
+        }
       } else if (e.altKey && (k === 'j' || e.code === 'KeyJ')) {
         e.preventDefault();
-        (terminalRefs.current[activePaneId] as any)?.scrollLines?.(3);
+        if (e.shiftKey) {
+          (terminalRefs.current[activePaneId] as any)?.scrollPages?.(1);
+        } else {
+          (terminalRefs.current[activePaneId] as any)?.scrollLines?.(scrollLines);
+        }
       } else if (e.altKey && e.shiftKey) {
         const digitMatch = e.code.match(/Digit(\d)/);
         if (digitMatch) {
@@ -1442,7 +1458,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTabId, activePaneId, tabs, buttons, activeGroup]);
+  }, [activeTabId, activePaneId, tabs, buttons, activeGroup, scrollLines]);
 
   const handleButtonClick = async (btn: ButtonData, isAutoRun = false) => {
     window.navigator.vibrate?.(VIBRATE_PATTERN);
@@ -1928,6 +1944,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                                 setActivePaneId(newId);
                               }
                             }}
+                            vars={vars}
                             localVars={localVars}
                             isTouch={isTouch}
                           />

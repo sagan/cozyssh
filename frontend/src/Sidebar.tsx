@@ -343,11 +343,13 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   }, []);
 
   const handleFilterKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') {
+    if (e.key === 'ArrowDown' || (e.altKey && e.key === 'j')) {
       e.preventDefault();
+      e.stopPropagation();
       setSelectedIndex(prev => Math.min(prev + 1, flatFilteredHosts.length - 1));
-    } else if (e.key === 'ArrowUp') {
+    } else if (e.key === 'ArrowUp' || (e.altKey && e.key === 'k')) {
       e.preventDefault();
+      e.stopPropagation();
       setSelectedIndex(prev => Math.max(prev - 1, 0));
     } else if (e.key === 'Enter') {
       if (selectedIndex >= 0 && selectedIndex < flatFilteredHosts.length) {
@@ -435,7 +437,9 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
               }}
             >
               {uniqueTags.map(tag => {
-                const isActive = filterStr.toLowerCase().includes(`#${tag.toLowerCase()}`);
+                const tagLower = tag.toLowerCase();
+                const filterStrLower = filterStr.toLowerCase().trim();
+                const isActive = filterStrLower.includes(`#${tagLower} `) || filterStrLower.endsWith(`#${tagLower}`);
                 return (
                   <Chip
                     key={tag}
@@ -647,16 +651,15 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
                 <Typography variant="subtitle2" gutterBottom>Keyboard Shortcuts</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
                   <b>Alt + T</b> : Open new tab dialog, then use ← → to switch view, ↑ ↓ to select, Enter to open<br />
-                  <b>Alt + H</b> : Switch to previous tab<br />
-                  <b>Alt + L</b> : Switch to next tab<br />
+                  <b>Alt + H / Alt + L</b> : Switch to previous / next tab<br />
                   <b>Alt + 1-9</b> : Switch to tab 1-9<br />
                   <b>Alt + 0</b> : Switch to last tab<br />
-                  <b>Alt + W</b> : Close current tab / pane<br />
+                  <b>Alt + W</b> : Close current tab or pane<br />
                   <b>Alt + I</b> : Focus sidebar search filter, then use ↑ ↓ to select, Enter to open<br />
                   <b>Alt + G</b> : Focus active terminal session<br />
                   <b>Alt + Shift + 1-9,0</b> : Click the button in button bar<br />
-                  <b>Alt + K</b> : Scroll terminal up<br />
-                  <b>Alt + J</b> : Scroll terminal down<br />
+                  <b>Alt + J / Alt + K</b> : Scroll terminal down / up by a few lines<br />
+                  <b>Alt + Shift + J / Alt + Shift + K</b> : Scroll terminal down / up by a page<br />
                   <b>Ctrl + Shift + F</b> : Open terminal search box<br />
                   <b>Ctrl + Shift + V (Windows) / Cmd + V (Mac)</b> : Paste into terminal<br />
                   <b>Mouse Select</b> in terminal to copy<br />
