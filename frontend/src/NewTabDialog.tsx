@@ -41,13 +41,14 @@ interface NewTabDialogProps {
 
   buttons?: any[];
   activeGroup?: string;
+  initialViewMode?: 'servers' | 'tabs' | 'buttons';
   onSelect: (host: string) => void;
   onSelectTab?: (tabId: string) => void;
   onAttachPinned?: (id: string, host: string, title: string, isLocked: boolean) => void;
   onExecuteButton?: (btn: any) => void;
 }
 
-export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [], buttons = [], activeGroup, onSelect, onSelectTab, onAttachPinned, onExecuteButton }: NewTabDialogProps) {
+export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [], buttons = [], activeGroup, initialViewMode = 'servers', onSelect, onSelectTab, onAttachPinned, onExecuteButton }: NewTabDialogProps) {
   const [filter, setFilter] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [viewMode, setViewMode] = useState<'servers' | 'tabs' | 'buttons'>('servers');
@@ -265,10 +266,10 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
     if (open) {
       setFilter('');
       setSelectedIndex(0);
-      setViewMode('servers');
+      setViewMode(initialViewMode);
       setTimeout(() => inputRef.current?.focus(), 50);
     }
-  }, [open]);
+  }, [open, initialViewMode]);
 
   useEffect(() => {
     if (selectedItemRef.current) {

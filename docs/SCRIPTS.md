@@ -16,7 +16,7 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
     - [`csSendData(data: string, paneId?: string): void`](#cssenddatadata-string-paneid-string-void)
     - [`csGetTerminalContents(lines = 100, paneId?: string) : string`](#csgetterminalcontentslines--100-paneid-string--string)
     - [`csFocus(paneId?: string): void`](#csfocuspaneid-string-void)
-    - [`csNotify(msg: string): void`](#csnotifymsg-string-void)
+    - [`csNotify(msg: string, severity: 'success' | 'info' | 'warning' | 'error' = 'info'): void`](#csnotifymsg-string-severity-success--info--warning--error--info-void)
     - [`csGetAll(): AllObject`](#csgetall-allobject)
     - [`csOpen(target: Host | string | (Host | string)[], options?: { name?: string }): void`](#csopentarget-host--string--host--string-options--name-string--void)
     - [`csFetch(url: string, options?: RequestInit): Promise<Response>`](#csfetchurl-string-options-requestinit-promiseresponse)
@@ -156,11 +156,12 @@ Returns the contents of the specified terminal buffer as a string.
 
 Focuses the specified terminal session if `paneId` is provided, the active instance otherwise.
 
-### `csNotify(msg: string): void`
+### `csNotify(msg: string, severity: 'success' | 'info' | 'warning' | 'error' = 'info'): void`
 
 Displays a toast notification in the top-right corner. Up to 3 messages can be displayed simultaneously.
 
 - `msg`: The message to display.
+- `severity`: The severity of the notification. Can be `'success'`, `'info'`, `'warning'`, or `'error'`. Defaults to `'info'`.
 
 ### `csGetAll(): AllObject`
 

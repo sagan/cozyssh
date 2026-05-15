@@ -86,12 +86,15 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
     ```
 - **Full keyboard Shortcuts**: It supports a complete set of keyboard shortcuts.
   - `Alt + T` : Open new tab dialog, then use `← →` to switch view, `↑ ↓` to select, `Enter` to open
+  - `Alt + E` : Open new tab dialog - buttons view
+  - `Alt + N` : Open new local shell tab
+  - `Alt + S` : Open scratchpad
   - `Alt + H / Alt + L` : Switch to previous / next tab
-  - `Alt + 1-9` : Switch to tab 1-9
-  - `Alt + 0` : Switch to last tab
+  - `Alt + 1-9,0` : Switch to tab 1-9, last tab
   - `Alt + W` : Close current tab / pane
   - `Alt + I` : Focus sidebar search filter, then use `↑ ↓` to select, `Enter` to open
   - `Alt + G` : Focus active terminal session
+  - `Alt + V / Alt + Shift + V` : Switch to next / previous group in button bar
   - `Alt + Shift + 1-9,0` : Click the button in button bar
   - `Alt + J / Alt + K` : Scroll terminal down / up by a few lines
   - `Alt + Shift + J / Alt + Shift + K` : Scroll terminal down / up by a page

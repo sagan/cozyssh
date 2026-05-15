@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, CssBaseline, ThemeProvider, createTheme, Tabs, Tab, IconButton, Menu, MenuItem, Typography, Button, ButtonGroup, useMediaQuery, useTheme, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, FormControlLabel, Checkbox, Drawer, Tooltip } from '@mui/material';
+import { useSearchParams } from "react-router";
+import { Box, CssBaseline, ThemeProvider, createTheme, Tabs, Tab, IconButton, Menu, MenuItem, Typography, Button, ButtonGroup, useMediaQuery, useTheme, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, FormControlLabel, Checkbox, Drawer, Tooltip, Alert } from '@mui/material';
 import Sidebar from './Sidebar';
 import type { Host } from './Sidebar';
 import TerminalComponent from './Terminal';
@@ -369,11 +370,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [inputValue, setInputValue] = useState('');
   const [appendNewLine, setAppendNewLine] = useState(true);
   const [sendScope, setSendScope] = useState<0 | 1 | 2>(0);
-  const [toasts, setToasts] = useState<{ id: number; msg: string }[]>([]);
+  const [toasts, setToasts] = useState<{ id: number; msg: string; severity: 'success' | 'info' | 'warning' | 'error' }[]>([]);
   const toastIdRef = useRef(0);
   const [hosts, setHosts] = useState<Host[]>([]);
   const [recents, setRecents] = useLocalStorage<{ host: string, last_used: number }[]>('cozy_recents', []);
   const [newTabDialogOpen, setNewTabDialogOpen] = useState(false);
+  const [newTabDialogInitialViewMode, setNewTabDialogInitialViewMode] = useState<'servers' | 'tabs' | 'buttons'>('servers');
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -405,16 +407,16 @@ export default function Dashboard({ initialData }: DashboardProps) {
     window.dispatchEvent(new CustomEvent('cs:terminal-change', { detail: { activePaneId } }));
   }, [activePaneId]);
 
-  const csNotify = (msg: string) => {
+  const csNotify = (msg: string, severity: 'success' | 'info' | 'warning' | 'error' = 'info') => {
     toastIdRef.current++;
     const id = toastIdRef.current;
     setToasts(prev => {
-      const newToasts = [...prev, { id, msg }];
-      return newToasts.slice(-3);
+      const newToasts = [...prev, { id, msg, severity }];
+      return newToasts.slice(-3); // Keep last 3
     });
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
-    }, 3000);
+    }, 4000);
   };
 
   const handleTerminalData = (tabId: string) => {
@@ -668,7 +670,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         setTimeout(() => terminalRefs.current[activePaneIdRef.current]?.focus(), 0);
       }
     };
-    (window as any).csNotify = (msg: string) => csNotify(msg);
+    (window as any).csNotify = (msg: string, severity?: any) => csNotify(msg, severity);
     (window as any).csFetch = async (url: string, options: any = {}) => {
       const token = localStorage.getItem('cozy_token');
       const proxyUrl = `/api/fetch?url=${encodeURIComponent(url)}`;
@@ -944,6 +946,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
   };
 
 
+  const [startupParams] = useSearchParams();
+
   useEffect(() => {
     const token = localStorage.getItem('cozy_token');
     const hash = window.location.hash.substring(1);
@@ -1118,8 +1122,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
   };
 
 
-  const handleCloseTab = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
+  const handleCloseTab = (e: React.MouseEvent | null, id: string) => {
+    e?.stopPropagation();
     const targetTab = tabs.find(t => t.id === id);
     if (targetTab?.isPinned && !targetTab?.isLocked) {
       handleUnpinTab(id);
@@ -1176,7 +1180,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, panes: newPanes, activePaneId: nextPaneId } : t));
       setActivePaneId(nextPaneId);
     } else {
-      handleCloseTab({ stopPropagation: () => { } } as any, activeTabId);
+      handleCloseTab(null, activeTabId);
     }
   };
 
@@ -1398,6 +1402,22 @@ export default function Dashboard({ initialData }: DashboardProps) {
         handleCloseCurrentPaneOrTab();
       } else if (e.altKey && (k === 't' || e.code === 'KeyT')) {
         e.preventDefault();
+        setNewTabDialogInitialViewMode('servers');
+        setNewTabDialogOpen(true);
+      } else if (e.altKey && (k === 'n' || e.code === 'KeyN')) {
+        e.preventDefault();
+        handleSelectHost("local");
+      } else if (e.altKey && (k === 's' || e.code === 'KeyS')) {
+        e.preventDefault();
+        handleOpenScratchpad();
+      } else if (e.altKey && (k === 'v' || e.code === 'KeyV')) {
+        e.preventDefault();
+        const idx = groups.indexOf(activeGroup);
+        const nextIdx = (e.shiftKey ? (idx - 1 + groups.length) : (idx + 1)) % groups.length;
+        setActiveGroup(groups[nextIdx]);
+      } else if (e.altKey && (k === 'e' || e.code === 'KeyE')) {
+        e.preventDefault();
+        setNewTabDialogInitialViewMode('buttons');
         setNewTabDialogOpen(true);
       } else if (e.altKey && e.key >= '1' && e.key <= '9') {
         e.preventDefault();
@@ -1458,7 +1478,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTabId, activePaneId, tabs, buttons, activeGroup, scrollLines]);
+  }, [activeTabId, activePaneId, tabs, buttons, groups, activeGroup, scrollLines]);
 
   const handleButtonClick = async (btn: ButtonData, isAutoRun = false) => {
     window.navigator.vibrate?.(VIBRATE_PATTERN);
@@ -1582,7 +1602,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         await import(url);
       } catch (e) {
         console.error('Script Error:', e);
-        csNotify('Script Error: ' + e);
+        csNotify('Script Error: ' + e, 'error');
       } finally {
         // Always clean up the URL to prevent memory leaks
         URL.revokeObjectURL(url);
@@ -1611,19 +1631,24 @@ export default function Dashboard({ initialData }: DashboardProps) {
       });
   };
 
+  const noautorun = getIntVar(vars, localVars, "cs_noautorun");
+
   useEffect(() => {
-    if (buttonsLoaded && !autoRunExecutedRef.current) {
+    if (startupParams && buttonsLoaded && !autoRunExecutedRef.current) {
       autoRunExecutedRef.current = true;
-      const scriptsToRun = buttons.filter(b => b.type === 'run_script' && b.autorun === 1);
-      try {
+      if (noautorun !== 1 && !startupParams.get("noautorun")) {
+        const scriptsToRun = buttons.filter(b => b.type === 'run_script' && b.autorun === 1);
         scriptsToRun.forEach(btn => {
-          handleButtonClick(btn, true);
+          try {
+            handleButtonClick(btn, true);
+          } catch (e) {
+            console.error(`Autorun script ${btn.name} error:`, e);
+          }
         });
-      } catch (e) {
-        console.error('Autorun scripts error:', e);
       }
+      (window as any).__CS_AUTORUN_DONE = 1;
     }
-  }, [buttonsLoaded, buttons]);
+  }, [startupParams, buttonsLoaded, buttons, noautorun]);
 
   const handleDeleteButton = async (id: string, name: string) => {
     if (!confirm(`Delete button "${name}"?`)) return;
@@ -1764,7 +1789,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
               </Box>
               <IconButton
                 size="small" title='New Tab (Alt+T)'
-                onClick={() => setNewTabDialogOpen(true)}
+                onClick={() => {
+                  setNewTabDialogInitialViewMode('servers');
+                  setNewTabDialogOpen(true);
+                }}
                 sx={{ mr: 1, ml: 0.5, bgcolor: 'action.hover', '&:hover': { bgcolor: 'action.selected' } }}
               >
                 <AddIcon fontSize="small" />
@@ -2029,7 +2057,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
                   </Tooltip>
                   <Tooltip title="New Tab (Alt+T)">
                     <IconButton
-                      onClick={() => setNewTabDialogOpen(true)}
+                      onClick={() => {
+                        setNewTabDialogInitialViewMode('servers');
+                        setNewTabDialogOpen(true);
+                      }}
                       color="primary"
                       sx={{
                         width: 64,
@@ -2514,6 +2545,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         hosts={hosts}
         recents={recents}
         tabs={tabs}
+        initialViewMode={newTabDialogInitialViewMode}
 
         buttons={buttons}
         activeGroup={activeGroup}
@@ -2568,14 +2600,26 @@ export default function Dashboard({ initialData }: DashboardProps) {
         }}
       />
 
-      <Box sx={{ position: 'fixed', top: 20, right: 20, zIndex: 10000, display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <Box sx={{ position: 'fixed', top: 20, right: 20, zIndex: 10000, display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'flex-end' }}>
         {toasts.map(t => (
-          <Paper key={t.id} sx={{ p: 1.5, minWidth: 200, bgcolor: 'primary.main', color: 'white', display: 'flex', alignItems: 'center', boxShadow: 3 }}>
-            <Typography variant="body2" sx={{ flexGrow: 1 }}>{t.msg}</Typography>
-            <IconButton size="small" onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))} sx={{ color: 'white', ml: 1 }}>
-              <CloseIcon fontSize="inherit" />
-            </IconButton>
-          </Paper>
+          <Alert
+            key={t.id}
+            severity={t.severity}
+            variant="filled"
+            onClose={() => setToasts(prev => prev.filter(x => x.id !== t.id))}
+            sx={{
+              minWidth: 250,
+              boxShadow: 3,
+              // Add a simple animation feel
+              animation: 'slideIn 0.1s cubic-bezier(0.15, 1.15, 0.3, 1) forwards',
+              '@keyframes slideIn': {
+                '0%': { transform: 'translateX(100%)', opacity: 0 },
+                '100%': { transform: 'translateX(0)', opacity: 1 }
+              }
+            }}
+          >
+            {t.msg}
+          </Alert>
         ))}
       </Box>
     </ThemeProvider>
