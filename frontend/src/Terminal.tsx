@@ -85,6 +85,8 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
   const isActiveRef = useRef(isActive);
   const reconnectFuncRef = useRef<(() => void) | null>(null);
   const forceReconnectRef = useRef(false);
+  // Track last known good terminal dimensions so we don't send tiny sizes when hidden
+  const lastKnownSizeRef = useRef<{ cols: number; rows: number }>({ cols: 80, rows: 24 });
   const shellIntegrationRef = useRef<ShellIntegration>({});
   const markersRef = useRef<{ start?: IMarker, end?: IMarker }>({});
 
@@ -274,6 +276,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     document.fonts.ready.then(() => {
       if (fitAddonRef.current) {
         fitAddonRef.current.fit();
+        lastKnownSizeRef.current = { cols: term.cols, rows: term.rows };
       }
     });
 
@@ -436,6 +439,8 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
       if (terminalRef.current && terminalRef.current.offsetWidth > 0) {
         requestAnimationFrame(() => {
           fitAddon.fit();
+          // Update last known good size whenever we successfully fit
+          lastKnownSizeRef.current = { cols: term.cols, rows: term.rows };
           const ws = wsRef.current;
           if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
@@ -447,10 +452,10 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
 
     term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
-      if (e.altKey && (k === 'h' || e.code === 'KeyH' || k === 'l' || e.code === 'KeyL' || k === 'j' || e.code === 'KeyJ' || k === 'k' || e.code === 'KeyK' || k === 'i' || e.code === 'KeyI' || k === 'g' || e.code === 'KeyG' || k === 'w' || e.code === 'KeyW' || k === 't' || e.code === 'KeyT' || k === 'e' || e.code === 'KeyE' || k === 'n' || e.code === 'KeyN' || k === 's' || e.code === 'KeyS' || k === 'v' || e.code === 'KeyV' || (e.key >= '0' && e.key <= '9') || (e.shiftKey && e.code.startsWith('Digit')))) {
+      if (e.altKey && (k === 'h' || e.code === 'KeyH' || k === 'l' || e.code === 'KeyL' || k === 'j' || e.code === 'KeyJ' || k === 'k' || e.code === 'KeyK' || k === 'i' || e.code === 'KeyI' || k === 'g' || e.code === 'KeyG' || k === 'w' || e.code === 'KeyW' || k === 't' || e.code === 'KeyT' || k === 'e' || e.code === 'KeyE' || k === 'n' || e.code === 'KeyN' || k === 's' || e.code === 'KeyS' || k === 'v' || e.code === 'KeyV' || k === 'a' || e.code === 'KeyA' || (e.key >= '0' && e.key <= '9') || (e.shiftKey && e.code.startsWith('Digit')))) {
         return false;
       }
-      if (e.ctrlKey && e.shiftKey && (k === 'f' || e.code === 'KeyF')) {
+      if (e.ctrlKey && e.shiftKey && (k === 'f' || e.code === 'KeyF' || k === 'c' || e.code === 'KeyC' || k === 'r' || e.code === 'KeyR')) {
         return false;
       }
       return true;
@@ -476,11 +481,22 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
         wsRef.current.close();
       }
       clearTimeout(reconnectTimer);
-      if (fitAddonRef.current) {
+
+      // Only call fit() if the container is visible (non-zero dimensions).
+      // When a tab is inactive (display:none), fit() would calculate a tiny
+      // fallback size (e.g. 10x5) which corrupts the remote PTY size.
+      const isVisible = terminalRef.current && terminalRef.current.offsetWidth > 0;
+      if (isVisible && fitAddonRef.current) {
         fitAddonRef.current.fit();
+        lastKnownSizeRef.current = { cols: term.cols, rows: term.rows };
       }
 
-      let finalUrl = wsUrl + `&cols=${term.cols}&rows=${term.rows}`;
+      // Use last known good size when hidden, current size when visible
+      const { cols, rows } = isVisible
+        ? { cols: term.cols, rows: term.rows }
+        : lastKnownSizeRef.current;
+
+      let finalUrl = wsUrl + `&cols=${cols}&rows=${rows}`;
       if (forceReconnectRef.current) {
         finalUrl += '&reconnect=true';
         forceReconnectRef.current = false;
@@ -497,8 +513,8 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
 
       ws.onopen = () => {
         if (isDisposed) { ws.close(); return; }
-        // Send initial resize
-        ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+        // Send initial resize using correct dimensions
+        ws.send(JSON.stringify({ type: 'resize', cols, rows }));
         window.dispatchEvent(new CustomEvent('cs:terminal-connected', { detail: { terminal: term, sessionId, host, is_active_terminal: isActive } }));
       };
 
@@ -682,12 +698,15 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     if (xtermRef.current && terminalRef.current) {
       setTimeout(() => {
         if (isActive) xtermRef.current?.focus();
-        // Force fit
+        // Force fit and update server with correct size (critical after reconnecting while hidden)
         if (fitAddonRef.current && terminalRef.current && terminalRef.current.offsetWidth > 0) {
           fitAddonRef.current.fit();
+          const cols = xtermRef.current?.cols || 80;
+          const rows = xtermRef.current?.rows || 24;
+          lastKnownSizeRef.current = { cols, rows };
           const ws = wsRef.current;
           if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'resize', cols: xtermRef.current?.cols, rows: xtermRef.current?.rows }));
+            ws.send(JSON.stringify({ type: 'resize', cols, rows }));
           }
         }
       }, 100);

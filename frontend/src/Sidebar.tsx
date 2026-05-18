@@ -650,20 +650,23 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
               <>
                 <Typography variant="subtitle2" gutterBottom>Keyboard Shortcuts</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
-                  <b>Alt + T</b> : Open new tab dialog, then use ← → to switch view, ↑ ↓ to select, Enter to open<br />
+                  <b>Alt + T</b> : Open new tab dialog, use ← → to switch view, ↑ ↓ to select, Enter to open<br />
                   <b>Alt + E</b> : Open new tab dialog - buttons view<br />
                   <b>Alt + N</b> : Open new local shell tab<br />
                   <b>Alt + S</b> : Open scratchpad<br />
                   <b>Alt + H / Alt + L</b> : Switch to previous / next tab<br />
                   <b>Alt + 1-9,0</b> : Switch to tab 1-9, last tab<br />
                   <b>Alt + W</b> : Close current tab or pane<br />
-                  <b>Alt + I</b> : Focus sidebar search filter, then use ↑ ↓ to select, Enter to open<br />
+                  <b>Alt + I</b> : Focus sidebar search filter, use ↑ ↓ to select, Enter to open<br />
                   <b>Alt + G</b> : Focus active terminal session<br />
+                  <b>Alt + A</b> : Select all in current terminal and copy<br />
                   <b>Alt + V / Alt + Shift + V</b> : Switch to next / previous group in button bar<br />
                   <b>Alt + Shift + 1-9,0</b> : Click the button in button bar<br />
                   <b>Alt + J / Alt + K</b> : Scroll terminal down / up by a few lines<br />
                   <b>Alt + Shift + J / Alt + Shift + K</b> : Scroll terminal down / up by a page<br />
                   <b>Ctrl + Shift + F</b> : Open terminal search box<br />
+                  <b>Ctrl + Shift + R</b> : Reconnect current terminal<br />
+                  <b>Ctrl + Shift + C</b> : Copy selected text in terminal<br />
                   <b>Ctrl + Shift + V (Windows) / Cmd + V (Mac)</b> : Paste into terminal<br />
                   <b>Mouse Select</b> in terminal to copy<br />
                   <b>Mouse Right Click</b> in terminal to paste<br />

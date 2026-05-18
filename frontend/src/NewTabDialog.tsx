@@ -386,9 +386,9 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
       slotProps={{
         paper: {
           sx: {
-            mt: '10vh',
+            mt: '10dvh',
             minHeight: '200px',
-            maxHeight: '70vh',
+            maxHeight: '80dvh',
             borderRadius: 2
           }
         }

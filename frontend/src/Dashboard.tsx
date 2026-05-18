@@ -1454,6 +1454,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
         } else {
           (terminalRefs.current[activePaneId] as any)?.scrollLines?.(scrollLines);
         }
+      } else if (e.altKey && (k === 'a' || e.code === 'KeyA')) {
+        e.preventDefault();
+        const term = terminalRefs.current[activePaneId] as any;
+        if (term) {
+          term.selectAll?.();
+        }
       } else if (e.altKey && e.shiftKey) {
         const digitMatch = e.code.match(/Digit(\d)/);
         if (digitMatch) {
@@ -1474,6 +1480,18 @@ export default function Dashboard({ initialData }: DashboardProps) {
           setSearchOpen(true);
           setTimeout(() => searchInputRef.current?.focus(), 100);
         }
+      } else if (e.ctrlKey && e.shiftKey && (k === 'c' || e.code === 'KeyC')) {
+        e.preventDefault();
+        const term = terminalRefs.current[activePaneId] as any;
+        if (term) {
+          const text = term.getSelection?.();
+          if (text) {
+            navigator.clipboard.writeText(text);
+          }
+        }
+      } else if (e.ctrlKey && e.shiftKey && (k === 'r' || e.code === 'KeyR')) {
+        e.preventDefault();
+        (terminalRefs.current[activePaneId] as any)?.reconnect?.();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -2146,9 +2164,17 @@ export default function Dashboard({ initialData }: DashboardProps) {
                   sx={{
                     minHeight: 28, minWidth: 'auto', p: '2px 12px',
                     textTransform: 'none', fontSize: '0.8rem', borderRadius: 1.5,
-                    border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper',
+                    border: btn.type === "run_script" ? '1px dashed'
+                      : btn.type !== "send_string" ? '1px dotted' : '1px solid',
+                    borderColor: btn.type === "run_script" ? "warning.main"
+                      : btn.type !== "send_string" ? "primary.main" : 'success.main',
+                    bgcolor: 'background.paper',
                     color: 'text.primary', margin: '6px 4px', cursor: 'pointer',
-                    '&:hover': { bgcolor: 'primary.light', color: 'white' }
+                    '&:hover': {
+                      bgcolor: btn.type === "run_script" ? 'warning.light'
+                        : btn.type !== "send_string" ? 'primary.light' : 'success.light',
+                      color: 'white'
+                    }
                   }}
                 />
               ))}
