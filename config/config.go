@@ -15,13 +15,14 @@ import (
 )
 
 type Button struct {
-	ID      string `yaml:"id" json:"id"`
-	Name    string `yaml:"name" json:"name"`
-	Type    string `yaml:"type" json:"type"`
-	Payload string `yaml:"payload" json:"payload"`
-	Group   string `yaml:"group" json:"group"`
-	AutoRun int    `yaml:"autorun" json:"autorun"`
-	Order   int    `yaml:"order" json:"order"`
+	ID       string `yaml:"id" json:"id"`
+	Name     string `yaml:"name" json:"name"`
+	Type     string `yaml:"type" json:"type"`
+	Payload  string `yaml:"payload" json:"payload"`
+	Group    string `yaml:"group" json:"group"`
+	AutoRun  int    `yaml:"autorun" json:"autorun"`
+	Order    int    `yaml:"order" json:"order"`
+	Shortcut string `yaml:"shortcut" json:"shortcut"`
 }
 
 type Config struct {

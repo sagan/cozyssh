@@ -1,14 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Box, Button, TextField, Typography, Paper, ThemeProvider, createTheme, CssBaseline } from '@mui/material';
+import { Box, Button, TextField, Typography, Paper, ThemeProvider, CssBaseline } from '@mui/material';
 import { version as PACKAGE_JSON_VERSION } from '../package.json';
-
-const lightTheme = createTheme({
-  palette: {
-    mode: 'light',
-    primary: { main: '#1976d2' },
-    background: { default: '#f4f6f8', paper: '#ffffff' },
-  },
-});
+import { loginTheme } from './common';
 
 export default function Login({ onLoginSuccess }: { onLoginSuccess?: (data: any) => void }) {
   const [password, setPassword] = useState('');
@@ -63,7 +56,7 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess?: (data: any)
   };
 
   return (
-    <ThemeProvider theme={lightTheme}>
+    <ThemeProvider theme={loginTheme}>
       <CssBaseline />
       <Box sx={{ height: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Paper elevation={3} sx={{ p: 4, width: 350, textAlign: 'center' }}>

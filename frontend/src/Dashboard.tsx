@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from "react-router";
-import { Box, CssBaseline, ThemeProvider, createTheme, Tabs, Tab, IconButton, Menu, MenuItem, Typography, Button, ButtonGroup, useMediaQuery, useTheme, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, FormControlLabel, Checkbox, Drawer, Tooltip, Alert } from '@mui/material';
+import { Box, CssBaseline, createTheme, ThemeProvider, Tabs, Tab, IconButton, Menu, MenuItem, Typography, Button, ButtonGroup, useMediaQuery, useTheme, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, FormControlLabel, Checkbox, Drawer, Tooltip, Alert } from '@mui/material';
 import Sidebar from './Sidebar';
 import type { Host } from './Sidebar';
 import TerminalComponent from './Terminal';
@@ -36,17 +36,9 @@ import { transform } from 'sucrase';
 import { useLocalStorage } from './useLocalStorage';
 import NewTabDialog from './NewTabDialog';
 import { TERMINAL_FUNCTIONS, MISC_FUNCTIONS, DEFAULT_SCROLL_LINES } from './constants';
-import { getIntVar } from './common';
+import { defaultTheme, getIntVar } from './common';
 
 const VIBRATE_PATTERN = 100;
-
-const lightTheme = createTheme({
-  palette: {
-    mode: 'light',
-    primary: { main: '#1976d2' },
-    background: { default: '#ffffff', paper: '#f4f6f8' },
-  },
-});
 
 interface PaneData {
   id: string;
@@ -75,6 +67,10 @@ interface ButtonData {
   group?: string;
   autorun?: number;
   order?: number;
+  /**
+   * shortcut. single letter such as "o": Alt + o
+   */
+  shortcut?: string;
 }
 
 interface DashboardProps {
@@ -361,7 +357,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [activeGroup, setActiveGroup] = useState<string>(localStorage.getItem('cozy_active_group') || 'Default');
   const [buttonDialogOpen, setButtonDialogOpen] = useState(false);
   const [editingButton, setEditingButton] = useState<ButtonData | null>(null);
-  const [buttonFormData, setButtonFormData] = useState({ name: '', type: 'send_string', payload: '', group: 'Default', autorun: 0, order: 0 });
+  const [buttonFormData, setButtonFormData] = useState({ name: '', type: 'send_string', payload: '', group: 'Default', autorun: 0, order: 0, shortcut: '' });
   const [initialBtnFormData, setInitialBtnFormData] = useState<any>(null);
   const [btnMenuAnchor, setBtnMenuAnchor] = useState<{ anchor: HTMLElement, btn: ButtonData } | null>(null);
   const [lastMenuBtn, setLastMenuBtn] = useState<ButtonData | null>(null);
@@ -443,8 +439,23 @@ export default function Dashboard({ initialData }: DashboardProps) {
     localStorage.setItem('cozy_active_group', activeGroup);
   }, [activeGroup]);
 
-  const groups = ['Default', ...Array.from(new Set(buttons.map(b => b.group || 'Default').filter(g => g !== 'Default')))].sort();
-  const filteredButtons = buttons.filter(b => (b.group || 'Default') === activeGroup);
+  const [groups, filteredButtons, shortButtons] = useMemo(() => {
+    const groups = ['Default', ...Array.from(new Set(buttons.map(b => b.group || 'Default').filter(g => g !== 'Default')))].sort();
+    const filteredButtons = buttons.filter(b => (b.group || 'Default') === activeGroup);
+    const shortButtons: Record<string, ButtonData> = {};
+    const otherGroupButtons = buttons.filter(b => (b.group || 'Default') !== activeGroup);
+    for (const btn of otherGroupButtons) {
+      if (btn.shortcut) {
+        shortButtons[btn.shortcut.toLowerCase()] = btn;
+      }
+    }
+    for (const btn of filteredButtons) {
+      if (btn.shortcut) {
+        shortButtons[btn.shortcut.toLowerCase()] = btn;
+      }
+    }
+    return [groups, filteredButtons, shortButtons]
+  }, [buttons, activeGroup]);
 
   useEffect(() => {
     if (buttonsLoaded && !groups.includes(activeGroup)) {
@@ -708,6 +719,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
       return res.json();
     };
 
+    (window as any).csSetTheme = (options: any, ...args: any[]) => {
+      setMuiTheme(createTheme(options, ...args));
+    };
+
     return () => {
       delete (window as any).csGetVar;
       delete (window as any).csSetVar;
@@ -720,6 +735,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       delete (window as any).csNotify;
       delete (window as any).csFetch;
       delete (window as any).csExec;
+      delete (window as any).csSetTheme;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1365,6 +1381,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
         return;
       }
       const k = e.key.toLowerCase();
+      if (e.altKey && !e.ctrlKey && !e.shiftKey && !e.metaKey && shortButtons[k]) {
+        e.preventDefault();
+        handleButtonClick(shortButtons[k]);
+        return;
+      }
       if (e.altKey && (k === 'l' || e.code === 'KeyL')) {
         e.preventDefault();
         const allPanes = tabs.flatMap(t => t.panes.map(p => ({ tabId: t.id, paneId: p.id })));
@@ -1496,7 +1517,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTabId, activePaneId, tabs, buttons, groups, activeGroup, scrollLines]);
+  }, [activeTabId, activePaneId, tabs, buttons, groups, shortButtons, activeGroup, scrollLines]);
 
   const handleButtonClick = async (btn: ButtonData, isAutoRun = false) => {
     window.navigator.vibrate?.(VIBRATE_PATTERN);
@@ -1572,6 +1593,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
         term.focus?.();
       } else if (btn.payload === 'SCROLL_TO_BOTTOM') {
         term.scrollToBottom?.();
+        term.focus?.();
+      } else if (btn.payload === 'SCROLL_UP') {
+        term.scrollLines?.(-scrollLines);
+        term.focus?.();
+      } else if (btn.payload === 'SCROLL_DOWN') {
+        term.scrollLines?.(scrollLines);
         term.focus?.();
       } else if (btn.payload === 'SCROLL_PAGE_UP') {
         term.scrollPages?.(-1);
@@ -1709,8 +1736,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setTimeout(() => (window as any).csFocus?.(), 0);
   };
 
+  const [muiTheme, setMuiTheme] = useState(defaultTheme);
+
   return (
-    <ThemeProvider theme={lightTheme}>
+    <ThemeProvider theme={muiTheme}>
       <Box sx={{ display: 'flex', height: viewportHeight, overflow: 'hidden' }}>
         <CssBaseline />
         <Sidebar
@@ -2153,7 +2182,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                 <Tab
                   key={btn.id}
                   label={btn.name}
-                  title={`${btn.type} (${btn.order || 0})${btn.autorun ? " (autorun)" : ""}${btn.type != "run_script" ? ": " + btn.payload : ""}`}
+                  title={`${btn.type} (${btn.order || 0})${btn.autorun ? " (autorun)" : ""}${btn.shortcut ? " (Alt+" + btn.shortcut.toUpperCase() + ")" : ""}${btn.type != "run_script" ? ": " + btn.payload : ""}`}
                   component="div"
                   onClick={() => handleButtonClick(btn)}
                   onContextMenu={(e) => {
@@ -2184,7 +2213,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                 size="small" title="New Button"
                 onClick={() => {
                   const maxOrder = buttons.length > 0 ? Math.max(...buttons.map(b => b.order || 0)) : 0;
-                  const data = { name: '', type: 'send_string', payload: '', group: activeGroup, autorun: 0, order: maxOrder + 10 || 10 };
+                  const data = { name: '', type: 'send_string', payload: '', group: activeGroup, autorun: 0, order: maxOrder + 10 || 10, shortcut: '' };
                   setEditingButton(null);
                   setButtonFormData(data);
                   setInitialBtnFormData(data);
@@ -2356,7 +2385,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
             payload: btnMenuAnchor.btn.payload,
             group: btnMenuAnchor.btn.group || 'Default',
             autorun: btnMenuAnchor.btn.autorun || 0,
-            order: btnMenuAnchor.btn.order || 0
+            order: btnMenuAnchor.btn.order || 0,
+            shortcut: btnMenuAnchor.btn.shortcut || ''
           };
           setEditingButton(btnMenuAnchor.btn);
           setButtonFormData(data);
@@ -2416,7 +2446,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
               <option value="misc">Misc</option>
               <option value="run_script">Run Script</option>
             </TextField>
-
             <TextField
               label="Order"
               type="number"
@@ -2425,7 +2454,18 @@ export default function Dashboard({ initialData }: DashboardProps) {
               onChange={e => setButtonFormData({ ...buttonFormData, order: parseInt(e.target.value) || 0 })}
               sx={{ width: 100 }}
             />
+          </Box>
 
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <TextField
+              label="Shortcut"
+              type="text"
+              size="small"
+              value={buttonFormData.shortcut}
+              onChange={e => setButtonFormData({ ...buttonFormData, shortcut: e.target.value })}
+              placeholder="Single letter, e.g. 'o': Alt+O"
+              sx={{ flexGrow: 1 }}
+            />
             {buttonFormData.type === 'run_script' && (
               <FormControlLabel
                 title="Automatically run this script when the page loads"

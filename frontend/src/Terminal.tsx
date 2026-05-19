@@ -452,10 +452,15 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
 
     term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
-      if (e.altKey && (k === 'h' || e.code === 'KeyH' || k === 'l' || e.code === 'KeyL' || k === 'j' || e.code === 'KeyJ' || k === 'k' || e.code === 'KeyK' || k === 'i' || e.code === 'KeyI' || k === 'g' || e.code === 'KeyG' || k === 'w' || e.code === 'KeyW' || k === 't' || e.code === 'KeyT' || k === 'e' || e.code === 'KeyE' || k === 'n' || e.code === 'KeyN' || k === 's' || e.code === 'KeyS' || k === 'v' || e.code === 'KeyV' || k === 'a' || e.code === 'KeyA' || (e.key >= '0' && e.key <= '9') || (e.shiftKey && e.code.startsWith('Digit')))) {
+      if (e.ctrlKey && e.shiftKey && (k === 'f' || k === 'c' || k === 'r')) {
         return false;
       }
-      if (e.ctrlKey && e.shiftKey && (k === 'f' || e.code === 'KeyF' || k === 'c' || e.code === 'KeyC' || k === 'r' || e.code === 'KeyR')) {
+      if (e.altKey && !e.shiftKey && (k.length > 1 || k === 'b' || k === 'f' || k === 'd'
+        || (k < 'a' || k > 'z') && (k < '0' || k > '9') || (window as any).__CS_PASSTHROUGH_SHORTCUTS?.includes?.(k))) {
+        return true;
+      }
+      if (e.altKey && k.length === 1 &&
+        (k >= 'a' && k <= 'z' || k >= '0' && k <= '9') || e.shiftKey && e.code.startsWith('Digit')) {
         return false;
       }
       return true;

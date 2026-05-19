@@ -11,6 +11,8 @@ export const TERMINAL_FUNCTIONS = [
   { value: 'CLOSE', label: 'CLOSE (Pane/Tab)' },
   { value: 'SCROLL_TO_TOP', label: 'SCROLL (Top)' },
   { value: 'SCROLL_TO_BOTTOM', label: 'SCROLL (Bottom)' },
+  { value: 'SCROLL_UP', label: 'SCROLL (Up)' },
+  { value: 'SCROLL_DOWN', label: 'SCROLL (Down)' },
   { value: 'SCROLL_PAGE_UP', label: 'SCROLL (Page Up)' },
   { value: 'SCROLL_PAGE_DOWN', label: 'SCROLL (Page Down)' },
   { value: 'SEARCH', label: 'SEARCH (Buffer)' },

@@ -22,6 +22,7 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
     - [`csFetch(url: string, options?: RequestInit): Promise<Response>`](#csfetchurl-string-options-requestinit-promiseresponse)
     - [`csExec(cmdline: string): Promise<{ error: any, stdout: string, stderr: string }>`](#csexeccmdline-string-promise-error-any-stdout-string-stderr-string-)
     - [`csRefresh(): Promise<void>`](#csrefresh-promisevoid)
+    - [`csSetTheme(options: any, ...args: any[]): void`](#cssetthemeoptions-any-args-any-void)
   - [Client-side Events](#client-side-events)
     - [`cs:terminal-change`](#csterminal-change)
     - [`cs:terminal-connected`](#csterminal-connected)
@@ -222,6 +223,36 @@ Executes a shell command on the CozySSH backend server.
 ### `csRefresh(): Promise<void>`
 
 Asynchronously refreshes all application data (server list, buttons, system info). Can be awaited.
+
+### `csSetTheme(options: any, ...args: any[]): void`
+
+Sets the MUI theme for the application. This function accepts the same arguments as MUI `createTheme`, see [Material UI document](https://mui.com/material-ui/customization/theming/).
+
+Sample usage:
+
+```ts
+csSetTheme({
+  palette: {
+    mode: 'dark',
+    primary: {
+      main: '#90caf9',
+    },
+  },
+});
+```
+
+The default theme:
+
+```json
+{
+  cssVariables: true,
+  palette: {
+    mode: 'light',
+    primary: { main: '#1976d2' },
+    background: { default: '#ffffff', paper: '#f4f6f8' },
+  },
+}
+```
 
 ---
 

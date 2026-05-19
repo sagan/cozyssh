@@ -1,6 +1,6 @@
 # CozySSH
 
-CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and terminal multiplexer. It allows you to manage multiple SSH sessions and local shells from a single, modern web interface.
+CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and terminal multiplexer. It allows you to manage multiple SSH sessions and local shells from a single, modern web interface. It's intuitive and easy, ready to use out of the box, while also having advanced features and being highly configurable & extensible.
 
 ![CozySSH Screenshot 1](./docs/screenshot-1.png)
 
@@ -66,6 +66,7 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
     - **Hover Tooltips**: Instant preview of the command payload.
     - **Common Terminal Functions**: Custom the button function to common terminal action, like copy terminal buffer, paste to terminal.
     - **Shortcut Invocation** : Use `<alt + shift + 1-9,0>` keyboard shortcut to invoke button directly.
+    - **Custom Shortcut** : Set a custom letter (e.g. `o`) for any button and use `Alt + O` to invoke it.
   - **Mobile-Friendly**: All features can be accessed seamlessly from mobile browser.
     - **Responsive sidebar and layout**.
     - **Mobile Input Toolbar**: Quick access to Esc, Tab, Arrow keys, and a stateful **Ctrl toggle** for mobile touch keyboards.
