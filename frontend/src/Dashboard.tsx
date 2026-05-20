@@ -2183,7 +2183,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                 <Tab
                   key={btn.id}
                   label={btn.name}
-                  title={`${btn.type} (${btn.order || 0})${btn.autorun ? " (autorun)" : ""}${btn.shortcut ? " (Alt+" + btn.shortcut.toUpperCase() + ")" : ""}${btn.type != "run_script" ? ": " + btn.payload : ""}`}
+                  title={`${btn.type} (${btn.order || 0})${btn.autorun ? " (autorun)" : ""}${btn.shortcut ? " (" + btn.shortcut.toUpperCase() + ")" : ""}${btn.type != "run_script" ? ": " + btn.payload : ""}`}
                   component="div"
                   onClick={() => handleButtonClick(btn)}
                   onContextMenu={(e) => {
