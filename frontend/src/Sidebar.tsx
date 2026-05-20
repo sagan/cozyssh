@@ -650,7 +650,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
               <>
                 <Typography variant="subtitle2" gutterBottom>Keyboard Shortcuts</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
-                  <b>Alt + T</b> : Open new tab dialog, use ← → to switch view, ↑ ↓ to select, Enter to open<br />
+                  <b>Alt + O</b> : Open new tab dialog, use ← → to switch view, ↑ ↓ to select, Enter to open<br />
                   <b>Alt + E</b> : Open new tab dialog - buttons view<br />
                   <b>Alt + N</b> : Open new local shell tab<br />
                   <b>Alt + S</b> : Open scratchpad<br />

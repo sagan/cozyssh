@@ -7,7 +7,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links"
 import { SearchAddon } from '@xterm/addon-search';
 import '@xterm/xterm/css/xterm.css';
 import { Box } from '@mui/material';
-import { getIntVar } from './common';
+import { getIntVar, getKeyCombination } from './common';
 
 export interface CommandHistoryEntry {
   commandId: string;
@@ -74,6 +74,46 @@ interface TerminalProps {
 }
 
 const RECENT_COMMANDS_NUM = 10;
+
+/**
+ * These shortcuts should be handled by the terminal / shell itself.
+ */
+const terminalKeyShortcuts = new Set([
+  // TTY / Kernel Signals
+  "ctrl+c",  // SIGINT (Kill process)
+  "ctrl+d",  // EOF (End of input / Exit)
+  "ctrl+q",  // XON (Resume screen output)
+  "ctrl+s",  // XOFF (Freeze screen output)
+  "ctrl+z",  // SIGTSTP (Suspend process)
+  "ctrl+\\", // SIGQUIT (Quit and core dump)
+
+  // Shell / Readline Shortcuts (Emacs Mode) - Navigation
+  "ctrl+a",  // Move cursor to beginning of line
+  "ctrl+e",  // Move cursor to end of line
+  "ctrl+b",  // Move backward one character
+  "ctrl+f",  // Move forward one character
+  "alt+b",   // Move backward one word
+  "alt+f",   // Move forward one word
+  "ctrl+x",  // Prefix for chorded commands (e.g., ctrl+x, ctrl+x)
+
+  // Shell / Readline Shortcuts (Emacs Mode) - Editing
+  "ctrl+u",  // Cut from cursor to beginning of line
+  "ctrl+k",  // Cut from cursor to end of line
+  "ctrl+w",  // Cut word before cursor
+  "alt+d",   // Cut word after cursor
+  "ctrl+y",  // Paste (yank) previously cut text
+  "ctrl+t",  // Swap last two characters
+  "alt+t",   // Swap current word with previous word
+  "ctrl+h",  // Backspace
+  "ctrl+l",  // Clear screen and redraw current line
+
+  // Shell / Readline Shortcuts (Emacs Mode) - History & Search
+  "ctrl+r",  // Reverse history search
+  "ctrl+g",  // Cancel reverse search / current action
+  "ctrl+p",  // Fetch previous command (Up)
+  "ctrl+n",  // Fetch next command (Down)
+  "alt+.",   // Insert last argument of previous command
+]);
 
 const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, sessionId, isActive, isCtrlActive, onCtrlDone, onStateChange, onTabStateChange, onStolen, onManualReconnect, onCwdChange, onShellIntegrationChange, onDataReceived, cloneFrom, isTouch, vars, localVars }, ref) => {
   const terminalRef = useRef<HTMLDivElement>(null);
@@ -451,19 +491,23 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     resizeObserver.observe(terminalRef.current);
 
     term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
-      const k = e.key.toLowerCase();
-      if (e.ctrlKey && e.shiftKey && (k === 'f' || k === 'c' || k === 'r')) {
-        return false;
-      }
-      if (e.altKey && !e.shiftKey && (k.length > 1 || k === 'b' || k === 'f' || k === 'd'
-        || (k < 'a' || k > 'z') && (k < '0' || k > '9') || (window as any).__CS_PASSTHROUGH_SHORTCUTS?.includes?.(k))) {
+      // Only evaluate on keydown to prevent double-firing
+      if (e.type !== 'keydown') {
         return true;
       }
-      if (e.altKey && k.length === 1 &&
-        (k >= 'a' && k <= 'z' || k >= '0' && k <= '9') || e.shiftKey && e.code.startsWith('Digit')) {
-        return false;
+      // Allow all standard typing (including Shift) to pass through to xterm
+      if (!e.ctrlKey && !e.altKey && !e.metaKey) {
+        return true;
       }
-      return true;
+      const kcomb = getKeyCombination(e);
+      if (terminalKeyShortcuts.has(kcomb)) {
+        return true;
+      }
+      const passthrough = (window as any).__CS_PASSTHROUGH_SHORTCUTS;
+      if (passthrough && (passthrough.has ? passthrough.has(kcomb) : passthrough.includes?.(kcomb))) {
+        return true;
+      }
+      return false;
     });
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';

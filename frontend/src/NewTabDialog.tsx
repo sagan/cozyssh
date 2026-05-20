@@ -145,7 +145,7 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
   }, [allFilteredButtons, viewMode]);
 
   const items = useMemo(() => {
-    const res: { type: 'recent' | 'host' | 'direct' | 'local' | 'tab' | 'pinned_tab' | 'button' | 'other_button' | 'builtin_button', value: string, label: string, subtitle?: string, tooltip?: string, isFav?: boolean, id?: string, host?: string, isLocked?: boolean, btn?: any }[] = [];
+    const res: { type: 'recent' | 'host' | 'direct' | 'local' | 'tab' | 'pinned_tab' | 'button' | 'other_button' | 'builtin_button', value: string, label: string, subtitle?: string, tooltip?: string, isFav?: boolean, id?: string, host?: string, isLocked?: boolean, btn?: any, tags?: string[] }[] = [];
 
     if (viewMode === 'servers') {
       filteredRecents.forEach(r => {
@@ -155,7 +155,8 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
           value: r.host,
           label: r.host,
           subtitle: knownHost ? `${knownHost.user || 'root'}@${knownHost.hostname}` : undefined,
-          tooltip: knownHost?.comment
+          tooltip: knownHost?.comment,
+          tags: knownHost?.tags,
         });
       });
 
@@ -177,7 +178,8 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
           label: h.name,
           subtitle,
           tooltip: h.comment,
-          isFav: h.is_favourite
+          isFav: h.is_favourite,
+          tags: h.tags,
         });
       });
 
@@ -322,7 +324,7 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
 
   useEffect(() => {
     const handleGlobalKeydown = (e: KeyboardEvent) => {
-      if (e.altKey && e.key === 't') {
+      if (e.altKey && (e.key === 'o' || e.key === 'e')) {
         e.preventDefault();
         e.stopPropagation();
         inputRef.current?.focus();
@@ -506,9 +508,18 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
                 </ListItemIcon>
                 <ListItemText
                   primary={
-                    <Typography variant="body2" sx={{ fontWeight: item.isFav ? 'bold' : 'normal', color: 'inherit', lineHeight: 1.2 }}>
-                      {item.label}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 0.5 }}>
+                      <Typography variant="body2" sx={{ fontWeight: item.isFav ? 'bold' : 'normal', lineHeight: 1.2, color: 'inherit', wordBreak: 'break-all' }}>
+                        {item.label}
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 0.25 }}>
+                        {item.tags && item.tags.filter(t => t !== 'fav').map(tag => (
+                          <Typography key={tag} variant="caption" sx={{ color: 'inherit', fontSize: '0.6rem', fontWeight: 600, opacity: 0.8 }}>
+                            #{tag}
+                          </Typography>
+                        ))}
+                      </Box>
+                    </Box>
                   }
                   secondary={
                     item.subtitle ? (

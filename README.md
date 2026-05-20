@@ -58,7 +58,7 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
   - **High-contrast Light Theme**: Designed for readability.
   - **Multi-Tab Interface**: Run multiple concurrent SSH sessions and local shells in a single browser tab.
   - **Split Screen Window**: Display multiple ssh servers of a `#tag` in single split-screen tab. View up to 4 terminal panes in a single tab.
-  - **New Tab Dialog** : Powerful "New Tab Dialog" (shortcut: `Alt + T`) to quickly create new session, navigate opened tabs, or execute custom button. Inspired by Notion New Tab dialog.
+  - **New Tab Dialog** : Powerful "New Tab Dialog" (shortcut: `Alt + O`) to quickly create new session, navigate opened tabs, or execute custom button. Inspired by Notion New Tab dialog.
   - **Button Bar**: A scrollable toolbar at the bottom of the terminal window for quickly sending string to terminal or executing custom function. Inspired by [SecureCRT Button Bar](https://www.vandyke.com/support/tips/button_bar.html).
     - **Custom Snippets**: Send custom string to current terminal.
     - **Special Syntax**: Full support for control keys via `<ctrl-x>` syntax (e.g., `<ctrl-c>` for SIGINT), which are sent with precise timing to ensure they reach the shell correctly.
@@ -66,7 +66,7 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
     - **Hover Tooltips**: Instant preview of the command payload.
     - **Common Terminal Functions**: Custom the button function to common terminal action, like copy terminal buffer, paste to terminal.
     - **Shortcut Invocation** : Use `<alt + shift + 1-9,0>` keyboard shortcut to invoke button directly.
-    - **Custom Shortcut** : Set a custom letter (e.g. `o`) for any button and use `Alt + O` to invoke it.
+    - **Custom Shortcut** : Set custom keyboard shortcut (e.g. `ctrl+shift+m`) for any button.
   - **Mobile-Friendly**: All features can be accessed seamlessly from mobile browser.
     - **Responsive sidebar and layout**.
     - **Mobile Input Toolbar**: Quick access to Esc, Tab, Arrow keys, and a stateful **Ctrl toggle** for mobile touch keyboards.
@@ -86,7 +86,7 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
   export PS1="$PS1\[\e]7;CurrentDir="'$(pwd)\a\]'
     ```
 - **Full keyboard Shortcuts**: It supports a complete set of keyboard shortcuts.
-  - `Alt + T` : Open new tab dialog, then use `← →` to switch view, `↑ ↓` to select, `Enter` to open
+  - `Alt + O` : Open new tab dialog, then use `← →` to switch view, `↑ ↓` to select, `Enter` to open
   - `Alt + E` : Open new tab dialog - buttons view
   - `Alt + N` : Open new local shell tab
   - `Alt + S` : Open scratchpad

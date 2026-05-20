@@ -50,3 +50,19 @@ export function getIntVar(vars: Record<string, string | undefined>, localVars: R
   const parsed = parseInt(value);
   return isNaN(parsed) ? defaultValue : parsed;
 }
+
+/**
+ * Get a key combination string from a KeyboardEvent
+ * @param ev KeyboardEvent
+ * @returns key combination string, e.g. "ctrl+alt+shift+meta+a",
+ * modifiers are in order, all lowercase.
+ */
+export function getKeyCombination(ev: KeyboardEvent): string {
+  let mods = "";
+  if (ev.ctrlKey) mods += "ctrl+";
+  if (ev.altKey) mods += "alt+";
+  if (ev.shiftKey) mods += "shift+";
+  if (ev.metaKey) mods += "meta+";
+  mods += ev.key.toLowerCase();
+  return mods;
+}

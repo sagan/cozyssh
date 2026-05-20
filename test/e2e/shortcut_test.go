@@ -33,10 +33,10 @@ func TestKeyboardShortcuts(t *testing.T) {
 		t.Fatalf("terminal not attached: %v", err)
 	}
 
-	// 1. Alt + T : Open new tab dialog
+	// 1. Alt + O : Open new tab dialog
 	page.Locator("div[data-pane-id] .xterm-screen").First().Click()
-	if err := page.Keyboard().Press("Alt+t"); err != nil {
-		t.Fatalf("failed to press Alt+T: %v", err)
+	if err := page.Keyboard().Press("Alt+o"); err != nil {
+		t.Fatalf("failed to press Alt+o: %v", err)
 	}
 
 	// Wait for dialog

@@ -36,7 +36,7 @@ import { transform } from 'sucrase';
 import { useLocalStorage } from './useLocalStorage';
 import NewTabDialog from './NewTabDialog';
 import { TERMINAL_FUNCTIONS, MISC_FUNCTIONS, DEFAULT_SCROLL_LINES } from './constants';
-import { defaultTheme, getIntVar } from './common';
+import { defaultTheme, getIntVar, getKeyCombination } from './common';
 
 const VIBRATE_PATTERN = 100;
 
@@ -68,7 +68,7 @@ interface ButtonData {
   autorun?: number;
   order?: number;
   /**
-   * shortcut. single letter such as "o": Alt + o
+   * shortcut. key combo, e.g. "ctrl+shift+m", modifiers in ctrl,alt,shift,meta order
    */
   shortcut?: string;
 }
@@ -439,22 +439,22 @@ export default function Dashboard({ initialData }: DashboardProps) {
     localStorage.setItem('cozy_active_group', activeGroup);
   }, [activeGroup]);
 
-  const [groups, filteredButtons, shortButtons] = useMemo(() => {
+  const [groups, filteredButtons, shortcutButtons] = useMemo(() => {
     const groups = ['Default', ...Array.from(new Set(buttons.map(b => b.group || 'Default').filter(g => g !== 'Default')))].sort();
     const filteredButtons = buttons.filter(b => (b.group || 'Default') === activeGroup);
-    const shortButtons: Record<string, ButtonData> = {};
+    const shortcutButtons: Record<string, ButtonData> = {};
     const otherGroupButtons = buttons.filter(b => (b.group || 'Default') !== activeGroup);
     for (const btn of otherGroupButtons) {
-      if (btn.shortcut) {
-        shortButtons[btn.shortcut.toLowerCase()] = btn;
+      if (btn.shortcut && btn.shortcut.length > 1) { // basic sanity check, ignore normal chars
+        shortcutButtons[btn.shortcut.toLowerCase()] = btn;
       }
     }
     for (const btn of filteredButtons) {
-      if (btn.shortcut) {
-        shortButtons[btn.shortcut.toLowerCase()] = btn;
+      if (btn.shortcut && btn.shortcut.length > 1) {
+        shortcutButtons[btn.shortcut.toLowerCase()] = btn;
       }
     }
-    return [groups, filteredButtons, shortButtons]
+    return [groups, filteredButtons, shortcutButtons]
   }, [buttons, activeGroup]);
 
   useEffect(() => {
@@ -1375,17 +1375,18 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const keycomb = getKeyCombination(e);
+      if (shortcutButtons[keycomb]) {
+        e.preventDefault();
+        handleButtonClick(shortcutButtons[keycomb]);
+        return;
+      }
       // standalone alt key pressed
       if (e.key === 'Alt' && !e.ctrlKey && !e.shiftKey && !e.metaKey) {
         e.preventDefault();
         return;
       }
       const k = e.key.toLowerCase();
-      if (e.altKey && !e.ctrlKey && !e.shiftKey && !e.metaKey && shortButtons[k]) {
-        e.preventDefault();
-        handleButtonClick(shortButtons[k]);
-        return;
-      }
       if (e.altKey && (k === 'l' || e.code === 'KeyL')) {
         e.preventDefault();
         const allPanes = tabs.flatMap(t => t.panes.map(p => ({ tabId: t.id, paneId: p.id })));
@@ -1421,7 +1422,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       } else if (e.altKey && (k === 'w' || e.code === 'KeyW')) {
         e.preventDefault();
         handleCloseCurrentPaneOrTab();
-      } else if (e.altKey && (k === 't' || e.code === 'KeyT')) {
+      } else if (e.altKey && (k === 'o' || e.code === 'KeyO')) {
         e.preventDefault();
         setNewTabDialogInitialViewMode('servers');
         setNewTabDialogOpen(true);
@@ -1517,7 +1518,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTabId, activePaneId, tabs, buttons, groups, shortButtons, activeGroup, scrollLines]);
+  }, [activeTabId, activePaneId, tabs, buttons, groups, shortcutButtons, activeGroup, scrollLines]);
 
   const handleButtonClick = async (btn: ButtonData, isAutoRun = false) => {
     window.navigator.vibrate?.(VIBRATE_PATTERN);
@@ -2459,11 +2460,18 @@ export default function Dashboard({ initialData }: DashboardProps) {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <TextField
               label="Shortcut"
-              type="text"
+              type="search"
               size="small"
               value={buttonFormData.shortcut}
               onChange={e => setButtonFormData({ ...buttonFormData, shortcut: e.target.value })}
-              placeholder="Single letter, e.g. 'o': Alt+O"
+              placeholder="Press keys or input, e.g. 'ctrl+shift+m', modifiers in ctrl,alt,shift,meta order"
+              onKeyDown={(e) => {
+                if (e.ctrlKey || e.altKey || e.metaKey || (e.key.length > 1 && e.key !== "Shift")) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setButtonFormData({ ...buttonFormData, shortcut: getKeyCombination(e as unknown as KeyboardEvent) });
+                }
+              }}
               sx={{ flexGrow: 1 }}
             />
             {buttonFormData.type === 'run_script' && (
