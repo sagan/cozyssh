@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from "react-router";
-import { Box, CssBaseline, createTheme, ThemeProvider, Tabs, Tab, IconButton, Menu, MenuItem, Typography, Button, ButtonGroup, useMediaQuery, useTheme, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, FormControlLabel, Checkbox, Drawer, Tooltip, Alert } from '@mui/material';
+import { Box, CssBaseline, createTheme, ThemeProvider, Tabs, Tab, IconButton, Menu, MenuItem, Typography, Button, ButtonGroup, useMediaQuery, useTheme, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, FormControlLabel, Checkbox, Drawer, Tooltip, Alert, Autocomplete } from '@mui/material';
 import Sidebar from './Sidebar';
 import type { Host } from './Sidebar';
 import TerminalComponent from './Terminal';
@@ -87,6 +87,27 @@ const exposeModules = {
   "react": react,
   "dompurify": dompurify,
   "marked": marked,
+};
+
+const buttonStyleBorder: Record<string, string> = {
+  "run_script": "1px dashed",
+  "send_string": "1px solid",
+  "open_terminal": "1px groove",
+  "": "1px dotted", // fallback
+};
+
+const buttonStyleBorderColor: Record<string, string> = {
+  "run_script": "warning.main",
+  "send_string": "success.main",
+  "open_terminal": "secondary.main",
+  "": "primary.main",
+};
+
+const buttonStyleBgColorHover: Record<string, string> = {
+  "run_script": "warning.light",
+  "send_string": "success.light",
+  "open_terminal": "secondary.light",
+  "": "primary.light",
 };
 
 // Generate Blob URLs for each exposed module
@@ -1525,6 +1546,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
     if (btn.type === 'send_string') {
       await sendParsedString(btn.payload);
       terminalRefs.current[activePaneId]?.focus();
+    } else if (btn.type === 'open_terminal') {
+      handleSelectHost(btn.payload || 'local');
     } else if (btn.type === 'terminal_function') {
       const term = terminalRefs.current[activePaneId] as any;
       if (!term) return;
@@ -2194,15 +2217,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
                   sx={{
                     minHeight: 28, minWidth: 'auto', p: '2px 12px',
                     textTransform: 'none', fontSize: '0.8rem', borderRadius: 1.5,
-                    border: btn.type === "run_script" ? '1px dashed'
-                      : btn.type !== "send_string" ? '1px dotted' : '1px solid',
-                    borderColor: btn.type === "run_script" ? "warning.main"
-                      : btn.type !== "send_string" ? "primary.main" : 'success.main',
+                    border: buttonStyleBorder[btn.type] || buttonStyleBorder[""],
+                    borderColor: buttonStyleBorderColor[btn.type] || buttonStyleBorderColor[""],
                     bgcolor: 'background.paper',
                     color: 'text.primary', margin: '6px 4px', cursor: 'pointer',
                     '&:hover': {
-                      bgcolor: btn.type === "run_script" ? 'warning.light'
-                        : btn.type !== "send_string" ? 'primary.light' : 'success.light',
+                      bgcolor: buttonStyleBgColorHover[btn.type] || buttonStyleBgColorHover[""],
                       color: 'white'
                     }
                   }}
@@ -2438,13 +2458,21 @@ export default function Dashboard({ initialData }: DashboardProps) {
               label="Button Type"
               size="small"
               value={buttonFormData.type}
-              onChange={e => setButtonFormData({ ...buttonFormData, type: e.target.value, payload: e.target.value === 'terminal_function' ? 'COPY' : e.target.value === 'misc' ? 'NEXT_BUTTON_GROUP' : '' })}
+              onChange={e => setButtonFormData({
+                ...buttonFormData,
+                type: e.target.value,
+                payload: e.target.value === 'terminal_function' ? 'COPY'
+                  : e.target.value === 'misc' ? 'NEXT_BUTTON_GROUP'
+                    : e.target.value === 'open_terminal' ? 'local'
+                      : ''
+              })}
               slotProps={{ select: { native: true } }}
               sx={{ flexGrow: 1 }}
             >
               <option value="send_string">Send String</option>
               <option value="terminal_function">Terminal Function</option>
               <option value="misc">Misc</option>
+              <option value="open_terminal">Open Terminal</option>
               <option value="run_script">Run Script</option>
             </TextField>
             <TextField
@@ -2529,6 +2557,27 @@ export default function Dashboard({ initialData }: DashboardProps) {
                 <option key={f.value} value={f.value}>{f.label}</option>
               ))}
             </TextField>
+          ) : buttonFormData.type === 'open_terminal' ? (
+            <Autocomplete
+              freeSolo
+              options={['local', ...hosts.map(h => h.name)]}
+              value={buttonFormData.payload}
+              onChange={(_event, newValue) => {
+                setButtonFormData({ ...buttonFormData, payload: newValue || '' });
+              }}
+              onInputChange={(_event, newInputValue) => {
+                setButtonFormData({ ...buttonFormData, payload: newInputValue || '' });
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  fullWidth
+                  label="Server / Address"
+                  size="small"
+                  placeholder="e.g. local, production-db, root@192.168.1.1"
+                />
+              )}
+            />
           ) : (
             <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden', flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
               <Box sx={{ px: 1.5, py: 0.5, bgcolor: 'action.hover', borderBottom: '1px solid', borderColor: 'divider' }}>
