@@ -50,7 +50,8 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
 - **Auto-run**: You can enable **Auto-run on startup** for a script button. These scripts will execute automatically after the application finishes loading all data (hosts, buttons, variables). This is the recommended way to register global event listeners or initialize custom UI applets.
 - **Execution**: Scripts are executed as ES modules via dynamic `import()`.
 - **Top-level `await`**: Fully supported. You can use `await` directly at the top level of your scripts without wrapping them in an `async` function or IIFE.
-- **Awaiting Completion**: The script engine automatically waits for all top-level `await` promises to resolve before finishing execution and re-focusing the terminal.
+- **Awaiting Completion**: The script engine automatically waits for all top-level `await` promises to resolve before finishing execution.
+- **Auto-focus**: By default, scripts will re-focus the terminal after execution. If you don't want to focus the terminal, you can add `export const noFocus = true;` at the top level of your script.
 
 ## Available modules
 

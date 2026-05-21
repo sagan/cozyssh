@@ -1,380 +1,60 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from "react-router";
-import { Box, CssBaseline, createTheme, ThemeProvider, Tabs, Tab, IconButton, Menu, MenuItem, Typography, Button, ButtonGroup, useMediaQuery, useTheme, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, FormControlLabel, Checkbox, Drawer, Tooltip, Alert, Autocomplete } from '@mui/material';
+import { Box, CssBaseline, createTheme, ThemeProvider, IconButton, Typography, useMediaQuery, useTheme, Drawer } from '@mui/material';
 import Sidebar from './Sidebar';
-import type { Host } from './Sidebar';
-import TerminalComponent from './Terminal';
-import type { TerminalHandle, ShellIntegration } from './Terminal';
-import FileBrowser from './FileBrowser';
-import Scratchpad from './Scratchpad';
+import type { TerminalHandle } from './Terminal';
 import type { ScratchpadHandle } from './Scratchpad';
 import CloseIcon from '@mui/icons-material/Close';
-import MenuIcon from '@mui/icons-material/Menu';
-import KeyboardTabIcon from '@mui/icons-material/KeyboardTab';
-import NorthIcon from '@mui/icons-material/North';
-import SouthIcon from '@mui/icons-material/South';
-import WestIcon from '@mui/icons-material/West';
-import EastIcon from '@mui/icons-material/East';
-import PushPinIcon from '@mui/icons-material/PushPin';
-import AddIcon from '@mui/icons-material/Add';
-import SyncIcon from '@mui/icons-material/Sync';
-import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
-import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import CloudDoneIcon from '@mui/icons-material/CloudDone';
-import CloudOffIcon from '@mui/icons-material/CloudOff';
-import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
-import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
-import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
-import LockIcon from '@mui/icons-material/Lock';
-import CodeMirror from '@uiw/react-codemirror';
-import { EditorView } from "@codemirror/view";
-import { javascript } from '@codemirror/lang-javascript';
-import { transform } from 'sucrase';
 import { useLocalStorage } from './useLocalStorage';
-import NewTabDialog from './NewTabDialog';
-import { TERMINAL_FUNCTIONS, MISC_FUNCTIONS, DEFAULT_SCROLL_LINES } from './constants';
-import { defaultTheme, getIntVar, getKeyCombination } from './common';
+import { DEFAULT_SCROLL_LINES, MISC_FUNCTIONS } from './constants';
+import { useDashboardStore, getStore } from './dashboardStore';
+import type { TabData, ButtonData } from './dashboardStore';
+import { defaultTheme, getIntVar } from './common';
+import { setupPluginAPI, runScript } from './pluginAPI';
+import { useKeyboardManager } from './useKeyboardManager';
+import TabBar from './TabBar';
+import TerminalGrid from './TerminalGrid';
+import ButtonBar from './ButtonBar';
+import DialogManager from './DialogManager';
+import AppletWrapper, { type AppletData } from './AppletWrapper';
 
 const VIBRATE_PATTERN = 100;
-
-interface PaneData {
-  id: string;
-  sessionId?: string;
-  host: string;
-  state?: string;
-  cloneFrom?: string;
-}
-
-interface TabData {
-  id: string;
-  title: string;
-  panes: PaneData[];
-  activePaneId: string;
-  isPinned?: boolean;
-  isLocked?: boolean;
-  showFiles?: boolean;
-  type?: 'terminal' | 'scratchpad';
-}
-
-interface ButtonData {
-  id: string;
-  name: string;
-  type: string;
-  payload: string;
-  group?: string;
-  autorun?: number;
-  order?: number;
-  /**
-   * shortcut. key combo, e.g. "ctrl+shift+m", modifiers in ctrl,alt,shift,meta order
-   */
-  shortcut?: string;
-}
 
 interface DashboardProps {
   initialData?: any;
 }
 
-// Importable modules for custom scripting
-import * as react from "react";
-import * as dompurify from 'dompurify';
-import * as marked from 'marked';
-
-// Expose those modules to custom scripts
-const exposeModules = {
-  "react": react,
-  "dompurify": dompurify,
-  "marked": marked,
-};
-
-const buttonStyleBorder: Record<string, string> = {
-  "run_script": "1px dashed",
-  "send_string": "1px solid",
-  "open_terminal": "1px groove",
-  "": "1px dotted", // fallback
-};
-
-const buttonStyleBorderColor: Record<string, string> = {
-  "run_script": "warning.main",
-  "send_string": "success.main",
-  "open_terminal": "secondary.main",
-  "": "primary.main",
-};
-
-const buttonStyleBgColorHover: Record<string, string> = {
-  "run_script": "warning.light",
-  "send_string": "success.light",
-  "open_terminal": "secondary.light",
-  "": "primary.light",
-};
-
-// Generate Blob URLs for each exposed module
-const virtualModules: Record<string, string> = {};
-
-for (const [moduleName, moduleObj] of Object.entries(exposeModules)) {
-  // Attach safely to window
-  const safeName = `__plugin_expose_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
-  (window as any)[safeName] = moduleObj;
-
-  // Identify named exports (everything except 'default')
-  const namedExports = Object.keys(moduleObj).filter(k => k !== 'default');
-
-  // Determine what the 'default' export should be
-  // If the module already has a .default, use that. Otherwise, use the whole object.
-  const shimCode = `
-  const mod = window["${safeName}"];
-
-  // Export the named members
-  export const { ${namedExports.join(', ')} } = mod;
-
-  // Export the default member
-  // If 'default' exists in the namespace, export that, otherwise the namespace itself
-  const defaultExport = mod.default !== undefined ? mod.default : mod;
-  export default defaultExport;
-`;
-
-  // Turn it into a Blob URL
-  const blob = new Blob([shimCode], { type: 'application/javascript' });
-  virtualModules[moduleName] = URL.createObjectURL(blob);
-}
-
-const escapeRegExp = (string: string) => {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-};
-
-const virtualModulesImportRegex = (() => {
-  const moduleNames = Object.keys(virtualModules).map(escapeRegExp).join('|');
-  return new RegExp(
-    `((?:from|import)\\s+['"])(${moduleNames})(['"])|(import\\s*\\(\\s*['"])(${moduleNames})(['"]\\))`,
-    'g'
-  );
-})();
-
-
-export interface AppletData {
-  name: string;
-  node: any;
-  position: 'widget' | 'sidebar';
-  width?: number;
-  height?: number;
-  zIndex?: number;
-}
-
-const AppletWrapper = ({ applet, onClose, onSwitchPosition, onFocus }: { applet: AppletData; index: number; onClose: () => void; onSwitchPosition: (pos: 'widget' | 'sidebar') => void; onFocus?: () => void; }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [expanded, setExpanded] = useState(true);
-  const [size, setSize] = useState(() => ({
-    width: applet.width || 320,
-    height: applet.height || 250
-  }));
-  const [position, setPosition] = useState(() => ({
-    x: Math.max(0, window.innerWidth - (applet.width || 320) - 20),
-    y: Math.max(0, window.innerHeight - (applet.height || 250) - 20)
-  }));
-  const dragStartRef = useRef({ x: 0, y: 0, pos: { x: 0, y: 0 } });
-
-  useEffect(() => {
-    if (applet.width !== undefined || applet.height !== undefined) {
-      setSize(prev => ({
-        width: applet.width ?? prev.width,
-        height: applet.height ?? prev.height
-      }));
-    }
-  }, [applet.width, applet.height]);
-
-  useEffect(() => {
-    if (applet.node instanceof Node && containerRef.current) {
-      containerRef.current.innerHTML = '';
-      containerRef.current.appendChild(applet.node);
-    }
-  }, [applet.node, expanded]);
-
-  useEffect(() => {
-    const handleWindowResize = () => {
-      if (applet.position !== 'widget' || !wrapperRef.current) return;
-      const winW = window.innerWidth;
-      const winH = window.innerHeight;
-
-      setPosition(prev => ({
-        x: Math.max(0, Math.min(prev.x, winW - (wrapperRef.current?.offsetWidth || 0))),
-        y: Math.max(0, Math.min(prev.y, winH - (wrapperRef.current?.offsetHeight || 0)))
-      }));
-    };
-
-    window.addEventListener('resize', handleWindowResize);
-    return () => window.removeEventListener('resize', handleWindowResize);
-  }, [applet.position]);
-
-  useEffect(() => {
-    if (applet.position !== 'widget' || !wrapperRef.current) return;
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const target = entry.target as HTMLElement;
-        const w = target.offsetWidth;
-        const h = target.offsetHeight;
-        if (w > 0 && h > 0) {
-          setSize(prev => {
-            if (Math.abs(prev.width - w) < 1 && Math.abs(prev.height - h) < 1) return prev;
-            return { width: w, height: h };
-          });
-        }
-      }
-    });
-    observer.observe(wrapperRef.current);
-    return () => observer.disconnect();
-  }, [applet.position]);
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (applet.position !== 'widget') return;
-    if ((e.target as HTMLElement).closest('button')) return;
-    setIsDragging(true);
-    dragStartRef.current = { x: e.clientX, y: e.clientY, pos: position };
-  };
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging) return;
-      setPosition({
-        x: dragStartRef.current.pos.x + (e.clientX - dragStartRef.current.x),
-        y: dragStartRef.current.pos.y + (e.clientY - dragStartRef.current.y)
-      });
-    };
-    const handleMouseUp = () => setIsDragging(false);
-    if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-    }
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging]);
-
-  if (applet.position === 'sidebar') {
-    return (
-      <Box sx={{
-        borderBottom: '2px solid #5d00ff',
-        bgcolor: 'background.paper',
-        display: 'flex',
-        flexDirection: 'column',
-        flex: expanded ? 1 : '0 0 auto',
-        minHeight: expanded ? 0 : 'auto'
-      }}>
-        <Box
-          onClick={() => setExpanded(!expanded)}
-          sx={{
-            display: 'flex', alignItems: 'center', px: 1, py: 0, minHeight: 40, bgcolor: '#00000014', color: 'text.primary',
-            borderBottom: 1, borderColor: 'divider',
-            cursor: 'pointer', userSelect: 'none', flexShrink: 0,
-            '&:hover': { bgcolor: '#00000028' }
-          }}
-        >
-          {expanded ? <KeyboardArrowDownIcon /> : <KeyboardArrowRightIcon />}
-          <Typography variant="subtitle2" sx={{ flexGrow: 1, fontWeight: 'bold' }}>{applet.name}</Typography>
-          <IconButton size="small" color="inherit" onClick={(e) => { e.stopPropagation(); onSwitchPosition('widget'); }} sx={{ p: 0.5 }}>
-            <OpenInNewIcon fontSize="small" />
-          </IconButton>
-          <IconButton size="small" color="inherit" onClick={(e) => { e.stopPropagation(); onClose(); }} sx={{ ml: 0.5, p: 0.5 }}>
-            <CloseIcon fontSize="small" />
-          </IconButton>
-        </Box>
-        <Box sx={{
-          display: expanded ? 'flex' : 'none',
-          flexDirection: 'column',
-          flex: 1,
-          minHeight: 0,
-          overflow: 'auto'
-        }}>
-          {!(applet.node instanceof Node) ? (
-            React.isValidElement(applet.node) ? applet.node : React.createElement(applet.node as React.ComponentType, {})
-          ) : (
-            <div ref={containerRef} style={{ width: '100%', minHeight: '150px' }} />
-          )}
-        </Box>
-      </Box>
-    );
-  }
-
-  const isReactComponent = !(applet.node instanceof Node);
-
-  return (
-    <Box
-      ref={wrapperRef}
-      onMouseDown={onFocus}
-      sx={{
-        position: 'fixed',
-        left: position.x,
-        top: position.y,
-        zIndex: applet.zIndex || 9999,
-        width: size.width,
-        height: size.height,
-        minWidth: 250,
-        minHeight: 150,
-        maxWidth: '100vw',
-        maxHeight: '100vh',
-        resize: isDragging ? 'none' : 'both',
-        overflow: 'hidden',
-        boxShadow: 3,
-        display: 'flex',
-        flexDirection: 'column',
-        bgcolor: 'background.paper',
-        border: 1,
-        borderColor: 'divider',
-        borderRadius: 1,
-        userSelect: isDragging ? 'none' : 'auto'
-      }}>
-      <Box
-        onMouseDown={handleMouseDown}
-        sx={{
-          display: 'flex', alignItems: 'center', px: 1, py: 0.5, bgcolor: '#f0f4f8', color: 'text.secondary',
-          borderBottom: 1, borderColor: 'divider',
-          cursor: 'move', flexShrink: 0
-        }}
-      >
-        <Typography variant="subtitle2" sx={{ flexGrow: 1, fontWeight: 'bold' }}>{applet.name}</Typography>
-        <IconButton size="small" color="inherit" onClick={() => onSwitchPosition('sidebar')}>
-          <ViewSidebarIcon fontSize="small" />
-        </IconButton>
-        <IconButton size="small" color="inherit" onClick={onClose} sx={{ ml: 0.5 }}>
-          <CloseIcon fontSize="small" />
-        </IconButton>
-      </Box>
-      <Box sx={{ flexGrow: 1, overflow: 'auto', p: 1, position: 'relative' }}>
-        {isReactComponent ? (React.isValidElement(applet.node) ? applet.node : React.createElement(applet.node as React.ComponentType, {})) : <div ref={containerRef} style={{ width: '100%', height: '100%' }} />}
-      </Box>
-    </Box>
-  );
-};
-
-
 export default function Dashboard({ initialData }: DashboardProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const isTouch = useMediaQuery('(pointer: coarse)');
-  const [tabs, setTabs] = useState<TabData[]>([]);
-  const [activeTabId, setActiveTabId] = useState<string>('');
+  // ── Store state (shared with pluginAPI and keyboard manager) ────────────
+  const {
+    tabs, setTabs,
+    activeTabId, setActiveTabId,
+    activePaneId, setActivePaneId,
+    hosts, setHosts,
+    buttons, setButtons,
+    vars, setVars,
+
+  } = useDashboardStore();
+
+  // ── UI-only state (stays in React) ────────────────────────────────────
   const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number; targetTabId: string } | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileAppletsOpen, setMobileAppletsOpen] = useState(false);
+  // terminalRefs is kept as a local ref for all Dashboard-internal usage,
+  // and also written into the store so pluginAPI / useKeyboardManager can read it.
   const terminalRefs = useRef<{ [key: string]: TerminalHandle | ScratchpadHandle | null }>({});
   const [viewportHeight, setViewportHeight] = useState('100dvh');
   const [isCtrlActive, setIsCtrlActive] = useState(false);
   const [scratchpadSyncState, setScratchpadSyncState] = useState<'offline' | 'syncing' | 'synced' | 'dirty'>('offline');
-  const [shellIntegrations, setShellIntegrations] = useState<{ [key: string]: ShellIntegration }>({});
   const [memoTabId, setMemoTabId] = useState<string | null>(null);
-  const [activePaneId, setActivePaneId] = useState<string>('');
   const [unreadTabIds, setUnreadTabIds] = useState<Set<string>>(new Set());
   const [applets, setApplets] = useState<AppletData[]>([]);
-  const [vars, setVars] = useState<Record<string, string>>({});
   const maxZIndexRef = useRef(10000);
   const swipeStartRef = useRef<{ x: number, y: number, time: number } | null>(null);
 
-
-  const [buttons, setButtons] = useState<ButtonData[]>([]);
   const [activeGroup, setActiveGroup] = useState<string>(localStorage.getItem('cozy_active_group') || 'Default');
   const [buttonDialogOpen, setButtonDialogOpen] = useState(false);
   const [editingButton, setEditingButton] = useState<ButtonData | null>(null);
@@ -382,6 +62,14 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [initialBtnFormData, setInitialBtnFormData] = useState<any>(null);
   const [btnMenuAnchor, setBtnMenuAnchor] = useState<{ anchor: HTMLElement, btn: ButtonData } | null>(null);
   const [lastMenuBtn, setLastMenuBtn] = useState<ButtonData | null>(null);
+  const handleNewButtonClick = () => {
+    const maxOrder = buttons.length > 0 ? Math.max(...buttons.map(b => b.order || 0)) : 0;
+    const data = { name: '', type: 'send_string', payload: '', group: activeGroup, autorun: 0, order: maxOrder + 10 || 10, shortcut: '' };
+    setEditingButton(null);
+    setButtonFormData(data);
+    setInitialBtnFormData(data);
+    setButtonDialogOpen(true);
+  };
   const [buttonsLoaded, setButtonsLoaded] = useState(false);
   const [inputDialogOpen, setInputDialogOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -389,36 +77,22 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [sendScope, setSendScope] = useState<0 | 1 | 2>(0);
   const [toasts, setToasts] = useState<{ id: number; msg: string; severity: 'success' | 'info' | 'warning' | 'error' }[]>([]);
   const toastIdRef = useRef(0);
-  const [hosts, setHosts] = useState<Host[]>([]);
   const [recents, setRecents] = useLocalStorage<{ host: string, last_used: number }[]>('cozy_recents', []);
   const [newTabDialogOpen, setNewTabDialogOpen] = useState(false);
-  const [newTabDialogInitialViewMode, setNewTabDialogInitialViewMode] = useState<'servers' | 'tabs' | 'buttons'>('servers');
+  const [newTabDialogInitialViewMode, setNewTabDialogInitialViewMode] = useState<'servers' | 'tabs' | 'buttons' | undefined>('servers');
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // local (this browser side) vars, all variable names has "local" (case insensitive) prefix.
+  // localVars uses useLocalStorage for persistence; synced into store for pluginAPI
   const [localVars, setLocalVars] = useLocalStorage<Record<string, string | undefined>>("cozy_localvars", {});
-  const varsRef = useRef<Record<string, string>>({});
-  const localVarsRef = useRef<Record<string, string | undefined>>({});
-  const shellIntegrationRef = useRef<Record<string, ShellIntegration>>({});
-  useEffect(() => { varsRef.current = vars; }, [vars]);
-  useEffect(() => { localVarsRef.current = localVars; }, [localVars]);
-  useEffect(() => { shellIntegrationRef.current = shellIntegrations; }, [shellIntegrations]);
+  useEffect(() => { useDashboardStore.getState().setLocalVars(localVars); }, [localVars]);
 
   const autoRunExecutedRef = useRef(false);
   const scriptInvokeContextRef = useRef<{ isAutoRun: boolean } | null>(null);
-
-  const activePaneIdRef = useRef(activePaneId);
-  const activeTabIdRef = useRef(activeTabId);
-  useEffect(() => { activePaneIdRef.current = activePaneId; }, [activePaneId]);
-  useEffect(() => { activeTabIdRef.current = activeTabId; }, [activeTabId]);
-
-  const hostsRef = useRef(hosts);
-  useEffect(() => { hostsRef.current = hosts; }, [hosts]);
-
-  const buttonsRef = useRef(buttons);
-  useEffect(() => { buttonsRef.current = buttons; }, [buttons]);
+  // sendScope needs to be readable from stable callbacks
+  const sendScopeRef = useRef<0 | 1 | 2>(0);
+  useEffect(() => { sendScopeRef.current = sendScope; }, [sendScope]);
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('cs:terminal-change', { detail: { activePaneId } }));
@@ -460,22 +134,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
     localStorage.setItem('cozy_active_group', activeGroup);
   }, [activeGroup]);
 
-  const [groups, filteredButtons, shortcutButtons] = useMemo(() => {
+  const [groups, filteredButtons] = useMemo(() => {
     const groups = ['Default', ...Array.from(new Set(buttons.map(b => b.group || 'Default').filter(g => g !== 'Default')))].sort();
     const filteredButtons = buttons.filter(b => (b.group || 'Default') === activeGroup);
-    const shortcutButtons: Record<string, ButtonData> = {};
-    const otherGroupButtons = buttons.filter(b => (b.group || 'Default') !== activeGroup);
-    for (const btn of otherGroupButtons) {
-      if (btn.shortcut && btn.shortcut.length > 1) { // basic sanity check, ignore normal chars
-        shortcutButtons[btn.shortcut.toLowerCase()] = btn;
-      }
-    }
-    for (const btn of filteredButtons) {
-      if (btn.shortcut && btn.shortcut.length > 1) {
-        shortcutButtons[btn.shortcut.toLowerCase()] = btn;
-      }
-    }
-    return [groups, filteredButtons, shortcutButtons]
+    return [groups, filteredButtons];
   }, [buttons, activeGroup]);
 
   useEffect(() => {
@@ -535,7 +197,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         console.error('Failed to record recent:', e);
       }
     }
-  }, [setRecents, tabs]);
+  }, [setRecents]);
 
   const handleSelectTagAsSplit = React.useCallback((tag: string, hosts: string[]) => {
     const tabId = Math.random().toString(36).substring(2);
@@ -555,7 +217,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, []);
 
   const handleAttach = React.useCallback(async (id: string, host: string, title: string, isLocked: boolean = false) => {
-    const existing = tabs.find(t => t.panes.some(p => (p.sessionId || p.id) === id && p.state !== 'stolen'));
+    const existing = getStore().tabs.find(t => t.panes.some(p => (p.sessionId || p.id) === id && p.state !== 'stolen'));
     if (existing) {
       setActiveTabId(existing.id);
       setActivePaneId(existing.panes.find(p => (p.sessionId || p.id) === id && p.state !== 'stolen')?.id || existing.activePaneId);
@@ -590,243 +252,32 @@ export default function Dashboard({ initialData }: DashboardProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // --- Scripting API: stable functions (refs + stable setters only — never re-assigned) ---
+  // ── Plugin API setup (single stable effect — no stale closures) ──────────
   useEffect(() => {
-    (window as any).csGetVar = (name?: string) => {
-      if (name) {
-        if (name.toLowerCase().startsWith("local")) {
-          return localVarsRef.current[name];
-        } else {
-          return varsRef.current[name];
-        }
-      }
-      return { ...varsRef.current, ...localVarsRef.current };
-    };
-    (window as any).csSetVar = async (nameOrVars: string | Record<string, string | undefined>, value?: string | undefined) => {
-      const token = localStorage.getItem('cozy_token');
-      let updates: Record<string, string | null> = {};
-      let localUpdates: Record<string, string | undefined> = {};
-      if (typeof nameOrVars === 'string') {
-        if (nameOrVars.toLowerCase().startsWith("local")) {
-          localUpdates[nameOrVars] = value;
-        } else {
-          updates[nameOrVars] = value === undefined ? null : value;
-        }
-      } else {
-        for (const k in nameOrVars) {
-          const v = nameOrVars[k];
-          if (k.toLowerCase().startsWith("local")) {
-            localUpdates[k] = v;
-          } else {
-            updates[k] = v === undefined ? null : v;
-          }
-        }
-      }
-
-      // known problem: local vars update are async and not finished when csSetVar returns
-      if (Object.keys(localUpdates).length > 0) {
-        setLocalVars({ ...localVarsRef.current, ...localUpdates });
-      }
-      if (Object.keys(updates).length === 0) {
-        return;
-      }
-      const r = await fetch('/api/vars', {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(updates)
-      });
-      if (!r.ok) throw new Error(await r.text());
-
-      const nextVars = { ...varsRef.current };
-      for (const k in updates) {
-        const v = updates[k];
-        if (v === null) delete nextVars[k];
-        else nextVars[k] = v;
-      }
-      varsRef.current = nextVars;
-      setVars(nextVars);
-    };
-
-    (window as any).csGetTerminal = (paneId?: string) => {
-      const term: any = terminalRefs.current[paneId || activePaneIdRef.current];
-      return term?.getXterm?.();
-    };
-    (window as any).csGetShellIntegration = (paneId?: string) => {
-      return shellIntegrationRef.current[paneId || activePaneIdRef.current];
-    };
-    (window as any).csGetAll = () => {
-      return {
-        activePaneId: activePaneIdRef.current,
-        terminals: terminalRefs.current,
-        shellIntegrations: shellIntegrationRef.current,
-        tabs: tabsRef.current,
-        hosts: hostsRef.current,
-        buttons: buttonsRef.current,
-        vars: varsRef.current,
-        localVars: localVarsRef.current,
-      };
-    };
-    (window as any).csSendData = (data: string, paneId?: string) => {
-      const term: any = terminalRefs.current[paneId || activePaneIdRef.current];
-      term?.sendData?.(data);
-    };
-    (window as any).csGetTerminalContents = (lineCount = 100, paneId?: string) => {
-      const term: any = terminalRefs.current[paneId || activePaneIdRef.current];
-      const xterm = term?.getXterm?.();
-      if (!xterm) return "";
-
-      const buffer = xterm.buffer.active;
-      const lines = [];
-      const end = buffer.baseY + buffer.cursorY;
-      const start = lineCount <= 0 ? 0 : Math.max(0, end - lineCount);
-
-      for (let i = start; i <= end; i++) {
-        const line = buffer.getLine(i);
-        if (line) lines.push(line.translateToString().trimEnd());
-      }
-      return lines.join('\n');
-    };
-    (window as any).csFocus = (paneId?: string) => {
-      if (paneId) {
-        const allPanes = tabsRef.current.flatMap(t => t.panes.map(p => ({ tabId: t.id, paneId: p.id })));
-        if (allPanes.length === 0) return;
-        const idx = allPanes.findIndex(p => p.paneId === paneId);
-        if (idx < 0) return;
-        const target = allPanes[idx];
-        setActiveTabId(target.tabId);
-        setTimeout(() => terminalRefs.current[target.paneId]?.focus(), 10);
-      } else if (activePaneIdRef.current) {
-        setTimeout(() => terminalRefs.current[activePaneIdRef.current]?.focus(), 0);
-      }
-    };
-    (window as any).csNotify = (msg: string, severity?: any) => csNotify(msg, severity);
-    (window as any).csFetch = async (url: string, options: any = {}) => {
-      const token = localStorage.getItem('cozy_token');
-      const proxyUrl = `/api/fetch?url=${encodeURIComponent(url)}`;
-
-      const rawHeaders = options.headers || {};
-      const headers: any = {};
-      const restricted = ['authorization', 'referer', 'origin', 'user-agent', 'cookie'];
-
-      headers["Authorization"] = `Bearer ${token}`;
-      for (const key in rawHeaders) {
-        if (restricted.includes(key.toLowerCase())) {
-          headers[`X-CozySSH-${key}`] = rawHeaders[key];
-        } else {
-          headers[key] = rawHeaders[key];
-        }
-      }
-
-      return fetch(proxyUrl, {
-        method: options.method || 'GET',
-        headers: headers,
-        body: options.body
-      });
-    };
-    (window as any).csExec = async (cmdline: string) => {
-      const token = localStorage.getItem('cozy_token');
-      const res = await fetch('/api/exec', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ cmdline })
-      });
-      if (!res.ok) throw new Error("Exec failed: " + res.statusText);
-      return res.json();
-    };
-
-    (window as any).csSetTheme = (options: any, ...args: any[]) => {
-      setMuiTheme(createTheme(options, ...args));
-    };
-
-    return () => {
-      delete (window as any).csGetVar;
-      delete (window as any).csSetVar;
-      delete (window as any).csGetTerminal;
-      delete (window as any).csGetShellIntegration;
-      delete (window as any).csGetAll;
-      delete (window as any).csSendData;
-      delete (window as any).csGetTerminalContents;
-      delete (window as any).csFocus;
-      delete (window as any).csNotify;
-      delete (window as any).csFetch;
-      delete (window as any).csExec;
-      delete (window as any).csSetTheme;
-    };
+    return setupPluginAPI({
+      notify: csNotify,
+      setTheme: (options, ...args) => setMuiTheme(createTheme(options, ...args)),
+      handleSelectHost,
+      handleSelectTagAsSplit,
+      handleAttach,
+      handleRefresh,
+      setApplets,
+      setMobileAppletsOpen,
+      isMobile,
+      scriptInvokeContextRef,
+      maxZIndexRef,
+      setLocalVars,
+      getTerminalRefs: () => terminalRefs.current,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // --- Scripting API: applet functions (re-assigned when isMobile changes) ---
+  // csGetApplet needs the reactive applets list — keep as a tiny separate effect
   useEffect(() => {
-    (window as any).csOpenApplet = (name: string, node: any, options: { position?: 'widget' | 'sidebar'; width?: number; height?: number } = {}) => {
-      const parsedPos = options.position === 'sidebar' || isMobile ? 'sidebar' : 'widget';
-
-      if (isMobile && parsedPos === 'sidebar' && !scriptInvokeContextRef.current?.isAutoRun) {
-        setMobileAppletsOpen(true);
-      }
-
-      setApplets(prev => {
-        const existing = prev.find(a => a.name === name);
-        if (existing) {
-          return prev.map(a => a.name === name ? { ...a, node, width: options.width ?? a.width, height: options.height ?? a.height } : a);
-        }
-        return [...prev, { name, node, position: parsedPos, width: options.width, height: options.height, zIndex: maxZIndexRef.current++ }];
-      });
-    };
-    (window as any).csCloseApplet = (name: string) => {
-      setApplets(prev => prev.filter(a => a.name !== name));
-    };
-    return () => {
-      delete (window as any).csOpenApplet;
-      delete (window as any).csCloseApplet;
-    };
-  }, [isMobile]);
-
-  // --- Scripting API: navigation functions (re-assigned when callbacks change) ---
-  useEffect(() => {
-    (window as any).csOpen = (target: any, options: { name?: string } = {}) => {
-      console.log('csOpen called:', target, options);
-      const targets = Array.isArray(target) ? target.slice(0, 4) : [target];
-      const hostNames = targets.map(t => {
-        if (typeof t === 'string') {
-          if (t === 'local') return 'local';
-          const known = hostsRef.current.find(h => h.name === t || h.hostname === t);
-          return known ? known.name : t;
-        }
-        return t.name;
-      });
-
-      const title = options.name || hostNames[0];
-
-      if (hostNames.length > 1) {
-        handleSelectTagAsSplit(title, hostNames);
-      } else {
-        handleSelectHost(hostNames[0], options.name);
-      }
-    };
-    (window as any).csAttach = (id: string, host: string, title: string, isLocked = false) => {
-      handleAttach(id, host, title, isLocked);
-    };
-    return () => {
-      delete (window as any).csOpen;
-      delete (window as any).csAttach;
-    };
-  }, [handleSelectHost, handleSelectTagAsSplit, handleAttach]);
-
-  // --- Scripting API: refresh (re-assigned when handleRefresh changes — which is never) ---
-  useEffect(() => {
-    (window as any).csRefresh = async () => {
-      await handleRefresh();
-    };
-    return () => {
-      delete (window as any).csRefresh;
-    };
-  }, [handleRefresh]);
+    (window as any).csGetApplet = (name?: string) =>
+      name ? applets.find(a => a.name === name) : applets;
+    return () => { delete (window as any).csGetApplet; };
+  }, [applets]);
 
   const handleCloseInputDialog = () => {
     setInputDialogOpen(false);
@@ -855,14 +306,16 @@ export default function Dashboard({ initialData }: DashboardProps) {
   };
 
   const sendParsedString = async (input: string) => {
+    const scope = sendScopeRef.current;
+    const { tabs: currentTabs, activeTabId: currentActiveTabId, activePaneId: currentActivePaneId } = getStore();
     let targetPaneIds: string[] = [];
-    if (sendScope === 2) {
-      targetPaneIds = tabsRef.current.flatMap(t => t.panes.map(p => p.id));
-    } else if (sendScope === 1) {
-      const currentTab = tabsRef.current.find(t => t.id === activeTabId);
-      targetPaneIds = currentTab ? currentTab.panes.map(p => p.id) : [activePaneId];
+    if (scope === 2) {
+      targetPaneIds = currentTabs.flatMap(t => t.panes.map(p => p.id));
+    } else if (scope === 1) {
+      const currentTab = currentTabs.find(t => t.id === currentActiveTabId);
+      targetPaneIds = currentTab ? currentTab.panes.map(p => p.id) : [currentActivePaneId];
     } else {
-      targetPaneIds = [activePaneId];
+      targetPaneIds = [currentActivePaneId];
     }
 
     const parts = input.split(/(<ctrl-[a-z]>)/gi);
@@ -916,7 +369,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
         setActivePaneId(newTab.activePaneId);
         setTimeout(() => terminalRefs.current[newTab.activePaneId]?.focus(), 50);
       }
-
     }
   };
 
@@ -940,10 +392,15 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [sysHostname, setSysHostname] = useState<string>('');
   const [appVersion, setAppVersion] = useState<string>('dev');
 
-  const tabsRef = useRef(tabs);
+  // Listen for activeGroup changes dispatched by useKeyboardManager
   useEffect(() => {
-    tabsRef.current = tabs;
-  }, [tabs]);
+    const handler = (e: Event) => {
+      const group = (e as CustomEvent).detail?.group;
+      if (group) setActiveGroup(group);
+    };
+    window.addEventListener('cs:active-group-change', handler);
+    return () => window.removeEventListener('cs:active-group-change', handler);
+  }, []);
 
   const loadFullData = (data: any) => {
     if (data.sysinfo) {
@@ -963,7 +420,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
     if (data.recents) {
       setRecents(data.recents);
     }
-
   };
 
   const fetchHosts = async () => {
@@ -1001,7 +457,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const initAsync = async () => {
       bc!.onmessage = (e) => {
         if (e.data === 'probe_pinned') {
-          const hasPinned = tabsRef.current.some(t => t.isPinned);
+          const hasPinned = getStore().tabs.some(t => t.isPinned);
           if (hasPinned) bc?.postMessage('pinned_present');
         }
         if (e.data === 'pinned_present') pinnedElsewhere = true;
@@ -1085,21 +541,21 @@ export default function Dashboard({ initialData }: DashboardProps) {
             });
             if (pinnedTabs.length > 0) {
               setTabs(prev => prev.length > 0 ? prev : pinnedTabs);
-              setActiveTabId(prev => prev || pinnedTabs[0].id);
-              setActivePaneId(prev => prev || pinnedTabs[0].activePaneId);
+              if (!getStore().activeTabId) setActiveTabId(pinnedTabs[0].id);
+              if (!getStore().activePaneId) setActivePaneId(pinnedTabs[0].activePaneId);
             } else {
               const initialId = `local-${Date.now()}`;
               const initialPaneId = Math.random().toString(36).substring(2);
               setTabs(prev => prev.length > 0 ? prev : [{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
-              setActiveTabId(prev => prev || initialId);
-              setActivePaneId(prev => prev || initialPaneId);
+              if (!getStore().activeTabId) setActiveTabId(initialId);
+              if (!getStore().activePaneId) setActivePaneId(initialPaneId);
             }
           } else {
             const initialId = `local-${Date.now()}`;
             const initialPaneId = Math.random().toString(36).substring(2);
             setTabs(prev => prev.length > 0 ? prev : [{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
-            setActiveTabId(prev => prev || initialId);
-            setActivePaneId(prev => prev || initialPaneId);
+            if (!getStore().activeTabId) setActiveTabId(initialId);
+            if (!getStore().activePaneId) setActivePaneId(initialPaneId);
           }
         }
       }, 350);
@@ -1197,7 +653,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       }
       return newTabs;
     });
-    setTimeout(() => terminalRefs.current[activePaneIdRef.current]?.focus(), 50);
+    setTimeout(() => terminalRefs.current[getStore().activePaneId]?.focus(), 50);
   };
 
   const handleCloseCurrentPaneOrTab = () => {
@@ -1397,306 +853,196 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setContextMenu(null);
   };
 
-  const scrollLines = getIntVar(vars, localVars, "cs_scroll_lines", DEFAULT_SCROLL_LINES);
-
-  useEffect(() => {
-    const shortcutFunctions: Record<string, (e: KeyboardEvent) => void> = {
-      "alt+o": function (e) {
-        e.preventDefault();
-        setNewTabDialogInitialViewMode('servers');
-        setNewTabDialogOpen(true);
-      },
-      "alt+a": function (e) {
-        e.preventDefault();
-        setNewTabDialogInitialViewMode('tabs');
-        setNewTabDialogOpen(true);
-      },
-      "alt+e": function (e) {
-        e.preventDefault();
-        setNewTabDialogInitialViewMode('buttons');
-        setNewTabDialogOpen(true);
-      },
-      "alt+n": function (e) {
-        e.preventDefault();
-        handleSelectHost("local");
-      },
-      "alt+s": function (e) {
-        e.preventDefault();
-        handleOpenScratchpad();
-      },
-      "alt+h": function (e) {
-        e.preventDefault();
-        const allPanes = tabs.flatMap(t => t.panes.map(p => ({ tabId: t.id, paneId: p.id })));
-        if (allPanes.length === 0) return;
-        const idx = allPanes.findIndex(p => p.paneId === activePaneId);
-        const nextIdx = (idx - 1 + allPanes.length) % allPanes.length;
-        const target = allPanes[nextIdx];
-        setActiveTabId(target.tabId);
-        setActivePaneId(target.paneId);
-        (document.activeElement as HTMLElement)?.blur?.();
-        terminalRefs.current[target.paneId]?.focus();
-        setTimeout(() => terminalRefs.current[target.paneId]?.focus(), 100);
-      },
-      "alt+l": function (e) {
-        e.preventDefault();
-        const allPanes = tabs.flatMap(t => t.panes.map(p => ({ tabId: t.id, paneId: p.id })));
-        if (allPanes.length === 0) return;
-        const idx = allPanes.findIndex(p => p.paneId === activePaneId);
-        const nextIdx = (idx + 1) % allPanes.length;
-        const target = allPanes[nextIdx];
-        setActiveTabId(target.tabId);
-        setActivePaneId(target.paneId);
-        (document.activeElement as HTMLElement)?.blur?.();
-        terminalRefs.current[target.paneId]?.focus();
-        setTimeout(() => terminalRefs.current[target.paneId]?.focus(), 100);
-      },
-      "alt+w": function (e) {
-        e.preventDefault();
-        handleCloseCurrentPaneOrTab();
-      },
-      "alt+g": function (e) {
-        e.preventDefault();
-        const currentTab = tabs.find(t => t.id === activeTabId);
-        if (currentTab && currentTab.panes.length > 0) {
-          const pid = currentTab.panes[0].id;
-          setActivePaneId(pid);
-          setTimeout(() => terminalRefs.current[pid]?.focus(), 100);
-        }
-      },
-      "alt+v": function (e) {
-        e.preventDefault();
-        const idx = groups.indexOf(activeGroup);
-        const nextIdx = (e.shiftKey ? (idx - 1 + groups.length) : (idx + 1)) % groups.length;
-        setActiveGroup(groups[nextIdx]);
-      },
-      "alt+j": function (e) {
-        e.preventDefault();
-        if (e.shiftKey) {
-          (terminalRefs.current[activePaneId] as any)?.scrollPages?.(1);
-        } else {
-          (terminalRefs.current[activePaneId] as any)?.scrollLines?.(scrollLines);
-        }
-      },
-      "alt+k": function (e) {
-        e.preventDefault();
-        if (e.shiftKey) {
-          (terminalRefs.current[activePaneId] as any)?.scrollPages?.(-1);
-        } else {
-          (terminalRefs.current[activePaneId] as any)?.scrollLines?.(-scrollLines);
-        }
-      },
-      "ctrl+shift+f": function (e) {
-        // Open terminal search box only if current tab is a terminal and no dialog is open
-        if (!document.querySelector("body > div.MuiDialog-root")
-          && terminalRefs.current[activePaneId]
-          && 'clear' in terminalRefs.current[activePaneId]) {
-          e.preventDefault();
-          setSearchOpen(true);
-          setTimeout(() => searchInputRef.current?.focus(), 100);
-        }
-      },
-      "ctrl+shift+r": function (e) {
-        e.preventDefault();
-        (terminalRefs.current[activePaneId] as any)?.reconnect?.();
-      },
-      "ctrl+shift+c": function (e) {
-        e.preventDefault();
-        const term = terminalRefs.current[activePaneId] as any;
-        if (term) {
-          const text = term.getSelection?.();
-          if (text) {
-            navigator.clipboard.writeText(text);
-          }
-        }
-      },
-    };
-    shortcutFunctions["alt+shift+j"] = shortcutFunctions["alt+j"];
-    shortcutFunctions["alt+shift+k"] = shortcutFunctions["alt+k"];
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const keycomb = getKeyCombination(e);
-      if (shortcutButtons[keycomb]) {
-        e.preventDefault();
-        handleButtonClick(shortcutButtons[keycomb]);
-        return;
-      }
-      // standalone alt key pressed
-      if (e.key === 'Alt' && !e.ctrlKey && !e.shiftKey && !e.metaKey) {
-        e.preventDefault();
-        return;
-      }
-      if (shortcutFunctions[keycomb]) {
-        shortcutFunctions[keycomb](e);
-        return;
-      }
-      if (e.altKey && e.key >= '0' && e.key <= '9') {
-        e.preventDefault();
-        let idx = parseInt(e.key);
-        idx = idx === 0 ? tabs.length - 1 : idx - 1;
-        if (tabs[idx]) {
-          const target = tabs[idx];
-          setActiveTabId(target.id);
-          setActivePaneId(target.activePaneId);
-          (document.activeElement as HTMLElement)?.blur?.();
-          terminalRefs.current[target.activePaneId]?.focus();
-          setTimeout(() => terminalRefs.current[target.activePaneId]?.focus(), 100);
-        }
-      } else if (e.altKey && e.shiftKey) {
-        const digitMatch = e.code.match(/Digit(\d)/);
-        if (digitMatch) {
-          e.preventDefault();
-          const num = parseInt(digitMatch[1]);
-          const idx = num === 0 ? 9 : num - 1;
-          const filteredButtons = buttons.filter(b => (b.group || 'Default') === activeGroup);
-          if (idx < filteredButtons.length) {
-            handleButtonClick(filteredButtons[idx]);
-          }
-        }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTabId, activePaneId, tabs, buttons, groups, shortcutButtons, activeGroup, scrollLines]);
-
   const handleButtonClick = async (btn: ButtonData, isAutoRun = false) => {
     window.navigator.vibrate?.(VIBRATE_PATTERN);
-    if (btn.type === 'send_string') {
-      await sendParsedString(btn.payload);
-      terminalRefs.current[activePaneId]?.focus();
-    } else if (btn.type === 'open_terminal') {
-      handleSelectHost(btn.payload || 'local');
-    } else if (btn.type === 'terminal_function') {
-      const term = terminalRefs.current[activePaneId] as any;
-      if (!term) return;
-      if (btn.payload === 'COPY') {
-        term.selectAll?.();
-        const text = term.getSelection?.()?.trim();
-        if (text) {
-          navigator.clipboard.writeText(text);
-        }
-        term.clearSelection?.();
-        term.focus?.();
-      } else if (btn.payload === 'COPY_VISIBLE') {
-        const xterm = term?.getXterm?.();
-        if (!xterm) {
-          return;
-        }
-        const buffer = xterm.buffer.active;
-        const start = buffer.viewportY;
-        const end = start + xterm.rows;
-        let text = "";
-        for (let i = start; i < end; i++) {
-          const line = buffer.getLine(i);
-          if (line) {
-            text += line.translateToString().trim() + "\n";
+    switch (btn.type) {
+      case 'send_string':
+        await sendParsedString(btn.payload);
+        terminalRefs.current[activePaneId]?.focus();
+        break;
+
+      case 'open_terminal':
+        handleSelectHost(btn.payload || 'local');
+        break;
+
+      case 'terminal_function': {
+        const term = terminalRefs.current[activePaneId] as any;
+        if (!term) return;
+        switch (btn.payload) {
+          case 'COPY':
+            term.selectAll?.();
+            const textCopy = term.getSelection?.()?.trim();
+            if (textCopy) {
+              navigator.clipboard.writeText(textCopy);
+            }
+            term.clearSelection?.();
+            term.focus?.();
+            break;
+
+          case 'COPY_VISIBLE': {
+            const xterm = term?.getXterm?.();
+            if (!xterm) {
+              return;
+            }
+            const buffer = xterm.buffer.active;
+            const start = buffer.viewportY;
+            const end = start + xterm.rows;
+            let text = "";
+            for (let i = start; i < end; i++) {
+              const line = buffer.getLine(i);
+              if (line) {
+                text += line.translateToString().trim() + "\n";
+              }
+            }
+            text = text.trim();
+            if (text) {
+              navigator.clipboard.writeText(text);
+            }
+            term.focus?.();
+            break;
           }
-        }
-        text = text.trim();
-        if (text) {
-          navigator.clipboard.writeText(text);
-        }
-        term.focus?.();
-      } else if (btn.payload === 'COPY_SELECTION') {
-        const text = term.getSelection?.();
-        if (text) {
-          navigator.clipboard.writeText(text);
-        }
-        term.focus?.();
-      } else if (btn.payload == 'COPY_LAST_COMMAND_OUTPUT') {
-        const text = term.getLastCommandOutput?.();
-        if (text) {
-          navigator.clipboard.writeText(text);
-        }
-        term.focus?.();
-      } else if (btn.payload === 'PASTE') {
-        const text = await navigator.clipboard.readText();
-        if (text) {
-          term.sendData?.(text);
-        }
-        term.focus?.();
-      } else if (btn.payload === 'INPUT') {
-        setInputValue('');
-        setSendScope(0);
-        setInputDialogOpen(true);
-      } else if (btn.payload === 'CLEAR') {
-        term.clear?.();
-        term.focus?.();
-      } else if (btn.payload === 'RESET') {
-        term.reset?.();
-        term.focus?.();
-      } else if (btn.payload === 'RECONNECT') {
-        term.reconnect?.();
-        term.focus?.();
-      } else if (btn.payload === 'CLOSE') {
-        handleCloseCurrentPaneOrTab();
-      } else if (btn.payload === 'SCROLL_TO_TOP') {
-        term.scrollToTop?.();
-        term.focus?.();
-      } else if (btn.payload === 'SCROLL_TO_BOTTOM') {
-        term.scrollToBottom?.();
-        term.focus?.();
-      } else if (btn.payload === 'SCROLL_UP') {
-        term.scrollLines?.(-scrollLines);
-        term.focus?.();
-      } else if (btn.payload === 'SCROLL_DOWN') {
-        term.scrollLines?.(scrollLines);
-        term.focus?.();
-      } else if (btn.payload === 'SCROLL_PAGE_UP') {
-        term.scrollPages?.(-1);
-        term.focus?.();
-      } else if (btn.payload === 'SCROLL_PAGE_DOWN') {
-        term.scrollPages?.(1);
-        term.focus?.();
-      } else if (btn.payload === 'SEARCH') {
-        setSearchOpen(true);
-        setTimeout(() => searchInputRef.current?.focus(), 100);
-      }
-    } else if (btn.type === 'misc') {
-      if (btn.payload === 'NEXT_BUTTON_GROUP') {
-        const idx = groups.indexOf(activeGroup);
-        const nextIdx = (idx + 1) % groups.length;
-        setActiveGroup(groups[nextIdx]);
-      } else if (btn.payload === 'PREV_BUTTON_GROUP') {
-        const idx = groups.indexOf(activeGroup);
-        const prevIdx = (idx - 1 + groups.length) % groups.length;
-        setActiveGroup(groups[prevIdx]);
-      } else if (btn.payload === 'OPEN_SCRATCHPAD') {
-        handleOpenScratchpad();
-      }
-      terminalRefs.current[activePaneId]?.focus();
-    } else if (btn.type === 'run_script') {
-      scriptInvokeContextRef.current = { isAutoRun };
-      let scriptCode = btn.payload;
-      // Do a single replace pass
-      scriptCode = scriptCode.replace(virtualModulesImportRegex, (match, p1, p2, p3, p4, p5, p6) => {
-        // Determine which capture group caught the module name
-        const matchedModule = p2 || p5;
-        const blobUrl = virtualModules[matchedModule];
 
-        // Reconstruct the string using the mapped Blob URL
-        if (p1 && p3) return `${p1}${blobUrl}${p3}`; // Standard & Side-effect import
-        if (p4 && p6) return `${p4}${blobUrl}${p6}`; // Dynamic import
+          case 'COPY_SELECTION': {
+            const text = term.getSelection?.();
+            if (text) {
+              navigator.clipboard.writeText(text);
+            }
+            term.focus?.();
+            break;
+          }
 
-        return match; // Fallback
-      });
-      scriptCode = transform(scriptCode, { transforms: ['typescript', 'jsx'] }).code;
+          case 'COPY_LAST_COMMAND_OUTPUT': {
+            const text = term.getLastCommandOutput?.();
+            if (text) {
+              navigator.clipboard.writeText(text);
+            }
+            term.focus?.();
+            break;
+          }
 
-      const blob = new Blob([scriptCode], { type: 'application/javascript' });
-      // Create a temporary URL pointing to that Blob
-      const url = URL.createObjectURL(blob);
-      try {
-        await import(url);
-      } catch (e) {
-        console.error('Script Error:', e);
-        csNotify('Script Error: ' + e, 'error');
-      } finally {
-        // Always clean up the URL to prevent memory leaks
-        URL.revokeObjectURL(url);
-        scriptInvokeContextRef.current = null;
+          case 'PASTE': {
+            const text = await navigator.clipboard.readText();
+            if (text) {
+              term.sendData?.(text);
+            }
+            term.focus?.();
+            break;
+          }
+
+          case 'INPUT':
+            setInputValue('');
+            setSendScope(0);
+            setInputDialogOpen(true);
+            break;
+
+          case 'CLEAR':
+            term.clear?.();
+            term.focus?.();
+            break;
+
+          case 'RESET':
+            term.reset?.();
+            term.focus?.();
+            break;
+
+          case 'RECONNECT':
+            term.reconnect?.();
+            term.focus?.();
+            break;
+
+          case 'CLOSE':
+            handleCloseCurrentPaneOrTab();
+            break;
+
+          case 'SCROLL_TO_TOP':
+            term.scrollToTop?.();
+            term.focus?.();
+            break;
+
+          case 'SCROLL_TO_BOTTOM':
+            term.scrollToBottom?.();
+            term.focus?.();
+            break;
+
+          case 'SCROLL_UP': {
+            const scrollLines = getIntVar(getStore().vars, getStore().localVars, 'cs_scroll_lines', DEFAULT_SCROLL_LINES);
+            term.scrollLines?.(-scrollLines);
+            term.focus?.();
+            break;
+          }
+
+          case 'SCROLL_DOWN': {
+            const scrollLines = getIntVar(getStore().vars, getStore().localVars, 'cs_scroll_lines', DEFAULT_SCROLL_LINES);
+            term.scrollLines?.(scrollLines);
+            term.focus?.();
+            break;
+          }
+
+          case 'SCROLL_PAGE_UP':
+            term.scrollPages?.(-1);
+            term.focus?.();
+            break;
+
+          case 'SCROLL_PAGE_DOWN':
+            term.scrollPages?.(1);
+            term.focus?.();
+            break;
+
+          case 'SEARCH':
+            setSearchOpen(true);
+            setTimeout(() => searchInputRef.current?.focus(), 100);
+            break;
+
+          default:
+            break;
+        }
+        break;
       }
-      terminalRefs.current[activePaneId]?.focus();
+
+      case 'misc':
+        switch (btn.payload) {
+          case 'NEXT_BUTTON_GROUP': {
+            const idx = groups.indexOf(activeGroup);
+            const nextIdx = (idx + 1) % groups.length;
+            setActiveGroup(groups[nextIdx]);
+            break;
+          }
+          case 'PREV_BUTTON_GROUP': {
+            const idx = groups.indexOf(activeGroup);
+            const prevIdx = (idx - 1 + groups.length) % groups.length;
+            setActiveGroup(groups[prevIdx]);
+            break;
+          }
+          case 'OPEN_SCRATCHPAD':
+            handleOpenScratchpad();
+            break;
+          default:
+            break;
+        }
+        terminalRefs.current[activePaneId]?.focus();
+        break;
+
+      case 'run_script':
+        runScript(btn, isAutoRun, scriptInvokeContextRef, csNotify, () => terminalRefs.current);
+        break;
+
+      default:
+        break;
     }
   };
+
+  // ── Keyboard shortcuts (reads fresh state from store — tiny stable dep array) ──
+  useKeyboardManager({
+    handleButtonClick,
+    handleSelectHost,
+    handleOpenScratchpad,
+    handleCloseCurrentPaneOrTab,
+    setNewTabDialogOpen,
+    setNewTabDialogInitialViewMode,
+    searchInputRef,
+    setSearchOpen,
+    getTerminalRefs: () => terminalRefs.current,
+  });
 
   const handleSaveButton = async () => {
     const token = localStorage.getItem('cozy_token');
@@ -1799,504 +1145,56 @@ export default function Dashboard({ initialData }: DashboardProps) {
           onOpenScratchpad={() => { handleOpenScratchpad(); setMobileOpen(false); }}
         />
         <Box component="main" sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-          {tabs.length > 0 && (
-            <Box sx={{ bgcolor: '#f4f6f8', display: 'flex', alignItems: 'center', borderBottom: 1, borderColor: 'divider', flexShrink: 0, overflow: 'hidden', position: 'relative' }}>
-              <IconButton
-                color="inherit"
-                aria-label="open drawer"
-                edge="start"
-                onClick={() => setMobileOpen(!mobileOpen)}
-                sx={{ ml: 1, display: { md: 'none' } }}
-              >
-                <MenuIcon />
-              </IconButton>
-              <Box sx={{ flexGrow: 1, minWidth: 0, overflow: 'hidden' }}>
-                <Tabs
-                  value={activeTabId}
-                  onChange={(_, val) => {
-                    setActiveTabId(val);
-                    const t = tabs.find(x => x.id === val);
-                    if (t) {
-                      setActivePaneId(t.activePaneId);
-                      setTimeout(() => terminalRefs.current[t.activePaneId]?.focus(), 50);
-                    }
-                  }}
-                  variant="scrollable"
-                  scrollButtons={true}
-                  allowScrollButtonsMobile
-                  sx={{ minHeight: 40 }}
-                >
-                  {tabs.map((tab) => (
-                    <Tab
-                      key={tab.id}
-                      value={tab.id}
-                      onContextMenu={(e) => handleContextMenu(e, tab.id)}
-                      sx={{ minHeight: 40, py: 0, textTransform: 'none', minWidth: 'auto' }}
-                      label={
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          {tab.isLocked ? <LockIcon sx={{ fontSize: 14, mr: 0.5, color: 'primary.main' }} /> : (tab.isPinned && <PushPinIcon sx={{ fontSize: 14, mr: 0.5, color: 'primary.main' }} />)}
-                          <Box sx={{ width: 16, mr: 0.5, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                            {tab.type === 'scratchpad' ? (
-                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                {scratchpadSyncState === 'offline' && <CloudOffIcon fontSize="small" color="error" />}
-                                {scratchpadSyncState === 'syncing' && <SyncIcon fontSize="small" color="info" sx={{ animation: "spin 2s linear infinite", '@keyframes spin': { '0%': { transform: 'rotate(0deg)' }, '100%': { transform: 'rotate(360deg)' } } }} />}
-                                {scratchpadSyncState === 'dirty' && <CloudUploadIcon fontSize="small" color="warning" />}
-                                {scratchpadSyncState === 'synced' && <CloudDoneIcon fontSize="small" color="success" />}
-                              </Box>
-                            ) : (() => {
-                              const state = tab.panes.find(p => p.id === tab.activePaneId)?.state || 'disconnected';
-                              const isConnected = state === 'connected';
-                              const isUnread = unreadTabIds.has(tab.id);
-
-                              if (isConnected && isUnread) {
-                                return <PriorityHighIcon sx={{ fontSize: 18, color: '#2196f3', fontWeight: 'bold' }} />;
-                              }
-
-                              return (
-                                <Box sx={{
-                                  width: 8, height: 8, borderRadius: '50%',
-                                  bgcolor: isConnected ? 'success.main' :
-                                    ((state.startsWith('connecting')) ? 'warning.main' : 'error.main')
-                                }} title={state} />
-                              );
-                            })()}
-                          </Box>
-                          <span>{tab.title}</span>
-                          <IconButton
-                            size="small"
-                            onClick={(e) => handleCloseTab(e, tab.id)}
-                            sx={{ ml: 1, p: 0.5 }}
-                          >
-                            <CloseIcon fontSize="small" />
-                          </IconButton>
-                        </Box>
-                      }
-                    />
-                  ))}
-                </Tabs>
-              </Box>
-              <IconButton
-                size="small" title='New Tab (Alt+T)'
-                onClick={() => {
-                  setNewTabDialogInitialViewMode('servers');
-                  setNewTabDialogOpen(true);
-                }}
-                sx={{ mr: 1, ml: 0.5, bgcolor: 'action.hover', '&:hover': { bgcolor: 'action.selected' } }}
-              >
-                <AddIcon fontSize="small" />
-              </IconButton>
-              {isMobile && applets.filter(a => a.position === 'sidebar').length > 0 && (
-                <IconButton
-                  color="inherit"
-                  onClick={() => setMobileAppletsOpen(!mobileAppletsOpen)}
-                  sx={{ mr: 1 }}
-                >
-                  <ViewSidebarIcon />
-                </IconButton>
-              )}
-              {searchOpen && (
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    top: 0,
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    zIndex: 2000,
-                    bgcolor: 'background.paper',
-                    boxShadow: 3,
-                    display: 'flex',
-                    alignItems: 'center',
-                    px: 1,
-                    py: 0.5,
-                    borderRadius: '0 0 8px 8px',
-                    border: 1,
-                    borderColor: 'divider',
-                    borderTop: 0,
-                  }}
-                >
-                  <TextField
-                    inputRef={searchInputRef}
-                    size="small"
-                    placeholder="Find"
-                    value={searchQuery}
-                    autoComplete="off"
-                    onFocus={(e) => e.target.select()}
-                    onBlur={() => {
-                      const term = terminalRefs.current[activePaneId] as any;
-                      term?.clearSearchActiveDecoration?.();
-                    }}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value);
-                      if (e.target.value) {
-                        const term = terminalRefs.current[activePaneId] as any;
-                        term?.findNext?.(e.target.value, { incremental: true });
-                      }
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        const term = terminalRefs.current[activePaneId] as any;
-                        if (e.shiftKey) {
-                          term?.findPrevious?.(searchQuery);
-                        } else {
-                          term?.findNext?.(searchQuery);
-                        }
-                      } else if (e.key === 'Escape') {
-                        handleCloseSearch();
-                      }
-                    }}
-                    sx={{
-                      width: 200,
-                      '& .MuiInputBase-root': { height: 32, fontSize: '0.875rem' },
-                    }}
-                  />
-                  <IconButton
-                    size="small"
-                    onClick={() => (terminalRefs.current[activePaneId] as any)?.findPrevious?.(searchQuery)}
-                    title="Previous"
-                  >
-                    <NavigateBeforeIcon fontSize="small" />
-                  </IconButton>
-                  <IconButton
-                    size="small"
-                    onClick={() => (terminalRefs.current[activePaneId] as any)?.findNext?.(searchQuery)}
-                    title="Next"
-                  >
-                    <NavigateNextIcon fontSize="small" />
-                  </IconButton>
-                  <IconButton
-                    size="small"
-                    onClick={handleCloseSearch}
-                    title="Close"
-                  >
-                    <CloseIcon fontSize="small" />
-                  </IconButton>
-                </Box>
-              )}
-            </Box>
-          )}
-
-          <Box
-            sx={{ flexGrow: 1, bgcolor: '#ffffff', overflow: 'hidden', position: 'relative' }}
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
-          >
-
-            {tabs.map((tab) => (
-              <Box
-                key={tab.id}
-                sx={{
-                  position: 'absolute',
-                  inset: 0,
-                  display: activeTabId === tab.id ? 'flex' : 'none',
-                  flexDirection: 'column'
-                }}
-              >
-                <Box sx={{ flexGrow: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column' }}>
-                  {(() => {
-                    const renderPaneInner = (pane: PaneData) => (
-                      <Box
-                        data-pane-id={pane.id}
-                        sx={{
-                          flex: 1,
-                          height: '100%',
-                          minWidth: 0,
-                          minHeight: 0,
-                          position: 'relative',
-                          outline: activePaneId === pane.id ? '1px solid #1976d2' : 'none',
-                          outlineOffset: -1,
-                          zIndex: activePaneId === pane.id ? 1 : 0
-                        }}
-                        onClick={() => setActivePaneId(pane.id)}
-                      >
-                        {tab.type === 'scratchpad' ? (
-                          <Scratchpad
-                            ref={el => { terminalRefs.current[pane.id] = el; }}
-                            onSyncStateChange={setScratchpadSyncState}
-                          />
-                        ) : (
-                          <TerminalComponent
-                            key={pane.id}
-                            ref={el => {
-                              console.log('Terminal ref for', pane.id, 'is', el ? 'set' : 'deleted');
-                              if (el) terminalRefs.current[pane.id] = el;
-                              else delete terminalRefs.current[pane.id];
-                            }}
-                            host={pane.host}
-                            sessionId={pane.sessionId || pane.id}
-                            cloneFrom={pane.cloneFrom}
-                            isActive={activeTabId === tab.id && activePaneId === pane.id}
-                            isCtrlActive={isCtrlActive}
-                            onCtrlDone={() => setIsCtrlActive(false)}
-                            onStateChange={(state) => {
-                              setTabs(prev => prev.map(t => t.id === tab.id ? {
-                                ...t,
-                                panes: t.panes.map(p => p.id === pane.id ? { ...p, state } : p)
-                              } : t));
-                            }}
-                            onShellIntegrationChange={(info) => {
-                              setShellIntegrations(prev => ({ ...prev, [pane.id]: info }));
-                            }}
-                            onDataReceived={() => handleTerminalData(tab.id)}
-                            onTabStateChange={(state) => {
-                              setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, isPinned: state.isPinned, isLocked: state.isLocked } : t));
-                            }}
-                            onStolen={() => {
-                              setTabs(prev => prev.map(t => t.id === tab.id ? {
-                                ...t,
-                                isPinned: false,
-                                isLocked: false,
-                                panes: t.panes.map(p => p.id === pane.id ? { ...p, state: 'stolen' } : p)
-                              } : t));
-                            }}
-                            onManualReconnect={(wasStolen) => {
-                              if (wasStolen) {
-                                const newId = `${pane.host}-${Date.now()}`;
-                                setTabs(prev => prev.map(t => t.id === tab.id ? {
-                                  ...t,
-                                  activePaneId: newId,
-                                  panes: t.panes.map(p => p.id === pane.id ? { ...p, id: newId, sessionId: newId, state: 'connecting' } : p)
-                                } : t));
-                                setActivePaneId(newId);
-                              }
-                            }}
-                            vars={vars}
-                            localVars={localVars}
-                            isTouch={isTouch}
-                          />
-                        )}
-                      </Box>
-                    );
-
-                    const n = tab.panes.length;
-                    if (n <= 1) return renderPaneInner(tab.panes[0]);
-                    if (n === 2) return (
-                      <Box sx={{ display: 'flex', flexDirection: 'row', height: '100%' }}>
-                        {renderPaneInner(tab.panes[0])}
-                        <Box sx={{ width: '1px', bgcolor: 'divider', flexShrink: 0 }} />
-                        {renderPaneInner(tab.panes[1])}
-                      </Box>
-                    );
-                    if (n === 3) return (
-                      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-                        {renderPaneInner(tab.panes[0])}
-                        <Box sx={{ height: '1px', bgcolor: 'divider', flexShrink: 0 }} />
-                        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'row', minHeight: 0 }}>
-                          {renderPaneInner(tab.panes[1])}
-                          <Box sx={{ width: '1px', bgcolor: 'divider', flexShrink: 0 }} />
-                          {renderPaneInner(tab.panes[2])}
-                        </Box>
-                      </Box>
-                    );
-                    if (n === 4) return (
-                      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-                        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'row', minHeight: 0 }}>
-                          {renderPaneInner(tab.panes[0])}
-                          <Box sx={{ width: '1px', bgcolor: 'divider', flexShrink: 0 }} />
-                          {renderPaneInner(tab.panes[1])}
-                        </Box>
-                        <Box sx={{ height: '1px', bgcolor: 'divider', flexShrink: 0 }} />
-                        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'row', minHeight: 0 }}>
-                          {renderPaneInner(tab.panes[2])}
-                          <Box sx={{ width: '1px', bgcolor: 'divider', flexShrink: 0 }} />
-                          {renderPaneInner(tab.panes[3])}
-                        </Box>
-                      </Box>
-                    );
-                    return null;
-                  })()}
-                </Box>
-                {tab.showFiles && (
-                  <Box sx={{ height: '50%', minHeight: 200, borderTop: 1, borderColor: 'divider' }}>
-                    <FileBrowser
-                      sessionId={tab.panes.find((p: any) => p.id === tab.activePaneId)?.sessionId || tab.activePaneId}
-                      isActive={activeTabId === tab.id && tab.showFiles}
-                      shellCwd={shellIntegrations[tab.activePaneId]?.cwd}
-                      onClose={() => setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, showFiles: false } : t))}
-                    />
-                  </Box>
-                )}
-              </Box>
-            ))}
-            {tabs.length === 0 && (
-              <Box sx={{
-                p: 4,
-                textAlign: 'center',
-                mt: 10,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center'
-              }}>
-                <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, mb: 4 }}>
-                  <Tooltip title="Open Sidebar">
-                    <IconButton
-                      onClick={() => setMobileOpen(true)}
-                      sx={{
-                        display: { md: 'none' },
-                        width: 64,
-                        height: 64,
-                        bgcolor: 'background.paper',
-                        boxShadow: 2,
-                        '&:hover': { bgcolor: 'action.hover' }
-                      }}
-                    >
-                      <MenuIcon sx={{ fontSize: 32 }} />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="New Tab (Alt+T)">
-                    <IconButton
-                      onClick={() => {
-                        setNewTabDialogInitialViewMode('servers');
-                        setNewTabDialogOpen(true);
-                      }}
-                      color="primary"
-                      sx={{
-                        width: 64,
-                        height: 64,
-                        bgcolor: 'background.paper',
-                        boxShadow: 2,
-                        '&:hover': { bgcolor: 'action.hover' }
-                      }}
-                    >
-                      <AddIcon sx={{ fontSize: 32 }} />
-                    </IconButton>
-                  </Tooltip>
-                  {isMobile && applets.filter(a => a.position === 'sidebar').length > 0 && (
-                    <Tooltip title="Open Applets">
-                      <IconButton
-                        color="inherit"
-                        onClick={() => setMobileAppletsOpen(!mobileAppletsOpen)}
-                        sx={{
-                          width: 64,
-                          height: 64,
-                          bgcolor: 'background.paper',
-                          boxShadow: 2,
-                          '&:hover': { bgcolor: 'action.hover' }
-                        }}
-                      >
-                        <ViewSidebarIcon />
-                      </IconButton>
-                    </Tooltip>
-                  )}
-                </Box>
-                <Typography color="text.secondary" variant="body1" sx={{ maxWidth: 400, fontWeight: 500 }}>
-                  Select a server from the sidebar or open a new tab to start.
-                </Typography>
-              </Box>
-            )}
-          </Box>
-
-          <Box sx={{ borderTop: 1, borderColor: 'divider', bgcolor: '#f8f9fa', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-            <Box sx={{ px: 1, display: 'flex', alignItems: 'center', borderRight: 1, borderColor: 'divider', flexShrink: 0 }}>
-              <TextField
-                select
-                size="small"
-                value={activeGroup}
-                onChange={(e) => setActiveGroup(e.target.value)}
-                slotProps={{ select: { native: true } }}
-                sx={{
-                  minWidth: 80,
-                  '& .MuiInputBase-root': { fontSize: '0.8rem', height: 26 },
-                  '& select': { py: 0, pr: '18px !important' }
-                }}
-              >
-                {groups.map(g => (
-                  <option key={g} value={g}>{g}</option>
-                ))}
-              </TextField>
-            </Box>
-            <Tabs
-              key={`tabs-${activeGroup}-${filteredButtons.length}`}
-              value={false}
-              variant="scrollable"
-              scrollButtons="auto"
-              allowScrollButtonsMobile
-              sx={{
-                flexGrow: 1,
-                minHeight: 40,
-                minWidth: 0,
-                '& .MuiTabs-flexContainer': { gap: 1, px: 2, alignItems: 'center' },
-                '& .MuiTabs-indicator': { display: 'none' }
-              }}
-            >
-              {filteredButtons.map(btn => (
-                <Tab
-                  key={btn.id}
-                  label={btn.name}
-                  title={`${btn.type} (${btn.order || 0})${btn.autorun ? " (autorun)" : ""}${btn.shortcut ? " (" + btn.shortcut.toUpperCase() + ")" : ""}${btn.type != "run_script" ? ": " + btn.payload : ""}`}
-                  component="div"
-                  onClick={() => handleButtonClick(btn)}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    setBtnMenuAnchor({ anchor: e.currentTarget, btn });
-                    setLastMenuBtn(btn);
-                  }}
-                  sx={{
-                    minHeight: 28, minWidth: 'auto', p: '2px 12px',
-                    textTransform: 'none', fontSize: '0.8rem', borderRadius: 1.5,
-                    border: buttonStyleBorder[btn.type] || buttonStyleBorder[""],
-                    borderColor: buttonStyleBorderColor[btn.type] || buttonStyleBorderColor[""],
-                    bgcolor: 'background.paper',
-                    color: 'text.primary', margin: '6px 4px', cursor: 'pointer',
-                    '&:hover': {
-                      bgcolor: buttonStyleBgColorHover[btn.type] || buttonStyleBgColorHover[""],
-                      color: 'white'
-                    }
-                  }}
-                />
-              ))}
-            </Tabs>
-            <Box sx={{ flexShrink: 0, px: 1, borderLeft: 1, borderColor: 'divider' }}>
-              <IconButton
-                size="small" title="New Button"
-                onClick={() => {
-                  const maxOrder = buttons.length > 0 ? Math.max(...buttons.map(b => b.order || 0)) : 0;
-                  const data = { name: '', type: 'send_string', payload: '', group: activeGroup, autorun: 0, order: maxOrder + 10 || 10, shortcut: '' };
-                  setEditingButton(null);
-                  setButtonFormData(data);
-                  setInitialBtnFormData(data);
-                  setButtonDialogOpen(true);
-                }}
-                sx={{ p: 0.5 }}
-              >
-                <AddIcon fontSize="small" />
-              </IconButton>
-            </Box>
-          </Box>
-
-          {(isMobile || isTouch) && tabs.length > 0 && (
-            <Paper
-              elevation={3}
-              sx={{
-                p: 0.5,
-                bgcolor: '#f4f6f8',
-                borderTop: 1,
-                borderColor: 'divider',
-                display: 'flex',
-                justifyContent: 'center',
-                gap: 0.5,
-                overflowX: 'auto',
-                flexShrink: 0
-              }}
-            >
-              <ButtonGroup size="small" variant="outlined">
-                <Button
-                  variant={isCtrlActive ? "contained" : "outlined"}
-                  onPointerDown={(e) => { e.preventDefault(); window.navigator.vibrate?.(VIBRATE_PATTERN); setIsCtrlActive(!isCtrlActive); }}
-                >
-                  Ctrl
-                </Button>
-                <Button onPointerDown={(e) => { e.preventDefault(); window.navigator.vibrate?.(VIBRATE_PATTERN); handleSendKey('\x1b'); }}>Esc</Button>
-                <Button onPointerDown={(e) => { e.preventDefault(); window.navigator.vibrate?.(VIBRATE_PATTERN); handleSendKey('\x09'); }}><KeyboardTabIcon fontSize="small" /></Button>
-              </ButtonGroup>
-              <ButtonGroup size="small" variant="outlined">
-                <Button onPointerDown={(e) => { e.preventDefault(); window.navigator.vibrate?.(VIBRATE_PATTERN); handleSendKey('\x1b[A'); }}><NorthIcon fontSize="small" /></Button>
-                <Button onPointerDown={(e) => { e.preventDefault(); window.navigator.vibrate?.(VIBRATE_PATTERN); handleSendKey('\x1b[B'); }}><SouthIcon fontSize="small" /></Button>
-                <Button onPointerDown={(e) => { e.preventDefault(); window.navigator.vibrate?.(VIBRATE_PATTERN); handleSendKey('\x1b[D'); }}><WestIcon fontSize="small" /></Button>
-                <Button onPointerDown={(e) => { e.preventDefault(); window.navigator.vibrate?.(VIBRATE_PATTERN); handleSendKey('\x1b[C'); }}><EastIcon fontSize="small" /></Button>
-              </ButtonGroup>
-            </Paper>
-          )}
+          <TabBar
+            mobileOpen={mobileOpen}
+            setMobileOpen={setMobileOpen}
+            mobileAppletsOpen={mobileAppletsOpen}
+            setMobileAppletsOpen={setMobileAppletsOpen}
+            searchOpen={searchOpen}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            searchInputRef={searchInputRef}
+            terminalRefs={terminalRefs}
+            unreadTabIds={unreadTabIds}
+            isMobile={isMobile}
+            applets={applets}
+            scratchpadSyncState={scratchpadSyncState}
+            handleContextMenu={handleContextMenu}
+            handleCloseTab={handleCloseTab}
+            handleCloseSearch={handleCloseSearch}
+            setNewTabDialogInitialViewMode={setNewTabDialogInitialViewMode}
+            setNewTabDialogOpen={setNewTabDialogOpen}
+          />
+          <TerminalGrid
+            terminalRefs={terminalRefs}
+            isCtrlActive={isCtrlActive}
+            setIsCtrlActive={setIsCtrlActive}
+            scratchpadSyncState={scratchpadSyncState}
+            setScratchpadSyncState={setScratchpadSyncState}
+            handleTerminalData={handleTerminalData}
+            isTouch={isTouch}
+            isMobile={isMobile}
+            mobileAppletsOpen={mobileAppletsOpen}
+            setMobileAppletsOpen={setMobileAppletsOpen}
+            applets={applets}
+            setMobileOpen={setMobileOpen}
+            setNewTabDialogOpen={setNewTabDialogOpen}
+            setNewTabDialogInitialViewMode={setNewTabDialogInitialViewMode}
+            handleTouchStart={handleTouchStart}
+            handleTouchEnd={handleTouchEnd}
+            handleSendKey={handleSendKey}
+            VIBRATE_PATTERN={VIBRATE_PATTERN}
+          />
+          <ButtonBar
+            activeGroup={activeGroup}
+            setActiveGroup={setActiveGroup}
+            groups={groups}
+            filteredButtons={filteredButtons}
+            handleButtonClick={handleButtonClick}
+            setBtnMenuAnchor={setBtnMenuAnchor}
+            setLastMenuBtn={setLastMenuBtn}
+            onNewButtonClick={handleNewButtonClick}
+          />
         </Box>
         {applets.filter(a => a.position === 'sidebar').length > 0 && (
           isMobile ? (
@@ -2351,417 +1249,59 @@ export default function Dashboard({ initialData }: DashboardProps) {
         />
       ))}
 
-      <Menu
-        open={contextMenu !== null}
-        onClose={handleCloseMenu}
-        anchorReference="anchorPosition"
-        anchorPosition={contextMenu ? { top: contextMenu.mouseY, left: contextMenu.mouseX } : undefined}
-      >
-        {memoTabId && (() => {
-          const tab = tabs.find(t => t.id === memoTabId);
-          if (!tab) return null;
-          return (
-            <>
-              {tab.type !== 'scratchpad' && (
-                <>
-                  {tab.isPinned ? (
-                    <MenuItem onClick={() => handleUnpinTab(memoTabId)}>Unpin tab</MenuItem>
-                  ) : tab.panes.length === 1 ? (
-                    <MenuItem onClick={() => handlePinTab(memoTabId)}>Pin tab</MenuItem>
-                  ) : null}
-                  {tab.isPinned && (
-                    tab.isLocked ? (
-                      <MenuItem onClick={() => handleUnlockTab(memoTabId)}>Unlock tab</MenuItem>
-                    ) : (
-                      <MenuItem onClick={() => handleLockTab(memoTabId)}>Lock tab</MenuItem>
-                    )
-                  )}
-                </>
-              )}
-              {tab.panes.length === 1 && tab.type !== 'scratchpad' && (
-                <>
-                  <MenuItem onClick={() => handleCloneSession(memoTabId)}>Clone session</MenuItem>
-                  <MenuItem onClick={handleToggleFiles}>
-                    {tab.showFiles ? 'Close files' : (tab.panes[0]?.host === 'local' ? 'Open files' : 'Open SFTP')}
-                  </MenuItem>
-                </>
-              )}
-              {tab.type !== 'scratchpad' && (
-                <>
-                  <MenuItem onClick={() => handleReconnectTab(memoTabId)}>Reconnect</MenuItem>
-                  <MenuItem onClick={handleRename}>Rename tab</MenuItem>
-                </>
-              )}
-              <MenuItem onClick={handleCloseOther}>Close other tabs</MenuItem>
-              <MenuItem onClick={handleCloseRight}>Close tabs to the right</MenuItem>
-              {tab.type === 'scratchpad' && (
-                <MenuItem onClick={() => {
-                  fetch('/api/scratchpad/reload', {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('cozy_token')}` }
-                  }).then(() => {
-                    // csNotify("Reloading Scratchpad from disk...");
-                  });
-                  handleCloseMenu();
-                }}>Force sync</MenuItem>
-              )}
-            </>
-          );
-        })()}
-      </Menu>
-
-      <Menu
-        anchorEl={btnMenuAnchor?.anchor}
-        open={Boolean(btnMenuAnchor)}
-        onClose={() => setBtnMenuAnchor(null)}
-      >
-        <MenuItem onClick={() => {
-          if (!btnMenuAnchor) return;
-          const data = {
-            name: btnMenuAnchor.btn.name,
-            type: btnMenuAnchor.btn.type,
-            payload: btnMenuAnchor.btn.payload,
-            group: btnMenuAnchor.btn.group || 'Default',
-            autorun: btnMenuAnchor.btn.autorun || 0,
-            order: btnMenuAnchor.btn.order || 0,
-            shortcut: btnMenuAnchor.btn.shortcut || ''
-          };
-          setEditingButton(btnMenuAnchor.btn);
-          setButtonFormData(data);
-          setInitialBtnFormData(data);
-          setBtnMenuAnchor(null);
-          setButtonDialogOpen(true);
-        }}>Edit Button</MenuItem>
-        <MenuItem
-          onClick={() => {
-            if (btnMenuAnchor) {
-              setInputValue(btnMenuAnchor.btn.payload);
-              setSendScope(2);
-              setAppendNewLine(false);
-              setInputDialogOpen(true);
-              setBtnMenuAnchor(null);
-            }
-          }}
-          sx={{ display: lastMenuBtn?.type === 'send_string' ? 'flex' : 'none' }}
-        >
-          Send To All
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            if (btnMenuAnchor) {
-              navigator.clipboard.writeText(btnMenuAnchor.btn.payload);
-              setBtnMenuAnchor(null);
-            }
-          }}
-          sx={{ display: lastMenuBtn?.type === 'send_string' || lastMenuBtn?.type === 'run_script' ? 'flex' : 'none' }}
-        >
-          Copy Contents
-        </MenuItem>
-        <MenuItem onClick={() => btnMenuAnchor && handleMoveButton(btnMenuAnchor.btn.id, -1)}>Move Button Left</MenuItem>
-        <MenuItem onClick={() => btnMenuAnchor && handleMoveButton(btnMenuAnchor.btn.id, 1)}>Move Button Right</MenuItem>
-        <MenuItem onClick={() => btnMenuAnchor && handleDeleteButton(btnMenuAnchor.btn.id, btnMenuAnchor.btn.name)} sx={{ color: 'error.main' }}>Delete Button</MenuItem>
-      </Menu>
-
-      <Dialog open={buttonDialogOpen} onClose={handleCloseBtnDialog} fullWidth maxWidth="lg">
-        <DialogTitle>{editingButton ? 'Edit Button' : 'Add Button'}</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-          <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
-            <TextField fullWidth label="Button Name" size="small" value={buttonFormData.name} onChange={e => setButtonFormData({ ...buttonFormData, name: e.target.value })} />
-            <TextField fullWidth label="Button Group" size="small" value={buttonFormData.group} onChange={e => setButtonFormData({ ...buttonFormData, group: e.target.value })} placeholder="Default" />
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <TextField
-              select
-              label="Button Type"
-              size="small"
-              value={buttonFormData.type}
-              onChange={e => setButtonFormData({
-                ...buttonFormData,
-                type: e.target.value,
-                payload: e.target.value === 'terminal_function' ? 'COPY'
-                  : e.target.value === 'misc' ? 'NEXT_BUTTON_GROUP'
-                    : e.target.value === 'open_terminal' ? 'local'
-                      : ''
-              })}
-              slotProps={{ select: { native: true } }}
-              sx={{ flexGrow: 1 }}
-            >
-              <option value="send_string">Send String</option>
-              <option value="terminal_function">Terminal Function</option>
-              <option value="misc">Misc</option>
-              <option value="open_terminal">Open Terminal</option>
-              <option value="run_script">Run Script</option>
-            </TextField>
-            <TextField
-              label="Order"
-              type="number"
-              size="small"
-              value={buttonFormData.order}
-              onChange={e => setButtonFormData({ ...buttonFormData, order: parseInt(e.target.value) || 0 })}
-              sx={{ width: 100 }}
-            />
-          </Box>
-
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <TextField
-              label="Shortcut"
-              type="search"
-              size="small"
-              value={buttonFormData.shortcut}
-              onChange={e => setButtonFormData({ ...buttonFormData, shortcut: e.target.value })}
-              placeholder="Press keys or input, e.g. 'ctrl+shift+m', modifiers in ctrl,alt,shift,meta order"
-              onKeyDown={(e) => {
-                if (e.ctrlKey || e.altKey || e.metaKey || (e.key.length > 1 && e.key !== "Shift")) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setButtonFormData({ ...buttonFormData, shortcut: getKeyCombination(e as unknown as KeyboardEvent) });
-                }
-              }}
-              sx={{ flexGrow: 1 }}
-            />
-            {buttonFormData.type === 'run_script' && (
-              <FormControlLabel
-                title="Automatically run this script when the page loads"
-                sx={{ flexShrink: 0, mr: 0, ml: 0, whiteSpace: 'nowrap' }}
-                control={
-                  <Checkbox
-                    checked={buttonFormData.autorun === 1}
-                    onChange={e => setButtonFormData({ ...buttonFormData, autorun: e.target.checked ? 1 : 0 })}
-                    size="small"
-                  />
-                }
-                label={<Typography variant="body2">Autorun</Typography>}
-              />
-            )}
-          </Box>
-
-          {buttonFormData.type === 'send_string' ? (
-            <TextField
-              fullWidth
-              label="Command / String"
-              size="small"
-              multiline
-              rows={3}
-              value={buttonFormData.payload}
-              onChange={e => setButtonFormData({ ...buttonFormData, payload: e.target.value })}
-              placeholder="String to send to terminal, <ctrl-x> style syntax supported"
-            />
-          ) : buttonFormData.type === 'terminal_function' ? (
-            <TextField
-              select
-              fullWidth
-              label="Function"
-              size="small"
-              value={buttonFormData.payload}
-              onChange={e => setButtonFormData({ ...buttonFormData, payload: e.target.value })}
-              slotProps={{ select: { native: true } }}
-            >
-              {TERMINAL_FUNCTIONS.map(f => (
-                <option key={f.value} value={f.value}>{f.label}</option>
-              ))}
-            </TextField>
-          ) : buttonFormData.type === 'misc' ? (
-            <TextField
-              select
-              fullWidth
-              label="Action"
-              size="small"
-              value={buttonFormData.payload}
-              onChange={e => setButtonFormData({ ...buttonFormData, payload: e.target.value })}
-              slotProps={{ select: { native: true } }}
-            >
-              {MISC_FUNCTIONS.map(f => (
-                <option key={f.value} value={f.value}>{f.label}</option>
-              ))}
-            </TextField>
-          ) : buttonFormData.type === 'open_terminal' ? (
-            <Autocomplete
-              freeSolo
-              options={['local', ...hosts.map(h => h.name)]}
-              value={buttonFormData.payload}
-              onChange={(_event, newValue) => {
-                setButtonFormData({ ...buttonFormData, payload: newValue || '' });
-              }}
-              onInputChange={(_event, newInputValue) => {
-                setButtonFormData({ ...buttonFormData, payload: newInputValue || '' });
-              }}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  fullWidth
-                  label="Server / Address"
-                  size="small"
-                  placeholder="e.g. local, production-db, root@192.168.1.1"
-                />
-              )}
-            />
-          ) : (
-            <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden', flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
-              <Box sx={{ px: 1.5, py: 0.5, bgcolor: 'action.hover', borderBottom: '1px solid', borderColor: 'divider' }}>
-                <Typography variant="caption" color="text.secondary">
-                  Check <a target="_blank" rel="noopener noreferrer" style={{ color: '#1976d2' }} href="https://github.com/sagan/cozyssh/blob/master/docs/SCRIPTS.md">help</a> about scripts.
-                </Typography>
-              </Box>
-              <CodeMirror
-                value={buttonFormData.payload}
-                height="200px"
-                theme="light"
-                extensions={[javascript({ typescript: true }), EditorView.lineWrapping]}
-                onChange={(value) => setButtonFormData({ ...buttonFormData, payload: value })}
-                style={{ fontSize: '12px' }}
-              />
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setButtonDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleSaveButton} disabled={!buttonFormData.name || !buttonFormData.payload}>Save</Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={inputDialogOpen} onClose={handleCloseInputDialog} fullWidth maxWidth="sm">
-        <DialogTitle>Terminal Input</DialogTitle>
-        <DialogContent sx={{ pt: 1 }}>
-          <TextField
-            fullWidth
-            multiline
-            rows={6}
-            variant="outlined"
-            placeholder="Type input to send to terminal. Press Enter to send, Shift + Enter for new line. <ctrl-x> style syntax supported."
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (inputValue) {
-                  const data = appendNewLine ? inputValue + '\n' : inputValue;
-                  sendParsedString(data);
-                }
-                handleCloseInputDialog();
-              }
-            }}
-            autoFocus
-          />
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 1 }}>
-            <FormControlLabel
-              control={<Checkbox checked={appendNewLine} onChange={(e) => setAppendNewLine(e.target.checked)} size="small" />}
-              label={<Typography variant="body2">Append new line (\n)</Typography>}
-            />
-            {tabs.find(t => t.id === activeTabId)?.panes.length! > 1 && (
-              <FormControlLabel
-                control={<Checkbox checked={sendScope === 1} onChange={(e) => setSendScope(e.target.checked ? 1 : 0)} size="small" />}
-                label={<Typography variant="body2">Send to all panes</Typography>}
-              />
-            )}
-            <FormControlLabel
-              control={<Checkbox checked={sendScope === 2} onChange={(e) => setSendScope(e.target.checked ? 2 : 0)} size="small" />}
-              label={<Typography variant="body2">Send to all</Typography>}
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseInputDialog}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={() => {
-              if (inputValue) {
-                const data = appendNewLine ? inputValue + '\n' : inputValue;
-                sendParsedString(data);
-              }
-              handleCloseInputDialog();
-            }}
-          >
-            Send
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <NewTabDialog
-        open={newTabDialogOpen}
-        onClose={() => {
-          setNewTabDialogOpen(false);
-          setTimeout(() => (window as any).csFocus?.(), 0);
-        }}
+      <DialogManager
+        contextMenu={contextMenu}
+        handleCloseMenu={handleCloseMenu}
+        memoTabId={memoTabId}
+        handleUnpinTab={handleUnpinTab}
+        handlePinTab={handlePinTab}
+        handleUnlockTab={handleUnlockTab}
+        handleLockTab={handleLockTab}
+        handleCloneSession={handleCloneSession}
+        handleToggleFiles={handleToggleFiles}
+        handleReconnectTab={handleReconnectTab}
+        handleRename={handleRename}
+        handleCloseOther={handleCloseOther}
+        handleCloseRight={handleCloseRight}
+        btnMenuAnchor={btnMenuAnchor}
+        setBtnMenuAnchor={setBtnMenuAnchor}
+        lastMenuBtn={lastMenuBtn}
+        handleMoveButton={handleMoveButton}
+        handleDeleteButton={handleDeleteButton}
+        buttonDialogOpen={buttonDialogOpen}
+        editingButton={editingButton}
+        buttonFormData={buttonFormData}
+        setButtonFormData={setButtonFormData}
+        handleCloseBtnDialog={handleCloseBtnDialog}
+        handleSaveButton={handleSaveButton}
+        MISC_FUNCTIONS={MISC_FUNCTIONS}
         hosts={hosts}
+        inputDialogOpen={inputDialogOpen}
+        handleCloseInputDialog={handleCloseInputDialog}
+        inputValue={inputValue}
+        setInputValue={setInputValue}
+        appendNewLine={appendNewLine}
+        setAppendNewLine={setAppendNewLine}
+        sendScope={sendScope}
+        setSendScope={setSendScope}
+        sendParsedString={sendParsedString}
+        newTabDialogOpen={newTabDialogOpen}
+        setNewTabDialogOpen={setNewTabDialogOpen}
         recents={recents}
-        tabs={tabs}
-        initialViewMode={newTabDialogInitialViewMode}
-
-        buttons={buttons}
+        newTabDialogInitialViewMode={newTabDialogInitialViewMode}
+        setEditingButton={setEditingButton}
+        setInitialBtnFormData={setInitialBtnFormData}
+        setButtonDialogOpen={setButtonDialogOpen}
+        setInputDialogOpen={setInputDialogOpen}
         activeGroup={activeGroup}
-        onExecuteButton={(btn) => {
-          handleButtonClick(btn);
-          setNewTabDialogOpen(false);
-        }}
-        onSelectTab={(tabId) => {
-          setActiveTabId(tabId);
-          const t = tabs.find(x => x.id === tabId);
-          if (t) {
-            setActivePaneId(t.activePaneId);
-            setTimeout(() => terminalRefs.current[t.activePaneId]?.focus(), 50);
-          }
-        }}
-        onAttachPinned={(id, host, title, isLocked) => { handleAttach(id, host, title, isLocked); setNewTabDialogOpen(false); }}
-        onSelect={async (host) => {
-          // Check if it's a direct connection and not in known hosts
-          if (host.includes('.') || host.includes(':') || host === 'localhost') {
-            const known = hosts.find(h => h.name === host || h.hostname === host);
-            if (!known) {
-              // Automatically add to ~/.ssh/config
-              const token = localStorage.getItem('cozy_token');
-              let user = 'root';
-              let hostname = host;
-              if (host.includes('@')) {
-                const parts = host.split('@');
-                user = parts[0];
-                hostname = parts[1];
-              }
-              try {
-                await fetch('/api/hosts', {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                  },
-                  body: JSON.stringify({
-                    alias: host,
-                    hostname: hostname,
-                    user: user,
-                    port: '22'
-                  })
-                });
-                handleRefresh(); // Refresh hosts list
-              } catch (e) {
-                console.error('Failed to auto-add host:', e);
-              }
-            }
-          }
-          handleSelectHost(host);
-        }}
+        handleButtonClick={handleButtonClick}
+        handleAttach={handleAttach}
+        handleRefresh={handleRefresh}
+        handleSelectHost={handleSelectHost}
+        terminalRefs={terminalRefs}
+        toasts={toasts}
+        setToasts={setToasts}
       />
-
-      <Box sx={{ position: 'fixed', top: 20, right: 20, zIndex: 10000, display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'flex-end' }}>
-        {toasts.map(t => (
-          <Alert
-            key={t.id}
-            severity={t.severity}
-            variant="filled"
-            onClose={() => setToasts(prev => prev.filter(x => x.id !== t.id))}
-            sx={{
-              minWidth: 250,
-              boxShadow: 3,
-              // Add a simple animation feel
-              animation: 'slideIn 0.1s cubic-bezier(0.15, 1.15, 0.3, 1) forwards',
-              '@keyframes slideIn': {
-                '0%': { transform: 'translateX(100%)', opacity: 0 },
-                '100%': { transform: 'translateX(0)', opacity: 1 }
-              }
-            }}
-          >
-            {t.msg}
-          </Alert>
-        ))}
-      </Box>
     </ThemeProvider>
   );
 }

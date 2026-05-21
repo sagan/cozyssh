@@ -1,0 +1,296 @@
+import React from 'react';
+import { Box, Paper, ButtonGroup, Button, Tooltip, IconButton, Typography } from '@mui/material';
+import MenuIcon from '@mui/icons-material/Menu';
+import AddIcon from '@mui/icons-material/Add';
+import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
+import KeyboardTabIcon from '@mui/icons-material/KeyboardTab';
+import NorthIcon from '@mui/icons-material/North';
+import SouthIcon from '@mui/icons-material/South';
+import WestIcon from '@mui/icons-material/West';
+import EastIcon from '@mui/icons-material/East';
+
+import Scratchpad from './Scratchpad';
+import TerminalComponent from './Terminal';
+import FileBrowser from './FileBrowser';
+import type { PaneData } from './dashboardStore';
+import { useDashboardStore } from './dashboardStore';
+import type { TerminalRefMap } from './dashboardStore';
+
+export interface TerminalGridProps {
+  terminalRefs: React.MutableRefObject<TerminalRefMap>;
+  isCtrlActive: boolean;
+  setIsCtrlActive: (v: boolean) => void;
+  scratchpadSyncState: string;
+  setScratchpadSyncState: (v: any) => void;
+  handleTerminalData: (tabId: string) => void;
+  isTouch: boolean;
+  isMobile: boolean;
+  mobileAppletsOpen: boolean;
+  setMobileAppletsOpen: (v: boolean) => void;
+  applets: any[];
+  setMobileOpen: (v: boolean) => void;
+  setNewTabDialogOpen: (v: boolean) => void;
+  setNewTabDialogInitialViewMode: React.Dispatch<React.SetStateAction<"servers" | "tabs" | "buttons" | undefined>>;
+  handleTouchStart: (e: any) => void;
+  handleTouchEnd: (e: any) => void;
+  handleSendKey: (key: string) => void;
+  VIBRATE_PATTERN: number;
+}
+
+export default function TerminalGrid({
+  terminalRefs, isCtrlActive, setIsCtrlActive, setScratchpadSyncState,
+  handleTerminalData, isTouch, isMobile, mobileAppletsOpen, setMobileAppletsOpen,
+  applets, setMobileOpen, setNewTabDialogOpen, setNewTabDialogInitialViewMode,
+  handleTouchStart, handleTouchEnd, handleSendKey, VIBRATE_PATTERN
+}: TerminalGridProps) {
+  const { tabs, setTabs, activeTabId, activePaneId, setActivePaneId, shellIntegrations, setShellIntegrations, vars, localVars } = useDashboardStore();
+
+  return (
+    <>
+
+          <Box
+            sx={{ flexGrow: 1, bgcolor: '#ffffff', overflow: 'hidden', position: 'relative' }}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          >
+
+            {tabs.map((tab) => (
+              <Box
+                key={tab.id}
+                sx={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: activeTabId === tab.id ? 'flex' : 'none',
+                  flexDirection: 'column'
+                }}
+              >
+                <Box sx={{ flexGrow: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column' }}>
+                  {(() => {
+                    const renderPaneInner = (pane: PaneData) => (
+                      <Box
+                        data-pane-id={pane.id}
+                        sx={{
+                          flex: 1,
+                          height: '100%',
+                          minWidth: 0,
+                          minHeight: 0,
+                          position: 'relative',
+                          outline: activePaneId === pane.id ? '1px solid #1976d2' : 'none',
+                          outlineOffset: -1,
+                          zIndex: activePaneId === pane.id ? 1 : 0
+                        }}
+                        onClick={() => setActivePaneId(pane.id)}
+                      >
+                        {tab.type === 'scratchpad' ? (
+                          <Scratchpad
+                            ref={el => {
+                              terminalRefs.current[pane.id] = el;
+                            }}
+                            onSyncStateChange={setScratchpadSyncState}
+                          />
+                        ) : (
+                          <TerminalComponent
+                            key={pane.id}
+                            ref={el => {
+                              if (el) terminalRefs.current[pane.id] = el;
+                              else delete terminalRefs.current[pane.id];
+                            }}
+                            host={pane.host}
+                            sessionId={pane.sessionId || pane.id}
+                            cloneFrom={pane.cloneFrom}
+                            isActive={activeTabId === tab.id && activePaneId === pane.id}
+                            isCtrlActive={isCtrlActive}
+                            onCtrlDone={() => setIsCtrlActive(false)}
+                            onStateChange={(state) => {
+                              setTabs(prev => prev.map(t => t.id === tab.id ? {
+                                ...t,
+                                panes: t.panes.map(p => p.id === pane.id ? { ...p, state } : p)
+                              } : t));
+                            }}
+                            onShellIntegrationChange={(info) => {
+                              setShellIntegrations(prev => ({ ...prev, [pane.id]: info }));
+                            }}
+                            onDataReceived={() => handleTerminalData(tab.id)}
+                            onTabStateChange={(state) => {
+                              setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, isPinned: state.isPinned, isLocked: state.isLocked } : t));
+                            }}
+                            onStolen={() => {
+                              setTabs(prev => prev.map(t => t.id === tab.id ? {
+                                ...t,
+                                isPinned: false,
+                                isLocked: false,
+                                panes: t.panes.map(p => p.id === pane.id ? { ...p, state: 'stolen' } : p)
+                              } : t));
+                            }}
+                            onManualReconnect={(wasStolen) => {
+                              if (wasStolen) {
+                                const newId = `${pane.host}-${Date.now()}`;
+                                setTabs(prev => prev.map(t => t.id === tab.id ? {
+                                  ...t,
+                                  activePaneId: newId,
+                                  panes: t.panes.map(p => p.id === pane.id ? { ...p, id: newId, sessionId: newId, state: 'connecting' } : p)
+                                } : t));
+                                setActivePaneId(newId);
+                              }
+                            }}
+                            vars={vars}
+                            localVars={localVars}
+                            isTouch={isTouch}
+                          />
+                        )}
+                      </Box>
+                    );
+
+                    const n = tab.panes.length;
+                    if (n <= 1) return renderPaneInner(tab.panes[0]);
+                    if (n === 2) return (
+                      <Box sx={{ display: 'flex', flexDirection: 'row', height: '100%' }}>
+                        {renderPaneInner(tab.panes[0])}
+                        <Box sx={{ width: '1px', bgcolor: 'divider', flexShrink: 0 }} />
+                        {renderPaneInner(tab.panes[1])}
+                      </Box>
+                    );
+                    if (n === 3) return (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+                        {renderPaneInner(tab.panes[0])}
+                        <Box sx={{ height: '1px', bgcolor: 'divider', flexShrink: 0 }} />
+                        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'row', minHeight: 0 }}>
+                          {renderPaneInner(tab.panes[1])}
+                          <Box sx={{ width: '1px', bgcolor: 'divider', flexShrink: 0 }} />
+                          {renderPaneInner(tab.panes[2])}
+                        </Box>
+                      </Box>
+                    );
+                    if (n === 4) return (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+                        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'row', minHeight: 0 }}>
+                          {renderPaneInner(tab.panes[0])}
+                          <Box sx={{ width: '1px', bgcolor: 'divider', flexShrink: 0 }} />
+                          {renderPaneInner(tab.panes[1])}
+                        </Box>
+                        <Box sx={{ height: '1px', bgcolor: 'divider', flexShrink: 0 }} />
+                        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'row', minHeight: 0 }}>
+                          {renderPaneInner(tab.panes[2])}
+                          <Box sx={{ width: '1px', bgcolor: 'divider', flexShrink: 0 }} />
+                          {renderPaneInner(tab.panes[3])}
+                        </Box>
+                      </Box>
+                    );
+                    return null;
+                  })()}
+                </Box>
+                {tab.showFiles && (
+                  <Box sx={{ height: '50%', minHeight: 200, borderTop: 1, borderColor: 'divider' }}>
+                    <FileBrowser
+                      sessionId={tab.panes.find((p: any) => p.id === tab.activePaneId)?.sessionId || tab.activePaneId}
+                      isActive={activeTabId === tab.id && tab.showFiles}
+                      shellCwd={shellIntegrations[tab.activePaneId]?.cwd}
+                      onClose={() => setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, showFiles: false } : t))}
+                    />
+                  </Box>
+                )}
+              </Box>
+            ))}
+            {tabs.length === 0 && (
+              <Box sx={{
+                p: 4,
+                textAlign: 'center',
+                mt: 10,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center'
+              }}>
+                <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, mb: 4 }}>
+                  <Tooltip title="Open Sidebar">
+                    <IconButton
+                      onClick={() => setMobileOpen(true)}
+                      sx={{
+                        display: { md: 'none' },
+                        width: 64,
+                        height: 64,
+                        bgcolor: 'background.paper',
+                        boxShadow: 2,
+                        '&:hover': { bgcolor: 'action.hover' }
+                      }}
+                    >
+                      <MenuIcon sx={{ fontSize: 32 }} />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="New Tab (Alt+T)">
+                    <IconButton
+                      onClick={() => {
+                        setNewTabDialogInitialViewMode('servers');
+                        setNewTabDialogOpen(true);
+                      }}
+                      color="primary"
+                      sx={{
+                        width: 64,
+                        height: 64,
+                        bgcolor: 'background.paper',
+                        boxShadow: 2,
+                        '&:hover': { bgcolor: 'action.hover' }
+                      }}
+                    >
+                      <AddIcon sx={{ fontSize: 32 }} />
+                    </IconButton>
+                  </Tooltip>
+                  {isMobile && applets.filter(a => a.position === 'sidebar').length > 0 && (
+                    <Tooltip title="Open Applets">
+                      <IconButton
+                        color="inherit"
+                        onClick={() => setMobileAppletsOpen(!mobileAppletsOpen)}
+                        sx={{
+                          width: 64,
+                          height: 64,
+                          bgcolor: 'background.paper',
+                          boxShadow: 2,
+                          '&:hover': { bgcolor: 'action.hover' }
+                        }}
+                      >
+                        <ViewSidebarIcon />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                </Box>
+                <Typography color="text.secondary" variant="body1" sx={{ maxWidth: 400, fontWeight: 500 }}>
+                  Select a server from the sidebar or open a new tab to start.
+                </Typography>
+              </Box>
+            )}
+          </Box>
+          {(isMobile || isTouch) && tabs.length > 0 && (
+            <Paper
+              elevation={3}
+              sx={{
+                p: 0.5,
+                bgcolor: '#f4f6f8',
+                borderTop: 1,
+                borderColor: 'divider',
+                display: 'flex',
+                justifyContent: 'center',
+                gap: 0.5,
+                overflowX: 'auto',
+                flexShrink: 0
+              }}
+            >
+              <ButtonGroup size="small" variant="outlined">
+                <Button
+                  variant={isCtrlActive ? "contained" : "outlined"}
+                  onPointerDown={(e) => { e.preventDefault(); window.navigator.vibrate?.(VIBRATE_PATTERN); setIsCtrlActive(!isCtrlActive); }}
+                >
+                  Ctrl
+                </Button>
+                <Button onPointerDown={(e) => { e.preventDefault(); window.navigator.vibrate?.(VIBRATE_PATTERN); handleSendKey('\x1b'); }}>Esc</Button>
+                <Button onPointerDown={(e) => { e.preventDefault(); window.navigator.vibrate?.(VIBRATE_PATTERN); handleSendKey('\x09'); }}><KeyboardTabIcon fontSize="small" /></Button>
+              </ButtonGroup>
+              <ButtonGroup size="small" variant="outlined">
+                <Button onPointerDown={(e) => { e.preventDefault(); window.navigator.vibrate?.(VIBRATE_PATTERN); handleSendKey('\x1b[A'); }}><NorthIcon fontSize="small" /></Button>
+                <Button onPointerDown={(e) => { e.preventDefault(); window.navigator.vibrate?.(VIBRATE_PATTERN); handleSendKey('\x1b[B'); }}><SouthIcon fontSize="small" /></Button>
+                <Button onPointerDown={(e) => { e.preventDefault(); window.navigator.vibrate?.(VIBRATE_PATTERN); handleSendKey('\x1b[D'); }}><WestIcon fontSize="small" /></Button>
+                <Button onPointerDown={(e) => { e.preventDefault(); window.navigator.vibrate?.(VIBRATE_PATTERN); handleSendKey('\x1b[C'); }}><EastIcon fontSize="small" /></Button>
+              </ButtonGroup>
+            </Paper>
+          )}
+    </>
+  );
+}

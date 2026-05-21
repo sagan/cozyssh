@@ -58,7 +58,7 @@ func TestServerManagement(t *testing.T) {
 	}
 
 	// 2. Right click to Edit
-	if err := page.Locator("text=my-test-server").Click(playwright.LocatorClickOptions{
+	if err := page.Locator("text=my-test-server").First().Click(playwright.LocatorClickOptions{
 		Button: playwright.MouseButtonRight,
 	}); err != nil {
 		t.Fatalf("failed to right click server: %v", err)
@@ -84,7 +84,7 @@ func TestServerManagement(t *testing.T) {
 	}
 
 	// 3. Right click to Favourite
-	if err := page.Locator("text=my-test-server").Click(playwright.LocatorClickOptions{
+	if err := page.Locator("text=my-test-server").First().Click(playwright.LocatorClickOptions{
 		Button: playwright.MouseButtonRight,
 	}); err != nil {
 		t.Fatalf("failed to right click server: %v", err)
@@ -104,7 +104,7 @@ func TestServerManagement(t *testing.T) {
 	}
 
 	// 4. Right click to Unfavourite
-	if err := page.Locator("text=my-test-server").Click(playwright.LocatorClickOptions{
+	if err := page.Locator("text=my-test-server").First().Click(playwright.LocatorClickOptions{
 		Button: playwright.MouseButtonRight,
 	}); err != nil {
 		t.Fatalf("failed to right click server: %v", err)
@@ -124,7 +124,7 @@ func TestServerManagement(t *testing.T) {
 	}
 
 	// 5. Right click to Delete
-	if err := page.Locator("text=my-test-server").Click(playwright.LocatorClickOptions{
+	if err := page.Locator("text=my-test-server").First().Click(playwright.LocatorClickOptions{
 		Button: playwright.MouseButtonRight,
 	}); err != nil {
 		t.Fatalf("failed to right click server: %v", err)
