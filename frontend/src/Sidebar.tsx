@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
+import { useSearchParams } from "react-router";
 import { Autocomplete, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Drawer, Toolbar, Typography, Box, CircularProgress, IconButton, Menu, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button, useMediaQuery, useTheme, Tabs, Tab, Chip, Divider } from '@mui/material';
 import ComputerIcon from '@mui/icons-material/Computer';
 import DnsIcon from '@mui/icons-material/Dns';
@@ -70,7 +71,8 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
     }
   }, [settingsOpen]);
 
-  const [filterStr, setFilterStr] = useState('');
+  const [startupParams] = useSearchParams();
+  const [filterStr, setFilterStr] = useState(startupParams.get('filter') || '');
   const [tagsExpanded, setTagsExpanded] = useState(false);
   const [showTagsToggle, setShowTagsToggle] = useState(false);
   const tagsContainerRef = useRef<HTMLDivElement>(null);
@@ -651,6 +653,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
                 <Typography variant="subtitle2" gutterBottom>Keyboard Shortcuts</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
                   <b>Alt + O</b> : Open new tab dialog, use ← → to switch view, ↑ ↓ to select, Enter to open<br />
+                  <b>Alt + A</b> : Open new tab dialog - tabs view<br />
                   <b>Alt + E</b> : Open new tab dialog - buttons view<br />
                   <b>Alt + N</b> : Open new local shell tab<br />
                   <b>Alt + S</b> : Open scratchpad<br />
@@ -659,7 +662,6 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
                   <b>Alt + W</b> : Close current tab or pane<br />
                   <b>Alt + I</b> : Focus sidebar search filter, use ↑ ↓ to select, Enter to open<br />
                   <b>Alt + G</b> : Focus active terminal session<br />
-                  <b>Alt + A</b> : Select all in current terminal and copy<br />
                   <b>Alt + V / Alt + Shift + V</b> : Switch to next / previous group in button bar<br />
                   <b>Alt + Shift + 1-9,0</b> : Click the button in button bar<br />
                   <b>Alt + J / Alt + K</b> : Scroll terminal down / up by a few lines<br />

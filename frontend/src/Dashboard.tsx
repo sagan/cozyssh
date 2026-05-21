@@ -982,10 +982,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
     }
   };
 
-
   const [startupParams] = useSearchParams();
 
+  const initted = useRef(false);
   useEffect(() => {
+    if (initted.current) return;
+    initted.current = true;
+    const autoload = startupParams.get('noautoload') !== '1';
     const token = localStorage.getItem('cozy_token');
     const hash = window.location.hash.substring(1);
     if (hash) {
@@ -1072,17 +1075,25 @@ export default function Dashboard({ initialData }: DashboardProps) {
               setTimeout(() => alert(`SSH server "${hash}" not found in config.`), 100);
             }
           }
-        } else if (!pinnedElsewhere) {
-          // Only auto-open tabs that are not currently in use by any client
-          const availablePins = pinnedTabsData.filter((p: any) => !p.listenerCount || p.listenerCount === 0);
-          const pinnedTabs = availablePins.map((p: any) => {
-            const paneId = p.id;
-            return { id: p.id, panes: [{ id: paneId, host: p.host }], activePaneId: paneId, title: p.title, isPinned: true, isLocked: p.isLocked };
-          });
-          if (pinnedTabs.length > 0) {
-            setTabs(prev => prev.length > 0 ? prev : pinnedTabs);
-            setActiveTabId(prev => prev || pinnedTabs[0].id);
-            setActivePaneId(prev => prev || pinnedTabs[0].activePaneId);
+        } else if (autoload) {
+          if (!pinnedElsewhere) {
+            // Only auto-open tabs that are not currently in use by any client
+            const availablePins = pinnedTabsData.filter((p: any) => !p.listenerCount || p.listenerCount === 0);
+            const pinnedTabs = availablePins.map((p: any) => {
+              const paneId = p.id;
+              return { id: p.id, panes: [{ id: paneId, host: p.host }], activePaneId: paneId, title: p.title, isPinned: true, isLocked: p.isLocked };
+            });
+            if (pinnedTabs.length > 0) {
+              setTabs(prev => prev.length > 0 ? prev : pinnedTabs);
+              setActiveTabId(prev => prev || pinnedTabs[0].id);
+              setActivePaneId(prev => prev || pinnedTabs[0].activePaneId);
+            } else {
+              const initialId = `local-${Date.now()}`;
+              const initialPaneId = Math.random().toString(36).substring(2);
+              setTabs(prev => prev.length > 0 ? prev : [{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
+              setActiveTabId(prev => prev || initialId);
+              setActivePaneId(prev => prev || initialPaneId);
+            }
           } else {
             const initialId = `local-${Date.now()}`;
             const initialPaneId = Math.random().toString(36).substring(2);
@@ -1090,12 +1101,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
             setActiveTabId(prev => prev || initialId);
             setActivePaneId(prev => prev || initialPaneId);
           }
-        } else {
-          const initialId = `local-${Date.now()}`;
-          const initialPaneId = Math.random().toString(36).substring(2);
-          setTabs(prev => prev.length > 0 ? prev : [{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
-          setActiveTabId(prev => prev || initialId);
-          setActivePaneId(prev => prev || initialPaneId);
         }
       }, 350);
     };
@@ -1105,7 +1110,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     return () => {
       if (bc) bc.close();
     };
-  }, []); // Run ONLY once on mount
+  }, [initialData, handleSelectTagAsSplit, handleSelectHost, startupParams]); // Run ONLY once on mount
 
   useEffect(() => {
     const active = tabs.find(t => t.id === activeTabId);
@@ -1395,6 +1400,119 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const scrollLines = getIntVar(vars, localVars, "cs_scroll_lines", DEFAULT_SCROLL_LINES);
 
   useEffect(() => {
+    const shortcutFunctions: Record<string, (e: KeyboardEvent) => void> = {
+      "alt+o": function (e) {
+        e.preventDefault();
+        setNewTabDialogInitialViewMode('servers');
+        setNewTabDialogOpen(true);
+      },
+      "alt+a": function (e) {
+        e.preventDefault();
+        setNewTabDialogInitialViewMode('tabs');
+        setNewTabDialogOpen(true);
+      },
+      "alt+e": function (e) {
+        e.preventDefault();
+        setNewTabDialogInitialViewMode('buttons');
+        setNewTabDialogOpen(true);
+      },
+      "alt+n": function (e) {
+        e.preventDefault();
+        handleSelectHost("local");
+      },
+      "alt+s": function (e) {
+        e.preventDefault();
+        handleOpenScratchpad();
+      },
+      "alt+h": function (e) {
+        e.preventDefault();
+        const allPanes = tabs.flatMap(t => t.panes.map(p => ({ tabId: t.id, paneId: p.id })));
+        if (allPanes.length === 0) return;
+        const idx = allPanes.findIndex(p => p.paneId === activePaneId);
+        const nextIdx = (idx - 1 + allPanes.length) % allPanes.length;
+        const target = allPanes[nextIdx];
+        setActiveTabId(target.tabId);
+        setActivePaneId(target.paneId);
+        (document.activeElement as HTMLElement)?.blur?.();
+        terminalRefs.current[target.paneId]?.focus();
+        setTimeout(() => terminalRefs.current[target.paneId]?.focus(), 100);
+      },
+      "alt+l": function (e) {
+        e.preventDefault();
+        const allPanes = tabs.flatMap(t => t.panes.map(p => ({ tabId: t.id, paneId: p.id })));
+        if (allPanes.length === 0) return;
+        const idx = allPanes.findIndex(p => p.paneId === activePaneId);
+        const nextIdx = (idx + 1) % allPanes.length;
+        const target = allPanes[nextIdx];
+        setActiveTabId(target.tabId);
+        setActivePaneId(target.paneId);
+        (document.activeElement as HTMLElement)?.blur?.();
+        terminalRefs.current[target.paneId]?.focus();
+        setTimeout(() => terminalRefs.current[target.paneId]?.focus(), 100);
+      },
+      "alt+w": function (e) {
+        e.preventDefault();
+        handleCloseCurrentPaneOrTab();
+      },
+      "alt+g": function (e) {
+        e.preventDefault();
+        const currentTab = tabs.find(t => t.id === activeTabId);
+        if (currentTab && currentTab.panes.length > 0) {
+          const pid = currentTab.panes[0].id;
+          setActivePaneId(pid);
+          setTimeout(() => terminalRefs.current[pid]?.focus(), 100);
+        }
+      },
+      "alt+v": function (e) {
+        e.preventDefault();
+        const idx = groups.indexOf(activeGroup);
+        const nextIdx = (e.shiftKey ? (idx - 1 + groups.length) : (idx + 1)) % groups.length;
+        setActiveGroup(groups[nextIdx]);
+      },
+      "alt+j": function (e) {
+        e.preventDefault();
+        if (e.shiftKey) {
+          (terminalRefs.current[activePaneId] as any)?.scrollPages?.(1);
+        } else {
+          (terminalRefs.current[activePaneId] as any)?.scrollLines?.(scrollLines);
+        }
+      },
+      "alt+k": function (e) {
+        e.preventDefault();
+        if (e.shiftKey) {
+          (terminalRefs.current[activePaneId] as any)?.scrollPages?.(-1);
+        } else {
+          (terminalRefs.current[activePaneId] as any)?.scrollLines?.(-scrollLines);
+        }
+      },
+      "ctrl+shift+f": function (e) {
+        // Open terminal search box only if current tab is a terminal and no dialog is open
+        if (!document.querySelector("body > div.MuiDialog-root")
+          && terminalRefs.current[activePaneId]
+          && 'clear' in terminalRefs.current[activePaneId]) {
+          e.preventDefault();
+          setSearchOpen(true);
+          setTimeout(() => searchInputRef.current?.focus(), 100);
+        }
+      },
+      "ctrl+shift+r": function (e) {
+        e.preventDefault();
+        (terminalRefs.current[activePaneId] as any)?.reconnect?.();
+      },
+      "ctrl+shift+c": function (e) {
+        e.preventDefault();
+        const term = terminalRefs.current[activePaneId] as any;
+        if (term) {
+          const text = term.getSelection?.();
+          if (text) {
+            navigator.clipboard.writeText(text);
+          }
+        }
+      },
+    };
+    shortcutFunctions["alt+shift+j"] = shortcutFunctions["alt+j"];
+    shortcutFunctions["alt+shift+k"] = shortcutFunctions["alt+k"];
+
     const handleKeyDown = (e: KeyboardEvent) => {
       const keycomb = getKeyCombination(e);
       if (shortcutButtons[keycomb]) {
@@ -1407,101 +1525,21 @@ export default function Dashboard({ initialData }: DashboardProps) {
         e.preventDefault();
         return;
       }
-      const k = e.key.toLowerCase();
-      if (e.altKey && (k === 'l' || e.code === 'KeyL')) {
+      if (shortcutFunctions[keycomb]) {
+        shortcutFunctions[keycomb](e);
+        return;
+      }
+      if (e.altKey && e.key >= '0' && e.key <= '9') {
         e.preventDefault();
-        const allPanes = tabs.flatMap(t => t.panes.map(p => ({ tabId: t.id, paneId: p.id })));
-        if (allPanes.length === 0) return;
-        const idx = allPanes.findIndex(p => p.paneId === activePaneId);
-        const nextIdx = (idx + 1) % allPanes.length;
-        const target = allPanes[nextIdx];
-        setActiveTabId(target.tabId);
-        setActivePaneId(target.paneId);
-        (document.activeElement as HTMLElement)?.blur?.();
-        terminalRefs.current[target.paneId]?.focus();
-        setTimeout(() => terminalRefs.current[target.paneId]?.focus(), 100);
-      } else if (e.altKey && (k === 'h' || e.code === 'KeyH')) {
-        e.preventDefault();
-        const allPanes = tabs.flatMap(t => t.panes.map(p => ({ tabId: t.id, paneId: p.id })));
-        if (allPanes.length === 0) return;
-        const idx = allPanes.findIndex(p => p.paneId === activePaneId);
-        const nextIdx = (idx - 1 + allPanes.length) % allPanes.length;
-        const target = allPanes[nextIdx];
-        setActiveTabId(target.tabId);
-        setActivePaneId(target.paneId);
-        (document.activeElement as HTMLElement)?.blur?.();
-        terminalRefs.current[target.paneId]?.focus();
-        setTimeout(() => terminalRefs.current[target.paneId]?.focus(), 100);
-      } else if (e.altKey && (k === 'g' || e.code === 'KeyG')) {
-        e.preventDefault();
-        const currentTab = tabs.find(t => t.id === activeTabId);
-        if (currentTab && currentTab.panes.length > 0) {
-          const pid = currentTab.panes[0].id;
-          setActivePaneId(pid);
-          setTimeout(() => terminalRefs.current[pid]?.focus(), 100);
-        }
-      } else if (e.altKey && (k === 'w' || e.code === 'KeyW')) {
-        e.preventDefault();
-        handleCloseCurrentPaneOrTab();
-      } else if (e.altKey && (k === 'o' || e.code === 'KeyO')) {
-        e.preventDefault();
-        setNewTabDialogInitialViewMode('servers');
-        setNewTabDialogOpen(true);
-      } else if (e.altKey && (k === 'n' || e.code === 'KeyN')) {
-        e.preventDefault();
-        handleSelectHost("local");
-      } else if (e.altKey && (k === 's' || e.code === 'KeyS')) {
-        e.preventDefault();
-        handleOpenScratchpad();
-      } else if (e.altKey && (k === 'v' || e.code === 'KeyV')) {
-        e.preventDefault();
-        const idx = groups.indexOf(activeGroup);
-        const nextIdx = (e.shiftKey ? (idx - 1 + groups.length) : (idx + 1)) % groups.length;
-        setActiveGroup(groups[nextIdx]);
-      } else if (e.altKey && (k === 'e' || e.code === 'KeyE')) {
-        e.preventDefault();
-        setNewTabDialogInitialViewMode('buttons');
-        setNewTabDialogOpen(true);
-      } else if (e.altKey && e.key >= '1' && e.key <= '9') {
-        e.preventDefault();
-        const idx = parseInt(e.key) - 1;
-        if (idx < tabs.length) {
+        let idx = parseInt(e.key);
+        idx = idx === 0 ? tabs.length - 1 : idx - 1;
+        if (tabs[idx]) {
           const target = tabs[idx];
           setActiveTabId(target.id);
           setActivePaneId(target.activePaneId);
           (document.activeElement as HTMLElement)?.blur?.();
           terminalRefs.current[target.activePaneId]?.focus();
           setTimeout(() => terminalRefs.current[target.activePaneId]?.focus(), 100);
-        }
-      } else if (e.altKey && e.key === '0') {
-        e.preventDefault();
-        if (tabs.length > 0) {
-          const last = tabs[tabs.length - 1];
-          setActiveTabId(last.id);
-          setActivePaneId(last.activePaneId);
-          (document.activeElement as HTMLElement)?.blur?.();
-          terminalRefs.current[last.activePaneId]?.focus();
-          setTimeout(() => terminalRefs.current[last.activePaneId]?.focus(), 100);
-        }
-      } else if (e.altKey && (k === 'k' || e.code === 'KeyK')) {
-        e.preventDefault();
-        if (e.shiftKey) {
-          (terminalRefs.current[activePaneId] as any)?.scrollPages?.(-1);
-        } else {
-          (terminalRefs.current[activePaneId] as any)?.scrollLines?.(-scrollLines);
-        }
-      } else if (e.altKey && (k === 'j' || e.code === 'KeyJ')) {
-        e.preventDefault();
-        if (e.shiftKey) {
-          (terminalRefs.current[activePaneId] as any)?.scrollPages?.(1);
-        } else {
-          (terminalRefs.current[activePaneId] as any)?.scrollLines?.(scrollLines);
-        }
-      } else if (e.altKey && (k === 'a' || e.code === 'KeyA')) {
-        e.preventDefault();
-        const term = terminalRefs.current[activePaneId] as any;
-        if (term) {
-          term.selectAll?.();
         }
       } else if (e.altKey && e.shiftKey) {
         const digitMatch = e.code.match(/Digit(\d)/);
@@ -1514,27 +1552,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
             handleButtonClick(filteredButtons[idx]);
           }
         }
-      } else if (e.ctrlKey && e.shiftKey && (k === 'f' || e.code === 'KeyF')) {
-        // Open terminal search box only if current tab is a terminal and no dialog is open
-        if (!document.querySelector("body > div.MuiDialog-root")
-          && terminalRefs.current[activePaneId]
-          && 'clear' in terminalRefs.current[activePaneId]) {
-          e.preventDefault();
-          setSearchOpen(true);
-          setTimeout(() => searchInputRef.current?.focus(), 100);
-        }
-      } else if (e.ctrlKey && e.shiftKey && (k === 'c' || e.code === 'KeyC')) {
-        e.preventDefault();
-        const term = terminalRefs.current[activePaneId] as any;
-        if (term) {
-          const text = term.getSelection?.();
-          if (text) {
-            navigator.clipboard.writeText(text);
-          }
-        }
-      } else if (e.ctrlKey && e.shiftKey && (k === 'r' || e.code === 'KeyR')) {
-        e.preventDefault();
-        (terminalRefs.current[activePaneId] as any)?.reconnect?.();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -1705,7 +1722,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   useEffect(() => {
     if (startupParams && buttonsLoaded && !autoRunExecutedRef.current) {
       autoRunExecutedRef.current = true;
-      if (noautorun !== 1 && !startupParams.get("noautorun")) {
+      if (noautorun !== 1 && startupParams.get("noautorun") !== "1") {
         const scriptsToRun = buttons.filter(b => b.type === 'run_script' && b.autorun === 1);
         scriptsToRun.forEach(btn => {
           try {

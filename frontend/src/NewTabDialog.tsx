@@ -324,7 +324,7 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
 
   useEffect(() => {
     const handleGlobalKeydown = (e: KeyboardEvent) => {
-      if (e.altKey && (e.key === 'o' || e.key === 'e')) {
+      if (e.altKey && (e.key === 'o' || e.key === 'a' || e.key === 'e')) {
         e.preventDefault();
         e.stopPropagation();
         inputRef.current?.focus();
