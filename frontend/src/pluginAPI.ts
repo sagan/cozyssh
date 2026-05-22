@@ -13,11 +13,16 @@ import React from 'react';
 import { getStore, type TerminalRefMap } from './dashboardStore';
 import type { ButtonData } from './dashboardStore';
 import type { AppletData } from './AppletWrapper';
+import type { Host } from './Sidebar';
+import { version as PACKAGE_JSON_VERSION } from '../package.json';
 
 import { transform } from 'sucrase';
 import * as react from "react";
 import * as dompurify from 'dompurify';
 import * as marked from 'marked';
+import { generatePassword } from './common';
+
+(window as any).__CS_VERSION__ = PACKAGE_JSON_VERSION;
 
 // Expose those modules to custom scripts
 const exposeModules = {
@@ -412,6 +417,138 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     // We leave it as-is in Dashboard rather than fighting React here.
   };
 
+  // ── Button / Host CRUD API ────────────────────────────────────────────────
+
+  w.csUpdateButton = async (btn: ButtonData): Promise<string> => {
+    const { buttons } = getStore();
+    const targetId = btn.id || generatePassword(12);
+    const exists = btn.id ? buttons.some(b => b.id === btn.id) : false;
+
+    const token = localStorage.getItem('cozy_token');
+    const method = exists ? 'PUT' : 'POST';
+    const url = exists ? `/api/buttons/${targetId}` : '/api/buttons';
+
+    const body = {
+      id: targetId,
+      name: btn.name ?? '',
+      type: btn.type ?? 'send_string',
+      payload: btn.payload ?? '',
+      group: btn.group ?? 'Default',
+      autorun: btn.autorun ?? 0,
+      order: btn.order ?? 0,
+      shortcut: btn.shortcut ?? '',
+    };
+
+    const res = await fetch(url, {
+      method,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to update button: ${res.statusText}`);
+    }
+
+    // Refresh buttons in store
+    const refreshRes = await fetch('/api/buttons', {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (refreshRes.ok) {
+      const data = await refreshRes.json();
+      getStore().setButtons(data || []);
+    }
+
+    return targetId;
+  };
+
+  w.csDeleteButton = async (id: string): Promise<void> => {
+    const token = localStorage.getItem('cozy_token');
+    const res = await fetch(`/api/buttons/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to delete button: ${res.statusText}`);
+    }
+
+    // Refresh buttons in store
+    const refreshRes = await fetch('/api/buttons', {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (refreshRes.ok) {
+      const data = await refreshRes.json();
+      getStore().setButtons(data || []);
+    }
+  };
+
+  w.csUpdateHost = async (host: Host): Promise<void> => {
+    const { hosts } = getStore();
+    const exists = hosts.some(h => h.name === host.name && h.source === 'config');
+
+    const token = localStorage.getItem('cozy_token');
+    const method = exists ? 'PUT' : 'POST';
+    const url = exists ? `/api/hosts/${encodeURIComponent(host.name)}` : '/api/hosts';
+
+    const body = {
+      alias: host.name,
+      hostname: host.hostname,
+      user: host.user ?? 'root',
+      port: host.port ? String(host.port) : '22',
+      identity_file: host.identity_file ?? (host as any).identityFile ?? '',
+      proxy_jump: host.proxy_jump ?? (host as any).proxyJump ?? '',
+      remote_command: host.remote_command ?? (host as any).remoteCommand ?? '',
+      tags: host.tags ?? [],
+      comment: host.comment ?? '',
+    };
+
+    const res = await fetch(url, {
+      method,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to update host: ${res.statusText}`);
+    }
+
+    // Refresh hosts in store
+    const refreshRes = await fetch('/api/hosts', {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (refreshRes.ok) {
+      const data = await refreshRes.json();
+      getStore().setHosts(data || []);
+    }
+  };
+
+  w.csDeleteHost = async (alias: string): Promise<void> => {
+    const token = localStorage.getItem('cozy_token');
+    const res = await fetch(`/api/hosts/${encodeURIComponent(alias)}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to delete host: ${res.statusText}`);
+    }
+
+    // Refresh hosts in store
+    const refreshRes = await fetch('/api/hosts', {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (refreshRes.ok) {
+      const data = await refreshRes.json();
+      getStore().setHosts(data || []);
+    }
+  };
+
   // ── Teardown ──────────────────────────────────────────────────────────────
 
   return () => {
@@ -419,7 +556,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
       'csGetVar', 'csSetVar', 'csGetTerminal', 'csGetShellIntegration', 'csGetAll',
       'csSendData', 'csGetTerminalContents', 'csFocus', 'csNotify', 'csFetch', 'csExec',
       'csSetTheme', 'csOpen', 'csAttach', 'csRefresh', 'csOpenApplet', 'csCloseApplet',
-      'csGetApplet',
+      'csGetApplet', 'csUpdateButton', 'csDeleteButton', 'csUpdateHost', 'csDeleteHost',
     ];
     for (const k of keys) delete (window as any)[k];
   };

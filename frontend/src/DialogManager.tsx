@@ -1,10 +1,11 @@
-// import React from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, TextField, Box, Typography, Button, FormControlLabel, Checkbox, Autocomplete, Menu, MenuItem, Alert } from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { Dialog, DialogTitle, DialogContent, DialogActions, TextField, Box, Typography, Button, FormControlLabel, Checkbox, Autocomplete, Menu, MenuItem, Alert, IconButton } from '@mui/material';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import CodeMirror from '@uiw/react-codemirror';
 import { EditorView } from "@codemirror/view";
 import { javascript } from '@codemirror/lang-javascript';
 import NewTabDialog from './NewTabDialog';
-import { getKeyCombination } from './common';
+import { getKeyCombination, buttonDataSchema } from './common';
 import { TERMINAL_FUNCTIONS } from './constants';
 
 import { useDashboardStore } from './dashboardStore';
@@ -63,6 +64,7 @@ export interface DialogManagerProps {
   handleButtonClick: (b: any) => void;
 }
 
+const PluginManagerUrl = "https://raw.githubusercontent.com/sagan/cozyssh-plugins/refs/heads/master/PluginManager.tsx";
 
 export default function DialogManager({
   contextMenu, handleCloseMenu, memoTabId, handleUnpinTab, handlePinTab, handleUnlockTab, handleLockTab,
@@ -75,6 +77,145 @@ export default function DialogManager({
   handleAttach, handleRefresh, handleSelectHost, terminalRefs, toasts, setToasts, setEditingButton, setInitialBtnFormData, setButtonDialogOpen, setInputDialogOpen, activeGroup
 }: DialogManagerProps) {
   const { tabs, activeTabId, setActiveTabId, buttons, setActivePaneId } = useDashboardStore();
+
+  const [titleMenuAnchor, setTitleMenuAnchor] = useState<null | HTMLElement>(null);
+  const [importTip, setImportTip] = useState<{ message: string; severity: 'success' | 'error' | 'warning' | 'info' } | null>(null);
+
+  const titleMenuOpen = Boolean(titleMenuAnchor);
+
+  useEffect(() => {
+    if (!buttonDialogOpen) {
+      setImportTip(null);
+    }
+  }, [buttonDialogOpen]);
+
+  const handleTitleMenuClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setTitleMenuAnchor(event.currentTarget);
+  };
+
+  const handleTitleMenuClose = () => {
+    setTitleMenuAnchor(null);
+  };
+
+  const importFromUrl = async (url: string) => {
+    setImportTip(null);
+
+    try {
+      new URL(url);
+    } catch (e) {
+      setImportTip({
+        message: "Invalid URL format. Please enter a valid URL (e.g., http://example.com/button.json).",
+        severity: "error"
+      });
+      return;
+    }
+
+    try {
+      const response = await (window as any).csFetch(url);
+      if (!response.ok) {
+        setImportTip({
+          message: `Failed to fetch ${url} : Server responded with status ${response.status} (${response.statusText}).`,
+          severity: "error"
+        });
+        return;
+      }
+
+      const text = await response.text();
+      let isJson = false;
+      let data: any = null;
+
+      try {
+        data = JSON.parse(text);
+        if (data && typeof data === 'object' && !Array.isArray(data)) {
+          isJson = true;
+        }
+      } catch (e) {
+        // Not a JSON document, fallback to treating as a script file
+      }
+
+      if (isJson) {
+        const result = buttonDataSchema.safeParse(data);
+        if (!result.success) {
+          const errorMsg = result.error.issues.map((err: any) => `${err.path.join('.') || 'root'}: ${err.message}`).join(', ');
+          setImportTip({
+            message: `Not a valid ButtonData object. Validation errors: ${errorMsg}`,
+            severity: "error"
+          });
+          return;
+        }
+
+        const validatedData = result.data;
+
+        setButtonFormData({
+          name: validatedData.name,
+          type: validatedData.type,
+          payload: validatedData.payload,
+          group: validatedData.group || buttonFormData.group || 'Default',
+          autorun: validatedData.autorun,
+          order: validatedData.order,
+          shortcut: validatedData.shortcut
+        });
+
+        setImportTip({
+          message: "Successfully loaded button data from JSON! Review the fields and click 'Save' to confirm.",
+          severity: "success"
+        });
+      } else {
+        // Treat as a direct script/text file URL
+        let buttonName = '';
+        const jsDocMatch = text.match(/^\s*\/\*\*([\s\S]*?)\*\//);
+        if (jsDocMatch) {
+          const content = jsDocMatch[1];
+          const moduleMatch = content.match(/@module\s+([^\r\n]+)/);
+          if (moduleMatch) {
+            buttonName = moduleMatch[1].trim();
+          }
+        }
+
+        if (!buttonName) {
+          try {
+            const urlObj = new URL(url);
+            const pathParts = urlObj.pathname.split('/');
+            const lastPart = pathParts[pathParts.length - 1] || 'Imported Script';
+            buttonName = lastPart.replace(/\.(ts|tsx|js|jsx|txt)$/i, '') || 'Imported Script';
+          } catch (e) {
+            buttonName = 'Imported Script';
+          }
+        }
+
+        setButtonFormData({
+          name: buttonName,
+          type: 'run_script',
+          payload: text,
+          group: buttonFormData.group || 'Default',
+          autorun: 0,
+          order: buttonFormData.order || 0,
+          shortcut: ''
+        });
+
+        setImportTip({
+          message: "Successfully loaded script file! Review the fields and click 'Save' to confirm.",
+          severity: "success"
+        });
+      }
+
+    } catch (error: any) {
+      setImportTip({
+        message: `Network error or failed to load button data: ${error.message || error}`,
+        severity: "error"
+      });
+    }
+  };
+
+  const handleAddFromUrl = async () => {
+    const url = prompt("Enter URL to load button data from:");
+    if (!url) return;
+    await importFromUrl(url);
+  };
+
+  const handleInstallPluginManager = async () => {
+    await importFromUrl(PluginManagerUrl);
+  };
 
   return (
     <>
@@ -190,8 +331,55 @@ export default function DialogManager({
       </Menu>
 
       <Dialog open={buttonDialogOpen} onClose={handleCloseBtnDialog} fullWidth maxWidth="lg">
-        <DialogTitle>{editingButton ? 'Edit Button ' + editingButton.id : 'Add Button'}</DialogTitle>
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pr: 1.5 }}>
+          <span>{editingButton ? 'Edit Button ' + editingButton.id : 'Add Button'}</span>
+          <IconButton
+            aria-label="more"
+            id="title-menu-button"
+            aria-controls={titleMenuOpen ? 'title-menu' : undefined}
+            aria-expanded={titleMenuOpen ? 'true' : undefined}
+            aria-haspopup="true"
+            onClick={handleTitleMenuClick}
+            size="small"
+          >
+            <MoreVertIcon fontSize="small" />
+          </IconButton>
+        </DialogTitle>
+        <Menu
+          id="title-menu"
+          anchorEl={titleMenuAnchor}
+          open={titleMenuOpen}
+          onClose={handleTitleMenuClose}
+        >
+          <MenuItem
+            onClick={() => {
+              handleTitleMenuClose();
+              handleAddFromUrl();
+            }}
+            disabled={!!editingButton}
+          >
+            Add From URL
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              handleTitleMenuClose();
+              handleInstallPluginManager();
+            }}
+            disabled={!!editingButton}
+          >
+            Add Plugin Manager
+          </MenuItem>
+        </Menu>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+          {importTip && (
+            <Alert
+              severity={importTip.severity}
+              onClose={() => setImportTip(null)}
+              sx={{ mb: 1 }}
+            >
+              {importTip.message}
+            </Alert>
+          )}
           <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
             <TextField fullWidth label="Button Name" size="small" value={buttonFormData.name} onChange={e => setButtonFormData({ ...buttonFormData, name: e.target.value })} />
             <TextField fullWidth label="Button Group" size="small" value={buttonFormData.group} onChange={e => setButtonFormData({ ...buttonFormData, group: e.target.value })} placeholder="Default" />

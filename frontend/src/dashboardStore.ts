@@ -12,6 +12,7 @@ import { create } from 'zustand';
 import type { Host } from './Sidebar';
 import type { TerminalHandle, ShellIntegration } from './Terminal';
 import type { ScratchpadHandle } from './Scratchpad';
+import type { ButtonData } from './common';
 
 // Re-exported so consumers don't need to import from Dashboard.tsx
 export interface PaneData {
@@ -33,17 +34,8 @@ export interface TabData {
   type?: 'terminal' | 'scratchpad';
 }
 
-export interface ButtonData {
-  id: string;
-  name: string;
-  type: string;
-  payload: string;
-  group?: string;
-  autorun?: number;
-  order?: number;
-  /** shortcut key combo, e.g. "ctrl+shift+m", modifiers in ctrl,alt,shift,meta order */
-  shortcut?: string;
-}
+export type { ButtonData };
+
 
 export type TerminalRefMap = Record<string, TerminalHandle | ScratchpadHandle | null>;
 

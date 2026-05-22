@@ -24,6 +24,10 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
     - [`csExec(cmdline: string): Promise<{ error: any, stdout: string, stderr: string }>`](#csexeccmdline-string-promise-error-any-stdout-string-stderr-string-)
     - [`csRefresh(): Promise<void>`](#csrefresh-promisevoid)
     - [`csSetTheme(options: any, ...args: any[]): void`](#cssetthemeoptions-any-args-any-void)
+    - [`csUpdateButton(btn: ButtonData): Promise<string>`](#csupdatebuttonbtn-buttondata-promisestring)
+    - [`csDeleteButton(id: string): Promise<void>`](#csdeletebuttonid-string-promisevoid)
+    - [`csUpdateHost(host: Host): Promise<void>`](#csupdatehosthost-host-promisevoid)
+    - [`csDeleteHost(alias: string): Promise<void>`](#csdeletehostalias-string-promisevoid)
   - [Client-side Events](#client-side-events)
     - [`cs:terminal-change`](#csterminal-change)
     - [`cs:terminal-connected`](#csterminal-connected)
@@ -78,8 +82,9 @@ You can also import any external module, for example from a CDN url.
 
 CozySSH sets some global variables in the browser's window object.
 
-- `window.__CS_AUTORUN_DONE__` : `1` if all autorun scripts have been executed, unset (undefined) otherwise. It can be used to determine if the script is executed via auto-run or via clicking the button.
+- `window.__CS_AUTORUN_DONE__` : `undefined | 0 | 1` - `1` if all autorun scripts have been executed, unset (undefined) or 0 otherwise. It can be used to determine if the script is executed via auto-run or via clicking the button.
 - `window.__CS_MODULECACHE__` : `Record<string, Record<string, any>>` - The module cache of imported scripts. The key is the button internal id.
+- `window.__CS_VERSION__` : `string` - The current frontend version of CozySSH. E.g. `0.1.26`.
 
 Some variables are not set by CozySSH, but rather can be set by script to modify the behavior of CozySSH. The default value of those variables is unset (undefined):
 
@@ -270,6 +275,57 @@ The default theme:
     background: { default: '#ffffff', paper: '#f4f6f8' },
   },
 }
+```
+
+### `csUpdateButton(btn: ButtonData): Promise<string>`
+
+Adds or updates a button in the configuration (depending on if `btn.id` is set), and returns the added / edited button's ID. If `btn.id` is not provided, CozySSH will automatically generate a unique 12-character ID for you.
+
+Sample usage:
+```typescript
+const btnId = await csUpdateButton({
+  name: "Say Hello",
+  type: "send_string",
+  payload: "echo 'Hello World!'\n",
+  group: "Default"
+});
+csNotify(`Button created with ID: ${btnId}`);
+```
+
+### `csDeleteButton(id: string): Promise<void>`
+
+Deletes a button from the configuration with the matching `id`.
+
+Sample usage:
+```typescript
+await csDeleteButton("btn-12345");
+csNotify("Button deleted");
+```
+
+### `csUpdateHost(host: Host): Promise<void>`
+
+Adds or updates a host configuration. If the host's `name` already exists in the configured hosts, it will be updated; otherwise, a new host block will be appended to your SSH config.
+
+Sample usage:
+```typescript
+await csUpdateHost({
+  name: "staging-server",
+  hostname: "192.168.1.50",
+  user: "ubuntu",
+  port: "22",
+  tags: ["staging", "web"]
+});
+csNotify("Host configuration updated");
+```
+
+### `csDeleteHost(alias: string): Promise<void>`
+
+Deletes a host configuration with the matching `alias` name from your SSH config.
+
+Sample usage:
+```typescript
+await csDeleteHost("staging-server");
+csNotify("Host deleted");
 ```
 
 ---
