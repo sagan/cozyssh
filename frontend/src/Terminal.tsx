@@ -503,7 +503,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
       if (terminalKeyShortcuts.has(kcomb)) {
         return true;
       }
-      const passthrough = (window as any).__CS_PASSTHROUGH_SHORTCUTS;
+      const passthrough = (window as any).__CS_PASSTHROUGH_SHORTCUTS__;
       if (passthrough && (passthrough.has ? passthrough.has(kcomb) : passthrough.includes?.(kcomb))) {
         return true;
       }

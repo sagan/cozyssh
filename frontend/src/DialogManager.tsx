@@ -190,7 +190,7 @@ export default function DialogManager({
       </Menu>
 
       <Dialog open={buttonDialogOpen} onClose={handleCloseBtnDialog} fullWidth maxWidth="lg">
-        <DialogTitle>{editingButton ? 'Edit Button' : 'Add Button'}</DialogTitle>
+        <DialogTitle>{editingButton ? 'Edit Button ' + editingButton.id : 'Add Button'}</DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
           <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
             <TextField fullWidth label="Button Name" size="small" value={buttonFormData.name} onChange={e => setButtonFormData({ ...buttonFormData, name: e.target.value })} />

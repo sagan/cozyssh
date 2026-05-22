@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from "react-router";
-import { Box, CssBaseline, createTheme, ThemeProvider, IconButton, Typography, useMediaQuery, useTheme, Drawer } from '@mui/material';
+import { Box, CssBaseline, createTheme, ThemeProvider, IconButton, Typography, useMediaQuery, useTheme, Drawer, Dialog, DialogTitle, DialogContent } from '@mui/material';
 import Sidebar from './Sidebar';
 import type { TerminalHandle } from './Terminal';
 import type { ScratchpadHandle } from './Scratchpad';
 import CloseIcon from '@mui/icons-material/Close';
+import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { useLocalStorage } from './useLocalStorage';
 import { DEFAULT_SCROLL_LINES, MISC_FUNCTIONS } from './constants';
 import { useDashboardStore, getStore } from './dashboardStore';
@@ -88,8 +90,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [localVars, setLocalVars] = useLocalStorage<Record<string, string | undefined>>("cozy_localvars", {});
   useEffect(() => { useDashboardStore.getState().setLocalVars(localVars); }, [localVars]);
 
-  const autoRunExecutedRef = useRef(false);
-  const scriptInvokeContextRef = useRef<{ isAutoRun: boolean } | null>(null);
   // sendScope needs to be readable from stable callbacks
   const sendScopeRef = useRef<0 | 1 | 2>(0);
   useEffect(() => { sendScopeRef.current = sendScope; }, [sendScope]);
@@ -264,7 +264,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
       setApplets,
       setMobileAppletsOpen,
       isMobile,
-      scriptInvokeContextRef,
       maxZIndexRef,
       setLocalVars,
       getTerminalRefs: () => terminalRefs.current,
@@ -853,7 +852,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setContextMenu(null);
   };
 
-  const handleButtonClick = async (btn: ButtonData, isAutoRun = false) => {
+  const handleButtonClick = async (btn: ButtonData) => {
     window.navigator.vibrate?.(VIBRATE_PATTERN);
     switch (btn.type) {
       case 'send_string':
@@ -1023,7 +1022,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         break;
 
       case 'run_script':
-        runScript(btn, isAutoRun, scriptInvokeContextRef, csNotify, () => terminalRefs.current);
+        await runScript(btn, csNotify, () => terminalRefs.current);
         break;
 
       default:
@@ -1066,19 +1065,21 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const noautorun = getIntVar(vars, localVars, "cs_noautorun");
 
   useEffect(() => {
-    if (startupParams && buttonsLoaded && !autoRunExecutedRef.current) {
-      autoRunExecutedRef.current = true;
-      if (noautorun !== 1 && startupParams.get("noautorun") !== "1") {
-        const scriptsToRun = buttons.filter(b => b.type === 'run_script' && b.autorun === 1);
-        scriptsToRun.forEach(btn => {
-          try {
-            handleButtonClick(btn, true);
-          } catch (e) {
-            console.error(`Autorun script ${btn.name} error:`, e);
+    if ((window as any).__CS_AUTORUN_DONE__ === undefined && buttonsLoaded) {
+      (window as any).__CS_AUTORUN_DONE__ = 0;
+      (async () => {
+        if (noautorun !== 1 && startupParams.get("noautorun") !== "1") {
+          const scriptsToRun = buttons.filter(b => b.type === 'run_script' && b.autorun === 1);
+          for (const btn of scriptsToRun) {
+            try {
+              await handleButtonClick(btn);
+            } catch (e) {
+              console.error(`Autorun script ${btn.name} error:`, e);
+            }
           }
-        });
-      }
-      (window as any).__CS_AUTORUN_DONE = 1;
+        }
+        (window as any).__CS_AUTORUN_DONE__ = 1;
+      })();
     }
   }, [startupParams, buttonsLoaded, buttons, noautorun]);
 
@@ -1247,6 +1248,38 @@ export default function Dashboard({ initialData }: DashboardProps) {
           onSwitchPosition={(pos) => setApplets(prev => prev.map(a => a.name === applet.name ? { ...a, position: pos } : a))}
           onFocus={() => setApplets(prev => prev.map(a => a.name === applet.name ? { ...a, zIndex: maxZIndexRef.current++ } : a))}
         />
+      ))}
+
+      {applets.filter(a => a.position === 'dialog').map((applet) => (
+        <Dialog
+          key={applet.name}
+          open
+          onClose={() => setApplets(prev => prev.filter(a => a.name !== applet.name))}
+          fullWidth
+          maxWidth={false}
+          slotProps={{ paper: { sx: { width: applet.width ?? 600, maxWidth: '95vw', height: applet.height ?? undefined } } }}
+        >
+          <DialogTitle sx={{ display: 'flex', alignItems: 'center', p: 1, pl: 2, borderBottom: 1, borderColor: 'divider' }}>
+            <Typography variant="subtitle1" sx={{ flexGrow: 1, fontWeight: 'bold' }}>{applet.name}</Typography>
+            <IconButton size="small" title="Move to sidebar" onClick={() => setApplets(prev => prev.map(a => a.name === applet.name ? { ...a, position: 'sidebar' } : a))} sx={{ mr: 0.5 }}>
+              <ViewSidebarIcon fontSize="small" />
+            </IconButton>
+            <IconButton size="small" title="Move to widget" onClick={() => setApplets(prev => prev.map(a => a.name === applet.name ? { ...a, position: 'widget', zIndex: maxZIndexRef.current++ } : a))} sx={{ mr: 0.5 }}>
+              <OpenInNewIcon fontSize="small" />
+            </IconButton>
+            <IconButton size="small" onClick={() => setApplets(prev => prev.filter(a => a.name !== applet.name))}>
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </DialogTitle>
+          <DialogContent sx={{ p: 0, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
+            <AppletWrapper
+              applet={applet}
+              index={0}
+              onClose={() => setApplets(prev => prev.filter(a => a.name !== applet.name))}
+              onSwitchPosition={(pos) => setApplets(prev => prev.map(a => a.name === applet.name ? { ...a, position: pos } : a))}
+            />
+          </DialogContent>
+        </Dialog>
       ))}
 
       <DialogManager

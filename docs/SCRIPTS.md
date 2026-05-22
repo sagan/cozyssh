@@ -5,8 +5,9 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
 - [CozySSH Custom Scripting API](#cozyssh-custom-scripting-api)
   - [General Usage](#general-usage)
   - [Available modules](#available-modules)
+  - [Available global variables](#available-global-variables)
   - [Available global functions](#available-global-functions)
-    - [`csOpenApplet(name: string, node: Node | React.ComponentType, options?: { position?: 'widget' | 'sidebar', width?: number, height?: number }): void`](#csopenappletname-string-node-node--reactcomponenttype-options--position-widget--sidebar-width-number-height-number--void)
+    - [`csOpenApplet(name: string, node: Node | React.ComponentType, options?: { position?: 'widget' | 'sidebar' | 'dialog', width?: number, height?: number }): void`](#csopenappletname-string-node-node--reactcomponenttype-options--position-widget--sidebar--dialog-width-number-height-number--void)
     - [`csCloseApplet(name: string): void`](#cscloseappletname-string-void)
     - [`csGetApplet(name?: string): AppletData | AppletData[]`](#csgetappletname-string-appletdata--appletdata)
     - [`csGetVar(name: string): string | undefined`, `csGetVar(): Record<string, string>`](#csgetvarname-string-string--undefined-csgetvar-recordstring-string)
@@ -51,7 +52,11 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
 - **Execution**: Scripts are executed as ES modules via dynamic `import()`.
 - **Top-level `await`**: Fully supported. You can use `await` directly at the top level of your scripts without wrapping them in an `async` function or IIFE.
 - **Awaiting Completion**: The script engine automatically waits for all top-level `await` promises to resolve before finishing execution.
-- **Auto-focus**: By default, scripts will re-focus the terminal after execution. If you don't want to focus the terminal, you can add `export const noFocus = true;` at the top level of your script.
+- **Auto-focus**: By default, scripts will re-focus the terminal after execution.
+- **Module Exports**: Optionally, the script may export some fields to control the behavior of the scripting engine:
+  - `export function run() {}` : the entrypoint of the script. if exported, the `run` function will be executed after the script is imported. It will always be executed each time the button is clicked, even if the script is cached (see `cache` below).
+  - `export const cache = true;` : if exported and `true`, the script will be cached when it's first imported. You may want to also export `run` in this case otherwise clicking the button will have no effect after the first time it's imported. The cache is cleared when the browser page is reloaded.
+  - `export const noFocus = true;` : if exported and `true`, the script will not focus the terminal after execution.
 
 ## Available modules
 
@@ -69,16 +74,28 @@ Available modules that's bundled in CozySSH frontend:
 
 You can also import any external module, for example from a CDN url.
 
+## Available global variables
+
+CozySSH sets some global variables in the browser's window object.
+
+- `window.__CS_AUTORUN_DONE__` : `1` if all autorun scripts have been executed, unset (undefined) otherwise. It can be used to determine if the script is executed via auto-run or via clicking the button.
+- `window.__CS_MODULECACHE__` : `Record<string, Record<string, any>>` - The module cache of imported scripts. The key is the button internal id.
+
+Some variables are not set by CozySSH, but rather can be set by script to modify the behavior of CozySSH. The default value of those variables is unset (undefined):
+
+- `window.__CS_PASSTHROUGH_SHORTCUTS__` : `Set<string> | string[]` - The (additional) list of key combinations that should be passed through to the terminal if terminal has focus. Each element is a key combination string such as `ctrl+shift+m` (all lowercase, modifiers in `ctrl,alt,shift,meta` order). Note that some key combinations (like `ctrl+c`, `ctrl+d`, etc.) are hardcoded to always be passed through to the terminal.
+
+
 ## Available global functions
 
-### `csOpenApplet(name: string, node: Node | React.ComponentType, options?: { position?: 'widget' | 'sidebar', width?: number, height?: number }): void`
+### `csOpenApplet(name: string, node: Node | React.ComponentType, options?: { position?: 'widget' | 'sidebar' | 'dialog', width?: number, height?: number }): void`
 
-Opens a custom UI applet. The applet is essentially a floating widget or a section in the right sidebar.
+Opens a custom UI applet. The applet is essentially a floating widget, a section in the right sidebar, or a MUI Dialog.
 
 - `name`: Unique identifier for the applet. If an applet with the same name exists, it is replaced.
-- `node`: A DOM element (e.g. `document.createElement('div')`) or a React Component.
-- `options.position`: Decides the initial layout position of the applet. Can be `'widget'` (floatable, resizable) or `'sidebar'` (docked in a right sidebar). Defaults to `'widget'`.
-- `options.width`, `options.height`: Initial dimensions for the widget (only applies to `'widget'` position).
+- `node`: A DOM element (e.g. `document.createElement("div")`) or a React Component.
+- `options.position`: Decides the initial layout position of the applet. Can be `widget` (floatable, resizable), `sidebar` (docked in a right sidebar), or `dialog` (opens in a centered MUI Dialog). Defaults to `widget` (on mobile devices it defaults to `sidebar`).
+- `options.width`, `options.height`: Initial dimensions. For `widget` and `dialog` positions, these set the initial width/height of the container, can be integer (in pixels) or CSS size string (e.g. `700`, `50vw`).
 
 ### `csCloseApplet(name: string): void`
 
@@ -434,10 +451,17 @@ const TerminalSizeApplet = () => {
   );
 };
 
-// Open as a small floating widget
-csOpenApplet("Terminal Size", TerminalSizeApplet, { 
-  position: "widget", 
-});
+const name = "Terminal Size";
+
+export function run() {
+  if (csGetApplet(name)) {
+    csCloseApplet(name);
+  } else {
+    csOpenApplet(name, TerminalSizeApplet, { position: "widget" });
+  }
+}
+
+export const cache = true;
 ```
 
 ### Variable Manager
@@ -599,11 +623,17 @@ const SettingsApplet = () => {
   );
 };
 
-if( csGetApplet("Settings") ) {
-  csCloseApplet("Settings")
-} else {
-  csOpenApplet("Settings", SettingsApplet, { position: "sidebar" });
+const name = "Variable Manager";
+
+export function run() {
+  if (csGetApplet(name)) {
+    csCloseApplet(name)
+  } else {
+    csOpenApplet(name, SettingsApplet, { position: "sidebar" });
+  }
 }
+
+export const cache = true;
 ```
 
 ### AI Assistant
@@ -885,11 +915,15 @@ const AIAssistant = () => {
   );
 };
 
-if( csGetApplet(AI_ASSISTANT_NAME) ) {
-  csCloseApplet(AI_ASSISTANT_NAME);
-} else {
-  csOpenApplet(AI_ASSISTANT_NAME, AIAssistant, { position: 'sidebar' });
+export function run() {
+  if( csGetApplet(AI_ASSISTANT_NAME) ) {
+    csCloseApplet(AI_ASSISTANT_NAME);
+  } else {
+    csOpenApplet(AI_ASSISTANT_NAME, AIAssistant, { position: 'sidebar' });
+  }
 }
+
+export const cache = true;
 ```
 
 ### Cmd History Sidebar Applet
@@ -1043,11 +1077,15 @@ const CmdHistoryApplet = () => {
   );
 };
 
-// Toggle behavior: Close if already open, otherwise open in sidebar.
 const APPLET_ID = "CmdHistory";
-if (window.csGetApplet?.(APPLET_ID)) {
-  window.csCloseApplet?.(APPLET_ID);
-} else {
-  window.csOpenApplet?.(APPLET_ID, CmdHistoryApplet, { position: 'sidebar' });
+
+export function run() {
+  if (csGetApplet(APPLET_ID)) {
+    csCloseApplet(APPLET_ID);
+  } else {
+    csOpenApplet(APPLET_ID, CmdHistoryApplet, { position: 'sidebar' });
+  }
 }
+
+export const cache = true;
 ```

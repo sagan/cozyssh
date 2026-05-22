@@ -10,7 +10,7 @@
  */
 
 import React from 'react';
-import { getStore } from './dashboardStore';
+import { getStore, type TerminalRefMap } from './dashboardStore';
 import type { ButtonData } from './dashboardStore';
 import type { AppletData } from './AppletWrapper';
 
@@ -68,44 +68,72 @@ const virtualModulesImportRegex = (() => {
   );
 })();
 
+/**
+ * id => moduleObj
+ */
+const moduleCache: Record<string, Record<string, any>> = {};
+
+(window as any).__CS_MODULECACHE__ = moduleCache;
+
 export async function runScript(
   btn: ButtonData,
-  isAutoRun: boolean,
-  scriptInvokeContextRef: React.MutableRefObject<{ isAutoRun: boolean } | null>,
   notify: (msg: string, severity?: 'success' | 'info' | 'warning' | 'error') => void,
-  getTerminalRefs: () => import('./dashboardStore').TerminalRefMap
+  getTerminalRefs: () => TerminalRefMap
 ) {
-  scriptInvokeContextRef.current = { isAutoRun };
-  let scriptCode = btn.payload;
-  // Do a single replace pass
-  scriptCode = scriptCode.replace(virtualModulesImportRegex, (match, p1, p2, p3, p4, p5, p6) => {
-    // Determine which capture group caught the module name
-    const matchedModule = p2 || p5;
-    const blobUrl = virtualModules[matchedModule];
-
-    // Reconstruct the string using the mapped Blob URL
-    if (p1 && p3) return `${p1}${blobUrl}${p3}`; // Standard & Side-effect import
-    if (p4 && p6) return `${p4}${blobUrl}${p6}`; // Dynamic import
-
-    return match; // Fallback
-  });
-  scriptCode = transform(scriptCode, { transforms: ['typescript', 'jsx'] }).code;
-
-  const blob = new Blob([scriptCode], { type: 'application/javascript' });
-  // Create a temporary URL pointing to that Blob
-  const url = URL.createObjectURL(blob);
   let moduleObj: any = null;
-  try {
-    moduleObj = await import(url);
-  } catch (e) {
-    console.error('Script Error:', e);
-    notify('Script Error: ' + e, 'error');
-  } finally {
-    // Always clean up the URL to prevent memory leaks
-    URL.revokeObjectURL(url);
-    scriptInvokeContextRef.current = null;
+  let cached = false;
+
+  if (!moduleCache[btn.id]) {
+    let scriptCode = btn.payload;
+    // Do a single replace pass
+    scriptCode = scriptCode.replace(virtualModulesImportRegex, (match, p1, p2, p3, p4, p5, p6) => {
+      // Determine which capture group caught the module name
+      const matchedModule = p2 || p5;
+      const blobUrl = virtualModules[matchedModule];
+
+      // Reconstruct the string using the mapped Blob URL
+      if (p1 && p3) return `${p1}${blobUrl}${p3}`; // Standard & Side-effect import
+      if (p4 && p6) return `${p4}${blobUrl}${p6}`; // Dynamic import
+
+      return match; // Fallback
+    });
+    scriptCode = transform(scriptCode, { transforms: ['typescript', 'jsx'] }).code;
+
+    const blob = new Blob([scriptCode], { type: 'application/javascript' });
+    // Create a temporary URL pointing to that Blob
+    const url = URL.createObjectURL(blob);
+
+    try {
+      moduleObj = await import(url);
+    } catch (e) {
+      console.error(`Script ${btn.name} Import Error:`, e);
+      notify(`Script ${btn.name} Import Error: ${e}`, 'error');
+      return;
+    } finally {
+      // Always clean up the URL to prevent memory leaks
+      URL.revokeObjectURL(url);
+    }
+    if (moduleObj.cache) {
+      moduleCache[btn.id] = moduleObj;
+    }
+  } else {
+    moduleObj = moduleCache[btn.id];
+    cached = true;
   }
-  if (!moduleObj?.noFocus) {
+
+  if (typeof moduleObj.run === 'function') {
+    try {
+      await moduleObj.run();
+    } catch (e) {
+      console.error(`Script ${btn.name} run() Error:`, e);
+      notify(`Script ${btn.name} run() Error: ${e}`, 'error');
+    }
+  } else if (cached) {
+    notify(`Script ${btn.name} is already imported & cached, and has no run function. Reload the page to clear the cache`, 'info');
+    return;
+  }
+
+  if (!moduleObj.noFocus) {
     const refs = getTerminalRefs();
     const activePaneId = getStore().activePaneId;
     refs[activePaneId]?.focus();
@@ -133,8 +161,6 @@ export interface PluginAPICallbacks {
   setMobileAppletsOpen: React.Dispatch<React.SetStateAction<boolean>>;
   /** Whether we're in mobile layout */
   isMobile: boolean;
-  /** Ref tracking whether the current script was invoked by autorun */
-  scriptInvokeContextRef: React.MutableRefObject<{ isAutoRun: boolean } | null>;
   /** Ref for the next z-index to assign to a widget applet */
   maxZIndexRef: React.MutableRefObject<number>;
   /** Update localVars in the store (and sync to localStorage via Dashboard) */
@@ -340,10 +366,17 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
   w.csOpenApplet = (
     name: string,
     node: any,
-    options: { position?: 'widget' | 'sidebar'; width?: number; height?: number } = {}
+    options: { position?: 'widget' | 'sidebar' | 'dialog'; width?: number; height?: number } = {}
   ) => {
-    const parsedPos = options.position === 'sidebar' || cb.isMobile ? 'sidebar' : 'widget';
-    if (cb.isMobile && parsedPos === 'sidebar' && !cb.scriptInvokeContextRef.current?.isAutoRun) {
+    let parsedPos: 'widget' | 'sidebar' | 'dialog';
+    if (options.position === 'dialog') {
+      parsedPos = 'dialog';
+    } else if (options.position === 'sidebar' || cb.isMobile) {
+      parsedPos = 'sidebar';
+    } else {
+      parsedPos = 'widget';
+    }
+    if (cb.isMobile && parsedPos === 'sidebar' && (window as any).__CS_AUTORUN_DONE__) {
       cb.setMobileAppletsOpen(true);
     }
     cb.setApplets((prev) => {

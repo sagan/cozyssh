@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Box, IconButton, Typography } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 
@@ -10,14 +10,14 @@ interface AppletWrapperProps {
   applet: AppletData;
   index: number;
   onClose: () => void;
-  onSwitchPosition: (pos: 'widget' | 'sidebar') => void;
+  onSwitchPosition: (pos: 'widget' | 'sidebar' | 'dialog') => void;
   onFocus?: () => void;
 }
 
 export interface AppletData {
   name: string;
   node: any;
-  position: 'widget' | 'sidebar';
+  position: 'widget' | 'sidebar' | 'dialog';
   width?: number;
   height?: number;
   zIndex?: number;
@@ -165,6 +165,18 @@ export default function AppletWrapper({
     );
   }
 
+  if (applet.position === 'dialog') {
+    const isReactNode = !(applet.node instanceof Node);
+    return (
+      <Box sx={{ flexGrow: 1, overflow: 'auto', p: 1, position: 'relative', minHeight: 150 }}>
+        {isReactNode
+          ? (React.isValidElement(applet.node) ? applet.node : React.createElement(applet.node as React.ComponentType, {}))
+          : <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+        }
+      </Box>
+    );
+  }
+
   const isReactComponent = !(applet.node instanceof Node);
 
   return (
@@ -202,8 +214,11 @@ export default function AppletWrapper({
         }}
       >
         <Typography variant="subtitle2" sx={{ flexGrow: 1, fontWeight: 'bold' }}>{applet.name}</Typography>
-        <IconButton size="small" color="inherit" onClick={() => onSwitchPosition('sidebar')}>
+        <IconButton size="small" color="inherit" title="Move to sidebar" onClick={() => onSwitchPosition('sidebar')}>
           <ViewSidebarIcon fontSize="small" />
+        </IconButton>
+        <IconButton size="small" color="inherit" title="Move to dialog" onClick={() => onSwitchPosition('dialog')}>
+          <OpenInNewIcon fontSize="small" />
         </IconButton>
         <IconButton size="small" color="inherit" onClick={onClose} sx={{ ml: 0.5 }}>
           <CloseIcon fontSize="small" />
