@@ -52,6 +52,8 @@ export interface TerminalHandle {
   clearSearchActiveDecoration: () => void;
   getLastCommandOutput: () => void;
   getXterm: () => Terminal | null;
+  /** Set the inputMode on the hidden xterm textarea (e.g. 'none' to suppress system keyboard) */
+  setInputMode: (mode: string) => void;
 }
 
 interface TerminalProps {
@@ -60,6 +62,8 @@ interface TerminalProps {
   isActive?: boolean;
   isCtrlActive?: boolean;
   onCtrlDone?: () => void;
+  isAltActive?: boolean;
+  onAltDone?: () => void;
   onStateChange?: (state: string) => void;
   onTabStateChange?: (state: { isPinned: boolean, isLocked: boolean }) => void;
   onStolen?: () => void;
@@ -115,13 +119,14 @@ const terminalKeyShortcuts = new Set([
   "alt+.",   // Insert last argument of previous command
 ]);
 
-const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, sessionId, isActive, isCtrlActive, onCtrlDone, onStateChange, onTabStateChange, onStolen, onManualReconnect, onCwdChange, onShellIntegrationChange, onDataReceived, cloneFrom, isTouch, vars, localVars }, ref) => {
+const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, sessionId, isActive, isCtrlActive, onCtrlDone, isAltActive, onAltDone, onStateChange, onTabStateChange, onStolen, onManualReconnect, onCwdChange, onShellIntegrationChange, onDataReceived, cloneFrom, isTouch, vars, localVars }, ref) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const searchAddonRef = useRef<SearchAddon | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const ctrlRef = useRef(isCtrlActive);
+  const altRef = useRef(isAltActive);
   const isActiveRef = useRef(isActive);
   const reconnectFuncRef = useRef<(() => void) | null>(null);
   const forceReconnectRef = useRef(false);
@@ -163,6 +168,10 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
   useEffect(() => {
     ctrlRef.current = isCtrlActive;
   }, [isCtrlActive]);
+
+  useEffect(() => {
+    altRef.current = isAltActive;
+  }, [isAltActive]);
 
   useImperativeHandle(ref, () => ({
     sendData: (data: string) => {
@@ -251,6 +260,10 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
       return textToCopy;
     },
     getXterm: () => xtermRef.current,
+    setInputMode: (mode: string) => {
+      const textarea = xtermRef.current?.textarea;
+      if (textarea) (textarea as HTMLTextAreaElement).inputMode = mode;
+    },
   }));
 
   useEffect(() => {
@@ -655,6 +668,8 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
           // Mobile IMEs often send composition artifacts. We extract the first valid char.
           // This regex matches a-z, A-Z, and the symbols @, [, \, ], ^, _, ?
           const match = data.match(/[a-zA-Z@[\\\]^_?]/);
+          let sent = false;
+          let dataToSend = data;
           if (match) {
             const code = match[0].toUpperCase().charCodeAt(0);
             let ctrlCode = String.fromCharCode(code - 64);
@@ -662,18 +677,33 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
             if (match[0] === '?') {
               ctrlCode = '\x7F';
             }
-            ws.send(new TextEncoder().encode(ctrlCode));
-            onCtrlDone?.();
-            return;
+            dataToSend = ctrlCode;
+            sent = true;
           } else if (data.includes(' ')) {
             // Handle Ctrl + Space
-            ws.send(new TextEncoder().encode('\x00'));
+            dataToSend = '\x00';
+            sent = true;
+          }
+          if (sent) {
+            if (altRef.current) {
+              ws.send(new TextEncoder().encode('\x1b' + dataToSend));
+              onAltDone?.();
+            } else {
+              ws.send(new TextEncoder().encode(dataToSend));
+            }
             onCtrlDone?.();
             return;
           }
           // Optional: Release Ctrl lock if an unmappable key was pressed to avoid getting stuck
           onCtrlDone?.();
         }
+        
+        if (altRef.current && data) {
+          ws.send(new TextEncoder().encode('\x1b' + data));
+          onAltDone?.();
+          return;
+        }
+        
         ws.send(new TextEncoder().encode(data));
       }
     });

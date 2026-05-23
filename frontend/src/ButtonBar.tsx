@@ -42,79 +42,75 @@ export default function ButtonBar({
   setBtnMenuAnchor, setLastMenuBtn, onNewButtonClick
 }: ButtonBarProps) {
   return (
-    <>
-
-          <Box sx={{ borderTop: 1, borderColor: 'divider', bgcolor: '#f8f9fa', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-            <Box sx={{ px: 1, display: 'flex', alignItems: 'center', borderRight: 1, borderColor: 'divider', flexShrink: 0 }}>
-              <TextField
-                select
-                size="small"
-                value={activeGroup}
-                onChange={(e) => setActiveGroup(e.target.value)}
-                slotProps={{ select: { native: true } }}
-                sx={{
-                  minWidth: 80,
-                  '& .MuiInputBase-root': { fontSize: '0.8rem', height: 26 },
-                  '& select': { py: 0, pr: '18px !important' }
-                }}
-              >
-                {groups.map(g => (
-                  <option key={g} value={g}>{g}</option>
-                ))}
-              </TextField>
-            </Box>
-            <Tabs
-              key={`tabs-${activeGroup}-${filteredButtons.length}`}
-              value={false}
-              variant="scrollable"
-              scrollButtons="auto"
-              allowScrollButtonsMobile
-              sx={{
-                flexGrow: 1,
-                minHeight: 40,
-                minWidth: 0,
-                '& .MuiTabs-flexContainer': { gap: 1, px: 2, alignItems: 'center' },
-                '& .MuiTabs-indicator': { display: 'none' }
-              }}
-            >
-              {filteredButtons.map(btn => (
-                <Tab
-                  key={btn.id}
-                  label={btn.name}
-                  title={`${btn.type} (${btn.order || 0})${btn.autorun ? " (autorun)" : ""}${btn.shortcut ? " (" + btn.shortcut.toUpperCase() + ")" : ""}${btn.type != "run_script" ? ": " + btn.payload : ""}`}
-                  component="div"
-                  onClick={() => handleButtonClick(btn)}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    setBtnMenuAnchor({ anchor: e.currentTarget, btn });
-                    setLastMenuBtn(btn);
-                  }}
-                  sx={{
-                    minHeight: 28, minWidth: 'auto', p: '2px 12px',
-                    textTransform: 'none', fontSize: '0.8rem', borderRadius: 1.5,
-                    border: buttonStyleBorder[btn.type] || buttonStyleBorder[""],
-                    borderColor: buttonStyleBorderColor[btn.type] || buttonStyleBorderColor[""],
-                    bgcolor: 'background.paper',
-                    color: 'text.primary', margin: '6px 4px', cursor: 'pointer',
-                    '&:hover': {
-                      bgcolor: buttonStyleBgColorHover[btn.type] || buttonStyleBgColorHover[""],
-                      color: 'white'
-                    }
-                  }}
-                />
-              ))}
-            </Tabs>
-            <Box sx={{ flexShrink: 0, px: 1, borderLeft: 1, borderColor: 'divider' }}>
-              <IconButton
-                size="small" title="New Button"
-                onClick={onNewButtonClick}
-                sx={{ p: 0.5 }}
-              >
-                <AddIcon fontSize="small" />
-              </IconButton>
-            </Box>
-          </Box>
-
-    </>
+    <Box id="button-bar" sx={{ borderTop: 1, borderColor: 'divider', bgcolor: '#f8f9fa', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+      <Box sx={{ px: 1, display: 'flex', alignItems: 'center', borderRight: 1, borderColor: 'divider', flexShrink: 0 }}>
+        <TextField
+          select
+          size="small"
+          value={activeGroup}
+          onChange={(e) => setActiveGroup(e.target.value)}
+          slotProps={{ select: { native: true } }}
+          sx={{
+            minWidth: 80,
+            '& .MuiInputBase-root': { fontSize: '0.8rem', height: 26 },
+            '& select': { py: 0, pr: '18px !important' }
+          }}
+        >
+          {groups.map(g => (
+            <option key={g} value={g}>{g}</option>
+          ))}
+        </TextField>
+      </Box>
+      <Tabs
+        key={`tabs-${activeGroup}-${filteredButtons.length}`}
+        value={false}
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
+        sx={{
+          flexGrow: 1,
+          minHeight: 40,
+          minWidth: 0,
+          '& .MuiTabs-flexContainer': { gap: 1, px: 2, alignItems: 'center' },
+          '& .MuiTabs-indicator': { display: 'none' }
+        }}
+      >
+        {filteredButtons.map(btn => (
+          <Tab
+            key={btn.id}
+            label={btn.name}
+            title={`${btn.type} (${btn.order || 0})${btn.autorun ? " (autorun)" : ""}${btn.shortcut ? " (" + btn.shortcut.toUpperCase() + ")" : ""}${btn.type != "run_script" ? ": " + btn.payload : ""}`}
+            component="div"
+            onClick={() => handleButtonClick(btn)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setBtnMenuAnchor({ anchor: e.currentTarget, btn });
+              setLastMenuBtn(btn);
+            }}
+            sx={{
+              minHeight: 28, minWidth: 'auto', p: '2px 12px',
+              textTransform: 'none', fontSize: '0.8rem', borderRadius: 1.5,
+              border: buttonStyleBorder[btn.type] || buttonStyleBorder[""],
+              borderColor: buttonStyleBorderColor[btn.type] || buttonStyleBorderColor[""],
+              bgcolor: 'background.paper',
+              color: 'text.primary', margin: '6px 4px', cursor: 'pointer',
+              '&:hover': {
+                bgcolor: buttonStyleBgColorHover[btn.type] || buttonStyleBgColorHover[""],
+                color: 'white'
+              }
+            }}
+          />
+        ))}
+      </Tabs>
+      <Box sx={{ flexShrink: 0, px: 1, borderLeft: 1, borderColor: 'divider' }}>
+        <IconButton
+          size="small" title="New Button"
+          onClick={onNewButtonClick}
+          sx={{ p: 0.5 }}
+        >
+          <AddIcon fontSize="small" />
+        </IconButton>
+      </Box>
+    </Box>
   );
 }

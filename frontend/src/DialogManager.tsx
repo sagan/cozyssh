@@ -5,7 +5,7 @@ import CodeMirror from '@uiw/react-codemirror';
 import { EditorView } from "@codemirror/view";
 import { javascript } from '@codemirror/lang-javascript';
 import NewTabDialog from './NewTabDialog';
-import { getKeyCombination, buttonDataSchema } from './common';
+import { getKeyCombination, buttonDataSchema, generatePassword } from './common';
 import { TERMINAL_FUNCTIONS } from './constants';
 
 import { useDashboardStore } from './dashboardStore';
@@ -146,7 +146,14 @@ export default function DialogManager({
 
         const validatedData = result.data;
 
+        if (validatedData.id && buttons.find((b) => b.id === validatedData.id)) {
+          if (!confirm(`Button with ID "${validatedData.id}" already exists. Overwrite it?`)) {
+            return;
+          }
+        }
+
         setButtonFormData({
+          id: validatedData.id || generatePassword(12),
           name: validatedData.name,
           type: validatedData.type,
           payload: validatedData.payload,
@@ -163,12 +170,23 @@ export default function DialogManager({
       } else {
         // Treat as a direct script/text file URL
         let buttonName = '';
+        let buttonId = '';
         const jsDocMatch = text.match(/^\s*\/\*\*([\s\S]*?)\*\//);
         if (jsDocMatch) {
           const content = jsDocMatch[1];
           const moduleMatch = content.match(/@module\s+([^\r\n]+)/);
           if (moduleMatch) {
             buttonName = moduleMatch[1].trim();
+          }
+          const idMatch = content.match(/@id\s+([^\r\n]+)/);
+          if (idMatch) {
+            buttonId = idMatch[1].trim();
+          }
+        }
+
+        if (buttonId && buttons.find((b) => b.id === buttonId)) {
+          if (!confirm(`Button with ID "${buttonId}" already exists. Overwrite it?`)) {
+            return;
           }
         }
 
@@ -184,6 +202,7 @@ export default function DialogManager({
         }
 
         setButtonFormData({
+          id: buttonId || generatePassword(12),
           name: buttonName,
           type: 'run_script',
           payload: text,

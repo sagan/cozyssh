@@ -50,12 +50,21 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const terminalRefs = useRef<{ [key: string]: TerminalHandle | ScratchpadHandle | null }>({});
   const [viewportHeight, setViewportHeight] = useState('100dvh');
   const [isCtrlActive, setIsCtrlActive] = useState(false);
+  const [isAltActive, setIsAltActive] = useState(false);
   const [scratchpadSyncState, setScratchpadSyncState] = useState<'offline' | 'syncing' | 'synced' | 'dirty'>('offline');
   const [memoTabId, setMemoTabId] = useState<string | null>(null);
   const [unreadTabIds, setUnreadTabIds] = useState<Set<string>>(new Set());
   const [applets, setApplets] = useState<AppletData[]>([]);
   const maxZIndexRef = useRef(10000);
   const swipeStartRef = useRef<{ x: number, y: number, time: number } | null>(null);
+
+  // ── Mobile bar state ─────────────────────────────────────────────────────
+  /** When true, swipe gestures on the terminal send arrow keys instead of switching tabs */
+  const [gestureMode, setGestureMode] = useState(false);
+  /** When true, the extra-keys panel is visible and the system keyboard is suppressed */
+  const [extraKeysOpen, setExtraKeysOpen] = useState(false);
+  /** Height of the on-screen keyboard in px (0 when hidden) */
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const [activeGroup, setActiveGroup] = useState<string>(localStorage.getItem('cozy_active_group') || 'Default');
   const [buttonDialogOpen, setButtonDialogOpen] = useState(false);
@@ -336,32 +345,29 @@ export default function Dashboard({ initialData }: DashboardProps) {
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (!isTouch || !isMobile) return;
+    if (!isTouch || !isMobile || gestureMode) return; // gesture mode uses native listeners
     const touch = e.touches[0];
     swipeStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (!isTouch || !isMobile || !swipeStartRef.current) return;
+    if (!isTouch || !isMobile || gestureMode || !swipeStartRef.current) return;
     const touch = e.changedTouches[0];
     const diffX = touch.clientX - swipeStartRef.current.x;
     const diffY = touch.clientY - swipeStartRef.current.y;
     const diffTime = Date.now() - swipeStartRef.current.time;
-
     swipeStartRef.current = null;
 
     // Thresholds: move at least 100px, mostly horizontal, within 500ms
     if (Math.abs(diffX) > 100 && Math.abs(diffX) > Math.abs(diffY) * 2 && diffTime < 500) {
       const currentIndex = tabs.findIndex(t => t.id === activeTabId);
       if (diffX > 0 && currentIndex > 0) {
-        // Swipe Right -> Previous Tab
         const newTab = tabs[currentIndex - 1];
         window.navigator.vibrate?.(VIBRATE_PATTERN);
         setActiveTabId(newTab.id);
         setActivePaneId(newTab.activePaneId);
         setTimeout(() => terminalRefs.current[newTab.activePaneId]?.focus(), 50);
       } else if (diffX < 0 && currentIndex < tabs.length - 1) {
-        // Swipe Left -> Next Tab
         const newTab = tabs[currentIndex + 1];
         window.navigator.vibrate?.(VIBRATE_PATTERN);
         setActiveTabId(newTab.id);
@@ -377,16 +383,70 @@ export default function Dashboard({ initialData }: DashboardProps) {
     sessionStorage.setItem('cozy_tab_id', tabId.current);
   }, []);
 
+  // 1. Add this ref right above the visualViewport useEffect
+  const extraKeysOpenRef = useRef(extraKeysOpen);
+  useEffect(() => { extraKeysOpenRef.current = extraKeysOpen; }, [extraKeysOpen]);
+
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
     const handleVVResize = () => {
       setViewportHeight(`${vv.height}px`);
+      // ALWAYS calculate from vv.height so the math perfectly cancels out during animation
+      setKeyboardHeight(Math.max(0, window.innerHeight - vv.height));
     };
     vv.addEventListener('resize', handleVVResize);
     handleVVResize();
     return () => vv.removeEventListener('resize', handleVVResize);
   }, []);
+
+  // ── VirtualKeyboard API setup ───────────────────────────────────────────
+  useEffect(() => {
+    const vk = (navigator as any).virtualKeyboard;
+    if (!vk) return;
+    // Opt-in: keyboard overlays content instead of resizing the viewport.
+    // This lets us position our bar precisely at keyboardHeight.
+    vk.overlaysContent = true;
+    const handleGeometryChange = () => {
+      setKeyboardHeight(vk.boundingRect?.height ?? 0);
+    };
+    vk.addEventListener('geometrychange', handleGeometryChange);
+    return () => {
+      vk.removeEventListener('geometrychange', handleGeometryChange);
+      // Restore default behaviour on unmount
+      vk.overlaysContent = false;
+    };
+  }, []);
+
+  // ── Keep inputmode in sync with extraKeysOpen across tab/pane changes ────
+  // When the extra-keys panel is open, every terminal that becomes active must
+  // have inputmode="none" so the system keyboard stays suppressed.  We also
+  // call vk.hide() explicitly for the VirtualKeyboard API path.
+  useEffect(() => {
+    const applyMode = () => {
+      if (extraKeysOpen) {
+        // Only suppress the active terminal
+        const term = terminalRefs.current[activePaneId] as any;
+        const textarea = term?.getXterm?.()?.textarea as HTMLTextAreaElement | undefined;
+        if (textarea) textarea.inputMode = 'none';
+        // Belt-and-suspenders: force-hide via VK API
+        (navigator as any).virtualKeyboard?.hide?.();
+      } else {
+        // Restore all terminals so the keyboard can appear naturally again
+        for (const term of Object.values(terminalRefs.current)) {
+          const textarea = (term as any)?.getXterm?.()?.textarea as HTMLTextAreaElement | undefined;
+          if (textarea && textarea.inputMode === 'none') textarea.inputMode = '';
+        }
+      }
+    };
+
+    applyMode();
+    // Newly-opened tabs mount their xterm asynchronously; retry after a short
+    // delay to make sure the textarea exists when we try to patch it.
+    const t = setTimeout(applyMode, 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extraKeysOpen, activePaneId]);
 
   const [sysHostname, setSysHostname] = useState<string>('');
   const [appVersion, setAppVersion] = useState<string>('dev');
@@ -1124,11 +1184,44 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setTimeout(() => (window as any).csFocus?.(), 0);
   };
 
+
+  const [lastKeyboardHeight, setLastKeyboardHeight] = useState(0);
+
+  // 1. Bring back a safe tracking state just for the closing transition
+  const [isClosingPanel, setIsClosingPanel] = useState(false);
+  const prevExtraKeysOpen = useRef(extraKeysOpen);
+
+  useEffect(() => {
+    if (keyboardHeight > 60) setLastKeyboardHeight(keyboardHeight);
+  }, [keyboardHeight]);
+
+  // 2. Track when the panel closes to hold the spacer momentarily
+  useEffect(() => {
+    if (prevExtraKeysOpen.current === true && extraKeysOpen === false) {
+      setIsClosingPanel(true);
+      const timer = setTimeout(() => setIsClosingPanel(false), 350);
+      return () => clearTimeout(timer);
+    }
+    prevExtraKeysOpen.current = extraKeysOpen;
+  }, [extraKeysOpen]);
+
+  const activeKbHeight = keyboardHeight > 60 ? keyboardHeight : lastKeyboardHeight;
+  const panelHeight = activeKbHeight > 60 ? (activeKbHeight + 40) : Math.round(window.innerHeight * 0.38);
+
+  const barHeight = extraKeysOpen ? 0 : 40;
+
+  // 3. CRITICAL FIX: Only calculate the spacer if the panel is open or closing.
+  // Otherwise, it must be exactly 0 (like on initial page load).
+  const spacerHeight = (extraKeysOpen || isClosingPanel)
+    ? Math.max(0, panelHeight - keyboardHeight - barHeight)
+    : 0;
+
+
   const [muiTheme, setMuiTheme] = useState(defaultTheme);
 
   return (
     <ThemeProvider theme={muiTheme}>
-      <Box sx={{ display: 'flex', height: viewportHeight, overflow: 'hidden' }}>
+      <Box id="main-ui" sx={{ display: 'flex', height: viewportHeight, overflow: 'hidden' }}>
         <CssBaseline />
         <Sidebar
           mobileOpen={mobileOpen}
@@ -1145,7 +1238,20 @@ export default function Dashboard({ initialData }: DashboardProps) {
           fetchHosts={fetchHosts}
           onOpenScratchpad={() => { handleOpenScratchpad(); setMobileOpen(false); }}
         />
-        <Box component="main" sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <Box
+          component="main"
+          style={{
+            // Pass the calculated height perfectly to CSS
+            '--keyboard-spacer-height': spacerHeight
+          } as React.CSSProperties}
+          sx={{
+            flexGrow: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            minWidth: 0,
+            position: 'relative',
+          }}
+        >
           <TabBar
             mobileOpen={mobileOpen}
             setMobileOpen={setMobileOpen}
@@ -1170,6 +1276,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
             terminalRefs={terminalRefs}
             isCtrlActive={isCtrlActive}
             setIsCtrlActive={setIsCtrlActive}
+            isAltActive={isAltActive}
+            setIsAltActive={setIsAltActive}
             scratchpadSyncState={scratchpadSyncState}
             setScratchpadSyncState={setScratchpadSyncState}
             handleTerminalData={handleTerminalData}
@@ -1185,6 +1293,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
             handleTouchEnd={handleTouchEnd}
             handleSendKey={handleSendKey}
             VIBRATE_PATTERN={VIBRATE_PATTERN}
+            gestureMode={gestureMode}
+            onGestureModeChange={setGestureMode}
+            extraKeysOpen={extraKeysOpen}
+            onExtraKeysOpenChange={setExtraKeysOpen}
+            keyboardHeight={keyboardHeight}
+            getActiveTerminal={() => terminalRefs.current[activePaneId]}
           />
           <ButtonBar
             activeGroup={activeGroup}
@@ -1195,6 +1309,14 @@ export default function Dashboard({ initialData }: DashboardProps) {
             setBtnMenuAnchor={setBtnMenuAnchor}
             setLastMenuBtn={setLastMenuBtn}
             onNewButtonClick={handleNewButtonClick}
+          />
+          <Box
+            sx={{
+              flexShrink: 0,
+              order: 9999,
+              height: `${spacerHeight}px`, // Controlled strictly by React math
+              width: '100%',
+            }}
           />
         </Box>
         {applets.filter(a => a.position === 'sidebar').length > 0 && (
