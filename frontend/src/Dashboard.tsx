@@ -391,9 +391,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const vv = window.visualViewport;
     if (!vv) return;
     const handleVVResize = () => {
-      setViewportHeight(`${vv.height}px`);
-      // ALWAYS calculate from vv.height so the math perfectly cancels out during animation
-      setKeyboardHeight(Math.max(0, window.innerHeight - vv.height));
+      // 1. Lock dimensions to perfect integers immediately
+      const roundedVVHeight = Math.round(vv.height);
+      const roundedInnerHeight = Math.round(window.innerHeight);
+
+      setViewportHeight(`${roundedVVHeight}px`);
+      // 2. Derive the keyboard height using the exact same integers
+      setKeyboardHeight(Math.max(0, roundedInnerHeight - roundedVVHeight));
     };
     vv.addEventListener('resize', handleVVResize);
     handleVVResize();
@@ -1212,9 +1216,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   // 3. CRITICAL FIX: Only calculate the spacer if the panel is open or closing.
   // Otherwise, it must be exactly 0 (like on initial page load).
-  const spacerHeight = (extraKeysOpen || isClosingPanel)
+  const spacerHeight = Math.round((extraKeysOpen || isClosingPanel)
     ? Math.max(0, panelHeight - keyboardHeight - barHeight)
-    : 0;
+    : 0);
 
 
   const [muiTheme, setMuiTheme] = useState(defaultTheme);
@@ -1239,6 +1243,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
           onOpenScratchpad={() => { handleOpenScratchpad(); setMobileOpen(false); }}
         />
         <Box
+          id="ui-fix-spacer"
           component="main"
           style={{
             // Pass the calculated height perfectly to CSS

@@ -146,7 +146,7 @@ export default function TerminalGrid({
                       minWidth: 0,
                       minHeight: 0,
                       position: 'relative',
-                      outline: activePaneId === pane.id ? '1px solid #1976d2' : 'none',
+                      outline: activePaneId === pane.id ? '1px solid #1976d2' : '1px solid #ffffff',
                       outlineOffset: -1,
                       zIndex: activePaneId === pane.id ? 1 : 0
                     }}
