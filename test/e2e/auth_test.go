@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-http-utils/headers"
 	"github.com/playwright-community/playwright-go"
 )
 
@@ -93,9 +94,9 @@ func TestAPIUnauthorized(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req, _ := http.NewRequest("GET", url+tt.path, nil)
+			req, _ := http.NewRequest(http.MethodGet, url+tt.path, nil)
 			if tt.authHeader != "" {
-				req.Header.Set("Authorization", tt.authHeader)
+				req.Header.Set(headers.Authorization, tt.authHeader)
 			}
 			resp, err := client.Do(req)
 			if err != nil {

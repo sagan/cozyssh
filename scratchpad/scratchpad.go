@@ -14,36 +14,12 @@ import (
 	"github.com/gorilla/websocket"
 
 	"cozyssh/auth"
+	"cozyssh/constants"
+	"cozyssh/models"
 )
 
-type ScratchpadPage struct {
-	ID          string `json:"id"`
-	Title       string `json:"title"`
-	Content     string `json:"content"`
-	Locked      bool   `json:"locked,omitempty"`
-	LastUpdated int64  `json:"lastUpdated"`
-}
-
-type ScratchpadData struct {
-	Pages []ScratchpadPage `json:"pages"`
-}
-
-type MsgType struct {
-	Type string `json:"type"`
-}
-
-type SyncMsg struct {
-	Type string         `json:"type"`
-	Data ScratchpadData `json:"data"`
-}
-
-type DeleteMsg struct {
-	Type string `json:"type"`
-	ID   string `json:"id"`
-}
-
 var (
-	globalData ScratchpadData
+	globalData models.ScratchpadData
 	dataMu     sync.RWMutex
 	conns      = make(map[*websocket.Conn]bool)
 	connsMu    sync.Mutex
@@ -59,14 +35,14 @@ var upgrader = websocket.Upgrader{
 // Init loads the scratchpad data from the config directory
 func Init(cDir string) {
 	configDir = cDir
-	globalData = ScratchpadData{
-		Pages: []ScratchpadPage{},
+	globalData = models.ScratchpadData{
+		Pages: []*models.ScratchpadPage{},
 	}
 
 	path := filepath.Join(configDir, "scratchpad.json")
 	data, err := os.ReadFile(path)
 	if err == nil {
-		var d ScratchpadData
+		var d models.ScratchpadData
 		if err := json.Unmarshal(data, &d); err == nil {
 			if len(d.Pages) > 0 {
 				globalData = d
@@ -74,8 +50,8 @@ func Init(cDir string) {
 		}
 	}
 	if len(globalData.Pages) == 0 {
-		globalData.Pages = []ScratchpadPage{{
-			ID:          fmt.Sprintf("%x", time.Now().UnixNano()),
+		globalData.Pages = []*models.ScratchpadPage{{
+			Id:          fmt.Sprintf("%x", time.Now().UnixNano()),
 			Title:       "Default",
 			Content:     "",
 			LastUpdated: time.Now().UnixMilli(),
@@ -115,12 +91,12 @@ func HandleWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	header := make(http.Header)
-	if protocols := r.Header.Get("Sec-WebSocket-Protocol"); protocols != "" {
+	if protocols := r.Header.Get(constants.HEADER_SEC_WEBSOCKET_PROTOCOL); protocols != "" {
 		parts := strings.Split(protocols, ",")
 		for _, p := range parts {
 			p = strings.TrimSpace(p)
 			if strings.HasPrefix(p, "cozy.") {
-				header.Set("Sec-WebSocket-Protocol", p)
+				header.Set(constants.HEADER_SEC_WEBSOCKET_PROTOCOL, p)
 				break
 			}
 		}
@@ -149,7 +125,7 @@ func HandleWS(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
-		var base MsgType
+		var base models.MsgType
 		if err := json.Unmarshal(msg, &base); err != nil {
 			continue
 		}
@@ -157,22 +133,22 @@ func HandleWS(w http.ResponseWriter, r *http.Request) {
 		if base.Type == "hello" {
 			// Client announces itself. Send our current state unconditionally to align them.
 			dataMu.RLock()
-			syncBytes, _ := json.Marshal(SyncMsg{Type: "sync", Data: globalData})
+			syncBytes, _ := json.Marshal(models.ScratchpadSyncMsg{Type: "sync", Data: globalData})
 			dataMu.RUnlock()
 			conn.WriteMessage(websocket.TextMessage, syncBytes)
 
 		} else if base.Type == "sync" {
-			var sm SyncMsg
+			var sm models.ScratchpadSyncMsg
 			if err := json.Unmarshal(msg, &sm); err == nil {
 				dataMu.Lock()
-				
+
 				changed := false
-				var updatedPages []ScratchpadPage
+				var updatedPages []*models.ScratchpadPage
 
 				for _, cp := range sm.Data.Pages {
 					found := false
 					for i := range globalData.Pages {
-						if globalData.Pages[i].ID == cp.ID {
+						if globalData.Pages[i].Id == cp.Id {
 							found = true
 							if cp.LastUpdated > globalData.Pages[i].LastUpdated {
 								globalData.Pages[i] = cp
@@ -190,39 +166,46 @@ func HandleWS(w http.ResponseWriter, r *http.Request) {
 				}
 
 				// Special case: if client sends ALL pages (likely a deletion or full sync)
-				// we need to check for deletions. 
+				// we need to check for deletions.
 				// However, our current partial sync only sends DIRTY pages.
 				// Deletions are triggered by sending the full set.
 				if len(sm.Data.Pages) > 1 && len(sm.Data.Pages) < len(globalData.Pages) {
 					// This logic is tricky if we don't know if it's a full sync.
-					// For now, assume if the client sends a list and it's missing something 
+					// For now, assume if the client sends a list and it's missing something
 					// that the client previously knew about, it's a deletion.
 					// BUT we don't know what the client knew.
-					// Let's decide: If Data carries multiple pages, we might treat it as 
+					// Let's decide: If Data carries multiple pages, we might treat it as
 					// the authoritative full list if it has a special flag.
 					// For now, we only handle UPDATES/ADDS as partial.
 				}
 
 				if changed {
 					save()
-					// Broadcast updated pages to ALL clients (including sender) 
+					// Broadcast updated pages to ALL clients (including sender)
 					// so they know the sync is complete and can update UI.
-					syncBytes, _ := json.Marshal(SyncMsg{Type: "sync", Data: ScratchpadData{Pages: updatedPages}})
+					syncBytes, _ := json.Marshal(models.ScratchpadSyncMsg{
+						Type: "sync", Data: models.ScratchpadData{Pages: updatedPages},
+					})
 					broadcast(syncBytes, nil)
 				} else {
 					// Even if nothing changed, acknowledge the sync so the client stops "syncing" state
-					syncBytes, _ := json.Marshal(SyncMsg{Type: "sync", Data: ScratchpadData{Pages: []ScratchpadPage{}}})
+					syncBytes, _ := json.Marshal(models.ScratchpadSyncMsg{
+						Type: "sync",
+						Data: models.ScratchpadData{
+							Pages: []*models.ScratchpadPage{},
+						},
+					})
 					conn.WriteMessage(websocket.TextMessage, syncBytes)
 				}
 				dataMu.Unlock()
 			}
 		} else if base.Type == "delete" {
-			var dm DeleteMsg
+			var dm models.ScratchpadDeleteMsg
 			if err := json.Unmarshal(msg, &dm); err == nil {
 				dataMu.Lock()
 				found := false
 				for i := range globalData.Pages {
-					if globalData.Pages[i].ID == dm.ID {
+					if globalData.Pages[i].Id == dm.Id {
 						// Remove page
 						globalData.Pages = append(globalData.Pages[:i], globalData.Pages[i+1:]...)
 						found = true
@@ -235,7 +218,7 @@ func HandleWS(w http.ResponseWriter, r *http.Request) {
 					broadcast(msg, nil)
 				} else {
 					// Acknowledge anyway
-					ack, _ := json.Marshal(DeleteMsg{Type: "delete", ID: dm.ID})
+					ack, _ := json.Marshal(models.ScratchpadDeleteMsg{Type: "delete", Id: dm.Id})
 					conn.WriteMessage(websocket.TextMessage, ack)
 				}
 				dataMu.Unlock()
@@ -252,12 +235,15 @@ func Reload() {
 	path := filepath.Join(configDir, "scratchpad.json")
 	data, err := os.ReadFile(path)
 	if err == nil {
-		var d ScratchpadData
+		var d models.ScratchpadData
 		if err := json.Unmarshal(data, &d); err == nil {
 			if len(d.Pages) > 0 {
 				dataMu.Lock()
 				globalData = d
-				syncBytes, _ := json.Marshal(SyncMsg{Type: "force_sync", Data: globalData})
+				syncBytes, _ := json.Marshal(models.ScratchpadSyncMsg{
+					Type: "force_sync",
+					Data: globalData,
+				})
 				dataMu.Unlock()
 				broadcast(syncBytes, nil)
 			}

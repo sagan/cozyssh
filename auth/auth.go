@@ -13,6 +13,10 @@ import (
 	"time"
 
 	"cozyssh/config"
+	"cozyssh/constants"
+	"cozyssh/models"
+
+	"github.com/go-http-utils/headers"
 )
 
 var globalConfig *config.Config
@@ -22,16 +26,14 @@ func Init(cfg *config.Config) {
 	globalConfig = cfg
 }
 
-func AddAuthRoutes(mux *http.ServeMux, getFullData func(r *http.Request) map[string]any) {
+func AddAuthRoutes(mux *http.ServeMux, getFullData func(r *http.Request) *models.FullData) {
 	mux.HandleFunc("/api/login", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		var req struct {
-			Password string `json:"password"`
-		}
+		var req models.LoginRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
 			return
@@ -42,20 +44,18 @@ func AddAuthRoutes(mux *http.ServeMux, getFullData func(r *http.Request) map[str
 			return
 		}
 
-		token := generateToken()
-		res := map[string]any{"token": token}
-		if getFullData != nil {
-			res["fulldata"] = getFullData(r)
+		res := &models.LoginResponse{
+			Token:    generateToken(),
+			Fulldata: getFullData(r),
 		}
-
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(headers.ContentType, constants.MIME_JSON)
 		json.NewEncoder(w).Encode(res)
 	})
 
 	mux.HandleFunc("/api/logout", func(w http.ResponseWriter, r *http.Request) {
 		// Stateless approach relies completely on the frontend purging its LocalStorage token
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"success": true}`))
+		w.Header().Set(headers.ContentType, constants.MIME_JSON)
+		w.WriteHeader(http.StatusNoContent)
 	})
 }
 
@@ -102,11 +102,11 @@ func isValidToken(token string) bool {
 func Middleware(next http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := ""
-		authHeader := r.Header.Get("Authorization")
-		if after, ok := strings.CutPrefix(authHeader, "Bearer "); ok {
+		authHeader := r.Header.Get(headers.Authorization)
+		if after, ok := strings.CutPrefix(authHeader, constants.HEADER_AUTHORIZATION_BEARER_PREFIX); ok {
 			token = after
 		} else {
-			token = r.URL.Query().Get("token")
+			token = r.URL.Query().Get(constants.VAR_TOKEN)
 		}
 
 		if token == "" || !isValidToken(token) {
@@ -119,10 +119,10 @@ func Middleware(next http.Handler) http.HandlerFunc {
 
 // WSAuth verifies tokens from WebSocket URL queries or Sec-WebSocket-Protocol header securely
 func WSAuth(r *http.Request) bool {
-	token := r.URL.Query().Get("token")
+	token := r.URL.Query().Get(constants.VAR_TOKEN)
 	if token == "" {
 		// Try Sec-WebSocket-Protocol header hack
-		protocols := r.Header.Get("Sec-WebSocket-Protocol")
+		protocols := r.Header.Get(constants.HEADER_SEC_WEBSOCKET_PROTOCOL)
 		if protocols != "" {
 			parts := strings.SplitSeq(protocols, ",")
 			for p := range parts {

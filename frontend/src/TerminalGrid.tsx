@@ -4,13 +4,15 @@ import MenuIcon from '@mui/icons-material/Menu';
 import AddIcon from '@mui/icons-material/Add';
 import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
 
-import Scratchpad from './Scratchpad';
-import TerminalComponent from './Terminal';
+import type { NewTabDialogViewMode, ScratchpadSyncState } from './common';
+import Scratchpad, { type ScratchpadHandle } from './Scratchpad';
+import TerminalComponent, { type TerminalHandle } from './Terminal';
 import FileBrowser from './FileBrowser';
 import MobileInputBar from './MobileInputBar';
 import type { PaneData } from './dashboardStore';
 import { useDashboardStore } from './dashboardStore';
 import type { TerminalRefMap } from './dashboardStore';
+import type { AppletData } from './AppletWrapper';
 
 export interface TerminalGridProps {
   terminalRefs: React.MutableRefObject<TerminalRefMap>;
@@ -18,19 +20,19 @@ export interface TerminalGridProps {
   setIsCtrlActive: (v: boolean) => void;
   isAltActive: boolean;
   setIsAltActive: (v: boolean) => void;
-  scratchpadSyncState: string;
-  setScratchpadSyncState: (v: any) => void;
+  scratchpadSyncState: ScratchpadSyncState;
+  setScratchpadSyncState: (v: ScratchpadSyncState) => void;
   handleTerminalData: (tabId: string) => void;
   isTouch: boolean;
   isMobile: boolean;
   mobileAppletsOpen: boolean;
   setMobileAppletsOpen: (v: boolean) => void;
-  applets: any[];
+  applets: AppletData[];
   setMobileOpen: (v: boolean) => void;
   setNewTabDialogOpen: (v: boolean) => void;
-  setNewTabDialogInitialViewMode: React.Dispatch<React.SetStateAction<"servers" | "tabs" | "buttons" | undefined>>;
-  handleTouchStart: (e: any) => void;
-  handleTouchEnd: (e: any) => void;
+  setNewTabDialogInitialViewMode: React.Dispatch<React.SetStateAction<NewTabDialogViewMode>>;
+  handleTouchStart: (e: React.TouchEvent) => void;
+  handleTouchEnd: (e: React.TouchEvent) => void;
   handleSendKey: (key: string) => void;
   VIBRATE_PATTERN: number;
   gestureMode: boolean;
@@ -38,7 +40,7 @@ export interface TerminalGridProps {
   extraKeysOpen: boolean;
   onExtraKeysOpenChange: (v: boolean) => void;
   keyboardHeight: number;
-  getActiveTerminal: () => any;
+  getActiveTerminal: () => TerminalHandle | ScratchpadHandle | null;
 }
 
 export default function TerminalGrid({
@@ -50,7 +52,8 @@ export default function TerminalGrid({
   gestureMode, onGestureModeChange, extraKeysOpen, onExtraKeysOpenChange,
   keyboardHeight, getActiveTerminal,
 }: TerminalGridProps) {
-  const { tabs, setTabs, activeTabId, activePaneId, setActivePaneId, shellIntegrations, setShellIntegrations, vars, localVars } = useDashboardStore();
+  const { tabs, setTabs, activeTabId, activePaneId, setActivePaneId, shellIntegrations,
+    setShellIntegrations, vars, localVars } = useDashboardStore();
 
   // ── Gesture-mode: non-passive native touch listeners ─────────────────────
   // React synthetic touch events are passive (cannot preventDefault), so we
@@ -119,7 +122,7 @@ export default function TerminalGrid({
   return (
     <>
       <Box
-        id="terminal-grid"
+        id="terminals"
         ref={termAreaRef}
         sx={{ flexGrow: 1, bgcolor: '#ffffff', overflow: 'hidden', position: 'relative' }}
         onTouchStart={handleTouchStart}
@@ -127,6 +130,7 @@ export default function TerminalGrid({
       >
         {tabs.map((tab) => (
           <Box
+            className="terminal-tab-wrap"
             key={tab.id}
             sx={{
               position: 'absolute',
@@ -135,10 +139,14 @@ export default function TerminalGrid({
               flexDirection: 'column'
             }}
           >
-            <Box sx={{ flexGrow: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column' }}>
+            <Box className="terminal-tab" sx={{
+              flexGrow: 1, minHeight: 0, position: 'relative',
+              display: 'flex', flexDirection: 'column'
+            }}>
               {(() => {
                 const renderPaneInner = (pane: PaneData) => (
                   <Box
+                    className="terminal-pane-wrap"
                     data-pane-id={pane.id}
                     sx={{
                       flex: 1,
@@ -183,7 +191,8 @@ export default function TerminalGrid({
                         }}
                         onDataReceived={() => handleTerminalData(tab.id)}
                         onTabStateChange={(state) => {
-                          setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, isPinned: state.isPinned, isLocked: state.isLocked } : t));
+                          setTabs(prev => prev.map(t => t.id === tab.id
+                            ? { ...t, isPinned: state.isPinned, isLocked: state.isLocked } : t));
                         }}
                         onStolen={() => {
                           setTabs(prev => prev.map(t => t.id === tab.id ? {
@@ -199,7 +208,8 @@ export default function TerminalGrid({
                             setTabs(prev => prev.map(t => t.id === tab.id ? {
                               ...t,
                               activePaneId: newId,
-                              panes: t.panes.map(p => p.id === pane.id ? { ...p, id: newId, sessionId: newId, state: 'connecting' } : p)
+                              panes: t.panes.map(p => p.id === pane.id
+                                ? { ...p, id: newId, sessionId: newId, state: 'connecting' } : p)
                             } : t));
                             setActivePaneId(newId);
                           }
@@ -253,7 +263,7 @@ export default function TerminalGrid({
             {tab.showFiles && (
               <Box sx={{ height: '50%', minHeight: 200, borderTop: 1, borderColor: 'divider' }}>
                 <FileBrowser
-                  sessionId={tab.panes.find((p: any) => p.id === tab.activePaneId)?.sessionId || tab.activePaneId}
+                  sessionId={tab.panes.find((p) => p.id === tab.activePaneId)?.sessionId || tab.activePaneId}
                   isActive={activeTabId === tab.id && tab.showFiles}
                   shellCwd={shellIntegrations[tab.activePaneId]?.cwd}
                   onClose={() => setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, showFiles: false } : t))}
@@ -264,12 +274,18 @@ export default function TerminalGrid({
         ))}
 
         {tabs.length === 0 && (
-          <Box sx={{ p: 4, textAlign: 'center', mt: 10, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <Box sx={{
+            p: 4, textAlign: 'center', mt: 10, display: 'flex',
+            flexDirection: 'column', alignItems: 'center'
+          }}>
             <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, mb: 4 }}>
               <Tooltip title="Open Sidebar">
                 <IconButton
                   onClick={() => setMobileOpen(true)}
-                  sx={{ display: { md: 'none' }, width: 64, height: 64, bgcolor: 'background.paper', boxShadow: 2, '&:hover': { bgcolor: 'action.hover' } }}
+                  sx={{
+                    display: { md: 'none' }, width: 64, height: 64,
+                    bgcolor: 'background.paper', boxShadow: 2, '&:hover': { bgcolor: 'action.hover' }
+                  }}
                 >
                   <MenuIcon sx={{ fontSize: 32 }} />
                 </IconButton>
@@ -278,7 +294,10 @@ export default function TerminalGrid({
                 <IconButton
                   onClick={() => { setNewTabDialogInitialViewMode('servers'); setNewTabDialogOpen(true); }}
                   color="primary"
-                  sx={{ width: 64, height: 64, bgcolor: 'background.paper', boxShadow: 2, '&:hover': { bgcolor: 'action.hover' } }}
+                  sx={{
+                    width: 64, height: 64, bgcolor: 'background.paper',
+                    boxShadow: 2, '&:hover': { bgcolor: 'action.hover' }
+                  }}
                 >
                   <AddIcon sx={{ fontSize: 32 }} />
                 </IconButton>
@@ -288,7 +307,10 @@ export default function TerminalGrid({
                   <IconButton
                     color="inherit"
                     onClick={() => setMobileAppletsOpen(!mobileAppletsOpen)}
-                    sx={{ width: 64, height: 64, bgcolor: 'background.paper', boxShadow: 2, '&:hover': { bgcolor: 'action.hover' } }}
+                    sx={{
+                      width: 64, height: 64, bgcolor: 'background.paper',
+                      boxShadow: 2, '&:hover': { bgcolor: 'action.hover' }
+                    }}
                   >
                     <ViewSidebarIcon />
                   </IconButton>

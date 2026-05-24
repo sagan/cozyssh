@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -12,19 +13,15 @@ import (
 
 	"time"
 
+	"github.com/go-http-utils/headers"
 	"github.com/pkg/sftp"
 
 	"cozyssh/auth"
+	"cozyssh/constants"
+	"cozyssh/models"
 	"cozyssh/session"
 	"cozyssh/sshmanager"
 )
-
-type FileInfo struct {
-	Name    string `json:"name"`
-	IsDir   bool   `json:"isDir"`
-	Size    int64  `json:"size"`
-	ModTime string `json:"modTime"`
-}
 
 func HandleDownloadDirect(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -126,8 +123,8 @@ func HandleFS(w http.ResponseWriter, r *http.Request) {
 		}
 		expires := time.Now().Add(5 * time.Minute).Unix()
 		sig := auth.SignDownloadToken(sessionID, path, expires)
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"expires": expires, "sig": sig})
+		w.Header().Set(headers.ContentType, constants.MIME_JSON)
+		json.NewEncoder(w).Encode(&models.FsToken{Expires: expires, Sig: sig})
 	case "upload":
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -191,21 +188,19 @@ func handleStat(w http.ResponseWriter, path string, isLocal bool, sftpClient *sf
 		return
 	}
 
-	res := FileInfo{
+	res := models.FileInfo{
 		Name:    info.Name(),
 		IsDir:   info.IsDir(),
 		Size:    info.Size(),
 		ModTime: info.ModTime().Format("2006-01-02 15:04:05"),
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headers.ContentType, constants.MIME_JSON)
 	json.NewEncoder(w).Encode(res)
 }
 
 func handleRename(w http.ResponseWriter, r *http.Request, oldPath string, isLocal bool, sftpClient *sftp.Client) {
-	var req struct {
-		NewPath string `json:"newPath"`
-	}
+	var req models.FileRenameRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 		return
@@ -265,9 +260,7 @@ func sftpRemoveAll(c *sftp.Client, path string) error {
 }
 
 func handleMkdir(w http.ResponseWriter, r *http.Request, parentPath string, isLocal bool, sftpClient *sftp.Client) {
-	var req struct {
-		Name string `json:"name"`
-	}
+	var req models.FileMkdirRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 		return
@@ -315,7 +308,7 @@ func handleList(w http.ResponseWriter, path string, isLocal bool, sftpClient *sf
 		}
 	}
 
-	var infos []FileInfo
+	var infos []*models.FileInfo
 
 	if isLocal {
 		// Special case for Windows drives
@@ -340,7 +333,7 @@ func handleList(w http.ResponseWriter, path string, isLocal bool, sftpClient *sf
 				if err != nil {
 					continue
 				}
-				infos = append(infos, FileInfo{
+				infos = append(infos, &models.FileInfo{
 					Name:    info.Name(),
 					IsDir:   info.IsDir(),
 					Size:    info.Size(),
@@ -356,7 +349,7 @@ func handleList(w http.ResponseWriter, path string, isLocal bool, sftpClient *sf
 			return
 		}
 		for _, info := range entries {
-			infos = append(infos, FileInfo{
+			infos = append(infos, &models.FileInfo{
 				Name:    info.Name(),
 				IsDir:   info.IsDir(),
 				Size:    info.Size(),
@@ -370,10 +363,10 @@ func handleList(w http.ResponseWriter, path string, isLocal bool, sftpClient *sf
 		displayPath = "/"
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
-		"path":  displayPath,
-		"files": infos,
+	w.Header().Set(headers.ContentType, constants.MIME_JSON)
+	json.NewEncoder(w).Encode(&models.FsList{
+		Path:  displayPath,
+		Files: infos,
 	})
 }
 
@@ -384,8 +377,8 @@ func handleDownload(w http.ResponseWriter, path string, isLocal bool, sftpClient
 	}
 
 	fileName := filepath.Base(path)
-	w.Header().Set("Content-Disposition", "attachment; filename=\""+fileName+"\"")
-	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set(headers.ContentDisposition, constants.HEADER_CONTENT_DISPOSITION_PREFIX+url.PathEscape(fileName))
+	w.Header().Set(headers.ContentType, constants.MIME_BINARY)
 
 	if isLocal {
 		f, err := os.Open(path)
@@ -460,6 +453,6 @@ func handleUpload(w http.ResponseWriter, r *http.Request, destPath string, isLoc
 		io.Copy(f, file)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"success":true}`))
+	w.Header().Set(headers.ContentType, constants.MIME_JSON)
+	w.WriteHeader(http.StatusNoContent)
 }

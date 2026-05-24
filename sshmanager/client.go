@@ -17,6 +17,7 @@ import (
 	"golang.org/x/crypto/ssh/knownhosts"
 
 	"cozyssh/config"
+	"cozyssh/models"
 )
 
 var globalConfig *config.Config
@@ -57,18 +58,6 @@ func (p *PooledClient) Release() {
 		}
 	}
 	p.Mu.Unlock()
-}
-
-type HostConfig struct {
-	Alias         string   `json:"alias"`
-	HostName      string   `json:"hostname"`
-	User          string   `json:"user"`
-	Port          string   `json:"port"`
-	IdentityFile  string   `json:"identity_file"`
-	ProxyJump     string   `json:"proxy_jump"`
-	RemoteCommand string   `json:"remote_command"`
-	Tags          []string `json:"tags"`
-	Comment       string   `json:"comment"`
 }
 
 func getSSHConfigPath() string {
@@ -125,7 +114,7 @@ func findHostBlock(lines []string, targetAlias string) (int, int) {
 }
 
 // SaveHost replaces an old host block or adds a new one gracefully without destroying file comments
-func SaveHost(oldAlias string, h HostConfig) error {
+func SaveHost(oldAlias string, h models.HostData) error {
 	lines, err := readConfigLines()
 	if err != nil {
 		return err
@@ -144,7 +133,7 @@ func SaveHost(oldAlias string, h HostConfig) error {
 		}
 		block = append(block, fmt.Sprintf("### %s", strings.Join(tagStrs, " ")))
 	}
-	block = append(block, fmt.Sprintf("Host %s", h.Alias))
+	block = append(block, fmt.Sprintf("Host %s", h.Name))
 	block = append(block, fmt.Sprintf("    HostName %s", h.HostName))
 	if h.User != "" {
 		block = append(block, fmt.Sprintf("    User %s", h.User))
@@ -163,13 +152,13 @@ func SaveHost(oldAlias string, h HostConfig) error {
 	}
 	block = append(block, "")
 
-	if oldAlias != "" && oldAlias != h.Alias {
+	if oldAlias != "" && oldAlias != h.Name {
 		if start, end := findHostBlock(lines, oldAlias); start != -1 {
 			lines = append(lines[:start], lines[end:]...)
 		}
 	}
 
-	start, end := findHostBlock(lines, h.Alias)
+	start, end := findHostBlock(lines, h.Name)
 	if start != -1 {
 		lines = append(lines[:start], append(block, lines[end:]...)...)
 	} else {
@@ -182,12 +171,12 @@ func SaveHost(oldAlias string, h HostConfig) error {
 	return writeConfigLines(lines)
 }
 
-func DeleteHost(alias string) error {
+func DeleteHost(name string) error {
 	lines, err := readConfigLines()
 	if err != nil {
 		return err
 	}
-	start, end := findHostBlock(lines, alias)
+	start, end := findHostBlock(lines, name)
 	if start != -1 {
 		lines = append(lines[:start], lines[end:]...)
 		return writeConfigLines(lines)
@@ -195,22 +184,9 @@ func DeleteHost(alias string) error {
 	return nil
 }
 
-type HostInfo struct {
-	Name          string   `json:"name"`
-	HostName      string   `json:"hostname"`
-	Port          string   `json:"port"`
-	User          string   `json:"user"`
-	ProxyJump     string   `json:"proxy_jump"`
-	RemoteCommand string   `json:"remote_command"`
-	Tags          []string `json:"tags"`
-	Comment       string   `json:"comment"`
-	Source        string   `json:"source"`  // "config" or "known_hosts"
-	IsAuto        bool     `json:"is_auto"` // true if from known_hosts and not config
-	IsFavourite   bool     `json:"is_favourite"`
-}
-
-// ListHosts reads the standard ~/.ssh/config and ~/.ssh/known_hosts and returns a list of configured and auto-discovered aliases
-func ListHosts() ([]HostInfo, error) {
+// ListHosts reads the standard ~/.ssh/config and ~/.ssh/known_hosts
+// and returns a list of configured and auto-discovered servers
+func ListHosts() ([]*models.HostData, error) {
 	configPath := filepath.Join(getSSHDir(), "config")
 	f, err := os.Open(configPath)
 	var cfg *ssh_config.Config
@@ -221,7 +197,7 @@ func ListHosts() ([]HostInfo, error) {
 
 	lines, _ := readConfigLines()
 
-	var hosts []HostInfo
+	var hosts []*models.HostData
 	seenHosts := make(map[string]bool)
 
 	if cfg != nil {
@@ -284,7 +260,7 @@ func ListHosts() ([]HostInfo, error) {
 					}
 				}
 
-				hosts = append(hosts, HostInfo{
+				hosts = append(hosts, &models.HostData{
 					Name:          name,
 					HostName:      hostname,
 					Port:          port,
@@ -298,7 +274,7 @@ func ListHosts() ([]HostInfo, error) {
 					IsFavourite:   isFav,
 				})
 				seenHosts[name] = true
-				break // only one alias rep per block needed for sidebar
+				break // only one name rep per block needed for sidebar
 			}
 		}
 	}
@@ -315,16 +291,16 @@ func ListHosts() ([]HostInfo, error) {
 }
 
 // ListKnownHosts reads ~/.ssh/known_hosts and returns plain-name entries
-func ListKnownHosts() ([]HostInfo, error) {
+func ListKnownHosts() ([]*models.HostData, error) {
 	knownHostsPath := filepath.Join(getSSHDir(), "known_hosts")
 	data, err := os.ReadFile(knownHostsPath)
 	if err != nil {
 		return nil, err
 	}
 
-	var hosts []HostInfo
-	lines := strings.Split(string(data), "\n")
-	for _, line := range lines {
+	var hosts []*models.HostData
+	lines := strings.SplitSeq(string(data), "\n")
+	for line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "|") {
 			continue
@@ -337,8 +313,8 @@ func ListKnownHosts() ([]HostInfo, error) {
 
 		hostPart := fields[0]
 		// Handle comma separated hosts/IPs
-		parts := strings.Split(hostPart, ",")
-		for _, p := range parts {
+		parts := strings.SplitSeq(hostPart, ",")
+		for p := range parts {
 			p = strings.TrimSpace(p)
 			if p == "" || strings.Contains(p, "*") || strings.Contains(p, "?") {
 				continue
@@ -356,7 +332,7 @@ func ListKnownHosts() ([]HostInfo, error) {
 			// We only want the first plain name we find or handle all?
 			// Usually users want to see "root@server"
 			// The requirement says "display 'root@server' style title"
-			hosts = append(hosts, HostInfo{
+			hosts = append(hosts, &models.HostData{
 				Name:     "root@" + hostname, // Title style
 				HostName: hostname,
 				Port:     port,
@@ -369,12 +345,12 @@ func ListKnownHosts() ([]HostInfo, error) {
 	}
 
 	// Deduplicate
-	unique := make(map[string]HostInfo)
+	unique := make(map[string]*models.HostData)
 	for _, h := range hosts {
 		unique[h.HostName] = h
 	}
 
-	var res []HostInfo
+	var res []*models.HostData
 	for _, h := range unique {
 		res = append(res, h)
 	}
@@ -390,9 +366,9 @@ type TerminalUI interface {
 
 // DialSSH resolves standard configs and connects via id_ed25519
 // It always returns a new independent connection.
-func DialSSH(alias string, term TerminalUI, rows, cols int) (*PooledClient, *ssh.Session, string, error) {
-	log.Printf("DialSSH: dialing %s", alias)
-	client, closers, remoteCommand, err := getSSHClient(alias, term)
+func DialSSH(name string, term TerminalUI, rows, cols int) (*PooledClient, *ssh.Session, string, error) {
+	log.Printf("DialSSH: dialing %s", name)
+	client, closers, remoteCommand, err := getSSHClient(name, term)
 	if err != nil {
 		return nil, nil, "", err
 	}
@@ -416,8 +392,8 @@ func DialSSH(alias string, term TerminalUI, rows, cols int) (*PooledClient, *ssh
 	return pClient, session, remoteCommand, nil
 }
 
-func getSSHClient(alias string, term TerminalUI) (*ssh.Client, []io.Closer, string, error) {
-	log.Printf("getSSHClient: alias=%s", alias)
+func getSSHClient(name string, term TerminalUI) (*ssh.Client, []io.Closer, string, error) {
+	log.Printf("getSSHClient: name=%s", name)
 	configPath := filepath.Join(getSSHDir(), "config")
 	f, err := os.Open(configPath)
 	var cfg *ssh_config.Config
@@ -426,7 +402,7 @@ func getSSHClient(alias string, term TerminalUI) (*ssh.Client, []io.Closer, stri
 		f.Close()
 	}
 
-	host := alias
+	host := name
 	port := "22"
 	user := os.Getenv("USER")
 	if user == "" {
@@ -435,8 +411,8 @@ func getSSHClient(alias string, term TerminalUI) (*ssh.Client, []io.Closer, stri
 	var password string
 
 	// Handle user:pass@host:port or user@host:port format
-	if strings.Contains(alias, "@") {
-		parts := strings.SplitN(alias, "@", 2)
+	if strings.Contains(name, "@") {
+		parts := strings.SplitN(name, "@", 2)
 		userPart := parts[0]
 		hostPart := parts[1]
 
@@ -455,21 +431,21 @@ func getSSHClient(alias string, term TerminalUI) (*ssh.Client, []io.Closer, stri
 		} else {
 			host = hostPart
 		}
-	} else if strings.Contains(alias, ":") {
+	} else if strings.Contains(name, ":") {
 		// handle host:port format
-		hp := strings.SplitN(alias, ":", 2)
+		hp := strings.SplitN(name, ":", 2)
 		host = hp[0]
 		port = hp[1]
 	}
 
 	if cfg != nil {
-		if h, _ := cfg.Get(alias, "HostName"); h != "" {
+		if h, _ := cfg.Get(name, "HostName"); h != "" {
 			host = h
 		}
-		if p, _ := cfg.Get(alias, "Port"); p != "" {
+		if p, _ := cfg.Get(name, "Port"); p != "" {
 			port = p
 		}
-		if u, _ := cfg.Get(alias, "User"); u != "" {
+		if u, _ := cfg.Get(name, "User"); u != "" {
 			user = u
 		}
 	}
@@ -478,9 +454,9 @@ func getSSHClient(alias string, term TerminalUI) (*ssh.Client, []io.Closer, stri
 	identityFile := ""
 	remoteCommand := ""
 	if cfg != nil {
-		identityFile, _ = cfg.Get(alias, "IdentityFile")
-		proxyJumpAlias, _ = cfg.Get(alias, "ProxyJump")
-		remoteCommand, _ = cfg.Get(alias, "RemoteCommand")
+		identityFile, _ = cfg.Get(name, "IdentityFile")
+		proxyJumpAlias, _ = cfg.Get(name, "ProxyJump")
+		remoteCommand, _ = cfg.Get(name, "RemoteCommand")
 	}
 
 	if identityFile == "" || identityFile == "~/.ssh/identity" {
@@ -724,13 +700,13 @@ func setupSession(session *ssh.Session, rows, cols int) error {
 	return nil
 }
 
-func ExpandTokens(cmd, host, port, user, alias string) string {
+func ExpandTokens(cmd, host, port, user, name string) string {
 	r := strings.NewReplacer(
 		"%%", "%",
 		"%h", host,
 		"%p", port,
 		"%r", user,
-		"%n", alias,
+		"%n", name,
 	)
 
 	// %u is local user

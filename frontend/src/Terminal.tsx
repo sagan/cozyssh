@@ -4,34 +4,13 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { ImageAddon } from '@xterm/addon-image';
 import { WebLinksAddon } from "@xterm/addon-web-links"
-import { SearchAddon } from '@xterm/addon-search';
-import '@xterm/xterm/css/xterm.css';
+import { SearchAddon, type ISearchOptions } from '@xterm/addon-search';
 import { Box } from '@mui/material';
-import { getIntVar, getKeyCombination } from './common';
+import '@xterm/xterm/css/xterm.css';
 
-export interface CommandHistoryEntry {
-  commandId: string;
-  command?: string;
-  exitStatus?: number;
-  exitSignal?: string;
-  timestamp: number;
-}
-
-export interface ShellIntegration {
-  cwd?: string;
-  user?: string;
-  hostname?: string;
-  machineId?: string;
-  bootId?: string;
-  pid?: string;
-  shellId?: string;
-  commandId?: string;
-  command?: string;
-  exitStatus?: number;
-  exitSignal?: string;
-  isExecuting?: boolean;
-  recentCommands?: CommandHistoryEntry[];
-}
+import type { WsResizeMsg, WsTerminalMessage } from './api';
+import { BROWSER_STORAGE_KEY_TOKEN } from './constants';
+import { CS_EVENT_TERMINAL_DISCONNECTED, CS_EVENT_SHELL_INTEGRATION, CS_EVENT_TERMINAL_RESIZE, getIntVar, getKeyCombination, type CommandHistoryEntry, type CSEventDetailShellIntegration, type CSEventDetailTerminalConnected, type CSEventDetailTerminalData, type CSEventDetailTerminalDisconnected, type CSEventDetailTerminalResize, type ShellIntegration, CS_EVENT_TERMINAL_DATA, CS_EVENT_TERMINAL_CONNECTED } from './common';
 
 export interface TerminalHandle {
   sendData: (data: string) => void;
@@ -46,11 +25,11 @@ export interface TerminalHandle {
   scrollToTop: () => void;
   scrollToBottom: () => void;
   scrollPages: (amount: number) => void;
-  findNext: (term: string, searchOptions?: any) => boolean;
-  findPrevious: (term: string, searchOptions?: any) => boolean;
+  findNext: (term: string, searchOptions?: ISearchOptions) => boolean;
+  findPrevious: (term: string, searchOptions?: ISearchOptions) => boolean;
   clearSearchDecorations: () => void;
   clearSearchActiveDecoration: () => void;
-  getLastCommandOutput: () => void;
+  getLastCommandOutput: () => string;
   getXterm: () => Terminal | null;
   /** Set the inputMode on the hidden xterm textarea (e.g. 'none' to suppress system keyboard) */
   setInputMode: (mode: string) => void;
@@ -119,7 +98,11 @@ const terminalKeyShortcuts = new Set([
   "alt+.",   // Insert last argument of previous command
 ]);
 
-const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, sessionId, isActive, isCtrlActive, onCtrlDone, isAltActive, onAltDone, onStateChange, onTabStateChange, onStolen, onManualReconnect, onCwdChange, onShellIntegrationChange, onDataReceived, cloneFrom, isTouch, vars, localVars }, ref) => {
+const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
+  host, sessionId, isActive, isCtrlActive, onCtrlDone, isAltActive, onAltDone, onStateChange, onTabStateChange,
+  onStolen, onManualReconnect, onCwdChange, onShellIntegrationChange, onDataReceived,
+  cloneFrom, isTouch, vars, localVars,
+}, ref) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -138,14 +121,14 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
   const updateShellIntegration = (updates: Partial<ShellIntegration>) => {
     shellIntegrationRef.current = { ...shellIntegrationRef.current, ...updates };
     onShellIntegrationChange?.(shellIntegrationRef.current);
-    window.dispatchEvent(new CustomEvent('cs:shell-integration', {
+    window.dispatchEvent(new CustomEvent(CS_EVENT_SHELL_INTEGRATION, {
       detail: {
         terminal: xtermRef.current,
         sessionId,
         host,
         is_active_terminal: isActiveRef.current,
-        ...shellIntegrationRef.current
-      }
+        shellIntegration: shellIntegrationRef.current,
+      } as CSEventDetailShellIntegration,
     }));
     if (updates.cwd) {
       onCwdChange?.(updates.cwd);
@@ -214,10 +197,10 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     scrollPages: (amount: number) => {
       xtermRef.current?.scrollPages(amount);
     },
-    findNext: (term: string, searchOptions?: any) => {
+    findNext: (term: string, searchOptions?: ISearchOptions) => {
       return searchAddonRef.current?.findNext(term, searchOptions) || false;
     },
-    findPrevious: (term: string, searchOptions?: any) => {
+    findPrevious: (term: string, searchOptions?: ISearchOptions) => {
       return searchAddonRef.current?.findPrevious(term, searchOptions) || false;
     },
     clearSearchDecorations: () => {
@@ -232,7 +215,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
 
       if (!buffer || !start || !end || start.isDisposed || end.isDisposed) {
         console.warn('Cannot copy: markers are missing or have scrolled out of the buffer.');
-        return;
+        return "";
       }
 
       const outputLines: string[] = [];
@@ -267,7 +250,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
   }));
 
   useEffect(() => {
-    if (!terminalRef.current) return;
+    if (!terminalRef.current) {
+      return;
+    }
 
     // Track the webgl addon
     let webglAddon: WebglAddon | null = null;
@@ -382,13 +367,27 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
         });
 
         const updates: Partial<ShellIntegration> = {};
-        if (info.cwd) updates.cwd = info.cwd;
-        if (info.user) updates.user = info.user;
-        if (info.hostname) updates.hostname = info.hostname;
-        if (info.machineid) updates.machineId = info.machineid;
-        if (info.bootid) updates.bootId = info.bootid;
-        if (info.pid) updates.pid = info.pid;
-        if (info.cmd) updates.command = info.cmd;
+        if (info.cwd) {
+          updates.cwd = info.cwd;
+        }
+        if (info.user) {
+          updates.user = info.user;
+        }
+        if (info.hostname) {
+          updates.hostname = info.hostname;
+        }
+        if (info.machineid) {
+          updates.machineId = info.machineid;
+        }
+        if (info.bootid) {
+          updates.bootId = info.bootid;
+        }
+        if (info.pid) {
+          updates.pid = info.pid;
+        }
+        if (info.cmd) {
+          updates.command = info.cmd; updates.command = info.cmd;
+        }
         if (info.start) {
           const type = info.type || 'shell';
           if (type === 'command') {
@@ -484,7 +483,11 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     });
 
     term.onResize(({ cols, rows }) => {
-      window.dispatchEvent(new CustomEvent('cs:terminal-resize', { detail: { terminal: term, cols, rows, sessionId, host, is_active_terminal: isActive } }));
+      window.dispatchEvent(new CustomEvent(CS_EVENT_TERMINAL_RESIZE, {
+        detail: {
+          terminal: term, cols, rows, sessionId, host, is_active_terminal: isActive
+        } as CSEventDetailTerminalResize,
+      }));
     });
 
     // Use ResizeObserver for more reliable fitting
@@ -496,7 +499,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
           lastKnownSizeRef.current = { cols: term.cols, rows: term.rows };
           const ws = wsRef.current;
           if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+            ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows } as WsResizeMsg));
           }
         });
       }
@@ -516,15 +519,15 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
       if (terminalKeyShortcuts.has(kcomb)) {
         return true;
       }
-      const passthrough = (window as any).__CS_PASSTHROUGH_SHORTCUTS__;
-      if (passthrough && (passthrough.has ? passthrough.has(kcomb) : passthrough.includes?.(kcomb))) {
+      const passthrough = window.__CS_PASSTHROUGH_SHORTCUTS__;
+      if (passthrough && ("has" in passthrough ? passthrough.has(kcomb) : passthrough.includes?.(kcomb))) {
         return true;
       }
       return false;
     });
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const token = localStorage.getItem('cozy_token');
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     let wsUrl = `${protocol}//${window.location.host}/api/ws?host=${encodeURIComponent(host)}&sessionId=${encodeURIComponent(sessionId || '')}`;
     if (cloneFrom) {
       wsUrl += `&cloneFrom=${encodeURIComponent(cloneFrom)}`;
@@ -565,7 +568,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
         xtermRef.current?.reset();
       }
 
-      if (isDisposed) return;
+      if (isDisposed) {
+        return;
+      }
       isDead = false;
       deathType = null;
       onStateChange?.('connecting to host');
@@ -574,22 +579,29 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
       wsRef.current = ws;
 
       ws.onopen = () => {
-        if (isDisposed) { ws.close(); return; }
+        if (isDisposed) {
+          ws.close();
+          return;
+        }
         // Send initial resize using correct dimensions
-        ws.send(JSON.stringify({ type: 'resize', cols, rows }));
-        window.dispatchEvent(new CustomEvent('cs:terminal-connected', { detail: { terminal: term, sessionId, host, is_active_terminal: isActive } }));
+        ws.send(JSON.stringify({ type: 'resize', cols, rows } as WsResizeMsg));
+        window.dispatchEvent(new CustomEvent(CS_EVENT_TERMINAL_CONNECTED, {
+          detail: {
+            terminal: term, sessionId, host, is_active_terminal: isActive
+          } as CSEventDetailTerminalConnected,
+        }));
       };
 
       ws.onmessage = (ev) => {
         if (typeof ev.data === 'string') {
           try {
-            const msg = JSON.parse(ev.data);
-            if (msg.type === 'history_start') {
+            const msg = JSON.parse(ev.data) as WsTerminalMessage;
+            if (msg.type === 'historyStart') {
               expectingHistory = true;
               return;
             }
-            if (msg.type === 'tab_state') {
-              onTabStateChange?.({ isPinned: msg.is_pinned, isLocked: msg.is_locked });
+            if (msg.type === 'tabState') {
+              onTabStateChange?.({ isPinned: msg.isPinned, isLocked: msg.isLocked });
               return;
             }
             if (msg.type === 'state') {
@@ -605,18 +617,27 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
                   term.write(`\r\n\x1b[31;1m*** ${msg.state} *** (Press Enter to reconnect)\x1b[0m\r\n`);
                 }
                 onStateChange?.(msg.state);
-                window.dispatchEvent(new CustomEvent('cs:terminal-disconnected', { detail: { terminal: term, sessionId, host, is_active_terminal: isActive, reason: deathType } }));
+                window.dispatchEvent(new CustomEvent(CS_EVENT_TERMINAL_DISCONNECTED, {
+                  detail: {
+                    terminal: term, sessionId, host, is_active_terminal: isActive, reason: deathType
+                  } as CSEventDetailTerminalDisconnected,
+                }));
                 return;
               }
               onStateChange?.(msg.state);
               return;
             }
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
           } catch (e) {
             // ignore
           }
           if (!isRestoringHistory) {
             onDataRef.current?.();
-            window.dispatchEvent(new CustomEvent('cs:terminal-data', { detail: { terminal: term, sessionId, host, is_active_terminal: isActive } }));
+            window.dispatchEvent(new CustomEvent(CS_EVENT_TERMINAL_DATA, {
+              detail: {
+                terminal: term, sessionId, host, is_active_terminal: isActive
+              } as CSEventDetailTerminalData,
+            }));
           }
           term.write(ev.data);
         } else {
@@ -630,7 +651,11 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
           } else {
             if (!isRestoringHistory) {
               onDataRef.current?.();
-              window.dispatchEvent(new CustomEvent('cs:terminal-data', { detail: { terminal: term, sessionId, host, is_active_terminal: isActive } }));
+              window.dispatchEvent(new CustomEvent(CS_EVENT_TERMINAL_DATA, {
+                detail: {
+                  terminal: term, sessionId, host, is_active_terminal: isActive
+                } as CSEventDetailTerminalData,
+              }));
             }
             term.write(buffer);
           }
@@ -638,9 +663,15 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
       };
 
       ws.onclose = () => {
-        if (isDisposed) return;
+        if (isDisposed) {
+          return;
+        }
         onStateChange?.('disconnected to ssh server');
-        window.dispatchEvent(new CustomEvent('cs:terminal-disconnected', { detail: { terminal: term, sessionId, host, is_active_terminal: isActive, reason: 'normal' } }));
+        window.dispatchEvent(new CustomEvent(CS_EVENT_TERMINAL_DISCONNECTED, {
+          detail: {
+            terminal: term, sessionId, host, is_active_terminal: isActive, reason: 'normal'
+          } as CSEventDetailTerminalDisconnected,
+        }));
         reconnectTimer = setTimeout(connectWS, 2000);
       };
     };
@@ -649,7 +680,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     setTimeout(connectWS, 50);
 
     term.onData((data) => {
-      if (isRestoringHistory) return;
+      if (isRestoringHistory) {
+        return;
+      }
       if (isDead && data === '\r') {
         if (deathType === 'stolen') {
           onManualReconnect?.(true);
@@ -697,13 +730,13 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
           // Optional: Release Ctrl lock if an unmappable key was pressed to avoid getting stuck
           onCtrlDone?.();
         }
-        
+
         if (altRef.current && data) {
           ws.send(new TextEncoder().encode('\x1b' + data));
           onAltDone?.();
           return;
         }
-        
+
         ws.send(new TextEncoder().encode(data));
       }
     });
@@ -711,7 +744,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     let selectionTimeout: number;
 
     term.onSelectionChange(() => {
-      if (isTouch) return;
+      if (isTouch) {
+        return;
+      }
 
       clearTimeout(selectionTimeout);
 
@@ -727,7 +762,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
     });
 
     const handleContextMenu = (e: MouseEvent) => {
-      if (isTouch) return;
+      if (isTouch) {
+        return;
+      }
       e.preventDefault();
       navigator.clipboard.readText().then(text => {
         const ws = wsRef.current;
@@ -757,6 +794,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
 
       // <-- Dispose of markers
       markersRef.current.start?.dispose();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       markersRef.current.end?.dispose();
 
       // Explicitly kill the WebGL addon first
@@ -770,13 +808,16 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
 
       term.dispose();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [host, sessionId]);
 
   // Execute focus and fit firmly when becoming active or mounted
   useEffect(() => {
     if (xtermRef.current && terminalRef.current) {
       setTimeout(() => {
-        if (isActive) xtermRef.current?.focus();
+        if (isActive) {
+          xtermRef.current?.focus();
+        }
         // Force fit and update server with correct size (critical after reconnecting while hidden)
         if (fitAddonRef.current && terminalRef.current && terminalRef.current.offsetWidth > 0) {
           fitAddonRef.current.fit();
@@ -785,14 +826,14 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ host, ses
           lastKnownSizeRef.current = { cols, rows };
           const ws = wsRef.current;
           if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'resize', cols, rows }));
+            ws.send(JSON.stringify({ type: 'resize', cols, rows } as WsResizeMsg));
           }
         }
       }, 100);
     }
   }, [isActive]);
 
-  return <Box ref={terminalRef} sx={{ width: '100%', height: '100%', overflow: 'hidden' }} />;
+  return <Box className="terminal-pane" ref={terminalRef} sx={{ width: '100%', height: '100%', overflow: 'hidden' }} />;
 });
 
 export default TerminalComponent;

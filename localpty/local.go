@@ -39,7 +39,7 @@ func init() {
 		return "bash"
 	})()
 
-	if strings.HasSuffix(DefaultShell, "/powershell.exe") {
+	if strings.HasSuffix(DefaultShell, "/powershell.exe") || strings.HasSuffix(DefaultShell, `\powershell.exe`) {
 		DefaultShellIsLegacyPowershell = true
 	}
 }

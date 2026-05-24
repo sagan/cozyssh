@@ -21,13 +21,13 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
     - [`csGetAll(): AllObject`](#csgetall-allobject)
     - [`csOpen(target: Host | string | (Host | string)[], options?: { name?: string }): void`](#csopentarget-host--string--host--string-options--name-string--void)
     - [`csFetch(url: string, options?: RequestInit): Promise<Response>`](#csfetchurl-string-options-requestinit-promiseresponse)
-    - [`csExec(cmdline: string): Promise<{ error: any, stdout: string, stderr: string }>`](#csexeccmdline-string-promise-error-any-stdout-string-stderr-string-)
+    - [`csExec(cmdline: string): Promise<{ error: unknown, stdout: string, stderr: string }>`](#csexeccmdline-string-promise-error-unknown-stdout-string-stderr-string-)
     - [`csRefresh(): Promise<void>`](#csrefresh-promisevoid)
-    - [`csSetTheme(options: any, ...args: any[]): void`](#cssetthemeoptions-any-args-any-void)
+    - [`csSetTheme(options: unknown, ...args: unknown[]): void`](#cssetthemeoptions-unknown-args-unknown-void)
     - [`csUpdateButton(btn: ButtonData): Promise<string>`](#csupdatebuttonbtn-buttondata-promisestring)
     - [`csDeleteButton(id: string): Promise<void>`](#csdeletebuttonid-string-promisevoid)
     - [`csUpdateHost(host: Host): Promise<void>`](#csupdatehosthost-host-promisevoid)
-    - [`csDeleteHost(alias: string): Promise<void>`](#csdeletehostalias-string-promisevoid)
+    - [`csDeleteHost(name: string): Promise<void>`](#csdeletehostname-string-promisevoid)
   - [Client-side Events](#client-side-events)
     - [`cs:terminal-change`](#csterminal-change)
     - [`cs:terminal-connected`](#csterminal-connected)
@@ -236,7 +236,7 @@ Opens a new tab or split-screen tab.
 Performs an HTTP request via the CozySSH backend proxy to bypass browser CORS restrictions.
 - **Restricted Headers**: You can set browser-restricted headers (like `Referer`, `Origin`, `User-Agent`, or `Cookie`) directly in the `{ headers }` fetch option. `csFetch` automatically handles these to ensure they are correctly forwarded to the target.
 
-### `csExec(cmdline: string): Promise<{ error: any, stdout: string, stderr: string }>`
+### `csExec(cmdline: string): Promise<{ error: unknown, stdout: string, stderr: string }>`
 
 Executes a shell command on the CozySSH backend server.
 
@@ -247,7 +247,7 @@ Executes a shell command on the CozySSH backend server.
 
 Asynchronously refreshes all application data (server list, buttons, system info). Can be awaited.
 
-### `csSetTheme(options: any, ...args: any[]): void`
+### `csSetTheme(options: unknown, ...args: unknown[]): void`
 
 Sets the MUI theme for the application. This function accepts the same arguments as MUI `createTheme`, see [Material UI document](https://mui.com/material-ui/customization/theming/).
 
@@ -318,9 +318,9 @@ await csUpdateHost({
 csNotify("Host configuration updated");
 ```
 
-### `csDeleteHost(alias: string): Promise<void>`
+### `csDeleteHost(name: string): Promise<void>`
 
-Deletes a host configuration with the matching `alias` name from your SSH config.
+Deletes a host configuration with the matching `Host my-server` name from your SSH config.
 
 Sample usage:
 ```typescript

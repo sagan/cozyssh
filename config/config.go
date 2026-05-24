@@ -1,6 +1,7 @@
 package config
 
 import (
+	"cozyssh/models"
 	"crypto/rand"
 	"fmt"
 	"log"
@@ -14,27 +15,16 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type Button struct {
-	ID       string `yaml:"id" json:"id"`
-	Name     string `yaml:"name" json:"name"`
-	Type     string `yaml:"type" json:"type"`
-	Payload  string `yaml:"payload" json:"payload"`
-	Group    string `yaml:"group" json:"group"`
-	AutoRun  int    `yaml:"autorun" json:"autorun"`
-	Order    int    `yaml:"order" json:"order"`
-	Shortcut string `yaml:"shortcut" json:"shortcut"`
-}
-
 type Config struct {
-	Addr                  string            `yaml:"addr"`
-	SiteName              string            `yaml:"sitename"`
-	AppPasswordHash       string            `yaml:"app_password_hash"`
-	SSHDir                string            `yaml:"sshdir"` // openssh config dir, defaults to ~/.ssh
-	Buttons               []Button          `yaml:"buttons" json:"buttons"`
-	ConfigPath            string            `yaml:"-"` // internal use
-	ConfigDir             string            `yaml:"-"` // internal use
-	Vars                  map[string]string `yaml:"vars" json:"vars"`
-	InsecureIgnoreHostKey bool              `yaml:"insecure_ignore_host_key"`
+	Addr                  string               `yaml:"addr"`
+	SiteName              string               `yaml:"sitename"`
+	AppPasswordHash       string               `yaml:"app_password_hash"`
+	SSHDir                string               `yaml:"sshdir"` // openssh config dir, defaults to ~/.ssh
+	Buttons               []*models.ButtonData `yaml:"buttons" json:"buttons"`
+	ConfigPath            string               `yaml:"-"` // internal use
+	ConfigDir             string               `yaml:"-"` // internal use
+	Vars                  map[string]string    `yaml:"vars" json:"vars"`
+	InsecureIgnoreHostKey bool                 `yaml:"insecure_ignore_host_key"`
 }
 
 func LoadConfig(customDir string) (*Config, error) {
@@ -196,7 +186,7 @@ func (c *Config) ResetAppPassword() (string, error) {
 	return password, nil
 }
 
-func (c *Config) AddButton(btn Button) error {
+func (c *Config) AddButton(btn *models.ButtonData) error {
 	if btn.Order == 0 {
 		maxOrder := 0
 		for _, b := range c.Buttons {
@@ -215,9 +205,9 @@ func (c *Config) AddButton(btn Button) error {
 	return c.Save()
 }
 
-func (c *Config) UpdateButton(btn Button) error {
+func (c *Config) UpdateButton(btn *models.ButtonData) error {
 	for i, b := range c.Buttons {
-		if b.ID == btn.ID {
+		if b.Id == btn.Id {
 			c.Buttons[i] = btn
 			c.SortButtons()
 			return c.Save()
@@ -228,7 +218,7 @@ func (c *Config) UpdateButton(btn Button) error {
 
 func (c *Config) RemoveButton(id string) error {
 	for i, b := range c.Buttons {
-		if b.ID == id {
+		if b.Id == id {
 			c.Buttons = append(c.Buttons[:i], c.Buttons[i+1:]...)
 			return c.Save()
 		}
@@ -240,7 +230,7 @@ func (c *Config) MoveButton(id string, direction int) error {
 	c.SortButtons() // Ensure we starts from sorted
 	idx := -1
 	for i, b := range c.Buttons {
-		if b.ID == id {
+		if b.Id == id {
 			idx = i
 			break
 		}
@@ -285,7 +275,7 @@ func (c *Config) MoveButton(id string, direction int) error {
 	// Find new index for targetBtn after removal
 	finalTargetIdx := -1
 	for i, b := range c.Buttons {
-		if b.ID == targetBtn.ID {
+		if b.Id == targetBtn.Id {
 			finalTargetIdx = i
 			break
 		}
@@ -301,7 +291,7 @@ func (c *Config) MoveButton(id string, direction int) error {
 	if insertIdx >= len(c.Buttons) {
 		c.Buttons = append(c.Buttons, btnObj)
 	} else {
-		c.Buttons = append(c.Buttons[:insertIdx], append([]Button{btnObj}, c.Buttons[insertIdx:]...)...)
+		c.Buttons = append(c.Buttons[:insertIdx], append([]*models.ButtonData{btnObj}, c.Buttons[insertIdx:]...)...)
 	}
 
 	// Update the order of the moved button
@@ -315,7 +305,7 @@ func (c *Config) MoveButton(id string, direction int) error {
 	// Find the moved button again in the slice
 	movedIdx := -1
 	for i, b := range c.Buttons {
-		if b.ID == id {
+		if b.Id == id {
 			movedIdx = i
 			break
 		}

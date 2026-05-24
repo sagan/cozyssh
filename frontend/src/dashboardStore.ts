@@ -8,11 +8,12 @@
  * Use `getStore()` inside callbacks/event handlers for a synchronous, always-fresh snapshot.
  */
 
-import { create } from 'zustand';
-import type { Host } from './Sidebar';
-import type { TerminalHandle, ShellIntegration } from './Terminal';
-import type { ScratchpadHandle } from './Scratchpad';
-import type { ButtonData } from './common';
+import { create } from "zustand";
+
+import type { HostData, ButtonData } from "./api";
+import type { ShellIntegration } from "./common";
+import type { TerminalHandle } from "./Terminal";
+import type { ScratchpadHandle } from "./Scratchpad";
 
 // Re-exported so consumers don't need to import from Dashboard.tsx
 export interface PaneData {
@@ -31,11 +32,8 @@ export interface TabData {
   isPinned?: boolean;
   isLocked?: boolean;
   showFiles?: boolean;
-  type?: 'terminal' | 'scratchpad';
+  type?: "terminal" | "scratchpad";
 }
-
-export type { ButtonData };
-
 
 export type TerminalRefMap = Record<string, TerminalHandle | ScratchpadHandle | null>;
 
@@ -43,7 +41,7 @@ interface DashboardState {
   tabs: TabData[];
   activeTabId: string;
   activePaneId: string;
-  hosts: Host[];
+  hosts: HostData[];
   buttons: ButtonData[];
   vars: Record<string, string>;
   /** Local (browser-only) vars. All names have a "local" (case-insensitive) prefix. */
@@ -55,7 +53,7 @@ interface DashboardActions {
   setTabs: (tabs: TabData[] | ((prev: TabData[]) => TabData[])) => void;
   setActiveTabId: (id: string) => void;
   setActivePaneId: (id: string) => void;
-  setHosts: (hosts: Host[]) => void;
+  setHosts: (hosts: HostData[]) => void;
   setButtons: (buttons: ButtonData[]) => void;
   setVars: (vars: Record<string, string>) => void;
   setLocalVars: (localVars: Record<string, string | undefined>) => void;
@@ -71,8 +69,8 @@ type DashboardStore = DashboardState & DashboardActions;
 export const useDashboardStore = create<DashboardStore>((set) => ({
   // ── State ──────────────────────────────────────────────────────────────
   tabs: [],
-  activeTabId: '',
-  activePaneId: '',
+  activeTabId: "",
+  activePaneId: "",
   hosts: [],
   buttons: [],
   vars: {},
@@ -80,8 +78,7 @@ export const useDashboardStore = create<DashboardStore>((set) => ({
   shellIntegrations: {},
 
   // ── Actions ────────────────────────────────────────────────────────────
-  setTabs: (tabs) =>
-    set((state) => ({ tabs: typeof tabs === 'function' ? tabs(state.tabs) : tabs })),
+  setTabs: (tabs) => set((state) => ({ tabs: typeof tabs === "function" ? tabs(state.tabs) : tabs })),
 
   setActiveTabId: (id) => set({ activeTabId: id }),
   setActivePaneId: (id) => set({ activePaneId: id }),
@@ -92,8 +89,7 @@ export const useDashboardStore = create<DashboardStore>((set) => ({
 
   setShellIntegrations: (update) =>
     set((state) => ({
-      shellIntegrations:
-        typeof update === 'function' ? update(state.shellIntegrations) : update,
+      shellIntegrations: typeof update === "function" ? update(state.shellIntegrations) : update,
     })),
 }));
 

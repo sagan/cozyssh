@@ -9,26 +9,50 @@
  *   useEffect(() => setupPluginAPI(callbacks), []);  // empty dep array — always stable
  */
 
-import React from 'react';
-import { getStore, type TerminalRefMap } from './dashboardStore';
-import type { ButtonData } from './dashboardStore';
-import type { AppletData } from './AppletWrapper';
-import type { Host } from './Sidebar';
-import { version as PACKAGE_JSON_VERSION } from '../package.json';
-
-import { transform } from 'sucrase';
-import * as react from "react";
-import * as dompurify from 'dompurify';
-import * as marked from 'marked';
-import { generatePassword } from './common';
-
-(window as any).__CS_VERSION__ = PACKAGE_JSON_VERSION;
+import React from "react";
+import { transform } from "sucrase";
 
 // Expose those modules to custom scripts
+import * as react from "react";
+import * as dompurify from "dompurify";
+import * as marked from "marked";
+
+import type { HostData, ButtonData, ExecRequest, ExecResult } from "./api";
+import { version as PACKAGE_JSON_VERSION } from "../package.json";
+import {
+  BROWSER_STORAGE_KEY_TOKEN,
+  DEFAULT_BUTTON_GROUP,
+  HEADER_AUTHORIZATION,
+  HEADER_AUTHORIZATION_BEARER_PREFIX,
+  HEADER_CONTENT_TYPE,
+  HEADER_COOKIE,
+  HEADER_ORIGIN,
+  HEADER_REFERER,
+  HEADER_USER_AGENT,
+  METHOD_DELETE,
+  METHOD_GET,
+  METHOD_POST,
+  METHOD_PUT,
+  MIME_JSON,
+} from "./constants";
+import { generatePassword, type Severity } from "./common";
+import { getStore, type TerminalRefMap } from "./dashboardStore";
+import type { AppletData } from "./AppletWrapper";
+
+window.__CS_VERSION__ = PACKAGE_JSON_VERSION;
+
+export type AppletPosition = "widget" | "sidebar" | "dialog";
+
+export interface CsExecResult {
+  error: unknown;
+  stdout: string;
+  stderr: string;
+}
+
 const exposeModules = {
-  "react": react,
-  "dompurify": dompurify,
-  "marked": marked,
+  react: react,
+  dompurify: dompurify,
+  marked: marked,
 };
 
 // Generate Blob URLs for each exposed module
@@ -36,11 +60,12 @@ const virtualModules: Record<string, string> = {};
 
 for (const [moduleName, moduleObj] of Object.entries(exposeModules)) {
   // Attach safely to window
-  const safeName = `__plugin_expose_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+  const safeName = `__plugin_expose_${moduleName.replace(/[^a-zA-Z0-9]/g, "_")}`;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (window as any)[safeName] = moduleObj;
 
   // Identify named exports (everything except 'default')
-  const namedExports = Object.keys(moduleObj).filter(k => k !== 'default');
+  const namedExports = Object.keys(moduleObj).filter((k) => k !== "default");
 
   // Determine what the 'default' export should be
   // If the module already has a .default, use that. Otherwise, use the whole object.
@@ -48,7 +73,7 @@ for (const [moduleName, moduleObj] of Object.entries(exposeModules)) {
   const mod = window["${safeName}"];
 
   // Export the named members
-  export const { ${namedExports.join(', ')} } = mod;
+  export const { ${namedExports.join(", ")} } = mod;
 
   // Export the default member
   // If 'default' exists in the namespace, export that, otherwise the namespace itself
@@ -57,38 +82,38 @@ for (const [moduleName, moduleObj] of Object.entries(exposeModules)) {
 `;
 
   // Turn it into a Blob URL
-  const blob = new Blob([shimCode], { type: 'application/javascript' });
+  const blob = new Blob([shimCode], { type: "application/javascript" });
   virtualModules[moduleName] = URL.createObjectURL(blob);
 }
 
 const escapeRegExp = (string: string) => {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 };
 
 const virtualModulesImportRegex = (() => {
-  const moduleNames = Object.keys(virtualModules).map(escapeRegExp).join('|');
+  const moduleNames = Object.keys(virtualModules).map(escapeRegExp).join("|");
   return new RegExp(
     `((?:from|import)\\s+['"])(${moduleNames})(['"])|(import\\s*\\(\\s*['"])(${moduleNames})(['"]\\))`,
-    'g'
+    "g"
   );
 })();
 
 /**
  * id => moduleObj
  */
-const moduleCache: Record<string, Record<string, any>> = {};
+const moduleCache: Record<string, Record<string, unknown>> = {};
 
-(window as any).__CS_MODULECACHE__ = moduleCache;
+window.__CS_MODULECACHE__ = moduleCache;
 
 export async function runScript(
   btn: ButtonData,
-  notify: (msg: string, severity?: 'success' | 'info' | 'warning' | 'error') => void,
+  notify: (msg: string, severity?: Severity) => void,
   getTerminalRefs: () => TerminalRefMap
 ) {
-  let moduleObj: any = null;
+  let moduleObj: Record<string, unknown>;
   let cached = false;
 
-  if (!moduleCache[btn.id]) {
+  if (!btn.id || !moduleCache[btn.id]) {
     let scriptCode = btn.payload;
     // Do a single replace pass
     scriptCode = scriptCode.replace(virtualModulesImportRegex, (match, p1, p2, p3, p4, p5, p6) => {
@@ -102,9 +127,9 @@ export async function runScript(
 
       return match; // Fallback
     });
-    scriptCode = transform(scriptCode, { transforms: ['typescript', 'jsx'] }).code;
+    scriptCode = transform(scriptCode, { transforms: ["typescript", "jsx"] }).code;
 
-    const blob = new Blob([scriptCode], { type: 'application/javascript' });
+    const blob = new Blob([scriptCode], { type: "application/javascript" });
     // Create a temporary URL pointing to that Blob
     const url = URL.createObjectURL(blob);
 
@@ -112,13 +137,13 @@ export async function runScript(
       moduleObj = await import(url);
     } catch (e) {
       console.error(`Script ${btn.name} Import Error:`, e);
-      notify(`Script ${btn.name} Import Error: ${e}`, 'error');
+      notify(`Script ${btn.name} Import Error: ${e}`, "error");
       return;
     } finally {
       // Always clean up the URL to prevent memory leaks
       URL.revokeObjectURL(url);
     }
-    if (moduleObj.cache) {
+    if (btn.id && moduleObj.cache) {
       moduleCache[btn.id] = moduleObj;
     }
   } else {
@@ -126,15 +151,18 @@ export async function runScript(
     cached = true;
   }
 
-  if (typeof moduleObj.run === 'function') {
+  if (typeof moduleObj.run === "function") {
     try {
       await moduleObj.run();
     } catch (e) {
       console.error(`Script ${btn.name} run() Error:`, e);
-      notify(`Script ${btn.name} run() Error: ${e}`, 'error');
+      notify(`Script ${btn.name} run() Error: ${e}`, "error");
     }
   } else if (cached) {
-    notify(`Script ${btn.name} is already imported & cached, and has no run function. Reload the page to clear the cache`, 'info');
+    notify(
+      `Script ${btn.name} is already imported & cached, and has no run function. Reload the page to clear the cache`,
+      "info"
+    );
     return;
   }
 
@@ -149,9 +177,9 @@ export async function runScript(
 
 export interface PluginAPICallbacks {
   /** Show a toast notification */
-  notify: (msg: string, severity?: 'success' | 'info' | 'warning' | 'error') => void;
+  notify: (msg: string, severity?: "success" | "info" | "warning" | "error") => void;
   /** Apply a new MUI theme */
-  setTheme: (options: any, ...args: any[]) => void;
+  setTheme: (options: unknown, ...args: unknown[]) => void;
   /** Open a new terminal tab */
   handleSelectHost: (host: string, customTitle?: string) => Promise<void>;
   /** Open a split-pane tab from a tag */
@@ -171,7 +199,7 @@ export interface PluginAPICallbacks {
   /** Update localVars in the store (and sync to localStorage via Dashboard) */
   setLocalVars: (v: Record<string, string | undefined>) => void;
   /** Getter for the live terminal ref map (avoids store coupling) */
-  getTerminalRefs: () => import('./dashboardStore').TerminalRefMap;
+  getTerminalRefs: () => TerminalRefMap;
 }
 
 // ── Setup / teardown ───────────────────────────────────────────────────────────
@@ -184,30 +212,25 @@ export interface PluginAPICallbacks {
  *   useEffect(() => setupPluginAPI(callbacks), []);
  */
 export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
-  const w = window as any;
-
   // ── Variable API ─────────────────────────────────────────────────────────
 
-  w.csGetVar = (name?: string) => {
+  window.csGetVar = ((name?: string) => {
     const { vars, localVars } = getStore();
     if (name) {
-      if (name.toLowerCase().startsWith('local')) return localVars[name];
+      if (name.toLowerCase().startsWith("local")) return localVars[name];
       return vars[name];
     }
     return { ...vars, ...localVars };
-  };
+  }) as typeof window.csGetVar;
 
-  w.csSetVar = async (
-    nameOrVars: string | Record<string, string | undefined>,
-    value?: string | undefined
-  ) => {
+  window.csSetVar = async (nameOrVars: string | Record<string, string | undefined>, value?: string | undefined) => {
     const { vars, localVars } = getStore();
-    const token = localStorage.getItem('cozy_token');
-    let updates: Record<string, string | null> = {};
-    let localUpdates: Record<string, string | undefined> = {};
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+    const updates: Record<string, string | null> = {};
+    const localUpdates: Record<string, string | undefined> = {};
 
-    if (typeof nameOrVars === 'string') {
-      if (nameOrVars.toLowerCase().startsWith('local')) {
+    if (typeof nameOrVars === "string") {
+      if (nameOrVars.toLowerCase().startsWith("local")) {
         localUpdates[nameOrVars] = value;
       } else {
         updates[nameOrVars] = value === undefined ? null : value;
@@ -215,7 +238,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     } else {
       for (const k in nameOrVars) {
         const v = nameOrVars[k];
-        if (k.toLowerCase().startsWith('local')) {
+        if (k.toLowerCase().startsWith("local")) {
           localUpdates[k] = v;
         } else {
           updates[k] = v === undefined ? null : v;
@@ -228,9 +251,12 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     }
     if (Object.keys(updates).length === 0) return;
 
-    const r = await fetch('/api/vars', {
-      method: 'PUT',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    const r = await fetch("/api/vars", {
+      method: METHOD_PUT,
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        [HEADER_CONTENT_TYPE]: MIME_JSON,
+      },
       body: JSON.stringify(updates),
     });
     if (!r.ok) throw new Error(await r.text());
@@ -246,36 +272,43 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
 
   // ── Terminal API ──────────────────────────────────────────────────────────
 
-  w.csGetTerminal = (paneId?: string) => {
+  window.csGetTerminal = (paneId?: string) => {
     const { activePaneId } = getStore();
     const refs = cb.getTerminalRefs();
-    const term: any = refs[paneId ?? activePaneId];
-    return term?.getXterm?.();
+    const term = refs[paneId ?? activePaneId];
+    return term && "getXterm" in term ? term.getXterm() : undefined;
   };
 
-  w.csGetShellIntegration = (paneId?: string) => {
+  window.csGetShellIntegration = (paneId?: string) => {
     const { shellIntegrations, activePaneId } = getStore();
     return shellIntegrations[paneId ?? activePaneId];
   };
 
-  w.csGetAll = () => {
+  window.csGetAll = () => {
     const { activePaneId, shellIntegrations, tabs, hosts, buttons, vars, localVars } = getStore();
     return { activePaneId, terminals: cb.getTerminalRefs(), shellIntegrations, tabs, hosts, buttons, vars, localVars };
   };
 
-  w.csSendData = (data: string, paneId?: string) => {
+  window.csSendData = (data: string, paneId?: string) => {
     const { activePaneId } = getStore();
     const refs = cb.getTerminalRefs();
-    const term: any = refs[paneId ?? activePaneId];
-    term?.sendData?.(data);
+    const term = refs[paneId ?? activePaneId];
+    if (term && "getXterm" in term) {
+      term.sendData(data);
+    }
   };
 
-  w.csGetTerminalContents = (lineCount = 100, paneId?: string) => {
+  window.csGetTerminalContents = (lineCount = 100, paneId?: string) => {
     const { activePaneId } = getStore();
     const refs = cb.getTerminalRefs();
-    const term: any = refs[paneId ?? activePaneId];
-    const xterm = term?.getXterm?.();
-    if (!xterm) return '';
+    const term = refs[paneId ?? activePaneId];
+    if (!term || !("getXterm" in term)) {
+      return "";
+    }
+    const xterm = term.getXterm();
+    if (!xterm) {
+      return "";
+    }
 
     const buffer = xterm.buffer.active;
     const lines: string[] = [];
@@ -285,10 +318,10 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
       const line = buffer.getLine(i);
       if (line) lines.push(line.translateToString().trimEnd());
     }
-    return lines.join('\n');
+    return lines.join("\n");
   };
 
-  w.csFocus = (paneId?: string) => {
+  window.csFocus = (paneId?: string) => {
     const { activePaneId, tabs } = getStore();
     const refs = cb.getTerminalRefs();
     if (paneId) {
@@ -304,47 +337,52 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     }
   };
 
-  w.csNotify = (msg: string, severity?: any) => cb.notify(msg, severity);
+  window.csNotify = (msg: string, severity) => cb.notify(msg, severity);
 
-  w.csFetch = async (url: string, options: any = {}) => {
-    const token = localStorage.getItem('cozy_token');
+  window.csFetch = async (url: string, options = {}) => {
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     const proxyUrl = `/api/fetch?url=${encodeURIComponent(url)}`;
-    const rawHeaders = options.headers || {};
-    const headers: any = {};
-    const restricted = ['authorization', 'referer', 'origin', 'user-agent', 'cookie'];
-    headers['Authorization'] = `Bearer ${token}`;
+    const rawHeaders = new Headers(options.headers);
+    const headers: Record<string, string> = {};
+    const restricted = [HEADER_AUTHORIZATION, HEADER_REFERER, HEADER_ORIGIN, HEADER_USER_AGENT, HEADER_COOKIE];
+    headers[HEADER_AUTHORIZATION] = HEADER_AUTHORIZATION_BEARER_PREFIX + token;
     for (const key in rawHeaders) {
       if (restricted.includes(key.toLowerCase())) {
-        headers[`X-CozySSH-${key}`] = rawHeaders[key];
+        headers[`X-CozySSH-${key}`] = rawHeaders.get(key)!;
       } else {
-        headers[key] = rawHeaders[key];
+        headers[key] = rawHeaders.get(key)!;
       }
     }
-    return fetch(proxyUrl, { method: options.method || 'GET', headers, body: options.body });
+    return fetch(proxyUrl, { method: options.method || METHOD_GET, headers, body: options.body });
   };
 
-  w.csExec = async (cmdline: string) => {
-    const token = localStorage.getItem('cozy_token');
-    const res = await fetch('/api/exec', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cmdline }),
+  window.csExec = async (cmdline: string) => {
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+    const res = await fetch("/api/exec", {
+      method: METHOD_POST,
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        [HEADER_CONTENT_TYPE]: MIME_JSON,
+      },
+      body: JSON.stringify({ cmdline } as ExecRequest),
     });
-    if (!res.ok) throw new Error('Exec failed: ' + res.statusText);
-    return res.json();
+    if (!res.ok) {
+      throw new Error("Exec failed: " + res.statusText);
+    }
+    return res.json() as Promise<ExecResult>;
   };
 
-  w.csSetTheme = (options: any, ...args: any[]) => cb.setTheme(options, ...args);
+  window.csSetTheme = (options, ...args) => cb.setTheme(options, ...args);
 
   // ── Navigation API ────────────────────────────────────────────────────────
 
-  w.csOpen = (target: any, options: { name?: string } = {}) => {
-    console.log('csOpen called:', target, options);
+  window.csOpen = (target, options: { name?: string } = {}) => {
+    console.log("csOpen called:", target, options);
     const { hosts } = getStore();
     const targets = Array.isArray(target) ? target.slice(0, 4) : [target];
-    const hostNames = targets.map((t: any) => {
-      if (typeof t === 'string') {
-        if (t === 'local') return 'local';
+    const hostNames = targets.map((t) => {
+      if (typeof t === "string") {
+        if (t === "local") return "local";
         const known = hosts.find((h) => h.name === t || h.hostname === t);
         return known ? known.name : t;
       }
@@ -358,39 +396,33 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     }
   };
 
-  w.csAttach = (id: string, host: string, title: string, isLocked = false) => {
+  window.csAttach = (id: string, host: string, title: string, isLocked = false) => {
     cb.handleAttach(id, host, title, isLocked);
   };
 
-  w.csRefresh = async () => {
+  window.csRefresh = async () => {
     await cb.handleRefresh();
   };
 
   // ── Applet API ────────────────────────────────────────────────────────────
 
-  w.csOpenApplet = (
-    name: string,
-    node: any,
-    options: { position?: 'widget' | 'sidebar' | 'dialog'; width?: number; height?: number } = {}
-  ) => {
-    let parsedPos: 'widget' | 'sidebar' | 'dialog';
-    if (options.position === 'dialog') {
-      parsedPos = 'dialog';
-    } else if (options.position === 'sidebar' || cb.isMobile) {
-      parsedPos = 'sidebar';
+  window.csOpenApplet = (name, node, options: { position?: AppletPosition; width?: number; height?: number } = {}) => {
+    let parsedPos: AppletPosition;
+    if (options.position === "dialog") {
+      parsedPos = "dialog";
+    } else if (options.position === "sidebar" || cb.isMobile) {
+      parsedPos = "sidebar";
     } else {
-      parsedPos = 'widget';
+      parsedPos = "widget";
     }
-    if (cb.isMobile && parsedPos === 'sidebar' && (window as any).__CS_AUTORUN_DONE__) {
+    if (cb.isMobile && parsedPos === "sidebar" && window.__CS_AUTORUN_DONE__) {
       cb.setMobileAppletsOpen(true);
     }
     cb.setApplets((prev) => {
       const existing = prev.find((a) => a.name === name);
       if (existing) {
         return prev.map((a) =>
-          a.name === name
-            ? { ...a, node, width: options.width ?? a.width, height: options.height ?? a.height }
-            : a
+          a.name === name ? { ...a, node, width: options.width ?? a.width, height: options.height ?? a.height } : a
         );
       }
       return [
@@ -407,43 +439,42 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     });
   };
 
-  w.csCloseApplet = (name: string) => {
+  window.csCloseApplet = (name: string) => {
     cb.setApplets((prev) => prev.filter((a) => a.name !== name));
   };
 
-  w.csGetApplet = (_name?: string) => {
-    // applets live in React state — overwritten immediately by Dashboard's
-    // own csGetApplet useEffect that depends on [applets].
-    // We leave it as-is in Dashboard rather than fighting React here.
-  };
+  // applets live in React state
+  // own csGetApplet useEffect that depends on [applets].
+  // We leave it as-is in Dashboard rather than fighting React here.
+  // window.csGetApplet = (_name?: string) => {};
 
   // ── Button / Host CRUD API ────────────────────────────────────────────────
 
-  w.csUpdateButton = async (btn: ButtonData): Promise<string> => {
+  window.csUpdateButton = async (btn: ButtonData): Promise<string> => {
     const { buttons } = getStore();
     const targetId = btn.id || generatePassword(12);
-    const exists = btn.id ? buttons.some(b => b.id === btn.id) : false;
+    const exists = btn.id ? buttons.some((b) => b.id === btn.id) : false;
 
-    const token = localStorage.getItem('cozy_token');
-    const method = exists ? 'PUT' : 'POST';
-    const url = exists ? `/api/buttons/${targetId}` : '/api/buttons';
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+    const method = exists ? METHOD_PUT : METHOD_POST;
+    const url = exists ? `/api/buttons/${targetId}` : "/api/buttons";
 
-    const body = {
+    const body: ButtonData = {
       id: targetId,
-      name: btn.name ?? '',
-      type: btn.type ?? 'send_string',
-      payload: btn.payload ?? '',
-      group: btn.group ?? 'Default',
+      name: btn.name || "",
+      type: btn.type || "send_string",
+      payload: btn.payload || "",
+      group: btn.group || DEFAULT_BUTTON_GROUP,
       autorun: btn.autorun ?? 0,
       order: btn.order ?? 0,
-      shortcut: btn.shortcut ?? '',
+      shortcut: btn.shortcut || "",
     };
 
     const res = await fetch(url, {
       method,
       headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        [HEADER_CONTENT_TYPE]: MIME_JSON,
       },
       body: JSON.stringify(body),
     });
@@ -453,22 +484,26 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     }
 
     // Refresh buttons in store
-    const refreshRes = await fetch('/api/buttons', {
-      headers: { 'Authorization': `Bearer ${token}` },
+    const refreshRes = await fetch("/api/buttons", {
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      },
     });
     if (refreshRes.ok) {
-      const data = await refreshRes.json();
+      const data: ButtonData[] = await refreshRes.json();
       getStore().setButtons(data || []);
     }
 
     return targetId;
   };
 
-  w.csDeleteButton = async (id: string): Promise<void> => {
-    const token = localStorage.getItem('cozy_token');
+  window.csDeleteButton = async (id: string): Promise<void> => {
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     const res = await fetch(`/api/buttons/${id}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` },
+      method: METHOD_DELETE,
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      },
     });
 
     if (!res.ok) {
@@ -476,40 +511,43 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     }
 
     // Refresh buttons in store
-    const refreshRes = await fetch('/api/buttons', {
-      headers: { 'Authorization': `Bearer ${token}` },
+    const refreshRes = await fetch("/api/buttons", {
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      },
     });
     if (refreshRes.ok) {
-      const data = await refreshRes.json();
+      const data: ButtonData[] = await refreshRes.json();
       getStore().setButtons(data || []);
     }
   };
 
-  w.csUpdateHost = async (host: Host): Promise<void> => {
+  window.csUpdateHost = async (host: HostData): Promise<void> => {
     const { hosts } = getStore();
-    const exists = hosts.some(h => h.name === host.name && h.source === 'config');
+    const exists = hosts.some((h) => h.name === host.name && h.source === "config");
 
-    const token = localStorage.getItem('cozy_token');
-    const method = exists ? 'PUT' : 'POST';
-    const url = exists ? `/api/hosts/${encodeURIComponent(host.name)}` : '/api/hosts';
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+    const method = exists ? METHOD_PUT : METHOD_POST;
+    const url = exists ? `/api/hosts/${encodeURIComponent(host.name)}` : "/api/hosts";
 
-    const body = {
-      alias: host.name,
+    const body: HostData = {
+      name: host.name,
       hostname: host.hostname,
-      user: host.user ?? 'root',
-      port: host.port ? String(host.port) : '22',
-      identity_file: host.identity_file ?? (host as any).identityFile ?? '',
-      proxy_jump: host.proxy_jump ?? (host as any).proxyJump ?? '',
-      remote_command: host.remote_command ?? (host as any).remoteCommand ?? '',
-      tags: host.tags ?? [],
-      comment: host.comment ?? '',
+      user: host.user || "root",
+      port: host.port ? String(host.port) : "22",
+      identity_file: host.identity_file || "",
+      proxy_jump: host.proxy_jump || "",
+      remote_command: host.remote_command || "",
+      tags: host.tags || [],
+      comment: host.comment || "",
+      source: host.source || "",
     };
 
     const res = await fetch(url, {
       method,
       headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        [HEADER_CONTENT_TYPE]: MIME_JSON,
       },
       body: JSON.stringify(body),
     });
@@ -519,20 +557,24 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     }
 
     // Refresh hosts in store
-    const refreshRes = await fetch('/api/hosts', {
-      headers: { 'Authorization': `Bearer ${token}` },
+    const refreshRes = await fetch("/api/hosts", {
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      },
     });
     if (refreshRes.ok) {
-      const data = await refreshRes.json();
+      const data: HostData[] = await refreshRes.json();
       getStore().setHosts(data || []);
     }
   };
 
-  w.csDeleteHost = async (alias: string): Promise<void> => {
-    const token = localStorage.getItem('cozy_token');
-    const res = await fetch(`/api/hosts/${encodeURIComponent(alias)}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` },
+  window.csDeleteHost = async (name: string): Promise<void> => {
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+    const res = await fetch(`/api/hosts/${encodeURIComponent(name)}`, {
+      method: METHOD_DELETE,
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      },
     });
 
     if (!res.ok) {
@@ -540,11 +582,13 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     }
 
     // Refresh hosts in store
-    const refreshRes = await fetch('/api/hosts', {
-      headers: { 'Authorization': `Bearer ${token}` },
+    const refreshRes = await fetch("/api/hosts", {
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      },
     });
     if (refreshRes.ok) {
-      const data = await refreshRes.json();
+      const data: HostData[] = await refreshRes.json();
       getStore().setHosts(data || []);
     }
   };
@@ -553,11 +597,31 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
 
   return () => {
     const keys = [
-      'csGetVar', 'csSetVar', 'csGetTerminal', 'csGetShellIntegration', 'csGetAll',
-      'csSendData', 'csGetTerminalContents', 'csFocus', 'csNotify', 'csFetch', 'csExec',
-      'csSetTheme', 'csOpen', 'csAttach', 'csRefresh', 'csOpenApplet', 'csCloseApplet',
-      'csGetApplet', 'csUpdateButton', 'csDeleteButton', 'csUpdateHost', 'csDeleteHost',
-    ];
-    for (const k of keys) delete (window as any)[k];
+      "csGetVar",
+      "csSetVar",
+      "csGetTerminal",
+      "csGetShellIntegration",
+      "csGetAll",
+      "csSendData",
+      "csGetTerminalContents",
+      "csFocus",
+      "csNotify",
+      "csFetch",
+      "csExec",
+      "csSetTheme",
+      "csOpen",
+      "csAttach",
+      "csRefresh",
+      "csOpenApplet",
+      "csCloseApplet",
+      "csGetApplet",
+      "csUpdateButton",
+      "csDeleteButton",
+      "csUpdateHost",
+      "csDeleteHost",
+    ] as const;
+    for (const k of keys) {
+      delete (window as Partial<Window>)[k];
+    }
   };
 }

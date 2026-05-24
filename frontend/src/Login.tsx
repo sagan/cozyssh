@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Box, Button, TextField, Typography, Paper, ThemeProvider, CssBaseline } from '@mui/material';
+
 import { version as PACKAGE_JSON_VERSION } from '../package.json';
+import type { FullData, LoginRequest, LoginResponse, Manifest } from './api';
+import { BROWSER_STORAGE_KEY_TOKEN, HEADER_CONTENT_TYPE, METHOD_POST, MIME_JSON } from './constants';
 import { loginTheme } from './common';
 
-export default function Login({ onLoginSuccess }: { onLoginSuccess?: (data: any) => void }) {
+export default function Login({ onLoginSuccess }: { onLoginSuccess?: (data: FullData) => void }) {
   const [password, setPassword] = useState('');
 
   const [sitename, setSitename] = useState("CozySSH");
   useEffect(() => {
-    fetch("/manifest.json").then((res) => res.json()).then((data) => {
+    fetch("/manifest.json").then((res) => res.json() as Promise<Manifest>).then((data) => {
       setSitename(data.name);
       document.title = data.name;
     }).catch(e => console.log(e))
@@ -21,13 +24,15 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess?: (data: any)
       return;
     }
     const res = await fetch('/api/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
+      method: METHOD_POST,
+      headers: {
+        [HEADER_CONTENT_TYPE]: MIME_JSON,
+      },
+      body: JSON.stringify({ password } as LoginRequest),
     });
     if (res.ok) {
-      const data = await res.json();
-      localStorage.setItem('cozy_token', data.token);
+      const data: LoginResponse = await res.json();
+      localStorage.setItem(BROWSER_STORAGE_KEY_TOKEN, data.token);
       if (onLoginSuccess && data.fulldata) {
         onLoginSuccess(data.fulldata);
       } else {
@@ -42,12 +47,12 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess?: (data: any)
     if (!confirm("This will unregister the Service Worker, clear all caches and reload. Proceed?")) return;
     if ('serviceWorker' in navigator) {
       const registrations = await navigator.serviceWorker.getRegistrations();
-      for (let registration of registrations) {
+      for (const registration of registrations) {
         await registration.unregister();
       }
       if (window.caches) {
         const cacheNames = await caches.keys();
-        for (let cacheName of cacheNames) {
+        for (const cacheName of cacheNames) {
           await caches.delete(cacheName);
         }
       }
@@ -86,7 +91,8 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess?: (data: any)
             Force clear cache & unregister service worker
           </Button>
           <Typography variant="body2" sx={{ mt: 2, fontSize: '0.7rem' }}>
-            v{PACKAGE_JSON_VERSION}&nbsp;|&nbsp;<a rel="noopener noreferrer" style={{ color: '#1976d2' }} href="https://github.com/sagan/cozyssh">GitHub</a>
+            v{PACKAGE_JSON_VERSION}&nbsp;|&nbsp;<a rel="noopener noreferrer" style={{ color: '#1976d2' }}
+              href="https://github.com/sagan/cozyssh">GitHub</a>
           </Typography>
         </Paper>
       </Box>

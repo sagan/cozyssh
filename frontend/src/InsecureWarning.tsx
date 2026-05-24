@@ -1,7 +1,6 @@
-import React from 'react';
 import { Box, Typography, Button, Paper, Container } from '@mui/material';
 
-const InsecureWarning: React.FC = () => {
+export default function InsecureWarning() {
   return (
     <Box sx={{
       display: 'flex',
@@ -73,5 +72,3 @@ const InsecureWarning: React.FC = () => {
     </Box>
   );
 };
-
-export default InsecureWarning;

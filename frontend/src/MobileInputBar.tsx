@@ -24,6 +24,9 @@ import SouthIcon from '@mui/icons-material/South';
 import WestIcon from '@mui/icons-material/West';
 import EastIcon from '@mui/icons-material/East';
 
+import type { TerminalHandle } from './Terminal';
+import type { ScratchpadHandle } from './Scratchpad';
+
 export interface MobileInputBarProps {
   isCtrlActive: boolean;
   setIsCtrlActive: (v: boolean) => void;
@@ -37,7 +40,7 @@ export interface MobileInputBarProps {
   onExtraKeysOpenChange: (v: boolean) => void;
   /** Height of the on-screen keyboard in px (0 when keyboard is hidden) */
   keyboardHeight: number;
-  getActiveTerminal: () => any;
+  getActiveTerminal: () => TerminalHandle | ScratchpadHandle | null;
 }
 
 // ── Key definitions ───────────────────────────────────────────────────────────
@@ -184,6 +187,7 @@ export default function MobileInputBar({
 
   useEffect(() => {
     if (keyboardHeight > 60) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLastKeyboardHeight(keyboardHeight);
     }
   }, [keyboardHeight]);
@@ -227,57 +231,61 @@ export default function MobileInputBar({
     onExtraKeysOpenChange(next);
     // Suppress / restore system keyboard on the active xterm textarea
     const term = getActiveTerminal();
-    const textarea = term?.getXterm?.()?.textarea as HTMLTextAreaElement | undefined;
-    if (textarea) textarea.inputMode = next ? 'none' : '';
-    if (next) (navigator as any).virtualKeyboard?.hide?.();
+    if (term && "getXterm" in term) {
+      const textarea = term.getXterm()?.textarea;
+      if (textarea) textarea.inputMode = next ? 'none' : '';
+      if (next) {
+        navigator.virtualKeyboard?.hide();
+      }
+    }
   };
 
   const activeKbHeight = keyboardHeight > 60 ? keyboardHeight : lastKeyboardHeight;
-  const panelHeight = activeKbHeight > 60 ? (activeKbHeight + 40) : Math.round(window.innerHeight * 0.38);
+  const panelHeight = activeKbHeight > 60 ? (activeKbHeight + 40) : Math.floor(window.innerHeight * 0.38);
 
   // ── Shared sub-components ──────────────────────────────────────────────────
 
   /** The gesture toggle button (leftmost of both bar and panel top row) */
-  const GestureBtn = () => (
-    <IconButton
-      size="small"
-      {...getTapProps(() => { vibe(); onGestureModeChange(!gestureMode); })}
-      sx={{
-        color: gestureMode ? 'primary.main' : 'text.secondary',
-        bgcolor: gestureMode ? 'primary.50' : 'transparent',
-        borderRadius: 1,
-        width: 34,
-        height: 34,
-        flexShrink: 0,
-      }}
-    >
-      {gestureMode ? <PanToolIcon fontSize="small" /> : <PanToolOutlinedIcon fontSize="small" />}
-    </IconButton>
-  );
+  const GestureBtn = <IconButton
+    size="small"
+    {...getTapProps(() => { vibe(); onGestureModeChange(!gestureMode); })}
+    sx={{
+      color: gestureMode ? 'primary.main' : 'text.secondary',
+      bgcolor: gestureMode ? 'primary.50' : 'transparent',
+      borderRadius: 1,
+      width: 34,
+      height: 34,
+      flexShrink: 0,
+    }}
+  >
+    {gestureMode ? <PanToolIcon fontSize="small" /> : <PanToolOutlinedIcon fontSize="small" />}
+  </IconButton>
 
   /** Ctrl toggle — fixed width prevents layout shift when toggling outlined↔contained */
-  const CtrlBtn = ({ height = 28 }: { height?: number }) => (
-    <Button
-      size="small"
-      variant={isCtrlActive ? 'contained' : 'outlined'}
-      {...getTapProps(() => { vibe(); setIsCtrlActive(!isCtrlActive); })}
-      sx={{ width: 44, minWidth: 44, height, px: 0, fontWeight: 700, flexShrink: 0, fontSize: '0.72rem', boxSizing: 'border-box' }}
-    >
-      Ctrl
-    </Button>
-  );
+  const CtrlBtn = <Button
+    size="small"
+    variant={isCtrlActive ? 'contained' : 'outlined'}
+    {...getTapProps(() => { vibe(); setIsCtrlActive(!isCtrlActive); })}
+    sx={{
+      width: 44, minWidth: 44, height: 28, px: 0, fontWeight: 700,
+      flexShrink: 0, fontSize: '0.72rem', boxSizing: 'border-box'
+    }}
+  >
+    Ctrl
+  </Button>;
 
   /** Alt toggle — same fixed-width pattern, auto-clears after next key */
-  const AltBtn = ({ height = 28 }: { height?: number }) => (
-    <Button
-      size="small"
-      variant={isAltActive ? 'contained' : 'outlined'}
-      {...getTapProps(() => { vibe(); setIsAltActive(!isAltActive); })}
-      sx={{ width: 38, minWidth: 38, height, px: 0, fontWeight: 700, flexShrink: 0, fontSize: '0.72rem', boxSizing: 'border-box' }}
-    >
-      Alt
-    </Button>
-  );
+  const AltBtn = <Button
+    size="small"
+    variant={isAltActive ? 'contained' : 'outlined'}
+    {...getTapProps(() => { vibe(); setIsAltActive(!isAltActive); })}
+    sx={{
+      width: 38, minWidth: 38, height: 28, px: 0, fontWeight: 700,
+      flexShrink: 0, fontSize: '0.72rem', boxSizing: 'border-box'
+    }}
+  >
+    Alt
+  </Button>;
 
   return (
     <Box
@@ -292,12 +300,14 @@ export default function MobileInputBar({
       {/* ── Extra-keys panel (replaces the accessory bar when open) ── */}
       {extraKeysOpen && (
         <Paper
+          id="mobile-input-bar-full"
           elevation={8}
           square
           sx={{
             height: panelHeight,
             position: 'fixed',
-            bottom: 0,
+            // bottom: 0, // Set it to 0 or 1 will cause layout shift when extra keys panel is toggled on / off.
+            // I don't know exactly why, CSS is difficult
             left: 0,
             right: 0,
             bgcolor: '#e8eaed',
@@ -311,6 +321,7 @@ export default function MobileInputBar({
         >
           {/* ── Top row: non-scrollable version of the accessory bar ── */}
           <Box
+            id="mobile-input-bar-full-top"
             sx={{
               height: 40,
               flexShrink: 0,
@@ -324,13 +335,14 @@ export default function MobileInputBar({
           >
             {/* LEFT: gesture toggle */}
             <Box sx={{ px: 0.5, flexShrink: 0 }}>
-              <GestureBtn />
+              {GestureBtn}
             </Box>
 
             <Divider orientation="vertical" flexItem sx={{ my: 0.5 }} />
 
             {/* CENTER: same keys as bar, but non-scrollable (no overflow) */}
             <Box
+              id="mobile-input-bar-full-top-center"
               sx={{
                 flex: 1,
                 display: 'flex',
@@ -341,8 +353,8 @@ export default function MobileInputBar({
                 overflow: 'hidden',
               }}
             >
-              <CtrlBtn />
-              <AltBtn />
+              {CtrlBtn}
+              {AltBtn}
               {/* Esc + Tab + arrows — fits on most screens without scrolling */}
               <ButtonGroup size="small" variant="outlined" sx={{ flexShrink: 0 }}>
                 <Button {...getTapProps(() => sendKey('\x1b'))} sx={BTN_SX()}>Esc</Button>
@@ -410,6 +422,7 @@ export default function MobileInputBar({
       {/* ── Accessory bar (only visible when extra-keys panel is closed) ── */}
       {!extraKeysOpen && (
         <Paper
+          id="mobile-input-bar-mini"
           elevation={3}
           square
           sx={{
@@ -427,13 +440,14 @@ export default function MobileInputBar({
         >
           {/* LEFT: gesture toggle */}
           <Box sx={{ px: 0.5, flexShrink: 0 }}>
-            <GestureBtn />
+            {GestureBtn}
           </Box>
 
           <Divider orientation="vertical" flexItem sx={{ my: 0.5 }} />
 
           {/* CENTER: horizontally scrollable shortcuts */}
           <Box
+            id="mobile-input-bar-mini-center"
             sx={{
               flex: 1,
               display: 'flex',
@@ -447,8 +461,8 @@ export default function MobileInputBar({
               scrollbarWidth: 'none',
             }}
           >
-            <CtrlBtn />
-            <AltBtn />
+            {CtrlBtn}
+            {AltBtn}
             {BAR_GROUPS.map((group, gi) => (
               <ButtonGroup key={gi} size="small" variant="outlined" sx={{ flexShrink: 0 }}>
                 {group.map((k) => (

@@ -1,6 +1,7 @@
 package recents
 
 import (
+	"cozyssh/models"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -8,13 +9,8 @@ import (
 	"time"
 )
 
-type Recent struct {
-	Host     string `json:"host"`
-	LastUsed int64  `json:"last_used"`
-}
-
 var (
-	recents   []Recent
+	recents   []*models.Recent
 	recentsMu sync.Mutex
 	filePath  string
 )
@@ -31,7 +27,7 @@ func load() error {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			recents = []Recent{}
+			recents = []*models.Recent{}
 			return nil
 		}
 		return err
@@ -71,7 +67,7 @@ func Add(host string) {
 	}
 
 	if !found {
-		recents = append(recents, Recent{Host: host, LastUsed: now})
+		recents = append(recents, &models.Recent{Host: host, LastUsed: now})
 	}
 
 	// Keep only top 50 recents
@@ -79,12 +75,12 @@ func Add(host string) {
 	// We'll sort before saving or returning for simplicity
 }
 
-func Get() []Recent {
+func Get() []*models.Recent {
 	recentsMu.Lock()
 	defer recentsMu.Unlock()
 
 	// Return a copy
-	res := make([]Recent, len(recents))
+	res := make([]*models.Recent, len(recents))
 	copy(res, recents)
 	return res
 }

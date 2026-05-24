@@ -13,7 +13,9 @@ import (
 
 	"cozyssh/auth"
 	"cozyssh/config"
+	"cozyssh/constants"
 	"cozyssh/localpty"
+	"cozyssh/models"
 	"cozyssh/session"
 	"cozyssh/sshmanager"
 
@@ -34,8 +36,8 @@ var upgrader = websocket.Upgrader{
 
 type WsMsg struct {
 	Type string `json:"type"` // "resize"
-	Cols uint16 `json:"cols,omitempty"`
-	Rows uint16 `json:"rows,omitempty"`
+	Cols uint16 `json:"cols"`
+	Rows uint16 `json:"rows"`
 }
 
 type WsTerminal struct {
@@ -96,12 +98,12 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	header := make(http.Header)
-	if protocols := r.Header.Get("Sec-WebSocket-Protocol"); protocols != "" {
+	if protocols := r.Header.Get(constants.HEADER_SEC_WEBSOCKET_PROTOCOL); protocols != "" {
 		parts := strings.Split(protocols, ",")
 		for _, p := range parts {
 			p = strings.TrimSpace(p)
 			if strings.HasPrefix(p, "cozy.") {
-				header.Set("Sec-WebSocket-Protocol", p)
+				header.Set(constants.HEADER_SEC_WEBSOCKET_PROTOCOL, p)
 				break
 			}
 		}
@@ -121,7 +123,8 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
 	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
 
-	log.Printf("WS: New connection. host=%s, sessionId=%s, reconnect=%v, cloneFrom=%s, size=%dx%d", host, sessionID, reconnect, cloneFrom, cols, rows)
+	log.Printf("WS: New connection. host=%s, sessionId=%s, reconnect=%v, cloneFrom=%s, size=%dx%d",
+		host, sessionID, reconnect, cloneFrom, cols, rows)
 	if sessionID == "" {
 		sessionID = host // Fallback to host if no unique ID provided
 	}
@@ -143,14 +146,13 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			}
 			s = session.NewSession(sessionID, host, ls.Pty, ls.Pty, ls.Close, ls.Resize)
 		} else {
-			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"state","state":"connecting to ssh server"}`))
+			conn.WriteMessage(websocket.TextMessage, models.WsMsgStateConnecting)
 			term := &WsTerminal{conn: conn}
 
 			var pClient *sshmanager.PooledClient
 			var sshSession *ssh.Session
 			var remoteCommand string
 			var err error
-
 
 			if cloneFrom != "" {
 				if parent := session.GlobalManager.Get(cloneFrom); parent != nil {
@@ -169,7 +171,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 				log.Println("SSH dial/clone error:", err)
 				errStr := strings.ToLower(err.Error())
 				if strings.Contains(errStr, "mismatch") || strings.Contains(errStr, "auth") {
-					conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"state","state":"disconnected (fatal)"}`))
+					conn.WriteMessage(websocket.TextMessage, models.WsMsgStateDisconnectedFatal)
 				}
 				return
 			}
@@ -179,9 +181,9 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			if remoteCommand != "" {
 				// Expand tokens
 				// We need host, port, user from the client
-				// The pClient doesn't directly expose them but we have the 'host' alias and we can guess or use what was used.
+				// The pClient doesn't directly expose them but we have the 'host' name and we can guess or use what was used.
 				// Actually, it's better if getSSHClient returns them or we store them.
-				// For now, let's just use the host alias for expansion.
+				// For now, let's just use the host name for expansion.
 				expanded := sshmanager.ExpandTokens(remoteCommand, host, "22", "root", host)
 				log.Printf("WS: Starting remote command: %s", expanded)
 				if err := sshSession.Start(expanded); err != nil {
@@ -208,12 +210,13 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			s.SSHClient = pClient
 
 			s.RetryFunc = func() (io.Reader, io.Writer, error) {
-				s.Broadcast(append([]byte("STATE:"), []byte(`{"type":"state","state":"disconnected to ssh server"}`)...))
+				s.Broadcast(append([]byte(models.WS_MSG_PREFIX_STATE), models.WsMsgStateDisconnected...))
 
 				newPClient, newSess, newRC, err := sshmanager.DialSSH(host, nil, rows, cols)
 				if err != nil {
 					errStr := strings.ToLower(err.Error())
-					if strings.Contains(errStr, "mismatch") || strings.Contains(errStr, "auth") || strings.Contains(errStr, "interactive") {
+					if strings.Contains(errStr, "mismatch") || strings.Contains(errStr, "auth") ||
+						strings.Contains(errStr, "interactive") {
 						return nil, nil, fmt.Errorf("fatal: %v", err)
 					}
 					return nil, nil, err
@@ -249,7 +252,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 				sshSession = newSess
 				s.SSHClient = pClient
 
-				s.Broadcast(append([]byte("STATE:"), []byte(`{"type":"state","state":"connected"}`)...))
+				s.Broadcast(append([]byte(models.WS_MSG_PREFIX_STATE), models.WsMsgStateConnected...))
 
 				return nr, nw, nil
 			}
@@ -267,22 +270,22 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	listener, history := s.AddListener()
 	defer session.GlobalManager.RemoveListener(sessionID, listener)
 
-	conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"state","state":"connected"}`))
+	conn.WriteMessage(websocket.TextMessage, models.WsMsgStateConnected)
 
 	// Send history first
 	if len(history) > 0 {
-		conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"history_start"}`))
+		conn.WriteMessage(websocket.TextMessage, models.WsMsgHistoryStart)
 		conn.WriteMessage(websocket.BinaryMessage, history)
 	}
 
-	stateMsg := fmt.Sprintf(`{"type":"tab_state","is_pinned":%t,"is_locked":%t}`, s.IsPinned, s.IsLocked)
-	conn.WriteMessage(websocket.TextMessage, []byte(stateMsg))
+	conn.WriteMessage(websocket.TextMessage, models.GetWsTabStateMsg(s.IsPinned, s.IsLocked))
 
 	// Session internal read loop handles writing to listeners
 	go func() {
 		for data := range listener {
-			if len(data) > 6 && string(data[:6]) == "STATE:" {
-				if err := conn.WriteMessage(websocket.TextMessage, data[6:]); err != nil {
+			if len(data) > len(models.WS_MSG_PREFIX_STATE) &&
+				string(data[:len(models.WS_MSG_PREFIX_STATE)]) == models.WS_MSG_PREFIX_STATE {
+				if err := conn.WriteMessage(websocket.TextMessage, data[len(models.WS_MSG_PREFIX_STATE):]); err != nil {
 					break
 				}
 				continue
@@ -300,8 +303,8 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 		}
 		switch mt {
 		case websocket.TextMessage:
-			var wmsg WsMsg
-			if err := json.Unmarshal(msg, &wmsg); err == nil && wmsg.Type == "resize" {
+			var wmsg models.WsResizeMsg
+			if err := json.Unmarshal(msg, &wmsg); err == nil && wmsg.Type == models.WsTerminalMessageTypeResize {
 				s.Resize(wmsg.Rows, wmsg.Cols)
 			}
 		case websocket.BinaryMessage:

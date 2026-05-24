@@ -1,6 +1,11 @@
 //go:build !windows
+
 package fsapi
 
-func GetAvailableDrives() []FileInfo {
+import (
+	"cozyssh/models"
+)
+
+func GetAvailableDrives() []*models.FileInfo {
 	return nil
 }

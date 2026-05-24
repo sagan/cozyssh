@@ -8,11 +8,17 @@
  * needing a large dependency array or ref-mirroring.
  */
 
-import { useEffect } from 'react';
-import { getStore } from './dashboardStore';
-import type { ButtonData } from './dashboardStore';
-import { getKeyCombination } from './common';
-import { DEFAULT_SCROLL_LINES } from './constants';
+import { useEffect } from "react";
+
+import { type ButtonData } from "./api";
+import { BROWSER_STORAGE_KEY_ACTIVE_GROUP, DEFAULT_BUTTON_GROUP, DEFAULT_SCROLL_LINES } from "./constants";
+import {
+  CS_EVENT_ACTIVE_GROUP_CHANGE,
+  getKeyCombination,
+  type CSEventDetailActiveGroupChange,
+  type NewTabDialogViewMode,
+} from "./common";
+import { getStore, type TerminalRefMap } from "./dashboardStore";
 
 export interface KeyboardManagerOptions {
   /** Called when a button shortcut is triggered */
@@ -26,13 +32,13 @@ export interface KeyboardManagerOptions {
   /** Open / close the new-tab dialog */
   setNewTabDialogOpen: (open: boolean) => void;
   /** Set the initial view mode of the new-tab dialog */
-  setNewTabDialogInitialViewMode: (mode: 'servers' | 'tabs' | 'buttons') => void;
+  setNewTabDialogInitialViewMode: (mode: NewTabDialogViewMode) => void;
   /** Ref to the terminal search input */
   searchInputRef: React.RefObject<HTMLInputElement | null>;
   /** Open the in-terminal search bar */
   setSearchOpen: (open: boolean) => void;
   /** Getter for the live terminal ref map */
-  getTerminalRefs: () => import('./dashboardStore').TerminalRefMap;
+  getTerminalRefs: () => TerminalRefMap;
 }
 
 export function useKeyboardManager(options: KeyboardManagerOptions): void {
@@ -56,24 +62,21 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
 
       // Derive scrollLines from store vars at call-time
       const { vars, localVars } = getStore();
-      const scrollLinesVar =
-        localVars['local_cs_scroll_lines'] ??
-        vars['cs_scroll_lines'];
-      const scrollLines =
-        scrollLinesVar ? (parseInt(scrollLinesVar) || DEFAULT_SCROLL_LINES) : DEFAULT_SCROLL_LINES;
+      const scrollLinesVar = localVars["local_cs_scroll_lines"] ?? vars["cs_scroll_lines"];
+      const scrollLines = scrollLinesVar ? parseInt(scrollLinesVar) || DEFAULT_SCROLL_LINES : DEFAULT_SCROLL_LINES;
 
       // Derive groups / activeGroup / shortcutButtons from store at call-time
-      const activeGroup = localStorage.getItem('cozy_active_group') || 'Default';
+      const activeGroup = localStorage.getItem(BROWSER_STORAGE_KEY_ACTIVE_GROUP) || DEFAULT_BUTTON_GROUP;
       const groups = [
-        'Default',
+        DEFAULT_BUTTON_GROUP,
         ...Array.from(
-          new Set(buttons.map((b) => b.group || 'Default').filter((g) => g !== 'Default'))
+          new Set(buttons.map((b) => b.group || DEFAULT_BUTTON_GROUP).filter((g) => g !== DEFAULT_BUTTON_GROUP))
         ),
       ].sort();
 
       const shortcutButtons: Record<string, ButtonData> = {};
       for (const btn of buttons) {
-        if ((btn.group || 'Default') === activeGroup) {
+        if ((btn.group || DEFAULT_BUTTON_GROUP) === activeGroup) {
           continue;
         }
         if (btn.shortcut && btn.shortcut.length > 1) {
@@ -82,7 +85,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
       }
       // active group button shortcut has priority
       for (const btn of buttons) {
-        if ((btn.group || 'Default') !== activeGroup) {
+        if ((btn.group || DEFAULT_BUTTON_GROUP) !== activeGroup) {
           continue;
         }
         if (btn.shortcut && btn.shortcut.length > 1) {
@@ -100,42 +103,42 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
       }
 
       // Suppress standalone Alt key
-      if (e.key === 'Alt' && !e.ctrlKey && !e.shiftKey && !e.metaKey) {
+      if (e.key === "Alt" && !e.ctrlKey && !e.shiftKey && !e.metaKey) {
         e.preventDefault();
         return;
       }
 
       // ── Named shortcuts ───────────────────────────────────────────────────
       switch (keycomb) {
-        case 'alt+o':
+        case "alt+o":
           e.preventDefault();
-          setNewTabDialogInitialViewMode('servers');
+          setNewTabDialogInitialViewMode("servers");
           setNewTabDialogOpen(true);
           return;
 
-        case 'alt+a':
+        case "alt+a":
           e.preventDefault();
-          setNewTabDialogInitialViewMode('tabs');
+          setNewTabDialogInitialViewMode("tabs");
           setNewTabDialogOpen(true);
           return;
 
-        case 'alt+e':
+        case "alt+e":
           e.preventDefault();
-          setNewTabDialogInitialViewMode('buttons');
+          setNewTabDialogInitialViewMode("buttons");
           setNewTabDialogOpen(true);
           return;
 
-        case 'alt+n':
+        case "alt+n":
           e.preventDefault();
-          handleSelectHost('local');
+          handleSelectHost("local");
           return;
 
-        case 'alt+s':
+        case "alt+s":
           e.preventDefault();
           handleOpenScratchpad();
           return;
 
-        case 'alt+h': {
+        case "alt+h": {
           e.preventDefault();
           const allPanes = tabs.flatMap((t) => t.panes.map((p) => ({ tabId: t.id, paneId: p.id })));
           if (allPanes.length === 0) return;
@@ -150,7 +153,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           return;
         }
 
-        case 'alt+l': {
+        case "alt+l": {
           e.preventDefault();
           const allPanes = tabs.flatMap((t) => t.panes.map((p) => ({ tabId: t.id, paneId: p.id })));
           if (allPanes.length === 0) return;
@@ -165,12 +168,12 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           return;
         }
 
-        case 'alt+w':
+        case "alt+w":
           e.preventDefault();
           handleCloseCurrentPaneOrTab();
           return;
 
-        case 'alt+g': {
+        case "alt+g": {
           e.preventDefault();
           const currentTab = tabs.find((t) => t.id === activeTabId);
           if (currentTab && currentTab.panes.length > 0) {
@@ -181,45 +184,55 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           return;
         }
 
-        case 'alt+v':
-        case 'alt+shift+v': {
+        case "alt+v":
+        case "alt+shift+v": {
           e.preventDefault();
           const idx = groups.indexOf(activeGroup);
           const nextIdx = (e.shiftKey ? idx - 1 + groups.length : idx + 1) % groups.length;
-          localStorage.setItem('cozy_active_group', groups[nextIdx]);
+          localStorage.setItem("cozy_active_group", groups[nextIdx]);
           // Dashboard listens to storage or manages activeGroup state; trigger a
           // custom event so Dashboard can update its local activeGroup state.
           window.dispatchEvent(
-            new CustomEvent('cs:active-group-change', { detail: { group: groups[nextIdx] } })
+            new CustomEvent(CS_EVENT_ACTIVE_GROUP_CHANGE, {
+              detail: { group: groups[nextIdx] } as CSEventDetailActiveGroupChange,
+            })
           );
           return;
         }
 
-        case 'alt+j':
-        case 'alt+shift+j':
-          e.preventDefault();
-          if (e.shiftKey) {
-            (terminalRefs[activePaneId] as any)?.scrollPages?.(1);
-          } else {
-            (terminalRefs[activePaneId] as any)?.scrollLines?.(scrollLines);
+        case "alt+j":
+        case "alt+shift+j": {
+          const term = terminalRefs[activePaneId];
+          if (term && "getXterm" in term) {
+            e.preventDefault();
+            if (e.shiftKey) {
+              term.scrollPages(1);
+            } else {
+              term.scrollLines(scrollLines);
+            }
           }
           return;
+        }
 
-        case 'alt+k':
-        case 'alt+shift+k':
-          e.preventDefault();
-          if (e.shiftKey) {
-            (terminalRefs[activePaneId] as any)?.scrollPages?.(-1);
-          } else {
-            (terminalRefs[activePaneId] as any)?.scrollLines?.(-scrollLines);
+        case "alt+k":
+        case "alt+shift+k": {
+          const term = terminalRefs[activePaneId];
+          if (term && "getXterm" in term) {
+            e.preventDefault();
+            if (e.shiftKey) {
+              term.scrollPages(-1);
+            } else {
+              term.scrollLines(-scrollLines);
+            }
           }
           return;
+        }
 
-        case 'ctrl+shift+f':
+        case "ctrl+shift+f":
           if (
-            !document.querySelector('body > div.MuiDialog-root') &&
+            !document.querySelector("body > div.MuiDialog-root") &&
             terminalRefs[activePaneId] &&
-            'clear' in terminalRefs[activePaneId]!
+            "clear" in terminalRefs[activePaneId]!
           ) {
             e.preventDefault();
             setSearchOpen(true);
@@ -227,24 +240,30 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           }
           return;
 
-        case 'ctrl+shift+r':
-          e.preventDefault();
-          (terminalRefs[activePaneId] as any)?.reconnect?.();
+        case "ctrl+shift+r": {
+          const term = terminalRefs[activePaneId];
+          if (term && "getXterm" in term) {
+            e.preventDefault();
+            term.reconnect();
+          }
           return;
+        }
 
-        case 'ctrl+shift+c': {
-          e.preventDefault();
-          const term = terminalRefs[activePaneId] as any;
-          if (term) {
-            const text = term.getSelection?.();
-            if (text) navigator.clipboard.writeText(text);
+        case "ctrl+shift+c": {
+          const term = terminalRefs[activePaneId];
+          if (term && "getXterm" in term) {
+            e.preventDefault();
+            const text = term.getSelection();
+            if (text) {
+              navigator.clipboard.writeText(text);
+            }
           }
           return;
         }
       }
 
       // ── Alt+0-9: switch to tab by index ───────────────────────────────────
-      if (e.altKey && e.key >= '0' && e.key <= '9') {
+      if (e.altKey && e.key >= "0" && e.key <= "9") {
         e.preventDefault();
         let idx = parseInt(e.key);
         idx = idx === 0 ? tabs.length - 1 : idx - 1;
@@ -266,7 +285,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           e.preventDefault();
           const num = parseInt(digitMatch[1]);
           const idx = num === 0 ? 9 : num - 1;
-          const filteredButtons = buttons.filter((b) => (b.group || 'Default') === activeGroup);
+          const filteredButtons = buttons.filter((b) => (b.group || DEFAULT_BUTTON_GROUP) === activeGroup);
           if (idx < filteredButtons.length) {
             handleButtonClick(filteredButtons[idx]);
           }
@@ -274,8 +293,8 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
     // Stable callbacks only — no store state in deps.
   }, [
     handleButtonClick,

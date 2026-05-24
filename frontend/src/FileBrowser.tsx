@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { Box, Typography, IconButton, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, CircularProgress } from '@mui/material';
+import {
+  Box, Typography, IconButton, Table, TableBody, TableCell, TableContainer,
+  TableHead, TableRow, Paper, CircularProgress
+} from '@mui/material';
 import FolderIcon from '@mui/icons-material/Folder';
 import HomeIcon from '@mui/icons-material/Home';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
@@ -16,15 +19,16 @@ import PushPinIcon from '@mui/icons-material/PushPin';
 import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
-import TextEditor from './TextEditor';
 import { Menu, MenuItem, TableSortLabel, InputBase } from '@mui/material';
 
-interface FileInfo {
-  name: string;
-  isDir: boolean;
-  size: number;
-  modTime: string;
-}
+import type { FileInfo, FileMkdirRequest, FileRenameRequest, FsList, FsToken } from './api';
+import {
+  BROWSER_STORAGE_KEY_TOKEN,
+  HEADER_AUTHORIZATION, HEADER_AUTHORIZATION_BEARER_PREFIX,
+  HEADER_CONTENT_TYPE, METHOD_POST, MIME_JSON,
+} from './constants';
+import TextEditor from './TextEditor';
+import type { Order } from './common';
 
 interface FileBrowserProps {
   sessionId: string;
@@ -37,8 +41,8 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   const [currentPath, setCurrentPath] = useState<string>('');
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [sortField, setSortField] = useState<'name' | 'size' | 'modTime'>('name');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [sortField, setSortField] = useState<Exclude<keyof FileInfo, "isDir">>('name');
+  const [sortOrder, setSortOrder] = useState<Order>('asc');
   const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number; file: FileInfo } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -80,18 +84,19 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   const fetchFiles = async (path: string = '') => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('cozy_token');
+      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
       const res = await fetch(`/api/fs/list?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(path)}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        }
       });
       if (res.ok) {
-        const data = await res.json();
+        const data: FsList = await res.json();
         setCurrentPath(data.path);
         setFiles(data.files || []);
-        if (isWindowsPath(data.path) || (data.files && data.files.some((f: FileInfo) => isWindowsPath(f.name)))) {
+        if (isWindowsPath(data.path) || (data.files && data.files.some((f) => isWindowsPath(f.name)))) {
           setIsWindowsHost(true);
         }
-
         // Reset filter if not pinned on directory change
         if (!isFilterPinned && data.path !== currentPath) {
           setIsFilterOpen(false);
@@ -112,12 +117,17 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
     if (isActive && !loading && currentPath === '') {
       fetchFiles();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive, sessionId]);
 
   const sortedFiles = [...files].sort((a, b) => {
     // Directories always first
-    if (a.isDir && !b.isDir) return -1;
-    if (!a.isDir && b.isDir) return 1;
+    if (a.isDir && !b.isDir) {
+      return -1;
+    }
+    if (!a.isDir && b.isDir) {
+      return 1;
+    }
 
     let cmp = 0;
     if (sortField === 'name') {
@@ -135,7 +145,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
     f.name.toLowerCase().includes(filterValue.toLowerCase())
   );
 
-  const handleSort = (field: 'name' | 'size' | 'modTime') => {
+  const handleSort = (field: typeof sortField) => {
     if (sortField === field) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     } else {
@@ -190,9 +200,12 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
 
     setLoading(true);
     try {
-      const token = localStorage.getItem('cozy_token');
-      const res = await fetch(`/api/fs/stat?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(targetPath)}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+      const res = await fetch(`/api/fs/stat?id=${encodeURIComponent(
+        sessionId)}&path=${encodeURIComponent(targetPath)}`, {
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        }
       });
 
       if (res.ok) {
@@ -229,11 +242,14 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
     const formData = new FormData();
     formData.append('file', file);
 
-    const token = localStorage.getItem('cozy_token');
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     try {
-      const res = await fetch(`/api/fs/upload?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(currentPath)}`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
+      const res = await fetch(`/api/fs/upload?id=${encodeURIComponent(
+        sessionId)}&path=${encodeURIComponent(currentPath)}`, {
+        method: METHOD_POST,
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        },
         body: formData,
       });
 
@@ -254,15 +270,19 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   const handleDownload = async (fileName: string) => {
     const join = getPathJoiner(currentPath);
     const targetPath = join(fileName);
-    const token = localStorage.getItem('cozy_token');
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     try {
-      const res = await fetch(`/api/fs/token?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(targetPath)}`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
+      const res = await fetch(`/api/fs/token?id=${encodeURIComponent(
+        sessionId)}&path=${encodeURIComponent(targetPath)}`, {
+        method: METHOD_POST,
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        }
       });
       if (res.ok) {
-        const data = await res.json();
-        const dlUrl = `/api/fs/download?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(targetPath)}&expires=${data.expires}&sig=${data.sig}`;
+        const data: FsToken = await res.json();
+        const dlUrl = `/api/fs/download?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(
+          targetPath)}&expires=${data.expires}&sig=${data.sig}`;
         const a = document.createElement('a');
         a.href = dlUrl;
         a.download = fileName;
@@ -281,17 +301,25 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
 
   const handleEditAsText = async (file: FileInfo, fullPath?: string) => {
     const targetPath = fullPath || getPathJoiner(currentPath)(file.name);
-    const token = localStorage.getItem('cozy_token');
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     setLoading(true);
     try {
-      const res = await fetch(`/api/fs/token?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(targetPath)}`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
+      const res = await fetch(`/api/fs/token?id=${encodeURIComponent(
+        sessionId)}&path=${encodeURIComponent(targetPath)}`, {
+        method: METHOD_POST,
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        }
       });
       if (res.ok) {
-        const data = await res.json();
-        const dlUrl = `/api/fs/download?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(targetPath)}&expires=${data.expires}&sig=${data.sig}`;
-        const dlRes = await fetch(dlUrl, { headers: { 'Authorization': `Bearer ${token}` } });
+        const data: FsToken = await res.json();
+        const dlUrl = `/api/fs/download?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(
+          targetPath)}&expires=${data.expires}&sig=${data.sig}`;
+        const dlRes = await fetch(dlUrl, {
+          headers: {
+            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+          }
+        });
         if (dlRes.ok) {
           const text = await dlRes.text();
           setEditorContent(text);
@@ -315,7 +343,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   const handleSaveTextFile = async (newContent: string) => {
     if (!editingFile || !editingPath) return;
     setLoading(true);
-    const token = localStorage.getItem('cozy_token');
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     try {
       // Get the parent directory of editingPath
       const isWin = isWindowsHost || isWindowsPath(editingPath);
@@ -331,9 +359,12 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
       const formData = new FormData();
       formData.append('file', blob, editingFile.name);
 
-      const res = await fetch(`/api/fs/upload?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(parentDir)}`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
+      const res = await fetch(`/api/fs/upload?id=${encodeURIComponent(
+        sessionId)}&path=${encodeURIComponent(parentDir)}`, {
+        method: METHOD_POST,
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        },
         body: formData,
       });
 
@@ -360,13 +391,17 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
     const join = getPathJoiner(currentPath);
     const oldPath = join(file.name);
     const newPath = join(newName);
-    const token = localStorage.getItem('cozy_token');
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
 
     try {
-      const res = await fetch(`/api/fs/rename?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(oldPath)}`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ newPath })
+      const res = await fetch(`/api/fs/rename?id=${encodeURIComponent(
+        sessionId)}&path=${encodeURIComponent(oldPath)}`, {
+        method: METHOD_POST,
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+          [HEADER_CONTENT_TYPE]: MIME_JSON
+        },
+        body: JSON.stringify({ newPath } as FileRenameRequest),
       });
       if (res.ok) {
         fetchFiles(currentPath);
@@ -384,12 +419,14 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
 
     const join = getPathJoiner(currentPath);
     const path = join(file.name);
-    const token = localStorage.getItem('cozy_token');
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
 
     try {
       const res = await fetch(`/api/fs/delete?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(path)}`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
+        method: METHOD_POST,
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        }
       });
       if (res.ok) {
         fetchFiles(currentPath);
@@ -406,12 +443,16 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
     const name = prompt('New folder name:');
     if (!name) return;
 
-    const token = localStorage.getItem('cozy_token');
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     try {
-      const res = await fetch(`/api/fs/mkdir?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(currentPath)}`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
+      const res = await fetch(`/api/fs/mkdir?id=${encodeURIComponent(
+        sessionId)}&path=${encodeURIComponent(currentPath)}`, {
+        method: METHOD_POST,
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+          [HEADER_CONTENT_TYPE]: MIME_JSON,
+        },
+        body: JSON.stringify({ name } as FileMkdirRequest)
       });
       if (res.ok) {
         fetchFiles(currentPath);
@@ -428,15 +469,18 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
     if (!name) return;
 
     setLoading(true);
-    const token = localStorage.getItem('cozy_token');
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     try {
       const blob = new Blob([''], { type: 'text/plain' });
       const formData = new FormData();
       formData.append('file', blob, name);
 
-      const res = await fetch(`/api/fs/upload?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(currentPath)}`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
+      const res = await fetch(`/api/fs/upload?id=${encodeURIComponent(
+        sessionId)}&path=${encodeURIComponent(currentPath)}`, {
+        method: METHOD_POST,
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        },
         body: formData,
       });
 
@@ -480,15 +524,25 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   };
 
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper', position: 'relative' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', p: 1, borderBottom: '1px solid', borderColor: 'divider', bgcolor: '#f4f6f8' }}>
+    <Box sx={{
+      height: '100%', display: 'flex', flexDirection: 'column',
+      bgcolor: 'background.paper', position: 'relative'
+    }}>
+      <Box sx={{
+        display: 'flex', alignItems: 'center', p: 1, borderBottom: '1px solid',
+        borderColor: 'divider', bgcolor: '#f4f6f8'
+      }}>
         <IconButton size="small" onClick={() => handleNavigate('..')} sx={{ mr: 1 }} title="Up one level">
           <ArrowUpwardIcon fontSize="small" />
         </IconButton>
-        <Typography variant="body2" sx={{ flexGrow: 1, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <Typography variant="body2" sx={{
+          flexGrow: 1, fontFamily: 'monospace',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+        }}>
           {currentPath || '/'}
         </Typography>
-        <IconButton size="small" onClick={() => fetchFiles(currentPath)} disabled={loading} sx={{ mr: 1 }} title="Refresh">
+        <IconButton size="small" onClick={() => fetchFiles(currentPath)}
+          disabled={loading} sx={{ mr: 1 }} title="Refresh">
           <RefreshIcon fontSize="small" />
         </IconButton>
         <IconButton size="small" onClick={handleMkdir} disabled={loading} sx={{ mr: 1 }} title="New Folder">
@@ -534,7 +588,10 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
       </Box>
 
       {isFilterOpen && (
-        <Box sx={{ px: 1, py: 0.5, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', bgcolor: 'background.paper' }}>
+        <Box sx={{
+          px: 1, py: 0.5, borderBottom: '1px solid', borderColor: 'divider',
+          display: 'flex', alignItems: 'center', bgcolor: 'background.paper'
+        }}>
           <SearchIcon fontSize="small" sx={{ color: 'action.active', mr: 1 }} />
           <InputBase
             placeholder="Filter files..."
@@ -625,9 +682,11 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
                   onContextMenu={(e) => handleContextMenu(e, file)}
                 >
                   <TableCell padding="none" sx={{ pl: 1 }}>
-                    {file.isDir ? <FolderIcon color="primary" fontSize="small" /> : <InsertDriveFileIcon color="action" fontSize="small" />}
+                    {file.isDir ? <FolderIcon color="primary" fontSize="small" />
+                      : <InsertDriveFileIcon color="action" fontSize="small" />}
                   </TableCell>
-                  <TableCell sx={{ cursor: file.isDir ? 'pointer' : 'default', fontWeight: file.isDir ? 500 : 400 }} onClick={() => file.isDir && handleNavigate(file.name)}>
+                  <TableCell sx={{ cursor: file.isDir ? 'pointer' : 'default', fontWeight: file.isDir ? 500 : 400 }}
+                    onClick={() => file.isDir && handleNavigate(file.name)}>
                     {file.name}
                   </TableCell>
                   <TableCell sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>
@@ -673,7 +732,8 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
         {!(contextMenu?.file.isDir && /^[a-zA-Z]:\\?$/.test(contextMenu.file.name)) && (
           <>
             <MenuItem onClick={() => contextMenu && handleRename(contextMenu.file)}>Rename</MenuItem>
-            <MenuItem onClick={() => contextMenu && handleDelete(contextMenu.file)} sx={{ color: 'error.main' }}>Delete</MenuItem>
+            <MenuItem onClick={() => contextMenu && handleDelete(contextMenu.file)}
+              sx={{ color: 'error.main' }}>Delete</MenuItem>
           </>
         )}
         <MenuItem onClick={() => contextMenu && handleCopyPath(contextMenu.file)}>Copy Path</MenuItem>

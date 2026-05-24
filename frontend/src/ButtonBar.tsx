@@ -2,8 +2,7 @@
 import { Box, TextField, Tabs, Tab, IconButton } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 
-import type { ButtonData } from './dashboardStore';
-// import { useDashboardStore } from './dashboardStore';
+import type { ButtonData } from './api';
 
 const buttonStyleBorder: Record<string, string> = {
   "run_script": "1px dashed",
@@ -32,7 +31,7 @@ export interface ButtonBarProps {
   groups: string[];
   filteredButtons: ButtonData[];
   handleButtonClick: (btn: ButtonData) => void;
-  setBtnMenuAnchor: (obj: any) => void;
+  setBtnMenuAnchor: (obj: { anchor: HTMLElement, btn: ButtonData } | null) => void;
   setLastMenuBtn: (btn: ButtonData) => void;
   onNewButtonClick: () => void;
 }
@@ -42,8 +41,14 @@ export default function ButtonBar({
   setBtnMenuAnchor, setLastMenuBtn, onNewButtonClick
 }: ButtonBarProps) {
   return (
-    <Box id="button-bar" sx={{ borderTop: 1, borderColor: 'divider', bgcolor: '#f8f9fa', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-      <Box sx={{ px: 1, display: 'flex', alignItems: 'center', borderRight: 1, borderColor: 'divider', flexShrink: 0 }}>
+    <Box id="button-bar" sx={{
+      borderTop: 1, borderColor: 'divider', bgcolor: '#f8f9fa',
+      flexShrink: 0, display: 'flex', alignItems: 'center'
+    }}>
+      <Box sx={{
+        px: 1, display: 'flex', alignItems: 'center',
+        borderRight: 1, borderColor: 'divider', flexShrink: 0
+      }}>
         <TextField
           select
           size="small"
@@ -79,7 +84,8 @@ export default function ButtonBar({
           <Tab
             key={btn.id}
             label={btn.name}
-            title={`${btn.type} (${btn.order || 0})${btn.autorun ? " (autorun)" : ""}${btn.shortcut ? " (" + btn.shortcut.toUpperCase() + ")" : ""}${btn.type != "run_script" ? ": " + btn.payload : ""}`}
+            title={`${btn.type} (${btn.order || 0})${btn.autorun ? " (autorun)" : ""}${btn.shortcut
+              ? " (" + btn.shortcut.toUpperCase() + ")" : ""}${btn.type != "run_script" ? ": " + btn.payload : ""}`}
             component="div"
             onClick={() => handleButtonClick(btn)}
             onContextMenu={(e) => {

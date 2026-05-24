@@ -1,17 +1,36 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useSearchParams } from "react-router";
-import { Box, CssBaseline, createTheme, ThemeProvider, IconButton, Typography, useMediaQuery, useTheme, Drawer, Dialog, DialogTitle, DialogContent } from '@mui/material';
-import Sidebar from './Sidebar';
-import type { TerminalHandle } from './Terminal';
-import type { ScratchpadHandle } from './Scratchpad';
+import {
+  Box, CssBaseline, createTheme, ThemeProvider, IconButton, Typography, useMediaQuery, useTheme, Drawer,
+  Dialog, DialogTitle, DialogContent
+} from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+
+import type {
+  FullData, HostData, ButtonData, RecentUpdateRequest, SessionsAttachRequest, TabsPinRequest,
+  TabsUnpinRequest, SessionsCloseRequest, TabsRenameRequest, ButtonsMoveRequest, TabsLockRequest
+} from './api';
+import {
+  BROWSER_STORAGE_KEY_ACTIVE_GROUP,
+  BROWSER_STORAGE_KEY_TOKEN,
+  DEFAULT_BUTTON_GROUP,
+  DEFAULT_SCROLL_LINES, HEADER_AUTHORIZATION, HEADER_AUTHORIZATION_BEARER_PREFIX, HEADER_CONTENT_TYPE,
+  METHOD_DELETE, METHOD_POST, METHOD_PUT, MIME_JSON,
+} from './constants';
+import {
+  CS_EVENT_TERMINAL_CHANGE,
+  defaultTheme, getIntVar,
+  type ContextMenu, type CSEventDetailTerminalChange, type NewTabDialogViewMode,
+  type Recent, type ScratchpadSyncState, type Severity, type Toast,
+} from './common';
+import Sidebar from './Sidebar';
+import type { TerminalHandle } from './Terminal';
+import type { ScratchpadHandle } from './Scratchpad';
 import { useLocalStorage } from './useLocalStorage';
-import { DEFAULT_SCROLL_LINES, MISC_FUNCTIONS } from './constants';
 import { useDashboardStore, getStore } from './dashboardStore';
-import type { TabData, ButtonData } from './dashboardStore';
-import { defaultTheme, getIntVar } from './common';
+import type { TabData } from './dashboardStore';
 import { setupPluginAPI, runScript } from './pluginAPI';
 import { useKeyboardManager } from './useKeyboardManager';
 import TabBar from './TabBar';
@@ -23,7 +42,7 @@ import AppletWrapper, { type AppletData } from './AppletWrapper';
 const VIBRATE_PATTERN = 100;
 
 interface DashboardProps {
-  initialData?: any;
+  initialData?: FullData;
 }
 
 export default function Dashboard({ initialData }: DashboardProps) {
@@ -42,7 +61,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   } = useDashboardStore();
 
   // ── UI-only state (stays in React) ────────────────────────────────────
-  const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number; targetTabId: string } | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileAppletsOpen, setMobileAppletsOpen] = useState(false);
   // terminalRefs is kept as a local ref for all Dashboard-internal usage,
@@ -51,7 +70,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [viewportHeight, setViewportHeight] = useState('100dvh');
   const [isCtrlActive, setIsCtrlActive] = useState(false);
   const [isAltActive, setIsAltActive] = useState(false);
-  const [scratchpadSyncState, setScratchpadSyncState] = useState<'offline' | 'syncing' | 'synced' | 'dirty'>('offline');
+  const [scratchpadSyncState, setScratchpadSyncState] = useState<ScratchpadSyncState>('offline');
   const [memoTabId, setMemoTabId] = useState<string | null>(null);
   const [unreadTabIds, setUnreadTabIds] = useState<Set<string>>(new Set());
   const [applets, setApplets] = useState<AppletData[]>([]);
@@ -66,16 +85,22 @@ export default function Dashboard({ initialData }: DashboardProps) {
   /** Height of the on-screen keyboard in px (0 when hidden) */
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
-  const [activeGroup, setActiveGroup] = useState<string>(localStorage.getItem('cozy_active_group') || 'Default');
+  const [activeGroup, setActiveGroup] = useState<string>(
+    localStorage.getItem(BROWSER_STORAGE_KEY_ACTIVE_GROUP) || DEFAULT_BUTTON_GROUP);
   const [buttonDialogOpen, setButtonDialogOpen] = useState(false);
   const [editingButton, setEditingButton] = useState<ButtonData | null>(null);
-  const [buttonFormData, setButtonFormData] = useState({ name: '', type: 'send_string', payload: '', group: 'Default', autorun: 0, order: 0, shortcut: '' });
-  const [initialBtnFormData, setInitialBtnFormData] = useState<any>(null);
+  const [buttonFormData, setButtonFormData] = useState<ButtonData>({
+    id: "", name: '', type: 'send_string', payload: '', group: DEFAULT_BUTTON_GROUP, autorun: 0, order: 0, shortcut: '',
+  });
+  const [initialBtnFormData, setInitialBtnFormData] = useState<ButtonData | null>(null);
   const [btnMenuAnchor, setBtnMenuAnchor] = useState<{ anchor: HTMLElement, btn: ButtonData } | null>(null);
   const [lastMenuBtn, setLastMenuBtn] = useState<ButtonData | null>(null);
   const handleNewButtonClick = () => {
     const maxOrder = buttons.length > 0 ? Math.max(...buttons.map(b => b.order || 0)) : 0;
-    const data = { name: '', type: 'send_string', payload: '', group: activeGroup, autorun: 0, order: maxOrder + 10 || 10, shortcut: '' };
+    const data: ButtonData = {
+      id: "", name: '', type: 'send_string', payload: '', group: activeGroup,
+      autorun: 0, order: maxOrder + 10 || 10, shortcut: '',
+    };
     setEditingButton(null);
     setButtonFormData(data);
     setInitialBtnFormData(data);
@@ -86,11 +111,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [inputValue, setInputValue] = useState('');
   const [appendNewLine, setAppendNewLine] = useState(true);
   const [sendScope, setSendScope] = useState<0 | 1 | 2>(0);
-  const [toasts, setToasts] = useState<{ id: number; msg: string; severity: 'success' | 'info' | 'warning' | 'error' }[]>([]);
+  const [toasts, setToasts] = useState<Toast[]>([]);
   const toastIdRef = useRef(0);
-  const [recents, setRecents] = useLocalStorage<{ host: string, last_used: number }[]>('cozy_recents', []);
+  const [recents, setRecents] = useLocalStorage<Recent[]>('cozy_recents', []);
   const [newTabDialogOpen, setNewTabDialogOpen] = useState(false);
-  const [newTabDialogInitialViewMode, setNewTabDialogInitialViewMode] = useState<'servers' | 'tabs' | 'buttons' | undefined>('servers');
+  const [newTabDialogInitialViewMode, setNewTabDialogInitialViewMode] = useState<NewTabDialogViewMode>('servers');
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -104,10 +129,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
   useEffect(() => { sendScopeRef.current = sendScope; }, [sendScope]);
 
   useEffect(() => {
-    window.dispatchEvent(new CustomEvent('cs:terminal-change', { detail: { activePaneId } }));
+    window.dispatchEvent(new CustomEvent(CS_EVENT_TERMINAL_CHANGE, {
+      detail: { activePaneId } as CSEventDetailTerminalChange,
+    }));
   }, [activePaneId]);
 
-  const csNotify = (msg: string, severity: 'success' | 'info' | 'warning' | 'error' = 'info') => {
+  const csNotify = (msg: string, severity: Severity = 'info') => {
     toastIdRef.current++;
     const id = toastIdRef.current;
     setToasts(prev => {
@@ -144,23 +171,30 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, [activeGroup]);
 
   const [groups, filteredButtons] = useMemo(() => {
-    const groups = ['Default', ...Array.from(new Set(buttons.map(b => b.group || 'Default').filter(g => g !== 'Default')))].sort();
-    const filteredButtons = buttons.filter(b => (b.group || 'Default') === activeGroup);
+    const groups = [
+      DEFAULT_BUTTON_GROUP,
+      ...Array.from(
+        new Set(
+          buttons.map(b => b.group || DEFAULT_BUTTON_GROUP).filter(g => g !== DEFAULT_BUTTON_GROUP)
+        )
+      ),
+    ].sort();
+    const filteredButtons = buttons.filter(b => (b.group || DEFAULT_BUTTON_GROUP) === activeGroup);
     return [groups, filteredButtons];
   }, [buttons, activeGroup]);
 
   useEffect(() => {
     if (buttonsLoaded && !groups.includes(activeGroup)) {
-      setActiveGroup('Default');
+      setActiveGroup(DEFAULT_BUTTON_GROUP);
     }
   }, [groups, buttonsLoaded, activeGroup]);
 
   useEffect(() => {
-    (window as any).csGetApplet = (name?: string) => {
+    window.csGetApplet = ((name?: string) => {
       return name ? applets.find(a => a.name === name) : applets;
-    }
+    }) as typeof window.csGetApplet;
     return () => {
-      delete (window as any).csGetApplet;
+      delete (window as Partial<Window>).csGetApplet;
     };
   }, [applets]);
 
@@ -179,15 +213,15 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
     // Record recent
     if (host !== 'local') {
-      const token = localStorage.getItem('cozy_token');
+      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
       try {
         fetch('/api/recents', {
-          method: 'POST',
+          method: METHOD_POST,
           headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
+            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+            [HEADER_CONTENT_TYPE]: MIME_JSON
           },
-          body: JSON.stringify({ host })
+          body: JSON.stringify({ host } as RecentUpdateRequest),
         });
 
         // Optimistic update for local recents
@@ -206,7 +240,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         console.error('Failed to record recent:', e);
       }
     }
-  }, [setRecents]);
+  }, [setActivePaneId, setActiveTabId, setRecents, setTabs]);
 
   const handleSelectTagAsSplit = React.useCallback((tag: string, hosts: string[]) => {
     const tabId = Math.random().toString(36).substring(2);
@@ -223,37 +257,48 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setTabs(prev => [...prev, newTab]);
     setActiveTabId(newTab.id);
     setActivePaneId(panes[0].id);
-  }, []);
+  }, [setActivePaneId, setActiveTabId, setTabs]);
 
   const handleAttach = React.useCallback(async (id: string, host: string, title: string, isLocked: boolean = false) => {
     const existing = getStore().tabs.find(t => t.panes.some(p => (p.sessionId || p.id) === id && p.state !== 'stolen'));
     if (existing) {
       setActiveTabId(existing.id);
-      setActivePaneId(existing.panes.find(p => (p.sessionId || p.id) === id && p.state !== 'stolen')?.id || existing.activePaneId);
+      setActivePaneId(existing.panes.find(p => (p.sessionId || p.id) === id
+        && p.state !== 'stolen')?.id || existing.activePaneId);
       return;
     }
-    const token = localStorage.getItem('cozy_token');
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     await fetch('/api/sessions/attach', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id })
+      method: METHOD_POST,
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        [HEADER_CONTENT_TYPE]: MIME_JSON
+      },
+      body: JSON.stringify({ id } as SessionsAttachRequest)
     });
     const frontendId = `${id}-${Date.now()}`;
-    setTabs(prev => [...prev, { id: frontendId, panes: [{ id: frontendId, sessionId: id, host }], activePaneId: frontendId, title, isPinned: true, isLocked }]);
+    setTabs(prev => [...prev, {
+      id: frontendId, panes: [{ id: frontendId, sessionId: id, host }],
+      activePaneId: frontendId, title, isPinned: true, isLocked
+    }]);
     setActiveTabId(frontendId);
     setActivePaneId(frontendId);
-  }, [tabs]);
+  }, [setActivePaneId, setActiveTabId, setTabs]);
 
   const handleRefresh = React.useCallback(async () => {
-    const token = localStorage.getItem('cozy_token');
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     try {
-      const r = await fetch('/api/fulldata', { headers: { 'Authorization': `Bearer ${token}` } });
+      const r = await fetch('/api/fulldata', {
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
+        }
+      });
       if (r.status === 401) {
-        localStorage.removeItem('cozy_token');
+        localStorage.removeItem(BROWSER_STORAGE_KEY_TOKEN);
         window.location.href = '/login';
         return;
       }
-      const data = await r.json();
+      const data: FullData = await r.json();
       loadFullData(data);
     } catch (e) {
       console.error(e);
@@ -265,7 +310,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
   useEffect(() => {
     return setupPluginAPI({
       notify: csNotify,
-      setTheme: (options, ...args) => setMuiTheme(createTheme(options, ...args)),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setTheme: (options: any, ...args: any[]) => setMuiTheme(createTheme(options, ...args)),
       handleSelectHost,
       handleSelectTagAsSplit,
       handleAttach,
@@ -282,9 +328,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   // csGetApplet needs the reactive applets list — keep as a tiny separate effect
   useEffect(() => {
-    (window as any).csGetApplet = (name?: string) =>
-      name ? applets.find(a => a.name === name) : applets;
-    return () => { delete (window as any).csGetApplet; };
+    window.csGetApplet = ((name?: string) => {
+      return name ? applets.find(a => a.name === name) : applets;
+    }) as typeof window.csGetApplet;
+    return () => {
+      delete (window as Partial<Window>).csGetApplet;
+    };
   }, [applets]);
 
   const handleCloseInputDialog = () => {
@@ -296,20 +345,18 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   const handleCloseSearch = () => {
     setSearchOpen(false);
-    const term = terminalRefs.current[activePaneId] as any;
-    term?.clearSearchDecorations?.();
-    setTimeout(() => term?.focus?.(), 50);
+    const term = terminalRefs.current[activePaneId];
+    if (term && "getXterm" in term) {
+      term.clearSearchDecorations();
+      setTimeout(() => term.focus(), 50);
+    }
   };
 
   const handleSendKey = (key: string) => {
-    if (activePaneId && terminalRefs.current[activePaneId]) {
-      const term: any = terminalRefs.current[activePaneId];
-      term?.sendData?.(key);
-      // Re-focus firmly
-      setTimeout(() => {
-        const term = terminalRefs.current[activePaneId];
-        if (term) (term as any).focus?.();
-      }, 0);
+    const term = terminalRefs.current[activePaneId];
+    if (term && "getXterm" in term) {
+      term.sendData(key);
+      setTimeout(() => term.focus(), 0);
     }
   };
 
@@ -336,8 +383,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
       for (const pid of targetPaneIds) {
         if (pid && terminalRefs.current[pid]) {
-          const term: any = terminalRefs.current[pid];
-          term?.sendData?.(dataToSend);
+          const term = terminalRefs.current[pid];
+          if (term && "getXterm" in term) {
+            term.sendData(dataToSend);
+          }
         }
       }
       await new Promise(r => setTimeout(r, ctrlMatch ? 50 : 10));
@@ -392,8 +441,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
     if (!vv) return;
     const handleVVResize = () => {
       // 1. Lock dimensions to perfect integers immediately
-      const roundedVVHeight = Math.round(vv.height);
-      const roundedInnerHeight = Math.round(window.innerHeight);
+      const roundedVVHeight = Math.floor(vv.height);
+      const roundedInnerHeight = Math.floor(window.innerHeight);
 
       setViewportHeight(`${roundedVVHeight}px`);
       // 2. Derive the keyboard height using the exact same integers
@@ -406,11 +455,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   // ── VirtualKeyboard API setup ───────────────────────────────────────────
   useEffect(() => {
-    const vk = (navigator as any).virtualKeyboard;
-    if (!vk) return;
+    const vk = navigator.virtualKeyboard;
+    if (!vk) {
+      return;
+    }
     // Opt-in: keyboard overlays content instead of resizing the viewport.
     // This lets us position our bar precisely at keyboardHeight.
-    vk.overlaysContent = true;
+    // vk.overlaysContent = true;
     const handleGeometryChange = () => {
       setKeyboardHeight(vk.boundingRect?.height ?? 0);
     };
@@ -430,16 +481,24 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const applyMode = () => {
       if (extraKeysOpen) {
         // Only suppress the active terminal
-        const term = terminalRefs.current[activePaneId] as any;
-        const textarea = term?.getXterm?.()?.textarea as HTMLTextAreaElement | undefined;
-        if (textarea) textarea.inputMode = 'none';
+        const term = terminalRefs.current[activePaneId];
+        if (term && "getXterm" in term) {
+          const textarea = term.getXterm()?.textarea as HTMLTextAreaElement | undefined;
+          if (textarea) {
+            textarea.inputMode = 'none';
+          }
+        }
         // Belt-and-suspenders: force-hide via VK API
-        (navigator as any).virtualKeyboard?.hide?.();
+        navigator.virtualKeyboard?.hide();
       } else {
         // Restore all terminals so the keyboard can appear naturally again
         for (const term of Object.values(terminalRefs.current)) {
-          const textarea = (term as any)?.getXterm?.()?.textarea as HTMLTextAreaElement | undefined;
-          if (textarea && textarea.inputMode === 'none') textarea.inputMode = '';
+          if (term && "getXterm" in term) {
+            const textarea = term.getXterm()?.textarea as HTMLTextAreaElement | undefined;
+            if (textarea && textarea.inputMode === 'none') {
+              textarea.inputMode = '';
+            }
+          }
         }
       }
     };
@@ -449,7 +508,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
     // delay to make sure the textarea exists when we try to patch it.
     const t = setTimeout(applyMode, 350);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [extraKeysOpen, activePaneId]);
 
   const [sysHostname, setSysHostname] = useState<string>('');
@@ -465,7 +523,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     return () => window.removeEventListener('cs:active-group-change', handler);
   }, []);
 
-  const loadFullData = (data: any) => {
+  const loadFullData = (data: FullData) => {
     if (data.sysinfo) {
       setSysHostname(data.sysinfo.hostname || 'unknown');
       setAppVersion(data.sysinfo.version || 'dev');
@@ -486,15 +544,19 @@ export default function Dashboard({ initialData }: DashboardProps) {
   };
 
   const fetchHosts = async () => {
-    const token = localStorage.getItem('cozy_token');
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     try {
-      const r = await fetch('/api/hosts', { headers: { 'Authorization': `Bearer ${token}` } });
+      const r = await fetch('/api/hosts', {
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
+        }
+      });
       if (r.status === 401) {
-        localStorage.removeItem('cozy_token');
+        localStorage.removeItem(BROWSER_STORAGE_KEY_TOKEN);
         window.location.href = '/login';
         return;
       }
-      const data = await r.json();
+      const data: HostData[] = await r.json();
       setHosts(data || []);
     } catch (e) {
       console.error(e);
@@ -508,13 +570,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
     if (initted.current) return;
     initted.current = true;
     const autoload = startupParams.get('noautoload') !== '1';
-    const token = localStorage.getItem('cozy_token');
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     const hash = window.location.hash.substring(1);
     if (hash) {
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
     }
 
-    let bc: BroadcastChannel | null = new BroadcastChannel('cozy_tabs');
+    const bc: BroadcastChannel | null = new BroadcastChannel('cozy_tabs');
     let pinnedElsewhere = false;
 
     const initAsync = async () => {
@@ -530,17 +592,28 @@ export default function Dashboard({ initialData }: DashboardProps) {
       let data = initialData;
       if (!data) {
         try {
-          const r = await fetch('/api/fulldata', { headers: { 'Authorization': `Bearer ${token}` } });
+          const r = await fetch('/api/fulldata', {
+            headers: {
+              [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
+            }
+          });
           if (r.status === 401) {
-            localStorage.removeItem('cozy_token');
+            localStorage.removeItem(BROWSER_STORAGE_KEY_TOKEN);
             window.location.href = '/login';
             return;
           }
-          data = await r.json();
+          if (!r.ok) {
+            csNotify(`Fail to load data: status=${r.status}`);
+            return;
+          }
+          data = (await r.json()) as FullData;
         } catch (e) {
           console.error(e);
           const initialId = `local-${Date.now()}`;
-          setTabs([{ id: initialId, panes: [{ id: initialId, host: 'local' }], activePaneId: initialId, title: 'local' }]);
+          setTabs([{
+            id: initialId, panes: [{ id: initialId, host: 'local' }],
+            activePaneId: initialId, title: 'local'
+          }]);
           setActiveTabId(initialId);
           setActivePaneId(initialId);
           return;
@@ -552,17 +625,19 @@ export default function Dashboard({ initialData }: DashboardProps) {
       bc!.postMessage('probe_pinned');
 
       setTimeout(() => {
-        const pinnedTabsData: any[] = data.pinned || [];
+        const pinnedTabsData = data.pinned || [];
         if (hash) {
-          const hostsData: any[] = data.hosts || [];
+          const hostsData = data.hosts || [];
           if (hash.startsWith('#')) {
             // Tag mode /##tag
             const tag = hash.substring(1);
             const filtered = hostsData.filter(h => h.tags && h.tags.includes(tag));
 
-            const nameSorter = (a: any, b: any) => a.name.localeCompare(b.name);
-            const hostNameSorter = (a: any, b: any) => {
-              if (a.hostname === b.hostname) return a.name.localeCompare(b.name);
+            const nameSorter = (a: HostData, b: HostData) => a.name.localeCompare(b.name);
+            const hostNameSorter = (a: HostData, b: HostData) => {
+              if (a.hostname === b.hostname) {
+                return a.name.localeCompare(b.name);
+              }
               return a.hostname.localeCompare(b.hostname);
             };
 
@@ -576,19 +651,27 @@ export default function Dashboard({ initialData }: DashboardProps) {
             } else {
               const initialId = `local-${Date.now()}`;
               const initialPaneId = Math.random().toString(36).substring(2);
-              setTabs([{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
+              setTabs([{
+                id: initialId, panes: [{ id: initialPaneId, host: 'local' }],
+                activePaneId: initialPaneId, title: 'local'
+              }]);
               setActiveTabId(initialId);
               setActivePaneId(initialPaneId);
             }
           } else {
             // Single host mode /#host
-            const host = hash !== "local" ? hostsData.find(h => hash.includes("@") ? hash == `${h.user || "root"}@${h.hostname}` : h.name === hash || h.hostname === hash) : { name: "local" };
+            const host = hash !== "local" ? hostsData.find(h => hash.includes("@")
+              ? hash == `${h.user || "root"}@${h.hostname}`
+              : h.name === hash || h.hostname === hash) : { name: "local" };
             if (host) {
               handleSelectHost(host.name);
             } else {
               const initialId = `local-${Date.now()}`;
               const initialPaneId = Math.random().toString(36).substring(2);
-              setTabs([{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
+              setTabs([{
+                id: initialId, panes: [{ id: initialPaneId, host: 'local' }],
+                activePaneId: initialPaneId, title: 'local'
+              }]);
               setActiveTabId(initialId);
               setActivePaneId(initialPaneId);
               setTimeout(() => alert(`SSH server "${hash}" not found in config.`), 100);
@@ -597,10 +680,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
         } else if (autoload) {
           if (!pinnedElsewhere) {
             // Only auto-open tabs that are not currently in use by any client
-            const availablePins = pinnedTabsData.filter((p: any) => !p.listenerCount || p.listenerCount === 0);
-            const pinnedTabs = availablePins.map((p: any) => {
+            const availablePins = pinnedTabsData.filter((p) => !p.listenerCount || p.listenerCount === 0);
+            const pinnedTabs = availablePins.map((p) => {
               const paneId = p.id;
-              return { id: p.id, panes: [{ id: paneId, host: p.host }], activePaneId: paneId, title: p.title, isPinned: true, isLocked: p.isLocked };
+              return {
+                id: p.id, panes: [{ id: paneId, host: p.host }], activePaneId: paneId,
+                title: p.title, isPinned: true, isLocked: p.isLocked
+              };
             });
             if (pinnedTabs.length > 0) {
               setTabs(prev => prev.length > 0 ? prev : pinnedTabs);
@@ -609,14 +695,20 @@ export default function Dashboard({ initialData }: DashboardProps) {
             } else {
               const initialId = `local-${Date.now()}`;
               const initialPaneId = Math.random().toString(36).substring(2);
-              setTabs(prev => prev.length > 0 ? prev : [{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
+              setTabs(prev => prev.length > 0 ? prev : [{
+                id: initialId, panes: [{ id: initialPaneId, host: 'local' }],
+                activePaneId: initialPaneId, title: 'local'
+              }]);
               if (!getStore().activeTabId) setActiveTabId(initialId);
               if (!getStore().activePaneId) setActivePaneId(initialPaneId);
             }
           } else {
             const initialId = `local-${Date.now()}`;
             const initialPaneId = Math.random().toString(36).substring(2);
-            setTabs(prev => prev.length > 0 ? prev : [{ id: initialId, panes: [{ id: initialPaneId, host: 'local' }], activePaneId: initialPaneId, title: 'local' }]);
+            setTabs(prev => prev.length > 0 ? prev : [{
+              id: initialId, panes: [{ id: initialPaneId, host: 'local' }],
+              activePaneId: initialPaneId, title: 'local'
+            }]);
             if (!getStore().activeTabId) setActiveTabId(initialId);
             if (!getStore().activePaneId) setActivePaneId(initialPaneId);
           }
@@ -629,6 +721,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     return () => {
       if (bc) bc.close();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialData, handleSelectTagAsSplit, handleSelectHost, startupParams]); // Run ONLY once on mount
 
   useEffect(() => {
@@ -647,10 +740,19 @@ export default function Dashboard({ initialData }: DashboardProps) {
         return;
       }
     }
-    const token = localStorage.getItem('cozy_token');
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     if (token) {
-      await fetch('/api/sessions/close_all_normal', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
-      await fetch('/api/logout', { headers: { 'Authorization': `Bearer ${token}` } });
+      await fetch('/api/sessions/close_all_normal', {
+        method: METHOD_POST,
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
+        }
+      });
+      await fetch('/api/logout', {
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
+        }
+      });
     }
     localStorage.clear();
     if (window.caches) {
@@ -660,7 +762,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     window.location.href = '/login';
   };
 
-  const handleOpenScratchpad = () => {
+  const handleOpenScratchpad = useCallback(() => {
     const existing = tabs.find(t => t.type === 'scratchpad');
     if (existing) {
       setActiveTabId(existing.id);
@@ -680,23 +782,41 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setActiveTabId(newTab.id);
     setActivePaneId(tabId);
     setTimeout(() => terminalRefs.current[tabId]?.focus(), 50);
-  };
+  }, [setActivePaneId, setActiveTabId, setTabs, tabs]);
 
+  const handleUnpinTab = useCallback(async (id: string) => {
+    const tab = tabs.find(t => t.id === id);
+    if (!tab) return;
+    const backendSessionId = tab.panes[0]?.sessionId || tab.panes[0]?.id || id;
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+    await fetch('/api/tabs/unpin', {
+      method: METHOD_POST,
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        [HEADER_CONTENT_TYPE]: MIME_JSON,
+      },
+      body: JSON.stringify({ id: backendSessionId } as TabsUnpinRequest)
+    });
+    setContextMenu(null);
+  }, [tabs]);
 
-  const handleCloseTab = (e: React.MouseEvent | null, id: string) => {
+  const handleCloseTab = useCallback((e: React.MouseEvent | null, id: string) => {
     e?.stopPropagation();
     const targetTab = tabs.find(t => t.id === id);
     if (targetTab?.isPinned && !targetTab?.isLocked) {
       handleUnpinTab(id);
     }
     if (targetTab && !targetTab.isLocked) {
-      const token = localStorage.getItem('cozy_token');
+      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
       targetTab.panes.forEach(p => {
         if (p.state !== 'stolen') {
           fetch('/api/sessions/close', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: p.sessionId || p.id })
+            method: METHOD_POST,
+            headers: {
+              [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+              [HEADER_CONTENT_TYPE]: MIME_JSON,
+            },
+            body: JSON.stringify({ id: p.sessionId || p.id } as SessionsCloseRequest)
           }).catch(e => console.error(e));
         }
       });
@@ -717,9 +837,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
       return newTabs;
     });
     setTimeout(() => terminalRefs.current[getStore().activePaneId]?.focus(), 50);
-  };
+  }, [activeTabId, handleUnpinTab, setActivePaneId, setActiveTabId, setTabs, tabs]);
 
-  const handleCloseCurrentPaneOrTab = () => {
+  const handleCloseCurrentPaneOrTab = useCallback(() => {
     const currentTab = tabs.find(t => t.id === activeTabId);
     if (!currentTab) return;
     if (currentTab.panes.length > 1) {
@@ -730,11 +850,14 @@ export default function Dashboard({ initialData }: DashboardProps) {
       if (!currentTab.isLocked) {
         const paneToClose = currentTab.panes.find(p => p.id === activePaneId);
         if (paneToClose && paneToClose.state !== 'stolen') {
-          const token = localStorage.getItem('cozy_token');
+          const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
           fetch('/api/sessions/close', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: paneToClose.sessionId || paneToClose.id })
+            method: METHOD_POST,
+            headers: {
+              [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+              [HEADER_CONTENT_TYPE]: MIME_JSON
+            },
+            body: JSON.stringify({ id: paneToClose.sessionId || paneToClose.id } as SessionsCloseRequest)
           }).catch(e => console.error(e));
         }
       }
@@ -743,7 +866,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     } else {
       handleCloseTab(null, activeTabId);
     }
-  };
+  }, [activePaneId, activeTabId, handleCloseTab, setActivePaneId, setTabs, tabs]);
 
   const handlePinTab = async (id: string) => {
     const tab = tabs.find(t => t.id === id);
@@ -755,30 +878,21 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const pane = tab.panes[0];
     if (!pane) return;
     const backendSessionId = pane.sessionId || pane.id;
-    const token = localStorage.getItem('cozy_token');
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     // Pinning only supports single-pane tabs for now (backend requirement)
     const host = pane.host || 'local';
     await fetch('/api/tabs/pin', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: backendSessionId, host, title: tab.title })
+      method: METHOD_POST,
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        [HEADER_CONTENT_TYPE]: MIME_JSON,
+      },
+      body: JSON.stringify({ id: backendSessionId, host, title: tab.title } as TabsPinRequest)
     });
     setTabs(prev => prev.map(t => t.id === id ? { ...t, isPinned: true } : t));
     setContextMenu(null);
   };
 
-  const handleUnpinTab = async (id: string) => {
-    const tab = tabs.find(t => t.id === id);
-    if (!tab) return;
-    const backendSessionId = tab.panes[0]?.sessionId || tab.panes[0]?.id || id;
-    const token = localStorage.getItem('cozy_token');
-    await fetch('/api/tabs/unpin', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: backendSessionId })
-    });
-    setContextMenu(null);
-  };
 
   const handleLockTab = async (id: string) => {
     const tab = tabs.find(t => t.id === id);
@@ -790,12 +904,15 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const pane = tab.panes[0];
     if (!pane) return;
     const backendSessionId = pane.sessionId || pane.id;
-    const token = localStorage.getItem('cozy_token');
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     const host = pane.host || 'local';
     await fetch('/api/tabs/lock', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: backendSessionId, host, title: tab.title })
+      method: METHOD_POST,
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        [HEADER_CONTENT_TYPE]: MIME_JSON,
+      },
+      body: JSON.stringify({ id: backendSessionId, host, title: tab.title } as TabsLockRequest)
     });
     setTabs(prev => prev.map(t => t.id === id ? { ...t, isLocked: true } : t));
     setContextMenu(null);
@@ -811,12 +928,15 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const pane = tab.panes[0];
     if (!pane) return;
     const paneId = pane.sessionId || pane.id;
-    const token = localStorage.getItem('cozy_token');
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     const host = pane.host || 'local';
     await fetch('/api/tabs/pin', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: paneId, host, title: tab.title })
+      method: METHOD_POST,
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        [HEADER_CONTENT_TYPE]: MIME_JSON,
+      },
+      body: JSON.stringify({ id: paneId, host, title: tab.title } as TabsPinRequest)
     });
     setTabs(prev => prev.map(t => t.id === id ? { ...t, isLocked: false } : t));
     if (activeTabId === id) setActiveTabId(paneId);
@@ -832,12 +952,15 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const newTitle = prompt("Enter new tab name:", targetTab.title);
     if (newTitle && newTitle.trim() !== "") {
       if (targetTab.isPinned) {
-        const token = localStorage.getItem('cozy_token');
+        const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
         const backendSessionId = targetTab.panes[0]?.sessionId || targetTab.panes[0]?.id || targetId;
         await fetch('/api/tabs/rename', {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: backendSessionId, title: newTitle })
+          method: METHOD_POST,
+          headers: {
+            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+            [HEADER_CONTENT_TYPE]: MIME_JSON,
+          },
+          body: JSON.stringify({ id: backendSessionId, title: newTitle } as TabsRenameRequest),
         });
       }
       setTabs(prev => prev.map(t => t.id === targetId ? { ...t, title: newTitle } : t));
@@ -869,8 +992,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const targetTab = tabs.find(t => t.id === id);
     if (!targetTab) return;
     targetTab.panes.forEach(p => {
-      const term: any = terminalRefs.current[p.id];
-      term?.reconnect?.();
+      const term = terminalRefs.current[p.id];
+      if (term && "getXterm" in term) {
+        term.reconnect();
+      }
     });
     setContextMenu(null);
   };
@@ -916,7 +1041,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setContextMenu(null);
   };
 
-  const handleButtonClick = async (btn: ButtonData) => {
+  const handleButtonClick = useCallback(async (btn: ButtonData) => {
     window.navigator.vibrate?.(VIBRATE_PATTERN);
     switch (btn.type) {
       case 'send_string':
@@ -929,21 +1054,25 @@ export default function Dashboard({ initialData }: DashboardProps) {
         break;
 
       case 'terminal_function': {
-        const term = terminalRefs.current[activePaneId] as any;
-        if (!term) return;
+        const term = terminalRefs.current[activePaneId];
+        if (!term || !("getXterm" in term)) {
+          return;
+        }
         switch (btn.payload) {
           case 'COPY':
-            term.selectAll?.();
-            const textCopy = term.getSelection?.()?.trim();
-            if (textCopy) {
-              navigator.clipboard.writeText(textCopy);
+            {
+              term.selectAll();
+              const textCopy = term.getSelection().trim();
+              if (textCopy) {
+                navigator.clipboard.writeText(textCopy);
+              }
+              term.clearSelection();
+              term.focus();
+              break;
             }
-            term.clearSelection?.();
-            term.focus?.();
-            break;
 
           case 'COPY_VISIBLE': {
-            const xterm = term?.getXterm?.();
+            const xterm = term.getXterm();
             if (!xterm) {
               return;
             }
@@ -961,34 +1090,34 @@ export default function Dashboard({ initialData }: DashboardProps) {
             if (text) {
               navigator.clipboard.writeText(text);
             }
-            term.focus?.();
+            term.focus();
             break;
           }
 
           case 'COPY_SELECTION': {
-            const text = term.getSelection?.();
+            const text = term.getSelection();
             if (text) {
               navigator.clipboard.writeText(text);
             }
-            term.focus?.();
+            term.focus();
             break;
           }
 
           case 'COPY_LAST_COMMAND_OUTPUT': {
-            const text = term.getLastCommandOutput?.();
+            const text = term.getLastCommandOutput();
             if (text) {
               navigator.clipboard.writeText(text);
             }
-            term.focus?.();
+            term.focus();
             break;
           }
 
           case 'PASTE': {
             const text = await navigator.clipboard.readText();
             if (text) {
-              term.sendData?.(text);
+              term.sendData(text);
             }
-            term.focus?.();
+            term.focus();
             break;
           }
 
@@ -999,18 +1128,18 @@ export default function Dashboard({ initialData }: DashboardProps) {
             break;
 
           case 'CLEAR':
-            term.clear?.();
-            term.focus?.();
+            term.clear();
+            term.focus();
             break;
 
           case 'RESET':
-            term.reset?.();
-            term.focus?.();
+            term.reset();
+            term.focus();
             break;
 
           case 'RECONNECT':
-            term.reconnect?.();
-            term.focus?.();
+            term.reconnect();
+            term.focus();
             break;
 
           case 'CLOSE':
@@ -1018,37 +1147,39 @@ export default function Dashboard({ initialData }: DashboardProps) {
             break;
 
           case 'SCROLL_TO_TOP':
-            term.scrollToTop?.();
-            term.focus?.();
+            term.scrollToTop();
+            term.focus();
             break;
 
           case 'SCROLL_TO_BOTTOM':
-            term.scrollToBottom?.();
-            term.focus?.();
+            term.scrollToBottom();
+            term.focus();
             break;
 
           case 'SCROLL_UP': {
-            const scrollLines = getIntVar(getStore().vars, getStore().localVars, 'cs_scroll_lines', DEFAULT_SCROLL_LINES);
-            term.scrollLines?.(-scrollLines);
-            term.focus?.();
+            const scrollLines = getIntVar(getStore().vars, getStore().localVars,
+              'cs_scroll_lines', DEFAULT_SCROLL_LINES);
+            term.scrollLines(-scrollLines);
+            term.focus();
             break;
           }
 
           case 'SCROLL_DOWN': {
-            const scrollLines = getIntVar(getStore().vars, getStore().localVars, 'cs_scroll_lines', DEFAULT_SCROLL_LINES);
-            term.scrollLines?.(scrollLines);
-            term.focus?.();
+            const scrollLines = getIntVar(getStore().vars, getStore().localVars,
+              'cs_scroll_lines', DEFAULT_SCROLL_LINES);
+            term.scrollLines(scrollLines);
+            term.focus();
             break;
           }
 
           case 'SCROLL_PAGE_UP':
-            term.scrollPages?.(-1);
-            term.focus?.();
+            term.scrollPages(-1);
+            term.focus();
             break;
 
           case 'SCROLL_PAGE_DOWN':
-            term.scrollPages?.(1);
-            term.focus?.();
+            term.scrollPages(1);
+            term.focus();
             break;
 
           case 'SEARCH':
@@ -1092,7 +1223,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       default:
         break;
     }
-  };
+  }, [activeGroup, activePaneId, groups, handleCloseCurrentPaneOrTab, handleOpenScratchpad, handleSelectHost]);
 
   // ── Keyboard shortcuts (reads fresh state from store — tiny stable dep array) ──
   useKeyboardManager({
@@ -1108,18 +1239,25 @@ export default function Dashboard({ initialData }: DashboardProps) {
   });
 
   const handleSaveButton = async () => {
-    const token = localStorage.getItem('cozy_token');
-    const method = editingButton ? 'PUT' : 'POST';
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+    const method = editingButton ? METHOD_PUT : METHOD_POST;
     const url = editingButton ? `/api/buttons/${editingButton.id}` : '/api/buttons';
     await fetch(url, {
       method,
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        [HEADER_CONTENT_TYPE]: MIME_JSON,
+      },
       body: JSON.stringify(buttonFormData)
     });
     setInitialBtnFormData(null);
     setButtonDialogOpen(false);
-    fetch('/api/buttons', { headers: { 'Authorization': `Bearer ${token}` } })
-      .then(r => r.json())
+    fetch('/api/buttons', {
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
+      }
+    })
+      .then(r => r.json() as Promise<ButtonData[]>)
       .then(data => {
         setButtons(data || []);
         setButtonsLoaded(true);
@@ -1129,8 +1267,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const noautorun = getIntVar(vars, localVars, "cs_noautorun");
 
   useEffect(() => {
-    if ((window as any).__CS_AUTORUN_DONE__ === undefined && buttonsLoaded) {
-      (window as any).__CS_AUTORUN_DONE__ = 0;
+    if (window.__CS_AUTORUN_DONE__ === undefined && buttonsLoaded) {
+      window.__CS_AUTORUN_DONE__ = 0;
       (async () => {
         if (noautorun !== 1 && startupParams.get("noautorun") !== "1") {
           const scriptsToRun = buttons.filter(b => b.type === 'run_script' && b.autorun === 1);
@@ -1142,21 +1280,27 @@ export default function Dashboard({ initialData }: DashboardProps) {
             }
           }
         }
-        (window as any).__CS_AUTORUN_DONE__ = 1;
+        window.__CS_AUTORUN_DONE__ = 1;
       })();
     }
-  }, [startupParams, buttonsLoaded, buttons, noautorun]);
+  }, [startupParams, buttonsLoaded, buttons, noautorun, handleButtonClick]);
 
   const handleDeleteButton = async (id: string, name: string) => {
     if (!confirm(`Delete button "${name}"?`)) return;
-    const token = localStorage.getItem('cozy_token');
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     await fetch(`/api/buttons/${id}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` }
+      method: METHOD_DELETE,
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
+      }
     });
     setBtnMenuAnchor(null);
-    fetch('/api/buttons', { headers: { 'Authorization': `Bearer ${token}` } })
-      .then(r => r.json())
+    fetch('/api/buttons', {
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
+      }
+    })
+      .then(r => r.json() as Promise<ButtonData[]>)
       .then(data => {
         setButtons(data || []);
         setButtonsLoaded(true);
@@ -1164,28 +1308,35 @@ export default function Dashboard({ initialData }: DashboardProps) {
   };
 
   const handleMoveButton = async (id: string, direction: number) => {
-    const token = localStorage.getItem('cozy_token');
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     await fetch('/api/buttons/move', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, direction })
+      method: METHOD_POST,
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        [HEADER_CONTENT_TYPE]: MIME_JSON,
+      },
+      body: JSON.stringify({ id, direction } as ButtonsMoveRequest)
     });
     setBtnMenuAnchor(null);
-    fetch('/api/buttons', { headers: { 'Authorization': `Bearer ${token}` } })
-      .then(r => r.json())
+    fetch('/api/buttons', {
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      }
+    })
+      .then(r => r.json() as Promise<ButtonData[]>)
       .then(data => {
         setButtons(data || []);
         setButtonsLoaded(true);
       });
   };
 
-  const handleCloseBtnDialog = (_: any, reason: string) => {
+  const handleCloseBtnDialog = (_e: unknown, reason: string) => {
     const isDirty = initialBtnFormData && JSON.stringify(buttonFormData) !== JSON.stringify(initialBtnFormData);
     if (isDirty && (reason === 'backdropClick' || reason === 'escapeKeyDown')) {
       return;
     }
     setButtonDialogOpen(false);
-    setTimeout(() => (window as any).csFocus?.(), 0);
+    setTimeout(() => window.csFocus(), 0);
   };
 
 
@@ -1210,13 +1361,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, [extraKeysOpen]);
 
   const activeKbHeight = keyboardHeight > 60 ? keyboardHeight : lastKeyboardHeight;
-  const panelHeight = activeKbHeight > 60 ? (activeKbHeight + 40) : Math.round(window.innerHeight * 0.38);
+  const panelHeight = activeKbHeight > 60 ? (activeKbHeight + 40) : Math.floor(window.innerHeight * 0.38);
 
   const barHeight = extraKeysOpen ? 0 : 40;
 
   // 3. CRITICAL FIX: Only calculate the spacer if the panel is open or closing.
   // Otherwise, it must be exactly 0 (like on initial page load).
-  const spacerHeight = Math.round((extraKeysOpen || isClosingPanel)
+  const spacerHeight = Math.floor((extraKeysOpen || isClosingPanel)
     ? Math.max(0, panelHeight - keyboardHeight - barHeight)
     : 0);
 
@@ -1233,7 +1384,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
           onSelect={(host) => { handleSelectHost(host); setMobileOpen(false); }}
           onSelectTagAsSplit={(tag, hosts) => { handleSelectTagAsSplit(tag, hosts); setMobileOpen(false); }}
           onLogout={handleLogout}
-          activeTabs={tabs.flatMap(t => t.panes.filter((p: any) => p.state !== 'stolen').map((p: any) => p.sessionId || p.id))}
+          activeTabs={tabs.flatMap(t => t.panes.filter((p) => p.state !== 'stolen').map((p) => p.sessionId || p.id))}
           sysHostname={sysHostname}
           appVersion={appVersion}
           onAttach={(id, host, title, isLocked) => { handleAttach(id, host, title, isLocked); setMobileOpen(false); }}
@@ -1247,7 +1398,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
           component="main"
           style={{
             // Pass the calculated height perfectly to CSS
-            '--keyboard-spacer-height': spacerHeight
+            // '--keyboard-spacer-height': spacerHeight
           } as React.CSSProperties}
           sx={{
             flexGrow: 1,
@@ -1316,6 +1467,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             onNewButtonClick={handleNewButtonClick}
           />
           <Box
+            id="mobile-keyboard-spacer"
             sx={{
               flexShrink: 0,
               order: 9999,
@@ -1332,7 +1484,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
               onClose={() => setMobileAppletsOpen(false)}
               sx={{ '& .MuiDrawer-paper': { width: 320, boxSizing: 'border-box' } }}
             >
-              <Box sx={{ px: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: 1, borderColor: 'divider' }}>
+              <Box sx={{
+                px: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                borderBottom: 1, borderColor: 'divider'
+              }}>
                 <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Applets</Typography>
                 <IconButton onClick={() => setMobileAppletsOpen(false)}>
                   <CloseIcon />
@@ -1345,20 +1500,25 @@ export default function Dashboard({ initialData }: DashboardProps) {
                     applet={applet}
                     index={idx}
                     onClose={() => setApplets(prev => prev.filter(a => a.name !== applet.name))}
-                    onSwitchPosition={(pos) => setApplets(prev => prev.map(a => a.name === applet.name ? { ...a, position: pos } : a))}
+                    onSwitchPosition={(pos) => setApplets(prev => prev.map(a => a.name === applet.name
+                      ? { ...a, position: pos } : a))}
                   />
                 ))}
               </Box>
             </Drawer>
           ) : (
-            <Box sx={{ width: 320, flexShrink: 0, borderLeft: 1, borderColor: 'divider', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper', overflow: 'hidden', height: '100%' }}>
+            <Box sx={{
+              width: 320, flexShrink: 0, borderLeft: 1, borderColor: 'divider', display: 'flex',
+              flexDirection: 'column', bgcolor: 'background.paper', overflow: 'hidden', height: '100%'
+            }}>
               {applets.filter(a => a.position === 'sidebar').map((applet, idx) => (
                 <AppletWrapper
                   key={applet.name}
                   applet={applet}
                   index={idx}
                   onClose={() => setApplets(prev => prev.filter(a => a.name !== applet.name))}
-                  onSwitchPosition={(pos) => setApplets(prev => prev.map(a => a.name === applet.name ? { ...a, position: pos } : a))}
+                  onSwitchPosition={(pos) => setApplets(prev => prev.map(a => a.name === applet.name
+                    ? { ...a, position: pos } : a))}
                 />
               ))}
             </Box>
@@ -1372,8 +1532,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
           applet={applet}
           index={idx}
           onClose={() => setApplets(prev => prev.filter(a => a.name !== applet.name))}
-          onSwitchPosition={(pos) => setApplets(prev => prev.map(a => a.name === applet.name ? { ...a, position: pos } : a))}
-          onFocus={() => setApplets(prev => prev.map(a => a.name === applet.name ? { ...a, zIndex: maxZIndexRef.current++ } : a))}
+          onSwitchPosition={(pos) => setApplets(prev => prev.map(a => a.name === applet.name
+            ? { ...a, position: pos } : a))}
+          onFocus={() => setApplets(prev => prev.map(a => a.name === applet.name
+            ? { ...a, zIndex: maxZIndexRef.current++ } : a))}
         />
       ))}
 
@@ -1384,14 +1546,28 @@ export default function Dashboard({ initialData }: DashboardProps) {
           onClose={() => setApplets(prev => prev.filter(a => a.name !== applet.name))}
           fullWidth
           maxWidth={false}
-          slotProps={{ paper: { sx: { width: applet.width ?? 600, maxWidth: '95vw', height: applet.height ?? undefined } } }}
+          slotProps={{
+            paper: {
+              sx: {
+                width: applet.width ?? 600, maxWidth: '95vw',
+                height: applet.height ?? undefined
+              }
+            }
+          }}
         >
-          <DialogTitle sx={{ display: 'flex', alignItems: 'center', p: 1, pl: 2, borderBottom: 1, borderColor: 'divider' }}>
+          <DialogTitle sx={{
+            display: 'flex', alignItems: 'center',
+            p: 1, pl: 2, borderBottom: 1, borderColor: 'divider'
+          }}>
             <Typography variant="subtitle1" sx={{ flexGrow: 1, fontWeight: 'bold' }}>{applet.name}</Typography>
-            <IconButton size="small" title="Move to sidebar" onClick={() => setApplets(prev => prev.map(a => a.name === applet.name ? { ...a, position: 'sidebar' } : a))} sx={{ mr: 0.5 }}>
+            <IconButton size="small" title="Move to sidebar"
+              onClick={() => setApplets(prev => prev.map(a => a.name === applet.name
+                ? { ...a, position: 'sidebar' } : a))} sx={{ mr: 0.5 }}>
               <ViewSidebarIcon fontSize="small" />
             </IconButton>
-            <IconButton size="small" title="Move to widget" onClick={() => setApplets(prev => prev.map(a => a.name === applet.name ? { ...a, position: 'widget', zIndex: maxZIndexRef.current++ } : a))} sx={{ mr: 0.5 }}>
+            <IconButton size="small" title="Move to widget"
+              onClick={() => setApplets(prev => prev.map(a => a.name === applet.name
+                ? { ...a, position: 'widget', zIndex: maxZIndexRef.current++ } : a))} sx={{ mr: 0.5 }}>
               <OpenInNewIcon fontSize="small" />
             </IconButton>
             <IconButton size="small" onClick={() => setApplets(prev => prev.filter(a => a.name !== applet.name))}>
@@ -1403,7 +1579,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
               applet={applet}
               index={0}
               onClose={() => setApplets(prev => prev.filter(a => a.name !== applet.name))}
-              onSwitchPosition={(pos) => setApplets(prev => prev.map(a => a.name === applet.name ? { ...a, position: pos } : a))}
+              onSwitchPosition={(pos) => setApplets(prev => prev.map(a => a.name === applet.name
+                ? { ...a, position: pos } : a))}
             />
           </DialogContent>
         </Dialog>
@@ -1434,7 +1611,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
         setButtonFormData={setButtonFormData}
         handleCloseBtnDialog={handleCloseBtnDialog}
         handleSaveButton={handleSaveButton}
-        MISC_FUNCTIONS={MISC_FUNCTIONS}
         hosts={hosts}
         inputDialogOpen={inputDialogOpen}
         handleCloseInputDialog={handleCloseInputDialog}

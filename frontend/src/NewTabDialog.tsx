@@ -24,8 +24,14 @@ import StarIcon from '@mui/icons-material/Star';
 import TabIcon from '@mui/icons-material/Tab';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import SmartButtonIcon from '@mui/icons-material/SmartButton';
-import { filterHosts, searchString, type Host } from './Sidebar';
-import { BUILTIN_BUTTONS } from './constants';
+
+import type { HostData, SessionPinned, ButtonData } from './api';
+import {
+  BROWSER_STORAGE_KEY_TOKEN, BUILTIN_BUTTONS, DEFAULT_BUTTON_GROUP, HEADER_AUTHORIZATION,
+  HEADER_AUTHORIZATION_BEARER_PREFIX,
+} from './constants';
+import { filterHosts, searchString } from './common';
+import type { TabData } from './dashboardStore';
 
 interface Recent {
   host: string;
@@ -35,20 +41,22 @@ interface Recent {
 interface NewTabDialogProps {
   open: boolean;
   onClose: () => void;
-  hosts: Host[];
+  hosts: HostData[];
   recents: Recent[];
-  tabs?: any[];
-
-  buttons?: any[];
+  tabs?: TabData[];
+  buttons?: ButtonData[];
   activeGroup?: string;
   initialViewMode?: 'servers' | 'tabs' | 'buttons';
   onSelect: (host: string) => void;
-  onSelectTab?: (tabId: string) => void;
-  onAttachPinned?: (id: string, host: string, title: string, isLocked: boolean) => void;
-  onExecuteButton?: (btn: any) => void;
+  onSelectTab: (tabId: string) => void;
+  onAttachPinned: (id: string, host: string, title: string, isLocked: boolean) => void;
+  onExecuteButton: (btn: ButtonData) => void;
 }
 
-export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [], buttons = [], activeGroup, initialViewMode = 'servers', onSelect, onSelectTab, onAttachPinned, onExecuteButton }: NewTabDialogProps) {
+export default function NewTabDialog({
+  open, onClose, hosts, recents, tabs = [], buttons = [], activeGroup,
+  initialViewMode = 'servers', onSelect, onSelectTab, onAttachPinned, onExecuteButton
+}: NewTabDialogProps) {
   const [filter, setFilter] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [viewMode, setViewMode] = useState<'servers' | 'tabs' | 'buttons'>('servers');
@@ -56,13 +64,17 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
   const selectedItemRef = useRef<HTMLDivElement>(null);
   const swipeStartRef = useRef<{ x: number, y: number, time: number } | null>(null);
 
-  const [localPinned, setLocalPinned] = useState<any[]>([]);
+  const [localPinned, setLocalPinned] = useState<SessionPinned[]>([]);
 
   useEffect(() => {
     if (open) {
-      const token = localStorage.getItem('cozy_token');
-      fetch('/api/sessions/pinned', { headers: { 'Authorization': `Bearer ${token}` } })
-        .then(r => r.json())
+      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+      fetch('/api/sessions/pinned', {
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        }
+      })
+        .then(r => r.json() as Promise<SessionPinned[]>)
         .then(data => setLocalPinned(data || []))
         .catch(e => console.error(e));
     }
@@ -95,21 +107,32 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
   }, [hosts, filter, viewMode]);
 
   const directConnect = useMemo(() => {
-    if (viewMode !== 'servers') return null;
-    if (!filter || (!filter.includes('.') && !filter.includes(':') && filter !== 'localhost')) return null;
+    if (viewMode !== 'servers') {
+      return null;
+    }
+    if (!filter || (!filter.includes('.') && !filter.includes(':') && filter !== 'localhost')) {
+      return null;
+    }
     return filter;
   }, [filter, viewMode]);
 
   const activeTabsList = useMemo(() => {
-    if (viewMode !== 'tabs') return [];
+    if (viewMode !== 'tabs') {
+      return [];
+    }
     const f = filter.toLowerCase();
-    return tabs.filter(t => t.title.toLowerCase().includes(f) || (t.type === 'terminal' && t.panes.some((p: any) => p.host.toLowerCase().includes(f))));
+    return tabs.filter(t => t.title.toLowerCase().includes(f)
+      || (t.type === 'terminal' && t.panes.some((p) => p.host.toLowerCase().includes(f))));
   }, [tabs, filter, viewMode]);
 
   const attachablePinnedTabs = useMemo(() => {
-    if (viewMode !== 'tabs') return [];
+    if (viewMode !== 'tabs') {
+      return [];
+    }
     const f = filter.toLowerCase();
-    return localPinned.filter(p => !tabs.some(t => t.panes.some((pane: any) => (pane.sessionId || pane.id) === p.id && pane.state !== 'stolen')) && (p.title?.toLowerCase().includes(f) || p.host?.toLowerCase().includes(f)));
+    return localPinned.filter(p => !tabs.some(t => t.panes.some(
+      (pane) => (pane.sessionId || pane.id) === p.id && pane.state !== 'stolen'))
+      && (p.title?.toLowerCase().includes(f) || p.host?.toLowerCase().includes(f)));
   }, [localPinned, tabs, filter, viewMode]);
 
   const allFilteredButtons = useMemo(() => {
@@ -131,12 +154,14 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
 
   const activeGroupButtons = useMemo(() => {
     if (viewMode !== 'buttons') return [];
-    return allFilteredButtons.matchedUser.filter(b => (b.group || 'Default') === (activeGroup || 'Default'));
+    return allFilteredButtons.matchedUser.filter(
+      b => (b.group || DEFAULT_BUTTON_GROUP) === (activeGroup || DEFAULT_BUTTON_GROUP));
   }, [allFilteredButtons, activeGroup, viewMode]);
 
   const otherGroupButtons = useMemo(() => {
     if (viewMode !== 'buttons') return [];
-    return allFilteredButtons.matchedUser.filter(b => (b.group || 'Default') !== (activeGroup || 'Default'));
+    return allFilteredButtons.matchedUser.filter(
+      b => (b.group || DEFAULT_BUTTON_GROUP) !== (activeGroup || DEFAULT_BUTTON_GROUP));
   }, [allFilteredButtons, activeGroup, viewMode]);
 
   const builtinButtons = useMemo(() => {
@@ -145,7 +170,20 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
   }, [allFilteredButtons, viewMode]);
 
   const items = useMemo(() => {
-    const res: { type: 'recent' | 'host' | 'direct' | 'local' | 'tab' | 'pinned_tab' | 'button' | 'other_button' | 'builtin_button', value: string, label: string, subtitle?: string, tooltip?: string, isFav?: boolean, id?: string, host?: string, isLocked?: boolean, btn?: any, tags?: string[] }[] = [];
+    const res: {
+      type: 'recent' | 'host' | 'direct' | 'local' | 'tab' | 'pinned_tab'
+      | 'button' | 'other_button' | 'builtin_button',
+      value: string,
+      label: string,
+      subtitle?: string,
+      tooltip?: string,
+      isFav?: boolean,
+      id?: string,
+      host?: string,
+      isLocked?: boolean,
+      btn?: ButtonData,
+      tags?: string[]
+    }[] = [];
 
     if (viewMode === 'servers') {
       filteredRecents.forEach(r => {
@@ -197,7 +235,8 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
           id: t.id,
           value: t.id,
           label: t.title,
-          subtitle: t.type === 'scratchpad' ? 'Scratchpad' : `Terminal (${t.panes.length} pane${t.panes.length > 1 ? 's' : ''})`
+          subtitle: t.type === 'scratchpad' ? 'Scratchpad'
+            : `Terminal (${t.panes.length} pane${t.panes.length > 1 ? 's' : ''})`
         });
       });
 
@@ -214,7 +253,8 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
       });
     } else if (viewMode === 'buttons') {
       activeGroupButtons.forEach(b => {
-        let subtitle = `Group: ${b.group || 'Default'} | Type: ${b.type}${b.type !== "send_string" && b.type !== "run_script" ? ' | Payload: ' + b.payload : ''}`;
+        let subtitle = `Group: ${b.group || DEFAULT_BUTTON_GROUP} | Type: ${b.type}${b.type !== "send_string" &&
+          b.type !== "run_script" ? ' | Payload: ' + b.payload : ''}`;
         if (filter && b.type === "send_string" && b.payload) {
           const matchedPayload = searchString(b.payload, filter);
           if (matchedPayload) {
@@ -232,7 +272,8 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
         });
       });
       otherGroupButtons.forEach(b => {
-        let subtitle = `Group: ${b.group || 'Default'} | Type: ${b.type}${b.type !== "send_string" && b.type !== "run_script" ? ' | Payload: ' + b.payload : ''}`;
+        let subtitle = `Group: ${b.group || DEFAULT_BUTTON_GROUP} | Type: ${b.type}${b.type !== "send_string" &&
+          b.type !== "run_script" ? ' | Payload: ' + b.payload : ''}`;
         if (filter && b.type === "send_string" && b.payload) {
           const matchedPayload = searchString(b.payload, filter);
           if (matchedPayload) {
@@ -256,16 +297,18 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
           value: b.id,
           label: b.name,
           subtitle: `Built-in | Type: ${b.type} | Payload: ${b.payload}`,
-          btn: b
+          btn: b as ButtonData,
         });
       });
     }
 
     return res;
-  }, [filteredRecents, filteredHosts, directConnect, hosts, filter, viewMode, activeTabsList, attachablePinnedTabs, activeGroupButtons, otherGroupButtons, builtinButtons]);
+  }, [filteredRecents, filteredHosts, directConnect, hosts, filter, viewMode, activeTabsList, attachablePinnedTabs,
+    activeGroupButtons, otherGroupButtons, builtinButtons]);
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFilter('');
       setSelectedIndex(0);
       setViewMode(initialViewMode);
@@ -334,15 +377,15 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
     return () => window.removeEventListener('keydown', handleGlobalKeydown);
   }, []);
 
-  const handleSelect = (item: any) => {
+  const handleSelect = (item: typeof items[number]) => {
     if (item.type === 'tab') {
-      onSelectTab?.(item.id);
+      onSelectTab(item.id!);
       onClose();
     } else if (item.type === 'pinned_tab') {
-      onAttachPinned?.(item.id, item.host, item.label, !!item.isLocked);
+      onAttachPinned(item.id!, item.host!, item.label, !!item.isLocked);
       onClose();
     } else if (item.type === 'button' || item.type === 'other_button' || item.type === 'builtin_button') {
-      onExecuteButton?.(item.btn);
+      onExecuteButton(item.btn!);
       onClose();
     } else {
       onSelect(item.value);
@@ -374,6 +417,39 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
     }
   };
 
+  const getItemIcon = (item: typeof items[number], index: number, selectedIndex: number) => {
+    // Use 'as const' so TS knows these are exact literal values, not generic strings
+    const baseProps = {
+      fontSize: 'small' as const
+    };
+    const activeProps = {
+      ...baseProps,
+      color: 'primary' as const,
+      sx: { color: selectedIndex === index ? 'white' : 'primary.main' }
+    };
+    switch (item.type) {
+      case 'recent':
+        return <HistoryIcon {...baseProps} />;
+      case 'direct':
+        return <SendIcon {...baseProps} />;
+      case 'local':
+        return <ComputerIcon {...baseProps} />;
+      case 'tab':
+        return <TabIcon {...activeProps} />;
+      case 'pinned_tab':
+        return <PushPinIcon {...activeProps} />;
+      case 'button':
+      case 'other_button':
+      case 'builtin_button':
+        return <SmartButtonIcon {...activeProps} />;
+      default:
+        if (item.isFav) {
+          return <StarIcon {...activeProps} />;
+        }
+        return <DnsIcon {...baseProps} />;
+    }
+  };
+
   return (
     <Dialog
       open={open}
@@ -400,7 +476,8 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
         <TextField
           fullWidth
           variant="outlined"
-          placeholder={viewMode === 'servers' ? "Search for a server or type an address..." : viewMode === 'tabs' ? "Search opened tabs..." : "Search buttons..."}
+          placeholder={viewMode === 'servers' ? "Search for a server or type an address..."
+            : viewMode === 'tabs' ? "Search opened tabs..." : "Search buttons..."}
           value={filter}
           onChange={(e) => { setFilter(e.target.value); setSelectedIndex(0); }}
           onKeyDown={handleKeyDown}
@@ -435,44 +512,58 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
             <React.Fragment key={`${item.type}-${item.value}-${index}`}>
               {index === 0 && item.type === 'recent' && (
                 <ListItem sx={{ py: 0.25, px: 2, bgcolor: 'action.hover' }} title={item.tooltip}>
-                  <Typography variant="overline" sx={{ lineHeight: 1.5, fontWeight: 'bold' }} color="text.secondary">Recent</Typography>
+                  <Typography variant="overline" sx={{ lineHeight: 1.5, fontWeight: 'bold' }}
+                    color="text.secondary">Recent</Typography>
                 </ListItem>
               )}
-              {((index === 0 && (item.type === 'host' || item.type === 'local')) || (index > 0 && (item.type === 'host' || item.type === 'local') && items[index - 1].type === 'recent')) && (
-                <ListItem sx={{ py: 0.25, px: 2, bgcolor: 'action.hover' }} title={item.tooltip}>
-                  <Typography variant="overline" sx={{ lineHeight: 1.5, fontWeight: 'bold' }} color="text.secondary">{filter === '' ? 'Favorites' : 'All Servers'}</Typography>
-                </ListItem>
-              )}
+              {((index === 0 && (item.type === 'host' || item.type === 'local'))
+                || (index > 0 && (item.type === 'host' || item.type === 'local')
+                  && items[index - 1].type === 'recent')) && (
+                  <ListItem sx={{ py: 0.25, px: 2, bgcolor: 'action.hover' }} title={item.tooltip}>
+                    <Typography variant="overline" sx={{ lineHeight: 1.5, fontWeight: 'bold' }}
+                      color="text.secondary">{filter === '' ? 'Favorites' : 'All Servers'}</Typography>
+                  </ListItem>
+                )}
               {item.type === 'direct' && (
                 <ListItem sx={{ py: 0.25, px: 2, bgcolor: 'action.hover' }} title={item.tooltip}>
-                  <Typography variant="overline" sx={{ lineHeight: 1.5, fontWeight: 'bold' }} color="text.secondary">Direct Connection</Typography>
+                  <Typography variant="overline"
+                    sx={{ lineHeight: 1.5, fontWeight: 'bold' }} color="text.secondary">Direct Connection</Typography>
                 </ListItem>
               )}
               {index === 0 && item.type === 'tab' && (
                 <ListItem sx={{ py: 0.25, px: 2, bgcolor: 'action.hover' }} title={item.tooltip}>
-                  <Typography variant="overline" sx={{ lineHeight: 1.5, fontWeight: 'bold' }} color="text.secondary">Current Browser Tabs</Typography>
+                  <Typography variant="overline" sx={{ lineHeight: 1.5, fontWeight: 'bold' }}
+                    color="text.secondary">Current Browser Tabs</Typography>
                 </ListItem>
               )}
-              {((index === 0 && item.type === 'pinned_tab') || (index > 0 && item.type === 'pinned_tab' && items[index - 1].type === 'tab')) && (
-                <ListItem sx={{ py: 0.25, px: 2, bgcolor: 'action.hover' }} title={item.tooltip}>
-                  <Typography variant="overline" sx={{ lineHeight: 1.5, fontWeight: 'bold' }} color="text.secondary">Attachable Pinned Tabs</Typography>
-                </ListItem>
-              )}
+              {((index === 0 && item.type === 'pinned_tab')
+                || (index > 0 && item.type === 'pinned_tab' && items[index - 1].type === 'tab')) && (
+                  <ListItem sx={{ py: 0.25, px: 2, bgcolor: 'action.hover' }} title={item.tooltip}>
+                    <Typography variant="overline" sx={{ lineHeight: 1.5, fontWeight: 'bold' }}
+                      color="text.secondary">Attachable Pinned Tabs</Typography>
+                  </ListItem>
+                )}
               {index === 0 && item.type === 'button' && (
                 <ListItem sx={{ py: 0.25, px: 2, bgcolor: 'action.hover' }} title={item.tooltip}>
-                  <Typography variant="overline" sx={{ lineHeight: 1.5, fontWeight: 'bold' }} color="text.secondary">Active Group ({activeGroup || 'Default'})</Typography>
+                  <Typography variant="overline" sx={{ lineHeight: 1.5, fontWeight: 'bold' }}
+                    color="text.secondary">Active Group ({activeGroup || DEFAULT_BUTTON_GROUP})</Typography>
                 </ListItem>
               )}
-              {((index === 0 && item.type === 'other_button') || (index > 0 && item.type === 'other_button' && items[index - 1].type === 'button')) && (
-                <ListItem sx={{ py: 0.25, px: 2, bgcolor: 'action.hover' }} title={item.tooltip}>
-                  <Typography variant="overline" sx={{ lineHeight: 1.5, fontWeight: 'bold' }} color="text.secondary">Other Groups</Typography>
-                </ListItem>
-              )}
-              {((index === 0 && item.type === 'builtin_button') || (index > 0 && item.type === 'builtin_button' && (items[index - 1].type === 'button' || items[index - 1].type === 'other_button'))) && (
-                <ListItem sx={{ py: 0.25, px: 2, bgcolor: 'action.hover' }} title={item.tooltip}>
-                  <Typography variant="overline" sx={{ lineHeight: 1.5, fontWeight: 'bold' }} color="text.secondary">Built-in Functions</Typography>
-                </ListItem>
-              )}
+              {((index === 0 && item.type === 'other_button')
+                || (index > 0 && item.type === 'other_button' && items[index - 1].type === 'button')) && (
+                  <ListItem sx={{ py: 0.25, px: 2, bgcolor: 'action.hover' }} title={item.tooltip}>
+                    <Typography variant="overline" sx={{ lineHeight: 1.5, fontWeight: 'bold' }}
+                      color="text.secondary">Other Groups</Typography>
+                  </ListItem>
+                )}
+              {((index === 0 && item.type === 'builtin_button')
+                || (index > 0 && item.type === 'builtin_button'
+                  && (items[index - 1].type === 'button' || items[index - 1].type === 'other_button'))) && (
+                  <ListItem sx={{ py: 0.25, px: 2, bgcolor: 'action.hover' }} title={item.tooltip}>
+                    <Typography variant="overline" sx={{ lineHeight: 1.5, fontWeight: 'bold' }}
+                      color="text.secondary">Built-in Functions</Typography>
+                  </ListItem>
+                )}
 
               <ListItemButton
                 selected={selectedIndex === index}
@@ -497,24 +588,23 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
                   }
                 }}
               >
-                <ListItemIcon sx={{ minWidth: 36 }}>
-                  {item.type === 'recent' ? <HistoryIcon fontSize="small" /> :
-                    item.type === 'direct' ? <SendIcon fontSize="small" /> :
-                      item.type === 'local' ? <ComputerIcon fontSize="small" /> :
-                        item.type === 'tab' ? <TabIcon fontSize="small" color="primary" sx={{ color: selectedIndex === index ? 'white' : 'primary.main' }} /> :
-                          item.type === 'pinned_tab' ? <PushPinIcon fontSize="small" color="primary" sx={{ color: selectedIndex === index ? 'white' : 'primary.main' }} /> :
-                            item.type === 'button' || item.type === 'other_button' || item.type === 'builtin_button' ? <SmartButtonIcon fontSize="small" color="primary" sx={{ color: selectedIndex === index ? 'white' : 'primary.main' }} /> :
-                              item.isFav ? <StarIcon fontSize="small" color="primary" sx={{ color: selectedIndex === index ? 'white' : 'primary.main' }} /> : <DnsIcon fontSize="small" />}
-                </ListItemIcon>
+                <ListItemIcon sx={{ minWidth: 36 }}>{getItemIcon(item, index, selectedIndex)}</ListItemIcon>
                 <ListItemText
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 0.5 }}>
-                      <Typography variant="body2" sx={{ fontWeight: item.isFav ? 'bold' : 'normal', lineHeight: 1.2, color: 'inherit', wordBreak: 'break-all' }}>
+                      <Typography variant="body2"
+                        sx={{
+                          fontWeight: item.isFav ? 'bold' : 'normal',
+                          lineHeight: 1.2, color: 'inherit', wordBreak: 'break-all'
+                        }}>
                         {item.label}
                       </Typography>
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 0.25 }}>
                         {item.tags && item.tags.filter(t => t !== 'fav').map(tag => (
-                          <Typography key={tag} variant="caption" sx={{ color: 'inherit', fontSize: '0.6rem', fontWeight: 600, opacity: 0.8 }}>
+                          <Typography key={tag} variant="caption" sx={{
+                            color: 'inherit', fontSize: '0.6rem',
+                            fontWeight: 600, opacity: 0.8
+                          }}>
                             #{tag}
                           </Typography>
                         ))}
@@ -523,7 +613,10 @@ export default function NewTabDialog({ open, onClose, hosts, recents, tabs = [],
                   }
                   secondary={
                     item.subtitle ? (
-                      <Typography variant="caption" sx={{ color: 'inherit', opacity: 0.8, display: 'block', mt: -0.2 }}>
+                      <Typography variant="caption" sx={{
+                        color: 'inherit', opacity: 0.8,
+                        display: 'block', mt: -0.2
+                      }}>
                         {item.subtitle}
                       </Typography>
                     ) : undefined

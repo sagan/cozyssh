@@ -6,18 +6,20 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 
+import type { AppletPosition } from './pluginAPI';
+
 interface AppletWrapperProps {
   applet: AppletData;
   index: number;
   onClose: () => void;
-  onSwitchPosition: (pos: 'widget' | 'sidebar' | 'dialog') => void;
+  onSwitchPosition: (pos: AppletPosition) => void;
   onFocus?: () => void;
 }
 
 export interface AppletData {
   name: string;
-  node: any;
-  position: 'widget' | 'sidebar' | 'dialog';
+  node: Node | React.ComponentType;
+  position: AppletPosition;
   width?: number;
   height?: number;
   zIndex?: number;
@@ -45,6 +47,7 @@ export default function AppletWrapper({
 
   useEffect(() => {
     if (applet.width !== undefined || applet.height !== undefined) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSize(prev => ({
         width: applet.width ?? prev.width,
         height: applet.height ?? prev.height
@@ -76,7 +79,9 @@ export default function AppletWrapper({
   }, [applet.position]);
 
   useEffect(() => {
-    if (applet.position !== 'widget' || !wrapperRef.current) return;
+    if (applet.position !== 'widget' || !wrapperRef.current) {
+      return;
+    }
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const target = entry.target as HTMLElement;
@@ -133,7 +138,8 @@ export default function AppletWrapper({
         <Box
           onClick={() => setExpanded(!expanded)}
           sx={{
-            display: 'flex', alignItems: 'center', px: 1, py: 0, minHeight: 40, bgcolor: '#00000014', color: 'text.primary',
+            display: 'flex', alignItems: 'center', px: 1, py: 0,
+            minHeight: 40, bgcolor: '#00000014', color: 'text.primary',
             borderBottom: 1, borderColor: 'divider',
             cursor: 'pointer', userSelect: 'none', flexShrink: 0,
             '&:hover': { bgcolor: '#00000028' }
@@ -141,10 +147,12 @@ export default function AppletWrapper({
         >
           {expanded ? <KeyboardArrowDownIcon /> : <KeyboardArrowRightIcon />}
           <Typography variant="subtitle2" sx={{ flexGrow: 1, fontWeight: 'bold' }}>{applet.name}</Typography>
-          <IconButton size="small" color="inherit" onClick={(e) => { e.stopPropagation(); onSwitchPosition('widget'); }} sx={{ p: 0.5 }}>
+          <IconButton size="small" color="inherit"
+            onClick={(e) => { e.stopPropagation(); onSwitchPosition('widget'); }} sx={{ p: 0.5 }}>
             <OpenInNewIcon fontSize="small" />
           </IconButton>
-          <IconButton size="small" color="inherit" onClick={(e) => { e.stopPropagation(); onClose(); }} sx={{ ml: 0.5, p: 0.5 }}>
+          <IconButton size="small" color="inherit"
+            onClick={(e) => { e.stopPropagation(); onClose(); }} sx={{ ml: 0.5, p: 0.5 }}>
             <CloseIcon fontSize="small" />
           </IconButton>
         </Box>
@@ -156,7 +164,8 @@ export default function AppletWrapper({
           overflow: 'auto'
         }}>
           {!(applet.node instanceof Node) ? (
-            React.isValidElement(applet.node) ? applet.node : React.createElement(applet.node as React.ComponentType, {})
+            React.isValidElement(applet.node) ? applet.node
+              : React.createElement(applet.node as React.ComponentType, {})
           ) : (
             <div ref={containerRef} style={{ width: '100%', minHeight: '150px' }} />
           )}
@@ -170,7 +179,8 @@ export default function AppletWrapper({
     return (
       <Box sx={{ flexGrow: 1, overflow: 'auto', p: 1, position: 'relative', minHeight: 150 }}>
         {isReactNode
-          ? (React.isValidElement(applet.node) ? applet.node : React.createElement(applet.node as React.ComponentType, {}))
+          ? (React.isValidElement(applet.node) ? applet.node
+            : React.createElement(applet.node as React.ComponentType, {}))
           : <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
         }
       </Box>
@@ -225,7 +235,9 @@ export default function AppletWrapper({
         </IconButton>
       </Box>
       <Box sx={{ flexGrow: 1, overflow: 'auto', p: 1, position: 'relative' }}>
-        {isReactComponent ? (React.isValidElement(applet.node) ? applet.node : React.createElement(applet.node as React.ComponentType, {})) : <div ref={containerRef} style={{ width: '100%', height: '100%' }} />}
+        {isReactComponent ? (React.isValidElement(applet.node) ? applet.node
+          : React.createElement(applet.node as React.ComponentType, {}))
+          : <div ref={containerRef} style={{ width: '100%', height: '100%' }} />}
       </Box>
     </Box>
   );

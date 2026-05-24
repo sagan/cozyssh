@@ -1,42 +1,61 @@
+export const METHOD_GET = "GET";
+export const METHOD_PUT = "PUT";
+export const METHOD_POST = "POST";
+export const METHOD_DELETE = "DELETE";
+export const HEADER_AUTHORIZATION = "Authorization";
+export const HEADER_AUTHORIZATION_BEARER_PREFIX = "Bearer ";
+export const HEADER_CONTENT_TYPE = "Content-Type";
+export const HEADER_COOKIE = "Cookie";
+export const HEADER_ORIGIN = "Origin";
+export const HEADER_REFERER = "Referer";
+export const HEADER_USER_AGENT = "User-Agent";
+export const MIME_JSON = "application/json";
+
+// export const WS_MSG_PREFIX_STATE = "STATE:";
+export const BROWSER_STORAGE_KEY_TOKEN = "cozy_token";
+export const BROWSER_STORAGE_KEY_ACTIVE_GROUP = "cozy_active_group";
+
+export const DEFAULT_BUTTON_GROUP = "Default";
+
 export const TERMINAL_FUNCTIONS = [
-  { value: 'COPY', label: 'COPY (Buffer)' },
-  { value: 'COPY_VISIBLE', label: 'COPY (Visible)' },
-  { value: 'COPY_SELECTION', label: 'COPY (Selection)' },
-  { value: 'COPY_LAST_COMMAND_OUTPUT', label: 'COPY (Last Cmd Output)' },
-  { value: 'PASTE', label: 'PASTE (Clipboard)' },
-  { value: 'INPUT', label: 'INPUT (Prompt)' },
-  { value: 'CLEAR', label: 'CLEAR (Screen)' },
-  { value: 'RESET', label: 'RESET (Terminal)' },
-  { value: 'RECONNECT', label: 'RECONNECT (Session)' },
-  { value: 'CLOSE', label: 'CLOSE (Pane/Tab)' },
-  { value: 'SCROLL_TO_TOP', label: 'SCROLL (Top)' },
-  { value: 'SCROLL_TO_BOTTOM', label: 'SCROLL (Bottom)' },
-  { value: 'SCROLL_UP', label: 'SCROLL (Up)' },
-  { value: 'SCROLL_DOWN', label: 'SCROLL (Down)' },
-  { value: 'SCROLL_PAGE_UP', label: 'SCROLL (Page Up)' },
-  { value: 'SCROLL_PAGE_DOWN', label: 'SCROLL (Page Down)' },
-  { value: 'SEARCH', label: 'SEARCH (Buffer)' },
-];
+  { value: "COPY", label: "COPY (Buffer)" },
+  { value: "COPY_VISIBLE", label: "COPY (Visible)" },
+  { value: "COPY_SELECTION", label: "COPY (Selection)" },
+  { value: "COPY_LAST_COMMAND_OUTPUT", label: "COPY (Last Cmd Output)" },
+  { value: "PASTE", label: "PASTE (Clipboard)" },
+  { value: "INPUT", label: "INPUT (Prompt)" },
+  { value: "CLEAR", label: "CLEAR (Screen)" },
+  { value: "RESET", label: "RESET (Terminal)" },
+  { value: "RECONNECT", label: "RECONNECT (Session)" },
+  { value: "CLOSE", label: "CLOSE (Pane/Tab)" },
+  { value: "SCROLL_TO_TOP", label: "SCROLL (Top)" },
+  { value: "SCROLL_TO_BOTTOM", label: "SCROLL (Bottom)" },
+  { value: "SCROLL_UP", label: "SCROLL (Up)" },
+  { value: "SCROLL_DOWN", label: "SCROLL (Down)" },
+  { value: "SCROLL_PAGE_UP", label: "SCROLL (Page Up)" },
+  { value: "SCROLL_PAGE_DOWN", label: "SCROLL (Page Down)" },
+  { value: "SEARCH", label: "SEARCH (Buffer)" },
+] as const;
 
 export const MISC_FUNCTIONS = [
-  { value: 'NEXT_BUTTON_GROUP', label: 'Next Button Group' },
-  { value: 'PREV_BUTTON_GROUP', label: 'Prev Button Group' },
-  { value: 'OPEN_SCRATCHPAD', label: 'Open Scratchpad' },
-];
+  { value: "NEXT_BUTTON_GROUP", label: "Next Button Group" },
+  { value: "PREV_BUTTON_GROUP", label: "Prev Button Group" },
+  { value: "OPEN_SCRATCHPAD", label: "Open Scratchpad" },
+] as const;
 
 export const BUILTIN_BUTTONS = [
-  ...TERMINAL_FUNCTIONS.map(f => ({
+  ...TERMINAL_FUNCTIONS.map((f) => ({
     id: `builtin-${f.value}`,
     name: f.label,
-    type: 'terminal_function',
-    payload: f.value
+    type: "terminal_function",
+    payload: f.value,
   })),
-  ...MISC_FUNCTIONS.map(f => ({
+  ...MISC_FUNCTIONS.map((f) => ({
     id: `builtin-${f.value}`,
     name: f.label,
-    type: 'misc',
-    payload: f.value
-  }))
-];
+    type: "misc",
+    payload: f.value,
+  })),
+] as const;
 
 export const DEFAULT_SCROLL_LINES = 3;

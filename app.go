@@ -18,13 +18,17 @@ import (
 
 	"cozyssh/auth"
 	"cozyssh/config"
+	"cozyssh/constants"
 	"cozyssh/fsapi"
 	"cozyssh/localpty"
+	"cozyssh/models"
 	"cozyssh/recents"
 	"cozyssh/scratchpad"
 	"cozyssh/session"
 	"cozyssh/sshmanager"
 	"cozyssh/ws"
+
+	"github.com/go-http-utils/headers"
 )
 
 //go:embed all:frontend/dist
@@ -80,7 +84,7 @@ func Run(ctx context.Context, args []string) error {
 	// 2. Set up HTTP router
 	mux := http.NewServeMux()
 
-	getFullData := func(r *http.Request) map[string]any {
+	getFullData := func(r *http.Request) *models.FullData {
 		scratchpad.Reload()
 		hostname, err := os.Hostname()
 		if err != nil {
@@ -92,21 +96,21 @@ func Run(ctx context.Context, args []string) error {
 		}
 		hosts, err := sshmanager.ListHosts()
 		if err != nil {
-			hosts = []sshmanager.HostInfo{}
+			hosts = []*models.HostData{}
 		}
 		pinned := session.GlobalManager.GetPinned()
-		return map[string]any{
-			"sysinfo": map[string]any{
-				"hostname":         displayHostname,
-				"version":          version,
-				"insecure_allowed": *allowInsecure,
-				"is_secure":        isSecureRequest(r),
+		return &models.FullData{
+			Sysinfo: models.Sysinfo{
+				Hostname:        displayHostname,
+				Version:         version,
+				InsecureAllowed: *allowInsecure,
+				IsSecure:        isSecureRequest(r),
 			},
-			"hosts":   hosts,
-			"buttons": cfg.Buttons,
-			"vars":    cfg.Vars,
-			"pinned":  pinned,
-			"recents": recents.Get(),
+			Hosts:   hosts,
+			Buttons: cfg.Buttons,
+			Vars:    cfg.Vars,
+			Pinned:  pinned,
+			Recents: recents.Get(),
 		}
 	}
 
@@ -130,157 +134,152 @@ func Run(ctx context.Context, args []string) error {
 	mux.Handle("/api/fs/", securityMiddleware(auth.Middleware(http.HandlerFunc(fsapi.HandleFS))))
 
 	mux.HandleFunc("/api/preflight", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
-			"insecure_allowed": *allowInsecure,
-			"is_secure":        isSecureRequest(r),
+		w.Header().Set(headers.ContentType, constants.MIME_JSON)
+		json.NewEncoder(w).Encode(&models.PreflightResponse{
+			InsecureAllowed: *allowInsecure,
+			IsSecure:        isSecureRequest(r),
 		})
 	})
 
-	mux.Handle("/api/fulldata", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(getFullData(r))
-	}))))
-
-	mux.Handle("/api/recents", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		var req struct {
-			Host string `json:"host"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Bad Request", http.StatusBadRequest)
-			return
-		}
-		recents.Add(req.Host)
-		recents.Save()
-		w.Write([]byte(`{"success":true}`))
-	}))))
-
-	mux.Handle("/api/hosts", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			hosts, err := sshmanager.ListHosts()
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+	mux.Handle("/api/fulldata", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 				return
 			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(hosts)
-		case http.MethodPost:
-			var h sshmanager.HostConfig
-			if err := json.NewDecoder(r.Body).Decode(&h); err != nil {
+			w.Header().Set(headers.ContentType, constants.MIME_JSON)
+			json.NewEncoder(w).Encode(getFullData(r))
+		}))))
+
+	mux.Handle("/api/recents", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var req models.RecentUpdateRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 				http.Error(w, "Bad Request", http.StatusBadRequest)
 				return
 			}
-			if err := sshmanager.SaveHost("", h); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+			recents.Add(req.Host)
+			recents.Save()
+			w.WriteHeader(http.StatusNoContent)
+		}))))
+
+	mux.Handle("/api/hosts", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet:
+				hosts, err := sshmanager.ListHosts()
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				w.Header().Set(headers.ContentType, constants.MIME_JSON)
+				json.NewEncoder(w).Encode(hosts)
+			case http.MethodPost:
+				var h models.HostData
+				if err := json.NewDecoder(r.Body).Decode(&h); err != nil {
+					http.Error(w, "Bad Request", http.StatusBadRequest)
+					return
+				}
+				if err := sshmanager.SaveHost("", h); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				w.WriteHeader(http.StatusNoContent)
+			default:
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			}
+		}))))
+
+	mux.Handle("/api/hosts/", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			name := strings.TrimPrefix(r.URL.Path, "/api/hosts/")
+			switch r.Method {
+			case http.MethodPut:
+				var h models.HostData
+				if err := json.NewDecoder(r.Body).Decode(&h); err != nil {
+					http.Error(w, "Bad Request", http.StatusBadRequest)
+					return
+				}
+				if err := sshmanager.SaveHost(name, h); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				w.WriteHeader(http.StatusNoContent)
+			case http.MethodDelete:
+				if err := sshmanager.DeleteHost(name); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				w.WriteHeader(http.StatusNoContent)
+			default:
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			}
+		}))))
+
+	mux.Handle("/api/settings/password", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 				return
 			}
-			w.Write([]byte(`{"success":true}`))
-		default:
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		}
-	}))))
-
-	mux.Handle("/api/hosts/", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		alias := strings.TrimPrefix(r.URL.Path, "/api/hosts/")
-		switch r.Method {
-		case http.MethodPut:
-			var h sshmanager.HostConfig
-			if err := json.NewDecoder(r.Body).Decode(&h); err != nil {
+			var req models.PasswordUpdateRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 				http.Error(w, "Bad Request", http.StatusBadRequest)
 				return
 			}
-			if err := sshmanager.SaveHost(alias, h); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+			if req.NewPassword == "" {
+				http.Error(w, "Password cannot be empty", http.StatusBadRequest)
 				return
 			}
-			w.Write([]byte(`{"success":true}`))
-		case http.MethodDelete:
-			if err := sshmanager.DeleteHost(alias); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+			if err := cfg.ChangeAppPassword(req.NewPassword); err != nil {
+				http.Error(w, "Failed to save", http.StatusInternalServerError)
 				return
 			}
-			w.Write([]byte(`{"success":true}`))
-		default:
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		}
-	}))))
+			w.Header().Set(headers.ContentType, constants.MIME_JSON)
+			w.WriteHeader(http.StatusNoContent)
+		}))))
 
-	mux.Handle("/api/settings/password", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		var req struct {
-			NewPassword string `json:"new_password"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Bad Request", http.StatusBadRequest)
-			return
-		}
-		if req.NewPassword == "" {
-			http.Error(w, "Password cannot be empty", http.StatusBadRequest)
-			return
-		}
-		if err := cfg.ChangeAppPassword(req.NewPassword); err != nil {
-			http.Error(w, "Failed to save", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"success": true}`))
-	}))))
+	mux.Handle("/api/tabs/pinned", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set(headers.ContentType, constants.MIME_JSON)
+			json.NewEncoder(w).Encode(session.GlobalManager.GetPinned())
+		}))))
 
-	mux.Handle("/api/tabs/pinned", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(session.GlobalManager.GetPinned())
-	}))))
-
-	mux.Handle("/api/tabs/pin", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		var req struct {
-			ID    string `json:"id"`
-			Host  string `json:"host"`
-			Title string `json:"title"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Bad Request", http.StatusBadRequest)
-			return
-		}
-		if s := session.GlobalManager.Get(req.ID); s != nil {
-			s.IsPinned = true
-			s.IsLocked = false
-			s.Title = req.Title
-			s.BroadcastTabState()
-		}
-		w.WriteHeader(http.StatusOK)
-	}))))
+	mux.Handle("/api/tabs/pin", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var req models.TabsPinRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+			if s := session.GlobalManager.Get(req.Id); s != nil {
+				s.IsPinned = true
+				s.IsLocked = false
+				s.Title = req.Title
+				s.BroadcastTabState()
+			}
+			w.WriteHeader(http.StatusOK)
+		}))))
 
 	mux.Handle("/api/tabs/lock", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		var req struct {
-			ID    string `json:"id"`
-			Host  string `json:"host"`
-			Title string `json:"title"`
-		}
+		var req models.TabsLockRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
 			return
 		}
-		if s := session.GlobalManager.Get(req.ID); s != nil {
+		if s := session.GlobalManager.Get(req.Id); s != nil {
 			s.IsPinned = true
 			s.IsLocked = true
 			s.Title = req.Title
@@ -294,258 +293,257 @@ func Run(ctx context.Context, args []string) error {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		var req struct {
-			ID string `json:"id"`
-		}
+		var req models.TabsUnpinRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
 			return
 		}
-		if s := session.GlobalManager.Get(req.ID); s != nil {
+		if s := session.GlobalManager.Get(req.Id); s != nil {
 			s.IsPinned = false
 			s.IsLocked = false
 			s.BroadcastTabState()
-			session.GlobalManager.ClearInactive(req.ID)
+			session.GlobalManager.ClearInactive(req.Id)
 		}
 		w.WriteHeader(http.StatusOK)
 	}))))
 
-	mux.Handle("/api/scratchpad/reload", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		scratchpad.Reload()
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"success":true}`))
-	}))))
+	mux.Handle("/api/scratchpad/reload", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			scratchpad.Reload()
+			w.Header().Set(headers.ContentType, constants.MIME_JSON)
+			w.WriteHeader(http.StatusNoContent)
+		}))))
 
-	mux.Handle("/api/sessions/pinned", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(session.GlobalManager.GetPinned())
-	}))))
+	mux.Handle("/api/sessions/pinned", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set(headers.ContentType, constants.MIME_JSON)
+			json.NewEncoder(w).Encode(session.GlobalManager.GetPinned())
+		}))))
 
-	mux.Handle("/api/sessions/attach", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		var req struct {
-			ID string `json:"id"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Bad Request", http.StatusBadRequest)
-			return
-		}
-		if s := session.GlobalManager.Get(req.ID); s != nil {
-			s.Steal()
-		}
-		w.WriteHeader(http.StatusOK)
-	}))))
-
-	mux.Handle("/api/sessions/close", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		var req struct {
-			ID string `json:"id"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Bad Request", http.StatusBadRequest)
-			return
-		}
-		session.GlobalManager.CloseIfNotLocked(req.ID)
-		w.WriteHeader(http.StatusOK)
-	}))))
-
-	mux.Handle("/api/sessions/close_all_normal", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		session.GlobalManager.CloseAllNormal()
-		w.WriteHeader(http.StatusOK)
-	}))))
-
-	mux.Handle("/api/tabs/rename", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		var req struct {
-			ID    string `json:"id"`
-			Title string `json:"title"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ID == "" || req.Title == "" {
-			http.Error(w, "Bad Request", http.StatusBadRequest)
-			return
-		}
-		if s := session.GlobalManager.Get(req.ID); s != nil {
-			s.Title = req.Title
-		}
-		w.WriteHeader(http.StatusOK)
-	}))))
-
-	mux.Handle("/api/buttons", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(cfg.Buttons)
-		case http.MethodPost:
-			var btn config.Button
-			if err := json.NewDecoder(r.Body).Decode(&btn); err != nil {
+	mux.Handle("/api/sessions/attach", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var req models.SessionsAttachRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 				http.Error(w, "Bad Request", http.StatusBadRequest)
 				return
 			}
-			if btn.ID == "" {
-				btn.ID = config.RandString(12, false)
+			if s := session.GlobalManager.Get(req.Id); s != nil {
+				s.Steal()
 			}
-			cfg.AddButton(btn)
 			w.WriteHeader(http.StatusOK)
-		default:
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		}
-	}))))
+		}))))
 
-	mux.Handle("/api/buttons/", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id := strings.TrimPrefix(r.URL.Path, "/api/buttons/")
-		switch r.Method {
-		case http.MethodPut:
-			var btn config.Button
-			if err := json.NewDecoder(r.Body).Decode(&btn); err != nil {
+	mux.Handle("/api/sessions/close", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var req models.SessionsCloseRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 				http.Error(w, "Bad Request", http.StatusBadRequest)
 				return
 			}
-			btn.ID = id
-			cfg.UpdateButton(btn)
+			session.GlobalManager.CloseIfNotLocked(req.Id)
 			w.WriteHeader(http.StatusOK)
-		case http.MethodDelete:
-			cfg.RemoveButton(id)
+		}))))
+
+	mux.Handle("/api/sessions/close_all_normal", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			session.GlobalManager.CloseAllNormal()
 			w.WriteHeader(http.StatusOK)
-		default:
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		}
-	}))))
+		}))))
 
-	mux.Handle("/api/buttons/move", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		var req struct {
-			ID        string `json:"id"`
-			Direction int    `json:"direction"` // -1 for left, 1 for right
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Bad Request", http.StatusBadRequest)
-			return
-		}
-		cfg.MoveButton(req.ID, req.Direction)
-		w.WriteHeader(http.StatusOK)
-	}))))
+	mux.Handle("/api/tabs/rename", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var req models.TabsRenameRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Id == "" || req.Title == "" {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+			if s := session.GlobalManager.Get(req.Id); s != nil {
+				s.Title = req.Title
+			}
+			w.WriteHeader(http.StatusOK)
+		}))))
 
-	mux.Handle("/api/vars", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		var updates map[string]*string
-		if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
-			http.Error(w, "Bad Request", http.StatusBadRequest)
-			return
-		}
-		for k, v := range updates {
-			if v == nil {
-				delete(cfg.Vars, k)
+	mux.Handle("/api/buttons", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet:
+				w.Header().Set(headers.ContentType, constants.MIME_JSON)
+				json.NewEncoder(w).Encode(cfg.Buttons)
+			case http.MethodPost:
+				var btn models.ButtonData
+				if err := json.NewDecoder(r.Body).Decode(&btn); err != nil {
+					http.Error(w, "Bad Request", http.StatusBadRequest)
+					return
+				}
+				if btn.Id == "" {
+					btn.Id = config.RandString(12, false)
+				}
+				cfg.AddButton(&btn)
+				w.WriteHeader(http.StatusOK)
+			default:
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			}
+		}))))
+
+	mux.Handle("/api/buttons/", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			id := strings.TrimPrefix(r.URL.Path, "/api/buttons/")
+			switch r.Method {
+			case http.MethodPut:
+				var btn models.ButtonData
+				if err := json.NewDecoder(r.Body).Decode(&btn); err != nil {
+					http.Error(w, "Bad Request", http.StatusBadRequest)
+					return
+				}
+				btn.Id = id
+				cfg.UpdateButton(&btn)
+				w.WriteHeader(http.StatusOK)
+			case http.MethodDelete:
+				cfg.RemoveButton(id)
+				w.WriteHeader(http.StatusOK)
+			default:
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			}
+		}))))
+
+	mux.Handle("/api/buttons/move", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var req models.ButtonsMoveRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+			cfg.MoveButton(req.Id, req.Direction)
+			w.WriteHeader(http.StatusOK)
+		}))))
+
+	mux.Handle("/api/vars", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPut {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var updates map[string]*string
+			if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+			for k, v := range updates {
+				if v == nil {
+					delete(cfg.Vars, k)
+				} else {
+					cfg.Vars[k] = *v
+				}
+			}
+			if err := cfg.Save(); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}))))
+
+	mux.Handle("/api/fetch", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			urlStr := r.URL.Query().Get("url")
+			if urlStr == "" {
+				http.Error(w, "Missing url", http.StatusBadRequest)
+				return
+			}
+
+			req, err := http.NewRequest(r.Method, urlStr, r.Body)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			for k, vv := range r.Header {
+				if k == headers.Authorization || k == constants.HEADER_CONNECTION || k == headers.Upgrade ||
+					k == headers.Referer || k == headers.Origin {
+					continue
+				}
+				targetKey := k
+				if strings.HasPrefix(strings.ToLower(k), "x-cozyssh-") {
+					targetKey = k[10:]
+				}
+				for _, v := range vv {
+					req.Header.Add(targetKey, v)
+				}
+			}
+			client := &http.Client{}
+			resp, err := client.Do(req)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadGateway)
+				return
+			}
+			defer resp.Body.Close()
+			for k, vv := range resp.Header {
+				for _, v := range vv {
+					w.Header().Add(k, v)
+				}
+			}
+			w.WriteHeader(resp.StatusCode)
+			io.Copy(w, resp.Body)
+		}))))
+
+	mux.Handle("/api/exec", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var req models.ExecRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+
+			var cmd *os_exec.Cmd
+			if !localpty.DefaultShellIsLegacyPowershell {
+				cmd = os_exec.Command(localpty.DefaultShell, "-l", "-c", req.Cmdline)
 			} else {
-				cfg.Vars[k] = *v
+				cmd = os_exec.Command(localpty.DefaultShell, "-Command", req.Cmdline)
 			}
-		}
-		if err := cfg.Save(); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	}))))
-
-	mux.Handle("/api/fetch", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		urlStr := r.URL.Query().Get("url")
-		if urlStr == "" {
-			http.Error(w, "Missing url", http.StatusBadRequest)
-			return
-		}
-
-		req, err := http.NewRequest(r.Method, urlStr, r.Body)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		for k, vv := range r.Header {
-			if k == "Authorization" || k == "Connection" || k == "Upgrade" || k == "Referer" || k == "Origin" {
-				continue
+			if home, err := os.UserHomeDir(); err == nil {
+				cmd.Dir = home
 			}
-			targetKey := k
-			if strings.HasPrefix(strings.ToLower(k), "x-cozyssh-") {
-				targetKey = k[10:]
-			}
-			for _, v := range vv {
-				req.Header.Add(targetKey, v)
-			}
-		}
-		client := &http.Client{}
-		resp, err := client.Do(req)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadGateway)
-			return
-		}
-		defer resp.Body.Close()
-		for k, vv := range resp.Header {
-			for _, v := range vv {
-				w.Header().Add(k, v)
-			}
-		}
-		w.WriteHeader(resp.StatusCode)
-		io.Copy(w, resp.Body)
-	}))))
 
-	mux.Handle("/api/exec", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		var req struct {
-			Cmdline string `json:"cmdline"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Bad Request", http.StatusBadRequest)
-			return
-		}
+			var stdoutBuf, stderrBuf bytes.Buffer
+			cmd.Stdout = &stdoutBuf
+			cmd.Stderr = &stderrBuf
+			err := cmd.Run()
+			stdout := stdoutBuf.String()
+			stderr := stderrBuf.String()
 
-		var cmd *os_exec.Cmd
-		if !localpty.DefaultShellIsLegacyPowershell {
-			cmd = os_exec.Command(localpty.DefaultShell, "-l", "-c", req.Cmdline)
-		} else {
-			cmd = os_exec.Command(localpty.DefaultShell, "-Command", req.Cmdline)
-		}
-		if home, err := os.UserHomeDir(); err == nil {
-			cmd.Dir = home
-		}
-
-		var stdoutBuf, stderrBuf bytes.Buffer
-		cmd.Stdout = &stdoutBuf
-		cmd.Stderr = &stderrBuf
-		err := cmd.Run()
-		stdout := stdoutBuf.String()
-		stderr := stderrBuf.String()
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
-			"stdout": string(stdout),
-			"stderr": stderr,
-			"error":  err,
-		})
-	}))))
+			w.Header().Set(headers.ContentType, constants.MIME_JSON)
+			json.NewEncoder(w).Encode(&models.ExecResult{
+				Stdout: stdout,
+				Stderr: stderr,
+				Error:  err,
+			})
+		}))))
 
 	// 4. Serve embedded frontend
 	distFS, err := fs.Sub(frontendFS, "frontend/dist")
@@ -564,22 +562,22 @@ func Run(ctx context.Context, args []string) error {
 		if displayHostname == "" {
 			displayHostname = hostname
 		}
-		manifest := map[string]any{
-			"name":             "CozySSH " + displayHostname,
-			"short_name":       "CozySSH",
-			"start_url":        "/",
-			"display":          "standalone",
-			"background_color": "#ffffff",
-			"theme_color":      "#1976d2",
-			"icons": []map[string]any{
+		manifest := &models.Manifest{
+			Name:            "CozySSH" + displayHostname,
+			ShortName:       "CozySSH",
+			StartURL:        "/",
+			Display:         "standalone",
+			BackgroundColor: "#ffffff",
+			ThemeColor:      "#1976d2",
+			Icons: []*models.ManifestIcon{
 				{
-					"src":   "/favicon.svg",
-					"sizes": "any",
-					"type":  "image/svg+xml",
+					Src:   "/favicon.svg",
+					Sizes: "any",
+					Type:  "image/svg+xml",
 				},
 			},
 		}
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(headers.ContentType, constants.MIME_JSON)
 		json.NewEncoder(w).Encode(manifest)
 	})
 
@@ -625,13 +623,9 @@ func isSecureRequest(r *http.Request) bool {
 		return true
 	}
 
-	// 3. Check for reverse proxy headers
-	headers := []string{"X-Forwarded-Proto", "X-Forwarded-Ssl", "X-Url-Scheme"}
-	for _, h := range headers {
-		val := strings.ToLower(r.Header.Get(h))
-		if val == "https" || val == "on" {
-			return true
-		}
+	// 3. Check for reverse proxy header
+	if r.Header.Get(headers.XForwardedProto) == "https" {
+		return true
 	}
 
 	return false

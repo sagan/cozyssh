@@ -1,9 +1,13 @@
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { Box, Typography, IconButton, Tabs, Tab, Menu, MenuItem } from '@mui/material';
-import CodeMirror from '@uiw/react-codemirror';
+import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { EditorView } from "@codemirror/view";
 import AddIcon from '@mui/icons-material/Add';
 import LockIcon from '@mui/icons-material/Lock';
+
+import { BROWSER_STORAGE_KEY_TOKEN } from './constants';
+import type { ScratchpadSyncState } from './common';
+import type { ScratchpadDeleteMsg, ScratchpadHelloMsg, ScratchpadSyncMsg } from './api';
 
 export interface ScratchpadPage {
   id: string;
@@ -22,7 +26,7 @@ export interface ScratchpadHandle {
 }
 
 interface ScratchpadProps {
-  onSyncStateChange?: (state: 'offline' | 'syncing' | 'synced' | 'dirty') => void;
+  onSyncStateChange?: (state: ScratchpadSyncState) => void;
 }
 
 const WS_RECONNECT_DELAY_MS = 3000;
@@ -47,7 +51,7 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
   });
 
   const [activePageId, setActivePageId] = useState<string>(data.pages.length > 0 ? data.pages[0].id : '');
-  const [syncState, setSyncState] = useState<'offline' | 'syncing' | 'synced' | 'dirty'>('offline');
+  const [syncState, setSyncState] = useState<ScratchpadSyncState>('offline');
   const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number; pageId: string } | null>(null);
   const [dirtyPageIds, setDirtyPageIds] = useState<Set<string>>(new Set());
 
@@ -55,9 +59,9 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
   const dataRef = useRef(data);
   const dirtyRef = useRef<Set<string>>(new Set());
   const lastSyncDataRef = useRef<string>(''); // To store JSON of what we last sent
-  const wsTimerRef = useRef<any>(null);
-  const debounceTimerRef = useRef<any>(null);
-  const cmRef = useRef<any>(null);
+  const wsTimerRef = useRef<number | undefined>(undefined);
+  const debounceTimerRef = useRef<number | undefined>(undefined);
+  const cmRef = useRef<ReactCodeMirrorRef>(null);
 
   const focusEditor = () => {
     if (cmRef.current?.view) {
@@ -94,11 +98,12 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
 
   const connectWS = () => {
     if (wsRef.current) {
-      try { wsRef.current.close(); } catch (e) { }
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      try { wsRef.current.close(); } catch (e) { /* empty */ }
     }
     setSyncState('syncing');
     if (onSyncStateChange) onSyncStateChange('syncing');
-    const token = localStorage.getItem('cozy_token');
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${wsProto}//${window.location.host}/api/ws/scratchpad`;
 
@@ -108,16 +113,16 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
     ws.onopen = () => {
       setSyncState('synced');
       if (onSyncStateChange) onSyncStateChange('synced');
-      ws.send(JSON.stringify({ type: 'hello' }));
+      ws.send(JSON.stringify({ type: 'hello' } as ScratchpadHelloMsg));
       // Push any offline modifications unconditionally. Backend resolves conflicts.
       if (dataRef.current.pages.length > 0) {
-        ws.send(JSON.stringify({ type: 'sync', data: dataRef.current }));
+        ws.send(JSON.stringify({ type: 'sync', data: dataRef.current } as ScratchpadSyncMsg));
       }
     };
 
     ws.onmessage = (evt) => {
       try {
-        const msg = JSON.parse(evt.data);
+        const msg: ScratchpadSyncMsg | ScratchpadDeleteMsg = JSON.parse(evt.data);
         if (msg.type === 'sync' && msg.data) {
           setData(prev => {
             const localMap = new Map<string, ScratchpadPage>();
@@ -138,18 +143,24 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
             return { pages: Array.from(localMap.values()) };
           });
           setSyncState('synced');
-          if (onSyncStateChange) onSyncStateChange('synced');
+          if (onSyncStateChange) {
+            onSyncStateChange('synced');
+          }
         } else if (msg.type === 'delete' && msg.id) {
           setData(prev => ({
             ...prev,
             pages: prev.pages.filter(p => p.id !== msg.id)
           }));
           setSyncState('synced');
-          if (onSyncStateChange) onSyncStateChange('synced');
+          if (onSyncStateChange) {
+            onSyncStateChange('synced');
+          }
         } else if (msg.type === 'force_sync' && msg.data) {
           setData(msg.data);
           setSyncState('synced');
-          if (onSyncStateChange) onSyncStateChange('synced');
+          if (onSyncStateChange) {
+            onSyncStateChange('synced');
+          }
         }
       } catch (e) {
         console.error("WS Message Error", e);
@@ -189,6 +200,7 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
       clearTimeout(wsTimerRef.current);
       clearTimeout(debounceTimerRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const triggerSync = (forceAll = false) => {
@@ -203,11 +215,15 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
       dataToSend.pages = dirty;
     }
 
-    const payload = JSON.stringify({ type: 'sync', data: dataToSend });
-    if (payload === lastSyncDataRef.current && !forceAll) return;
+    const payload = JSON.stringify({ type: 'sync', data: dataToSend } as ScratchpadSyncMsg);
+    if (payload === lastSyncDataRef.current && !forceAll) {
+      return;
+    }
 
     setSyncState('syncing');
-    if (onSyncStateChange) onSyncStateChange('syncing');
+    if (onSyncStateChange) {
+      onSyncStateChange('syncing');
+    }
     wsRef.current.send(payload);
     lastSyncDataRef.current = payload;
     setDirtyPageIds(new Set());
@@ -220,6 +236,7 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
         triggerSync();
       }, 1000);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dirtyPageIds]);
 
   const handleEditorChange = (value: string) => {
@@ -229,7 +246,9 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
       pages: prev.pages.map(p => p.id === activePageId ? { ...p, content: value, lastUpdated: updatedNow } : p)
     }));
     setSyncState('dirty');
-    if (onSyncStateChange) onSyncStateChange('dirty');
+    if (onSyncStateChange) {
+      onSyncStateChange('dirty');
+    }
     setDirtyPageIds(prev => new Set(prev).add(activePageId));
   };
 
@@ -244,7 +263,9 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
       pages: [...prev.pages, newPage]
     }));
     setSyncState('dirty');
-    if (onSyncStateChange) onSyncStateChange('dirty');
+    if (onSyncStateChange) {
+      onSyncStateChange('dirty');
+    }
     setDirtyPageIds(prev => new Set(prev).add(newId));
     setActivePageId(newId);
   };
@@ -255,9 +276,13 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
   };
 
   const handleRename = () => {
-    if (!contextMenu) return;
+    if (!contextMenu) {
+      return;
+    }
     const targetPage = data.pages.find(p => p.id === contextMenu.pageId);
-    if (!targetPage) return;
+    if (!targetPage) {
+      return;
+    }
     const newTitle = prompt("Rename page:", targetPage.title);
     if (newTitle && newTitle !== targetPage.title) {
       const updatedNow = Date.now();
@@ -273,7 +298,9 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
   };
 
   const handleDelete = () => {
-    if (!contextMenu) return;
+    if (!contextMenu) {
+      return;
+    }
     if (data.pages.length <= 1) {
       alert("Cannot delete the last page.");
       setContextMenu(null);
@@ -287,8 +314,10 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
       };
       setData(newData);
       setSyncState('syncing');
-      if (onSyncStateChange) onSyncStateChange('syncing');
-      wsRef.current?.send(JSON.stringify({ type: 'delete', id: contextMenu.pageId }));
+      if (onSyncStateChange) {
+        onSyncStateChange('syncing');
+      }
+      wsRef.current?.send(JSON.stringify({ type: 'delete', id: contextMenu.pageId } as ScratchpadDeleteMsg));
       if (activePageId === contextMenu.pageId) {
         setActivePageId(newData.pages[0].id);
       }
@@ -297,20 +326,26 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
   };
 
   const handleToggleLock = () => {
-    if (!contextMenu) return;
+    if (!contextMenu) {
+      return;
+    }
     const updatedNow = Date.now();
     setData(prev => ({
       ...prev,
       pages: prev.pages.map(p => p.id === contextMenu.pageId ? { ...p, locked: !p.locked, lastUpdated: updatedNow } : p)
     }));
     setSyncState('dirty');
-    if (onSyncStateChange) onSyncStateChange('dirty');
+    if (onSyncStateChange) {
+      onSyncStateChange('dirty');
+    }
     setDirtyPageIds(prev => new Set(prev).add(contextMenu.pageId));
     setContextMenu(null);
   };
 
   const handleCopy = () => {
-    if (!contextMenu) return;
+    if (!contextMenu) {
+      return;
+    }
     const targetPage = data.pages.find(p => p.id === contextMenu.pageId);
     if (targetPage) {
       navigator.clipboard.writeText(targetPage.content);
@@ -321,7 +356,7 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
   const cPage = data.pages.find(p => p.id === activePageId) || data.pages[0];
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', bgcolor: 'background.paper', width: '100%', minWidth: 0 }}>
+    <Box id="scratchpad-tab" sx={{ display: 'flex', flexDirection: 'column', height: '100%', bgcolor: 'background.paper', width: '100%', minWidth: 0 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', borderBottom: 1, borderColor: 'divider', bgcolor: '#f4f6f8', flexShrink: 0, overflow: 'hidden' }}>
         <Box sx={{ flexGrow: 1, minWidth: 0, overflow: 'hidden' }}>
           <Tabs

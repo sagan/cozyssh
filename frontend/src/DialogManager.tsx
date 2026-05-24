@@ -1,22 +1,37 @@
-import React, { useState, useEffect } from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, TextField, Box, Typography, Button, FormControlLabel, Checkbox, Autocomplete, Menu, MenuItem, Alert, IconButton } from '@mui/material';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  Dialog, DialogTitle, DialogContent, DialogActions, TextField, Box, Typography, Button, FormControlLabel,
+  Checkbox, Autocomplete, Menu, MenuItem, Alert, IconButton,
+} from '@mui/material';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import CodeMirror from '@uiw/react-codemirror';
 import { EditorView } from "@codemirror/view";
 import { javascript } from '@codemirror/lang-javascript';
-import NewTabDialog from './NewTabDialog';
-import { getKeyCombination, buttonDataSchema, generatePassword } from './common';
-import { TERMINAL_FUNCTIONS } from './constants';
 
-import { useDashboardStore } from './dashboardStore';
+import type { HostData, ButtonData } from './api';
+import {
+  BROWSER_STORAGE_KEY_TOKEN,
+  DEFAULT_BUTTON_GROUP,
+  HEADER_AUTHORIZATION, HEADER_AUTHORIZATION_BEARER_PREFIX, HEADER_CONTENT_TYPE,
+  METHOD_POST, MIME_JSON, MISC_FUNCTIONS, TERMINAL_FUNCTIONS,
+} from './constants';
+import {
+  getKeyCombination, ButtonDataSchema, generatePassword,
+  type Recent, type Toast, type ContextMenu,
+  type NewTabDialogViewMode, type ToastData,
+} from './common';
+import { useDashboardStore, type TabData } from './dashboardStore';
+import NewTabDialog from './NewTabDialog';
+import type { ScratchpadHandle } from './Scratchpad';
+import type { TerminalHandle } from './Terminal';
 
 export interface DialogManagerProps {
   activeGroup: string;
-  setEditingButton: any;
-  setInitialBtnFormData: any;
-  setButtonDialogOpen: any;
-  setInputDialogOpen: any;
-  contextMenu: any;
+  setEditingButton: React.Dispatch<React.SetStateAction<ButtonData | null>>;
+  setInitialBtnFormData: React.Dispatch<React.SetStateAction<ButtonData | null>>;
+  setButtonDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  setInputDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  contextMenu: ContextMenu | null;
   handleCloseMenu: () => void;
   memoTabId: string | null;
   handleUnpinTab: (id: string) => void;
@@ -29,19 +44,18 @@ export interface DialogManagerProps {
   handleRename: () => void;
   handleCloseOther: () => void;
   handleCloseRight: () => void;
-  btnMenuAnchor: any;
-  setBtnMenuAnchor: (v: any) => void;
-  lastMenuBtn: any;
+  btnMenuAnchor: { anchor: HTMLElement, btn: ButtonData } | null;
+  setBtnMenuAnchor: (v: { anchor: HTMLElement, btn: ButtonData } | null) => void;
+  lastMenuBtn: ButtonData | null;
   handleMoveButton: (id: string, dir: number) => void;
   handleDeleteButton: (id: string, name: string) => void;
   buttonDialogOpen: boolean;
-  editingButton: any;
-  buttonFormData: any;
-  setButtonFormData: (v: any) => void;
-  handleCloseBtnDialog: (e: any, reason: string) => void;
+  editingButton: ButtonData | null;
+  buttonFormData: ButtonData;
+  setButtonFormData: (v: ButtonData) => void;
+  handleCloseBtnDialog: (e: unknown, reason: string) => void;
   handleSaveButton: () => void;
-  MISC_FUNCTIONS: any[];
-  hosts: any[];
+  hosts: HostData[];
   inputDialogOpen: boolean;
   handleCloseInputDialog: () => void;
   inputValue: string;
@@ -53,38 +67,55 @@ export interface DialogManagerProps {
   sendParsedString: (s: string) => void;
   newTabDialogOpen: boolean;
   setNewTabDialogOpen: (v: boolean) => void;
-  recents: any[];
-  newTabDialogInitialViewMode: "servers" | "tabs" | "buttons" | undefined;
+  recents: Recent[];
+  newTabDialogInitialViewMode: NewTabDialogViewMode;
   handleAttach: (id: string, host: string, title: string, isLocked: boolean) => void;
   handleRefresh: () => void;
   handleSelectHost: (h: string) => void;
-  terminalRefs: any;
-  toasts: any[];
-  setToasts: (v: any) => void;
-  handleButtonClick: (b: any) => void;
+  terminalRefs: React.RefObject<{ [key: string]: TerminalHandle | ScratchpadHandle | null }>;
+  toasts: Toast[];
+  setToasts: React.Dispatch<React.SetStateAction<Toast[]>>;
+  handleButtonClick: (btn: ButtonData) => Promise<void>;
 }
 
 const PluginManagerUrl = "https://raw.githubusercontent.com/sagan/cozyssh-plugins/refs/heads/master/PluginManager.tsx";
+
+/**
+ * button type, label
+ */
+const buttonTypes: [ButtonData["type"], string][] = [
+  ["send_string", "Send String"],
+  ["terminal_function", "Terminal Function"],
+  ["misc", "Misc"],
+  ["open_terminal", "Open Terminal"],
+  ["run_script", "Run Script"],
+];
 
 export default function DialogManager({
   contextMenu, handleCloseMenu, memoTabId, handleUnpinTab, handlePinTab, handleUnlockTab, handleLockTab,
   handleCloneSession, handleToggleFiles, handleReconnectTab, handleRename, handleCloseOther, handleCloseRight,
   btnMenuAnchor, setBtnMenuAnchor, lastMenuBtn, handleButtonClick, handleMoveButton, handleDeleteButton,
   buttonDialogOpen, editingButton, buttonFormData, setButtonFormData, handleCloseBtnDialog, handleSaveButton,
-  MISC_FUNCTIONS, hosts, inputDialogOpen, handleCloseInputDialog, inputValue, setInputValue,
+  hosts, inputDialogOpen, handleCloseInputDialog, inputValue, setInputValue,
   appendNewLine, setAppendNewLine, sendScope, setSendScope, sendParsedString,
   newTabDialogOpen, setNewTabDialogOpen, recents, newTabDialogInitialViewMode,
-  handleAttach, handleRefresh, handleSelectHost, terminalRefs, toasts, setToasts, setEditingButton, setInitialBtnFormData, setButtonDialogOpen, setInputDialogOpen, activeGroup
+  handleAttach, handleRefresh, handleSelectHost, terminalRefs, toasts, setToasts, setEditingButton,
+  setInitialBtnFormData, setButtonDialogOpen, setInputDialogOpen, activeGroup
 }: DialogManagerProps) {
   const { tabs, activeTabId, setActiveTabId, buttons, setActivePaneId } = useDashboardStore();
 
   const [titleMenuAnchor, setTitleMenuAnchor] = useState<null | HTMLElement>(null);
-  const [importTip, setImportTip] = useState<{ message: string; severity: 'success' | 'error' | 'warning' | 'info' } | null>(null);
+  const [importTip, setImportTip] = useState<ToastData | null>(null);
 
   const titleMenuOpen = Boolean(titleMenuAnchor);
 
+  const activeTab: TabData | undefined = useMemo(() => {
+    return tabs.find(t => t.id === activeTabId);
+  }, [activeTabId, tabs]);
+
   useEffect(() => {
     if (!buttonDialogOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setImportTip(null);
     }
   }, [buttonDialogOpen]);
@@ -103,18 +134,19 @@ export default function DialogManager({
     try {
       new URL(url);
     } catch (e) {
+      console.log(e);
       setImportTip({
-        message: "Invalid URL format. Please enter a valid URL (e.g., http://example.com/button.json).",
+        msg: "Invalid URL format. Please enter a valid URL (e.g., http://example.com/button.json).",
         severity: "error"
       });
       return;
     }
 
     try {
-      const response = await (window as any).csFetch(url);
+      const response = await window.csFetch(url);
       if (!response.ok) {
         setImportTip({
-          message: `Failed to fetch ${url} : Server responded with status ${response.status} (${response.statusText}).`,
+          msg: `Failed to fetch ${url} : Server responded with status ${response.status}.`,
           severity: "error"
         });
         return;
@@ -122,23 +154,25 @@ export default function DialogManager({
 
       const text = await response.text();
       let isJson = false;
-      let data: any = null;
+      let data: unknown = null;
 
       try {
         data = JSON.parse(text);
         if (data && typeof data === 'object' && !Array.isArray(data)) {
           isJson = true;
         }
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
       } catch (e) {
         // Not a JSON document, fallback to treating as a script file
       }
 
       if (isJson) {
-        const result = buttonDataSchema.safeParse(data);
+        const result = ButtonDataSchema.safeParse(data);
         if (!result.success) {
-          const errorMsg = result.error.issues.map((err: any) => `${err.path.join('.') || 'root'}: ${err.message}`).join(', ');
+          const errorMsg = result.error.issues.map((err) =>
+            `${err.path.join('.') || 'root'}: ${err.message}`).join(', ');
           setImportTip({
-            message: `Not a valid ButtonData object. Validation errors: ${errorMsg}`,
+            msg: `Not a valid ButtonData object. Validation errors: ${errorMsg}`,
             severity: "error"
           });
           return;
@@ -157,14 +191,14 @@ export default function DialogManager({
           name: validatedData.name,
           type: validatedData.type,
           payload: validatedData.payload,
-          group: validatedData.group || buttonFormData.group || 'Default',
+          group: validatedData.group || buttonFormData.group || DEFAULT_BUTTON_GROUP,
           autorun: validatedData.autorun,
           order: validatedData.order,
           shortcut: validatedData.shortcut
         });
 
         setImportTip({
-          message: "Successfully loaded button data from JSON! Review the fields and click 'Save' to confirm.",
+          msg: "Successfully loaded button data from JSON! Review the fields and click 'Save' to confirm.",
           severity: "success"
         });
       } else {
@@ -197,6 +231,7 @@ export default function DialogManager({
             const lastPart = pathParts[pathParts.length - 1] || 'Imported Script';
             buttonName = lastPart.replace(/\.(ts|tsx|js|jsx|txt)$/i, '') || 'Imported Script';
           } catch (e) {
+            console.log(e);
             buttonName = 'Imported Script';
           }
         }
@@ -206,21 +241,20 @@ export default function DialogManager({
           name: buttonName,
           type: 'run_script',
           payload: text,
-          group: buttonFormData.group || 'Default',
+          group: buttonFormData.group || DEFAULT_BUTTON_GROUP,
           autorun: 0,
           order: buttonFormData.order || 0,
           shortcut: ''
         });
 
         setImportTip({
-          message: "Successfully loaded script file! Review the fields and click 'Save' to confirm.",
+          msg: "Successfully loaded script file! Review the fields and click 'Save' to confirm.",
           severity: "success"
         });
       }
-
-    } catch (error: any) {
+    } catch (error) {
       setImportTip({
-        message: `Network error or failed to load button data: ${error.message || error}`,
+        msg: `Network error or failed to load button data: ${error}`,
         severity: "error"
       });
     }
@@ -284,8 +318,10 @@ export default function DialogManager({
               {tab.type === 'scratchpad' && (
                 <MenuItem onClick={() => {
                   fetch('/api/scratchpad/reload', {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('cozy_token')}` }
+                    method: METHOD_POST,
+                    headers: {
+                      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN),
+                    }
                   }).then(() => {
                     // csNotify("Reloading Scratchpad from disk...");
                   });
@@ -305,10 +341,11 @@ export default function DialogManager({
         <MenuItem onClick={() => {
           if (!btnMenuAnchor) return;
           const data = {
+            id: "",
             name: btnMenuAnchor.btn.name,
             type: btnMenuAnchor.btn.type,
             payload: btnMenuAnchor.btn.payload,
-            group: btnMenuAnchor.btn.group || 'Default',
+            group: btnMenuAnchor.btn.group || DEFAULT_BUTTON_GROUP,
             autorun: btnMenuAnchor.btn.autorun || 0,
             order: btnMenuAnchor.btn.order || 0,
             shortcut: btnMenuAnchor.btn.shortcut || ''
@@ -344,9 +381,14 @@ export default function DialogManager({
         >
           Copy Contents
         </MenuItem>
-        <MenuItem onClick={() => btnMenuAnchor && handleMoveButton(btnMenuAnchor.btn.id, -1)}>Move Button Left</MenuItem>
-        <MenuItem onClick={() => btnMenuAnchor && handleMoveButton(btnMenuAnchor.btn.id, 1)}>Move Button Right</MenuItem>
-        <MenuItem onClick={() => btnMenuAnchor && handleDeleteButton(btnMenuAnchor.btn.id, btnMenuAnchor.btn.name)} sx={{ color: 'error.main' }}>Delete Button</MenuItem>
+        <MenuItem onClick={() => btnMenuAnchor && handleMoveButton(btnMenuAnchor.btn.id, -1)}>
+          Move Button Left
+        </MenuItem>
+        <MenuItem onClick={() => btnMenuAnchor && handleMoveButton(btnMenuAnchor.btn.id, 1)}>
+          Move Button Right
+        </MenuItem>
+        <MenuItem onClick={() => btnMenuAnchor && handleDeleteButton(btnMenuAnchor.btn.id, btnMenuAnchor.btn.name)}
+          sx={{ color: 'error.main' }}>Delete Button</MenuItem>
       </Menu>
 
       <Dialog open={buttonDialogOpen} onClose={handleCloseBtnDialog} fullWidth maxWidth="lg">
@@ -396,12 +438,15 @@ export default function DialogManager({
               onClose={() => setImportTip(null)}
               sx={{ mb: 1 }}
             >
-              {importTip.message}
+              {importTip.msg}
             </Alert>
           )}
           <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
-            <TextField fullWidth label="Button Name" size="small" value={buttonFormData.name} onChange={e => setButtonFormData({ ...buttonFormData, name: e.target.value })} />
-            <TextField fullWidth label="Button Group" size="small" value={buttonFormData.group} onChange={e => setButtonFormData({ ...buttonFormData, group: e.target.value })} placeholder="Default" />
+            <TextField fullWidth label="Button Name" size="small" value={buttonFormData.name}
+              onChange={e => setButtonFormData({ ...buttonFormData, name: e.target.value })} />
+            <TextField fullWidth label="Button Group" size="small" value={buttonFormData.group}
+              onChange={e => setButtonFormData({ ...buttonFormData, group: e.target.value })}
+              placeholder={DEFAULT_BUTTON_GROUP} />
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <TextField
@@ -411,7 +456,7 @@ export default function DialogManager({
               value={buttonFormData.type}
               onChange={e => setButtonFormData({
                 ...buttonFormData,
-                type: e.target.value,
+                type: e.target.value as ButtonData["type"],
                 payload: e.target.value === 'terminal_function' ? 'COPY'
                   : e.target.value === 'misc' ? 'NEXT_BUTTON_GROUP'
                     : e.target.value === 'open_terminal' ? 'local'
@@ -420,11 +465,7 @@ export default function DialogManager({
               slotProps={{ select: { native: true } }}
               sx={{ flexGrow: 1 }}
             >
-              <option value="send_string">Send String</option>
-              <option value="terminal_function">Terminal Function</option>
-              <option value="misc">Misc</option>
-              <option value="open_terminal">Open Terminal</option>
-              <option value="run_script">Run Script</option>
+              {buttonTypes.map(v => <option key={v[0]} value={v[0]}>{v[1]}</option>)}
             </TextField>
             <TextField
               label="Order"
@@ -490,7 +531,7 @@ export default function DialogManager({
               onChange={e => setButtonFormData({ ...buttonFormData, payload: e.target.value })}
               slotProps={{ select: { native: true } }}
             >
-              {TERMINAL_FUNCTIONS.map((f: any) => (
+              {TERMINAL_FUNCTIONS.map((f) => (
                 <option key={f.value} value={f.value}>{f.label}</option>
               ))}
             </TextField>
@@ -530,10 +571,17 @@ export default function DialogManager({
               )}
             />
           ) : (
-            <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden', flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
-              <Box sx={{ px: 1.5, py: 0.5, bgcolor: 'action.hover', borderBottom: '1px solid', borderColor: 'divider' }}>
+            <Box sx={{
+              border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden',
+              flexShrink: 0, display: 'flex', flexDirection: 'column'
+            }}>
+              <Box sx={{
+                px: 1.5, py: 0.5, bgcolor: 'action.hover',
+                borderBottom: '1px solid', borderColor: 'divider'
+              }}>
                 <Typography variant="caption" color="text.secondary">
-                  Check <a target="_blank" rel="noopener noreferrer" style={{ color: '#1976d2' }} href="https://github.com/sagan/cozyssh/blob/master/docs/SCRIPTS.md">help</a> about scripts.
+                  Check <a target="_blank" rel="noopener noreferrer" style={{ color: '#1976d2' }}
+                    href="https://github.com/sagan/cozyssh/blob/master/docs/SCRIPTS.md">help</a> about scripts.
                 </Typography>
               </Box>
               <CodeMirror
@@ -549,7 +597,8 @@ export default function DialogManager({
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setButtonDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleSaveButton} disabled={!buttonFormData.name || !buttonFormData.payload}>Save</Button>
+          <Button variant="contained" onClick={handleSaveButton}
+            disabled={!buttonFormData.name || !buttonFormData.payload}>Save</Button>
         </DialogActions>
       </Dialog>
 
@@ -578,17 +627,20 @@ export default function DialogManager({
           />
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 1 }}>
             <FormControlLabel
-              control={<Checkbox checked={appendNewLine} onChange={(e) => setAppendNewLine(e.target.checked)} size="small" />}
+              control={<Checkbox checked={appendNewLine}
+                onChange={(e) => setAppendNewLine(e.target.checked)} size="small" />}
               label={<Typography variant="body2">Append new line (\n)</Typography>}
             />
-            {tabs.find(t => t.id === activeTabId)?.panes.length! > 1 && (
+            {activeTab && activeTab.panes.length > 1 && (
               <FormControlLabel
-                control={<Checkbox checked={sendScope === 1} onChange={(e) => setSendScope(e.target.checked ? 1 : 0)} size="small" />}
+                control={<Checkbox checked={sendScope === 1}
+                  onChange={(e) => setSendScope(e.target.checked ? 1 : 0)} size="small" />}
                 label={<Typography variant="body2">Send to all panes</Typography>}
               />
             )}
             <FormControlLabel
-              control={<Checkbox checked={sendScope === 2} onChange={(e) => setSendScope(e.target.checked ? 2 : 0)} size="small" />}
+              control={<Checkbox checked={sendScope === 2} onChange={(e) => setSendScope(e.target.checked ? 2 : 0)}
+                size="small" />}
               label={<Typography variant="body2">Send to all</Typography>}
             />
           </Box>
@@ -614,13 +666,12 @@ export default function DialogManager({
         open={newTabDialogOpen}
         onClose={() => {
           setNewTabDialogOpen(false);
-          setTimeout(() => (window as any).csFocus?.(), 0);
+          setTimeout(() => window.csFocus(), 0);
         }}
         hosts={hosts}
         recents={recents}
         tabs={tabs}
         initialViewMode={newTabDialogInitialViewMode}
-
         buttons={buttons}
         activeGroup={activeGroup}
         onExecuteButton={(btn) => {
@@ -635,14 +686,16 @@ export default function DialogManager({
             setTimeout(() => terminalRefs.current[t.activePaneId]?.focus(), 50);
           }
         }}
-        onAttachPinned={(id, host, title, isLocked) => { handleAttach(id, host, title, isLocked); setNewTabDialogOpen(false); }}
+        onAttachPinned={(id, host, title, isLocked) => {
+          handleAttach(id, host, title, isLocked); setNewTabDialogOpen(false);
+        }}
         onSelect={async (host) => {
           // Check if it's a direct connection and not in known hosts
           if (host.includes('.') || host.includes(':') || host === 'localhost') {
             const known = hosts.find(h => h.name === host || h.hostname === host);
             if (!known) {
               // Automatically add to ~/.ssh/config
-              const token = localStorage.getItem('cozy_token');
+              const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
               let user = 'root';
               let hostname = host;
               if (host.includes('@')) {
@@ -652,17 +705,17 @@ export default function DialogManager({
               }
               try {
                 await fetch('/api/hosts', {
-                  method: 'POST',
+                  method: METHOD_POST,
                   headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
+                    [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+                    [HEADER_CONTENT_TYPE]: MIME_JSON,
                   },
                   body: JSON.stringify({
-                    alias: host,
+                    name: host,
                     hostname: hostname,
                     user: user,
                     port: '22'
-                  })
+                  } as HostData)
                 });
                 handleRefresh(); // Refresh hosts list
               } catch (e) {
@@ -673,14 +726,16 @@ export default function DialogManager({
           handleSelectHost(host);
         }}
       />
-
-      <Box sx={{ position: 'fixed', top: 20, right: 20, zIndex: 10000, display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'flex-end' }}>
+      <Box sx={{
+        position: 'fixed', top: 20, right: 20, zIndex: 10000,
+        display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'flex-end'
+      }}>
         {toasts.map(t => (
           <Alert
             key={t.id}
             severity={t.severity}
             variant="filled"
-            onClose={() => setToasts((prev: any[]) => prev.filter((x: any) => x.id !== t.id))}
+            onClose={() => setToasts((prev) => prev.filter((x) => x.id !== t.id))}
             sx={{
               minWidth: 250,
               boxShadow: 3,

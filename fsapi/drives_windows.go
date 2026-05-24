@@ -1,12 +1,15 @@
 //go:build windows
+
 package fsapi
 
 import (
+	"cozyssh/models"
+
 	"golang.org/x/sys/windows"
 )
 
-func GetAvailableDrives() []FileInfo {
-	var drives []FileInfo
+func GetAvailableDrives() []*models.FileInfo {
+	var drives []*models.FileInfo
 	bitmask, err := windows.GetLogicalDrives()
 	if err != nil {
 		return nil
@@ -14,7 +17,7 @@ func GetAvailableDrives() []FileInfo {
 	for char := 'A'; char <= 'Z'; char++ {
 		if bitmask&(1<<uint(char-'A')) != 0 {
 			dPath := string(char) + ":\\"
-			drives = append(drives, FileInfo{
+			drives = append(drives, &models.FileInfo{
 				Name:    dPath,
 				IsDir:   true,
 				Size:    0,

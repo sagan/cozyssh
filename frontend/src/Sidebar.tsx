@@ -1,36 +1,36 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { useSearchParams } from "react-router";
-import { Autocomplete, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Drawer, Toolbar, Typography, Box, CircularProgress, IconButton, Menu, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button, useMediaQuery, useTheme, Tabs, Tab, Chip, Divider } from '@mui/material';
+import {
+  Autocomplete, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Drawer, Toolbar, Typography, Box,
+  CircularProgress, IconButton, Menu, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button,
+  useMediaQuery, useTheme, Tabs, Tab, Chip, Divider,
+} from '@mui/material';
 import ComputerIcon from '@mui/icons-material/Computer';
 import DnsIcon from '@mui/icons-material/Dns';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import AddIcon from '@mui/icons-material/Add';
 import StarIcon from '@mui/icons-material/Star';
+
 import { version as PACKAGE_JSON_VERSION } from '../package.json';
+import type { HostData, PasswordUpdateRequest, SessionPinned } from './api';
+import {
+  METHOD_PUT, METHOD_POST, METHOD_DELETE, HEADER_AUTHORIZATION_BEARER_PREFIX,
+  HEADER_AUTHORIZATION, MIME_JSON, HEADER_CONTENT_TYPE,
+  BROWSER_STORAGE_KEY_TOKEN,
+} from './constants';
+import { filterHosts, remoteCommandOptions, searchString, type HostForm, type ServiceWorkerStatus } from './common';
 
 const drawerWidth = 260;
 
-const remoteCommandOptions = [
-  'tmux attach || tmux new', // Linux + tmux
-  'tmux attach -or (tmux new)', // Windows PowerShell + psmux ( https://github.com/psmux/psmux ). Use "-or ()" so it works with PowerShell 5.1+
-];
-
-export interface Host {
-  name: string;
-  hostname: string;
-  port: string;
-  user: string;
-  identity_file?: string;
-  proxy_jump?: string;
-  remote_command?: string;
-  tags?: string[];
-  comment?: string;
-  source?: string;
-  is_auto?: boolean;
-  is_favourite?: boolean;
-}
-
-export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, onSelect, onSelectTagAsSplit, onLogout, onOpenScratchpad, activeTabs, onAttach, onRefresh, hosts, fetchHosts }: { sysHostname: string, appVersion: string, mobileOpen: boolean, onClose: () => void, onSelect: (host: string) => void, onSelectTagAsSplit?: (tag: string, hosts: string[]) => void, onLogout?: () => void, onOpenScratchpad?: () => void, activeTabs: string[], onAttach: (id: string, host: string, title: string, isLocked: boolean) => void, onRefresh?: () => void, hosts: Host[], fetchHosts: () => void }) {
+export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, onSelect, onSelectTagAsSplit,
+  onLogout, onOpenScratchpad, activeTabs, onAttach, onRefresh, hosts, fetchHosts }: {
+    sysHostname: string, appVersion: string, mobileOpen: boolean,
+    onClose: () => void, onSelect: (host: string) => void,
+    onSelectTagAsSplit?: (tag: string, hosts: string[]) => void,
+    onLogout?: () => void, onOpenScratchpad?: () => void, activeTabs: string[],
+    onAttach: (id: string, host: string, title: string, isLocked: boolean) => void,
+    onRefresh?: () => void, hosts: HostData[], fetchHosts: () => void,
+  }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -41,31 +41,41 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newPwd, setNewPwd] = useState('');
   const [confirmPwd, setConfirmPwd] = useState('');
-  const [pinnedSessions, setPinnedSessions] = useState<any[]>([]);
+  const [pinnedSessions, setPinnedSessions] = useState<SessionPinned[]>([]);
   const [dialogTab, setDialogTab] = useState(0);
 
-  const [swStatus, setSwStatus] = useState<string>('Unknown');
+  const [swStatus, setSwStatus] = useState<ServiceWorkerStatus>('unknown');
 
   useEffect(() => {
     if (settingsOpen && dialogTab === 1) {
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistration().then(reg => {
-          if (!reg) setSwStatus('Not registered');
-          else if (reg.active) setSwStatus('Active');
-          else if (reg.waiting) setSwStatus('Waiting');
-          else if (reg.installing) setSwStatus('Installing');
-        }).catch(() => setSwStatus('Error checking status'));
+          if (!reg) {
+            setSwStatus('unregistered');
+          } else if (reg.active) {
+            setSwStatus('active');
+          } else if (reg.waiting) {
+            setSwStatus('waiting');
+          } else if (reg.installing) {
+            setSwStatus('installing');
+          }
+        }).catch(() => setSwStatus('error'));
       } else {
-        setSwStatus('Not supported');
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setSwStatus('unsupported');
       }
     }
   }, [settingsOpen, dialogTab]);
 
   useEffect(() => {
     if (settingsOpen) {
-      const token = localStorage.getItem('cozy_token');
-      fetch('/api/sessions/pinned', { headers: { 'Authorization': `Bearer ${token}` } })
-        .then(r => r.json())
+      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+      fetch('/api/sessions/pinned', {
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        }
+      })
+        .then(r => r.json() as Promise<SessionPinned[]>)
         .then(data => setPinnedSessions(data || []))
         .catch(e => console.error(e));
     }
@@ -81,17 +91,21 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
 
   // Host CRUD State
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingAlias, setEditingAlias] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ alias: '', hostname: '', user: '', port: '', identity_file: '', proxy_jump: '', remote_command: '', tags: '', comment: '' });
-  const [initialHostFormData, setInitialHostFormData] = useState<any>(null);
+  const [editingName, setEditingName] = useState<string | null>(null);
+  const [formData, setFormData] = useState<HostForm>({
+    name: '', hostname: '', user: '', port: '', identity_file: '', source: "",
+    proxy_jump: '', remote_command: '', tags: '', comment: '',
+  });
+  const [initialHostFormData, setInitialHostFormData] = useState<HostForm | null>(null);
 
   // Context Menu State
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number; target: Host } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number; target: HostData } | null>(null);
   const [tagContextMenuOpen, setTagContextMenuOpen] = useState(false);
   const [tagContextMenu, setTagContextMenu] = useState<{ mouseX: number; mouseY: number; tag: string } | null>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (loading && hosts.length > 0) setLoading(false);
   }, [hosts, loading]);
 
@@ -100,11 +114,14 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
       alert("Passwords don't match");
       return;
     }
-    const token = localStorage.getItem('cozy_token');
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     const res = await fetch('/api/settings/password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ new_password: newPwd })
+      method: METHOD_POST,
+      headers: {
+        [HEADER_CONTENT_TYPE]: MIME_JSON,
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
+      },
+      body: JSON.stringify({ new_password: newPwd } as PasswordUpdateRequest)
     });
     if (res.ok) {
       alert('Password updated! You will be logged out.');
@@ -118,12 +135,12 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
     if (!confirm("This will unregister the Service Worker, clear all caches and reload. Proceed?")) return;
     if ('serviceWorker' in navigator) {
       const registrations = await navigator.serviceWorker.getRegistrations();
-      for (let registration of registrations) {
+      for (const registration of registrations) {
         await registration.unregister();
       }
       if (window.caches) {
         const cacheNames = await caches.keys();
-        for (let cacheName of cacheNames) {
+        for (const cacheName of cacheNames) {
           await caches.delete(cacheName);
         }
       }
@@ -131,7 +148,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
     }
   };
 
-  const handleContextMenu = (e: React.MouseEvent, host: Host) => {
+  const handleContextMenu = (e: React.MouseEvent, host: HostData) => {
     e.preventDefault();
     setContextMenu({ mouseX: e.clientX - 2, mouseY: e.clientY - 4, target: host });
     setContextMenuOpen(true);
@@ -160,9 +177,11 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
     const tag = tagContextMenu.tag;
     const filtered = hosts.filter(h => h.tags && h.tags.includes(tag));
 
-    const nameSorter = (a: any, b: any) => a.name.localeCompare(b.name);
-    const hostNameSorter = (a: any, b: any) => {
-      if (a.hostname === b.hostname) return a.name.localeCompare(b.name);
+    const nameSorter = (a: HostData, b: HostData) => a.name.localeCompare(b.name);
+    const hostNameSorter = (a: HostData, b: HostData) => {
+      if (a.hostname === b.hostname) {
+        return a.name.localeCompare(b.name);
+      }
       return a.hostname.localeCompare(b.hostname);
     };
 
@@ -185,8 +204,11 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   };
 
   const handleAddOpen = () => {
-    const data = { alias: '', hostname: '', user: 'root', port: '22', identity_file: '', proxy_jump: '', remote_command: '', tags: '', comment: '' };
-    setEditingAlias(null);
+    const data: HostForm = {
+      name: "", hostname: '', user: 'root', port: '22', source: "",
+      identity_file: '', proxy_jump: '', remote_command: '', tags: "", comment: '',
+    };
+    setEditingName(null);
     setFormData(data);
     setInitialHostFormData(data);
     setDialogOpen(true);
@@ -195,18 +217,19 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   const handleEditOpen = () => {
     if (!contextMenu) return;
     const isAuto = contextMenu.target.source === 'known_hosts';
-    const data = {
-      alias: isAuto ? contextMenu.target.hostname : contextMenu.target.name,
+    const data: HostForm = {
+      name: isAuto ? contextMenu.target.hostname : contextMenu.target.name,
       hostname: contextMenu.target.hostname,
       user: contextMenu.target.user || 'root',
       port: contextMenu.target.port || '22',
+      source: "",
       identity_file: contextMenu.target.identity_file || '',
       proxy_jump: contextMenu.target.proxy_jump || '',
       remote_command: contextMenu.target.remote_command || '',
       tags: contextMenu.target.tags ? contextMenu.target.tags.join(' ') : '',
       comment: contextMenu.target.comment || ''
     };
-    setEditingAlias(isAuto ? null : contextMenu.target.name);
+    setEditingName(isAuto ? null : contextMenu.target.name);
     setFormData(data);
     setInitialHostFormData(data);
     closeMenu();
@@ -216,10 +239,12 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   const handleDelete = async () => {
     if (!contextMenu) return;
     if (confirm(`Are you extremely certain you want to permanently delete "${contextMenu.target.name}"?`)) {
-      const token = localStorage.getItem('cozy_token');
+      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
       await fetch(`/api/hosts/${contextMenu.target.name}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
+        method: METHOD_DELETE,
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
+        }
       });
       fetchHosts();
     }
@@ -229,7 +254,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   const handleToggleFavourite = async () => {
     if (!contextMenu) return;
     const host = contextMenu.target;
-    const token = localStorage.getItem('cozy_token');
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
 
     let newTags = host.tags ? [...host.tags] : [];
     if (host.is_favourite) {
@@ -240,23 +265,28 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
       }
     }
 
-    const payload = {
-      alias: host.source === 'known_hosts' ? host.hostname : host.name,
+    const payload: HostData = {
+      name: host.source === 'known_hosts' ? host.hostname : host.name,
       hostname: host.hostname,
       user: host.user || 'root',
       port: host.port || '22',
       identity_file: host.identity_file || '',
       proxy_jump: host.proxy_jump || '',
       remote_command: host.remote_command || '',
+      source: host.source || "",
+      comment: host.comment || "",
       tags: newTags
     };
 
     const url = host.source === 'config' ? `/api/hosts/${host.name}` : `/api/hosts`;
-    const method = host.source === 'config' ? 'PUT' : 'POST';
+    const method = host.source === 'config' ? METHOD_PUT : METHOD_POST;
 
     await fetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      headers: {
+        [HEADER_CONTENT_TYPE]: MIME_JSON,
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
+      },
       body: JSON.stringify(payload)
     });
 
@@ -265,23 +295,28 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   };
 
   const handleSaveHost = async () => {
-    if (!formData.hostname) return;
-    const finalAlias = formData.alias.trim() || formData.hostname.trim();
-    const token = localStorage.getItem('cozy_token');
-    const url = editingAlias ? `/api/hosts/${editingAlias}` : `/api/hosts`;
-    const method = editingAlias ? 'PUT' : 'POST';
+    if (!formData.hostname) {
+      return;
+    }
+    const finalName = formData.name.trim() || formData.hostname.trim();
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+    const url = editingName ? `/api/hosts/${editingName}` : `/api/hosts`;
+    const method = editingName ? METHOD_PUT : METHOD_POST;
 
     const parsedTags = formData.tags.replace(/,/g, ' ').split(/\s+/).filter(t => t.trim() !== '');
 
-    const payload = {
+    const payload: HostData = {
       ...formData,
-      alias: finalAlias,
+      name: finalName,
       tags: parsedTags
     };
 
     await fetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        [HEADER_CONTENT_TYPE]: MIME_JSON,
+      },
       body: JSON.stringify(payload)
     });
 
@@ -290,13 +325,13 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
     fetchHosts();
   };
 
-  const handleCloseHostDialog = (_: any, reason: string) => {
+  const handleCloseHostDialog = (_e: unknown, reason: string) => {
     const isDirty = initialHostFormData && JSON.stringify(formData) !== JSON.stringify(initialHostFormData);
     if (isDirty && (reason === 'backdropClick' || reason === 'escapeKeyDown')) {
       return;
     }
     setDialogOpen(false);
-    setTimeout(() => (window as any).csFocus?.(), 0);
+    setTimeout(() => window.csFocus(), 0);
   };
 
   const filteredHosts = useMemo(() => {
@@ -306,8 +341,8 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
     const normals = filtered.filter(h => !h.is_favourite && !h.is_auto);
     const autos = filtered.filter(h => !h.is_favourite && h.is_auto);
 
-    const nameSorter = (a: Host, b: Host) => a.name.localeCompare(b.name);
-    const hostNameSorter = (a: Host, b: Host) => {
+    const nameSorter = (a: HostData, b: HostData) => a.name.localeCompare(b.name);
+    const hostNameSorter = (a: HostData, b: HostData) => {
       if (a.hostname === b.hostname) {
         return a.name.localeCompare(b.name);
       }
@@ -327,6 +362,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
 
   useEffect(() => {
     if (filterStr.trim() !== '' && flatFilteredHosts.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedIndex(0);
     } else {
       setSelectedIndex(-1);
@@ -401,11 +437,29 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
         <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
           <MenuItem onClick={() => {
             setAnchorEl(null);
-            if (onRefresh) onRefresh();
+            if (onRefresh) {
+              onRefresh();
+            }
           }}>Refresh</MenuItem>
-          <MenuItem onClick={() => { setAnchorEl(null); setSettingsOpen(true); if (isMobile) onClose(); }}>Dashboard</MenuItem>
-          <MenuItem onClick={() => { setAnchorEl(null); if (onOpenScratchpad) onOpenScratchpad(); }}>Open Scratchpad</MenuItem>
-          <MenuItem onClick={() => { setAnchorEl(null); if (onLogout) onLogout(); }}>Logout</MenuItem>
+          <MenuItem onClick={() => {
+            setAnchorEl(null);
+            setSettingsOpen(true);
+            if (isMobile) {
+              onClose();
+            }
+          }}>Dashboard</MenuItem>
+          <MenuItem onClick={() => {
+            setAnchorEl(null);
+            if (onOpenScratchpad) {
+              onOpenScratchpad();
+            }
+          }}>Open Scratchpad</MenuItem>
+          <MenuItem onClick={() => {
+            setAnchorEl(null);
+            if (onLogout) {
+              onLogout();
+            }
+          }}>Logout</MenuItem>
         </Menu>
       </Toolbar>
 
@@ -422,7 +476,8 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
             onKeyDown={handleFilterKeyDown}
             sx={{ flexGrow: 1 }}
           />
-          <IconButton size="small" title="New Server" onClick={handleAddOpen} sx={{ bgcolor: 'action.hover', border: '1px solid #ccc' }}>
+          <IconButton size="small" title="New Server" onClick={handleAddOpen}
+            sx={{ bgcolor: 'action.hover', border: '1px solid #ccc' }}>
             <AddIcon fontSize="small" />
           </IconButton>
         </Box>
@@ -474,7 +529,8 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
             {showTagsToggle && (
               <Box sx={{ textAlign: 'center', mt: -0.5 }}>
                 <IconButton size="small" onClick={() => setTagsExpanded(!tagsExpanded)} sx={{ p: 0 }}>
-                  {tagsExpanded ? <Typography variant="caption" color="text.secondary">▲</Typography> : <Typography variant="caption" color="text.secondary">▼</Typography>}
+                  {tagsExpanded ? <Typography variant="caption" color="text.secondary">▲</Typography>
+                    : <Typography variant="caption" color="text.secondary">▼</Typography>}
                 </IconButton>
               </Box>
             )}
@@ -492,25 +548,30 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
             </ListItemButton>
           </ListItem>
 
-          {(filteredHosts.favourite.length > 0 || filteredHosts.normal.length > 0 || filteredHosts.auto.length > 0) && <Divider sx={{ my: 1 }} />}
+          {(filteredHosts.favourite.length > 0 || filteredHosts.normal.length > 0
+            || filteredHosts.auto.length > 0) && <Divider sx={{ my: 1 }} />}
 
           {filteredHosts.favourite.map((host, idx) => {
             const absIdx = idx;
-            return <HostListItem key={`fav-${idx}`} filter={filterStr} host={host} onSelect={onSelect} onContextMenu={handleContextMenu} isSelected={selectedIndex === absIdx} />;
+            return <HostListItem key={`fav-${idx}`} filter={filterStr} host={host} onSelect={onSelect}
+              onContextMenu={handleContextMenu} isSelected={selectedIndex === absIdx} />;
           })}
 
-          {filteredHosts.favourite.length > 0 && (filteredHosts.normal.length > 0 || filteredHosts.auto.length > 0) && <Divider sx={{ my: 1 }} />}
+          {filteredHosts.favourite.length > 0 && (filteredHosts.normal.length > 0 || filteredHosts.auto.length > 0)
+            && <Divider sx={{ my: 1 }} />}
 
           {filteredHosts.normal.map((host, idx) => {
             const absIdx = filteredHosts.favourite.length + idx;
-            return <HostListItem key={`normal-${idx}`} filter={filterStr} host={host} onSelect={onSelect} onContextMenu={handleContextMenu} isSelected={selectedIndex === absIdx} />;
+            return <HostListItem key={`normal-${idx}`} filter={filterStr} host={host} onSelect={onSelect}
+              onContextMenu={handleContextMenu} isSelected={selectedIndex === absIdx} />;
           })}
 
           {filteredHosts.normal.length > 0 && filteredHosts.auto.length > 0 && <Divider sx={{ my: 1 }} />}
 
           {filteredHosts.auto.map((host, idx) => {
             const absIdx = filteredHosts.favourite.length + filteredHosts.normal.length + idx;
-            return <HostListItem key={`auto-${idx}`} filter={filterStr} host={host} onSelect={onSelect} onContextMenu={handleContextMenu} isSelected={selectedIndex === absIdx} />;
+            return <HostListItem key={`auto-${idx}`} filter={filterStr} host={host} onSelect={onSelect}
+              onContextMenu={handleContextMenu} isSelected={selectedIndex === absIdx} />;
           })}
         </List>
       </Box>
@@ -525,7 +586,8 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
         <MenuItem onClick={handleEditOpen}>Edit {contextMenu?.target.name}</MenuItem>
         <MenuItem onClick={() => {
           if (!contextMenu) return;
-          const url = `${window.location.origin}/#${contextMenu?.target.source !== 'known_hosts' ? contextMenu.target.name : `${contextMenu.target.user || "root"}@${contextMenu.target.hostname}`}`;
+          const url = `${window.location.origin}/#${contextMenu?.target.source !== 'known_hosts'
+            ? contextMenu.target.name : `${contextMenu.target.user || "root"}@${contextMenu.target.hostname}`}`;
           navigator.clipboard.writeText(url);
           closeMenu();
         }}>Copy URL</MenuItem>
@@ -578,7 +640,8 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
         <MenuItem onClick={handleToggleFavourite}>
           {contextMenu?.target.is_favourite ? 'Remove From Favourite' : 'Add To Favourite'}
         </MenuItem>
-        <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>Delete {contextMenu?.target.source === 'config' ? 'Host' : 'Auto Host'}</MenuItem>
+        <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>Delete {
+          contextMenu?.target.source === 'config' ? 'Host' : 'Auto Host'}</MenuItem>
       </Menu>
 
       <Menu
@@ -595,7 +658,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
       {/* Dashboard Dialog */}
       <Dialog open={settingsOpen} onClose={() => {
         setSettingsOpen(false);
-        setTimeout(() => (window as any).csFocus?.(), 0);
+        setTimeout(() => window.csFocus(), 0);
       }} fullWidth maxWidth="sm" sx={{ '& .MuiDialog-paper': { overflow: 'hidden' } }}>
         <DialogTitle>Dashboard</DialogTitle>
         <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 3 }}>
@@ -622,7 +685,8 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
                   return (
                     <ListItem key={ps.id} divider>
                       <ListItemText primary={ps.title} secondary={`${ps.host} (Listeners: ${ps.listenerCount})`} />
-                      {canAttach && <Button size="small" variant="outlined" onClick={() => onAttach(ps.id, ps.host, ps.title, !!ps.isLocked)}>Attach</Button>}
+                      {canAttach && <Button size="small" variant="outlined"
+                        onClick={() => onAttach(ps.id, ps.host, ps.title, !!ps.isLocked)}>Attach</Button>}
                     </ListItem>
                   );
                 })}
@@ -635,16 +699,20 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
                 <Typography variant="subtitle2" gutterBottom>Service Worker & Cache</Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
                   <Typography variant="body2" color="text.secondary">Status:</Typography>
-                  <Chip label={swStatus} size="small" color={swStatus === 'Active' ? 'success' : 'default'} variant="outlined" sx={{ fontWeight: 'bold' }} />
+                  <Chip label={swStatus} size="small" color={swStatus === 'active' ? 'success' : 'default'}
+                    variant="outlined" sx={{ fontWeight: 'bold' }} />
                 </Box>
                 <Button variant="outlined" color="error" size="small" onClick={handleClearCache} sx={{ mt: 1 }}>
                   Force Clear Cache & Unregister SW
                 </Button>
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="subtitle2" gutterBottom>Change App Password</Typography>
-                <TextField fullWidth label="New Password" type="password" size="small" margin="dense" value={newPwd} onChange={e => setNewPwd(e.target.value)} />
-                <TextField fullWidth label="Confirm Password" type="password" size="small" margin="dense" value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)} />
-                <Button variant="contained" onClick={handleSavePassword} disabled={!newPwd} sx={{ mt: 2 }} disableElevation>Save Password</Button>
+                <TextField fullWidth label="New Password" type="password" size="small" margin="dense"
+                  value={newPwd} onChange={e => setNewPwd(e.target.value)} />
+                <TextField fullWidth label="Confirm Password" type="password" size="small" margin="dense"
+                  value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)} />
+                <Button variant="contained" onClick={handleSavePassword} disabled={!newPwd} sx={{ mt: 2 }}
+                  disableElevation>Save Password</Button>
               </>
             )}
 
@@ -684,7 +752,8 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
                   Frontend: <b>{PACKAGE_JSON_VERSION}</b>
                 </Typography>
                 <Typography variant="body2" sx={{ mt: 3 }}>
-                  <a href="https://github.com/sagan/cozyssh" target="_blank" rel="noopener noreferrer" style={{ color: theme.palette.primary.main, textDecoration: 'none' }}>
+                  <a href="https://github.com/sagan/cozyssh" target="_blank" rel="noopener noreferrer"
+                    style={{ color: theme.palette.primary.main, textDecoration: 'none' }}>
                     GitHub Repository
                   </a>
                 </Typography>
@@ -699,25 +768,39 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
 
       {/* Host CRUD Dialog */}
       <Dialog open={dialogOpen} onClose={handleCloseHostDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>{editingAlias ? `Edit Host: ${editingAlias}` : 'Add New Server'}</DialogTitle>
+        <DialogTitle>{editingName ? `Edit Host: ${editingName}` : 'Add New Server'}</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <TextField fullWidth label="Alias Name" size="small" value={formData.alias} onChange={e => setFormData({ ...formData, alias: e.target.value })} placeholder={formData.hostname || "e.g. production-database"} />
-            <TextField fullWidth label="HostName (IP / Domain)" size="small" value={formData.hostname} onChange={e => setFormData({ ...formData, hostname: e.target.value })} required autoFocus={!formData.hostname} />
-            <TextField fullWidth label="User" size="small" value={formData.user} onChange={e => setFormData({ ...formData, user: e.target.value })} placeholder="default: root" />
-            <TextField fullWidth label="Port" size="small" value={formData.port} onChange={e => setFormData({ ...formData, port: e.target.value })} placeholder="default: 22" />
-            <TextField fullWidth label="Tags (Optional)" size="small" value={formData.tags} onChange={e => setFormData({ ...formData, tags: e.target.value })} placeholder="e.g. production web" />
-            <TextField fullWidth label="IdentityFile (Optional)" size="small" value={formData.identity_file} onChange={e => setFormData({ ...formData, identity_file: e.target.value })} placeholder="~/.ssh/id_ed25519" />
-            <TextField fullWidth label="ProxyJump (Optional)" size="small" value={formData.proxy_jump} onChange={e => setFormData({ ...formData, proxy_jump: e.target.value })} placeholder="e.g. server-foo,server-bar" />
+            <TextField fullWidth label="Alias Name" size="small" value={formData.name}
+              onChange={e => setFormData({ ...formData, name: e.target.value })}
+              placeholder={formData.hostname || "e.g. production-database"} />
+            <TextField fullWidth label="HostName (IP / Domain)" size="small" value={formData.hostname}
+              onChange={e => setFormData({ ...formData, hostname: e.target.value })}
+              required autoFocus={!formData.hostname} />
+            <TextField fullWidth label="User" size="small" value={formData.user}
+              onChange={e => setFormData({ ...formData, user: e.target.value })} placeholder="default: root" />
+            <TextField fullWidth label="Port" size="small" value={formData.port}
+              onChange={e => setFormData({ ...formData, port: e.target.value })} placeholder="default: 22" />
+            <TextField fullWidth label="Tags (Optional)" size="small" value={formData.tags}
+              onChange={e => setFormData({ ...formData, tags: e.target.value })} placeholder="e.g. production web" />
+            <TextField fullWidth label="IdentityFile (Optional)" size="small" value={formData.identity_file}
+              onChange={e => setFormData({ ...formData, identity_file: e.target.value })}
+              placeholder="~/.ssh/id_ed25519" />
+            <TextField fullWidth label="ProxyJump (Optional)" size="small" value={formData.proxy_jump}
+              onChange={e => setFormData({ ...formData, proxy_jump: e.target.value })}
+              placeholder="e.g. server-foo,server-bar" />
             <Autocomplete freeSolo options={remoteCommandOptions} value={formData.remote_command}
               onInputChange={(_event, newValue) => {
                 setFormData({ ...formData, remote_command: newValue })
               }}
               renderInput={(params) => (
-                <TextField {...params} fullWidth label="RemoteCommand (Optional)" size="small" placeholder="e.g. tmux attach || tmux new" />
+                <TextField {...params} fullWidth label="RemoteCommand (Optional)"
+                  size="small" placeholder="e.g. tmux attach || tmux new" />
               )}
             />
-            <TextField fullWidth label="Comment (Optional)" size="small" multiline rows={2} value={formData.comment} onChange={e => setFormData({ ...formData, comment: e.target.value })} placeholder="Host description..." />
+            <TextField fullWidth label="Comment (Optional)" size="small" multiline rows={2} value={formData.comment}
+              onChange={e => setFormData({ ...formData, comment: e.target.value })}
+              placeholder="Host description..." />
           </Box>
         </DialogContent>
         <DialogActions>
@@ -729,7 +812,10 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   );
 }
 
-function HostListItem({ filter, host, onSelect, onContextMenu, isSelected }: { filter: string, host: Host, onSelect: (name: string) => void, onContextMenu: (e: React.MouseEvent, host: Host) => void, isSelected?: boolean }) {
+function HostListItem({ filter, host, onSelect, onContextMenu, isSelected }: {
+  filter: string, host: HostData, onSelect: (name: string) => void,
+  onContextMenu: (e: React.MouseEvent, host: HostData) => void, isSelected?: boolean,
+}) {
   const itemRef = useRef<HTMLLIElement>(null);
 
   useEffect(() => {
@@ -767,7 +853,10 @@ function HostListItem({ filter, host, onSelect, onContextMenu, isSelected }: { f
       <ListItemButton title={host.comment || ""} onClick={() => onSelect(host.name)} sx={{ py: 0.5 }}>
         <ListItemIcon sx={{ minWidth: 32 }}>
           {isFavourite ? (
-            <StarIcon fontSize="small" sx={{ color: 'primary.main', filter: 'drop-shadow(0 0 2px rgba(25, 118, 210, 0.3))' }} />
+            <StarIcon fontSize="small" sx={{
+              color: 'primary.main',
+              filter: 'drop-shadow(0 0 2px rgba(25, 118, 210, 0.3))'
+            }} />
           ) : (
             <DnsIcon fontSize="small" color="action" />
           )}
@@ -775,12 +864,18 @@ function HostListItem({ filter, host, onSelect, onContextMenu, isSelected }: { f
         <ListItemText
           primary={
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 0.5 }}>
-              <Typography variant="body2" sx={{ fontWeight: isFavourite ? 700 : 500, lineHeight: 1.2, wordBreak: 'break-all', color: isFavourite ? 'primary.main' : 'text.primary' }}>
+              <Typography variant="body2" sx={{
+                fontWeight: isFavourite ? 700 : 500,
+                lineHeight: 1.2, wordBreak: 'break-all', color: isFavourite ? 'primary.main' : 'text.primary'
+              }}>
                 {host.name}
               </Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 0.25 }}>
                 {host.tags && host.tags.filter(t => t !== 'fav').map(tag => (
-                  <Typography key={tag} variant="caption" sx={{ color: 'primary.main', fontSize: '0.6rem', fontWeight: 600, opacity: 0.8 }}>
+                  <Typography key={tag} variant="caption" sx={{
+                    color: 'primary.main', fontSize: '0.6rem',
+                    fontWeight: 600, opacity: 0.8
+                  }}>
                     #{tag}
                   </Typography>
                 ))}
@@ -798,118 +893,4 @@ function HostListItem({ filter, host, onSelect, onContextMenu, isSelected }: { f
       </ListItemButton>
     </ListItem>
   );
-}
-
-/**
- * Filter hosts by tags and search text.
- * @param hosts - Array of hosts to filter
- * @param filterStr - Filter string. Put "#tag" syntax(es) at the beginning to filter by tags. E.g. "#foo #bar git server".
- * @returns Filtered array of hosts.
- */
-export function filterHosts(hosts: Host[], filterStr: string): Host[] {
-  filterStr = filterStr.trim().toLowerCase();
-  if (!filterStr) {
-    return hosts;
-  }
-
-  const tokens = filterStr.split(/\s+/);
-  const requiredTags: string[] = [];
-  let textStartIndex = 0;
-
-  // Extract tags from the beginning
-  for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i];
-    if (token.startsWith('#') && token.length > 1) {
-      // Remove the '#' and add to required tags
-      requiredTags.push(token.substring(1));
-      textStartIndex = i + 1;
-    } else {
-      // Stop extracting tags as soon as a non-tag word appears
-      break;
-    }
-  }
-
-  // The rest of the string is the search text (case-insensitive)
-  const searchText = tokens.slice(textStartIndex).join(' ');
-
-  return hosts.filter(host => {
-    // 1. Tag Filtering
-    // If the filter contains tags, the host MUST have all of them
-    if (requiredTags.length > 0) {
-      if (!host.tags || host.tags.length === 0) {
-        return false;
-      }
-
-      const hasAllTags = requiredTags.every(tag => host.tags!.includes(tag));
-      if (!hasAllTags) {
-        return false;
-      }
-    }
-
-    // 2. Text Filtering
-    // If there is remaining text, it must match name, hostname, or comment
-    if (searchText) {
-      const matchName = host.name.toLowerCase().includes(searchText);
-      const matchHostname = host.hostname.toLowerCase().includes(searchText);
-      const matchComment = !!(host.comment && host.comment.toLowerCase().includes(searchText));
-
-      if (!matchName && !matchHostname && !matchComment) {
-        return false;
-      }
-    }
-
-    return true;
-  });
-}
-
-/**
- * Search needle in input and returns a snippet with the needle highlighted and centered.
- * For example, if it searchs "Liberty" in "Declaration of Independence", it returns "that among these are Life, Liberty and the pursuit of Happiness."
- * @param input - Input string
- * @param needle - Needle to search for
- * @returns Snippet with the needle highlighted and centered
- */
-export function searchString(input: string, needle: string): string {
-  if (!input || !needle) return "";
-
-  const lowerInput = input.toLowerCase();
-  const lowerNeedle = needle.toLowerCase();
-  const matchIndex = lowerInput.indexOf(lowerNeedle);
-
-  // Return empty string if no match is found
-  if (matchIndex === -1) {
-    return "";
-  }
-
-  // Define the number of characters of context to grab around the match
-  const contextLength = 40;
-
-  // Calculate initial start and end bounds
-  let start = Math.max(0, matchIndex - contextLength);
-  let end = Math.min(input.length, matchIndex + needle.length + contextLength);
-
-  // If we aren't at the beginning of the string, snap to the nearest subsequent whitespace 
-  // to avoid returning a partially truncated word at the start of the snippet.
-  if (start > 0) {
-    const nextSpace = input.substring(start, matchIndex).indexOf(" ");
-    if (nextSpace !== -1) {
-      start = start + nextSpace + 1;
-    }
-  }
-
-  // If we aren't at the end of the string, snap to the nearest preceding whitespace 
-  // to avoid returning a partially truncated word at the end of the snippet.
-  if (end < input.length) {
-    const trailingContext = input.substring(matchIndex + needle.length, end);
-    const lastSpace = trailingContext.lastIndexOf(" ");
-    if (lastSpace !== -1) {
-      end = matchIndex + needle.length + lastSpace;
-    }
-  }
-
-  // Extract the snippet
-  let snippet = input.substring(start, end);
-
-  // Replace multi-line breaks, tabs, or consecutive spaces with a single space
-  return snippet.replace(/\s+/g, " ").trim();
 }

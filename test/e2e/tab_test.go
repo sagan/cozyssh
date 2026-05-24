@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"cozyssh/models"
 	"fmt"
 	"net/http"
 	"os"
@@ -84,10 +85,10 @@ func TestPinTab(t *testing.T) {
 	t.Logf("session id: %s", sessionId)
 
 	// 2. Pin it via the API (simulates right-click → "Pin tab").
-	resp := apiPost(t, url, token, "/api/tabs/pin", map[string]string{
-		"id":    sessionId,
-		"host":  "local",
-		"title": "PIN_TEST",
+	resp := apiPost(t, url, token, "/api/tabs/pin", &models.TabsPinRequest{
+		Id:    sessionId,
+		Host:  "local",
+		Title: "PIN_TEST",
 	})
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -101,7 +102,7 @@ func TestPinTab(t *testing.T) {
 	}
 	found := false
 	for _, p := range pinned {
-		if p["id"] == sessionId {
+		if p.Id == sessionId {
 			found = true
 			break
 		}
@@ -135,7 +136,7 @@ func TestPinTab(t *testing.T) {
 	t.Logf("pinned tab title after reload: %s", tabTitle)
 
 	// 4. Unpin via the API.
-	resp = apiPost(t, url, token, "/api/tabs/unpin", map[string]string{"id": sessionId})
+	resp = apiPost(t, url, token, "/api/tabs/unpin", &models.TabsUnpinRequest{Id: sessionId})
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("unpin: expected 200, got %d", resp.StatusCode)
@@ -177,10 +178,10 @@ func TestLockTab(t *testing.T) {
 	t.Logf("session id: %s", sessionId)
 
 	// Lock the session.
-	resp := apiPost(t, url, token, "/api/tabs/lock", map[string]string{
-		"id":    sessionId,
-		"host":  "local",
-		"title": "LOCK_TEST",
+	resp := apiPost(t, url, token, "/api/tabs/lock", &models.TabsLockRequest{
+		Id:    sessionId,
+		Host:  "local",
+		Title: "LOCK_TEST",
 	})
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -189,9 +190,9 @@ func TestLockTab(t *testing.T) {
 
 	// Verify backend sees it as locked.
 	pinned := pinnedSessions(t, url, token)
-	var lockedEntry map[string]any
+	var lockedEntry *models.SessionPinned
 	for _, p := range pinned {
-		if p["id"] == sessionId {
+		if p.Id == sessionId {
 			lockedEntry = p
 			break
 		}
@@ -199,12 +200,12 @@ func TestLockTab(t *testing.T) {
 	if lockedEntry == nil {
 		t.Fatalf("locked session %s not in pinned list: %v", sessionId, pinned)
 	}
-	if lockedEntry["isLocked"] != true {
-		t.Errorf("expected isLocked=true, got %v", lockedEntry["isLocked"])
+	if lockedEntry.IsLocked != true {
+		t.Errorf("expected isLocked=true, got %v", lockedEntry.IsLocked)
 	}
 
 	// Try to close the session — must be a no-op because it's locked.
-	resp = apiPost(t, url, token, "/api/sessions/close", map[string]string{"id": sessionId})
+	resp = apiPost(t, url, token, "/api/sessions/close", &models.SessionsCloseRequest{Id: sessionId})
 	resp.Body.Close()
 
 	// Reload the page — the locked session must auto-reopen.
@@ -223,10 +224,10 @@ func TestLockTab(t *testing.T) {
 	}
 
 	// Downgrade: unlock → pin only (so it can be closed).
-	resp = apiPost(t, url, token, "/api/tabs/pin", map[string]string{
-		"id":    sessionId,
-		"host":  "local",
-		"title": "LOCK_TEST",
+	resp = apiPost(t, url, token, "/api/tabs/pin", &models.TabsPinRequest{
+		Id:    sessionId,
+		Host:  "local",
+		Title: "LOCK_TEST",
 	})
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -234,13 +235,13 @@ func TestLockTab(t *testing.T) {
 	}
 
 	// Now close should succeed.
-	resp = apiPost(t, url, token, "/api/sessions/close", map[string]string{"id": sessionId})
+	resp = apiPost(t, url, token, "/api/sessions/close", &models.SessionsCloseRequest{Id: sessionId})
 	resp.Body.Close()
 
 	// Verify it's gone from the pinned list.
 	pinnedAfter := pinnedSessions(t, url, token)
 	for _, p := range pinnedAfter {
-		if p["id"] == sessionId {
+		if p.Id == sessionId {
 			t.Errorf("session %s still in pinned list after close: %v", sessionId, pinnedAfter)
 		}
 	}
@@ -270,10 +271,10 @@ func TestAttachStealsSession(t *testing.T) {
 	waitForTerminalText(t, pageA, "stolen_marker", 10*time.Second)
 
 	// Pin the session so it persists when the WS is stolen.
-	resp := apiPost(t, url, tokenA, "/api/tabs/pin", map[string]string{
-		"id":    sessionId,
-		"host":  "local",
-		"title": "STEAL_TEST",
+	resp := apiPost(t, url, tokenA, "/api/tabs/pin", &models.TabsPinRequest{
+		Id:    sessionId,
+		Host:  "local",
+		Title: "STEAL_TEST",
 	})
 	resp.Body.Close()
 
@@ -301,7 +302,7 @@ func TestAttachStealsSession(t *testing.T) {
 	pinned := pinnedSessions(t, url, tokenA)
 	found := false
 	for _, p := range pinned {
-		if p["id"] == sessionId {
+		if p.Id == sessionId {
 			found = true
 			break
 		}
@@ -347,10 +348,10 @@ func TestPinnedSessionSurvivesClientDisconnect(t *testing.T) {
 	waitForTerminalText(t, pageA, "survive_marker", 10*time.Second)
 
 	// Pin.
-	resp := apiPost(t, url, token, "/api/tabs/pin", map[string]string{
-		"id":    sessionId,
-		"host":  "local",
-		"title": "SURVIVE_TEST",
+	resp := apiPost(t, url, token, "/api/tabs/pin", &models.TabsPinRequest{
+		Id:    sessionId,
+		Host:  "local",
+		Title: "SURVIVE_TEST",
 	})
 	resp.Body.Close()
 
@@ -362,9 +363,9 @@ func TestPinnedSessionSurvivesClientDisconnect(t *testing.T) {
 
 	// The session must still be listed as pinned with listenerCount == 0.
 	pinned := pinnedSessions(t, url, token)
-	var entry map[string]any
+	var entry *models.SessionPinned
 	for _, p := range pinned {
-		if p["id"] == sessionId {
+		if p.Id == sessionId {
 			entry = p
 			break
 		}
@@ -372,8 +373,8 @@ func TestPinnedSessionSurvivesClientDisconnect(t *testing.T) {
 	if entry == nil {
 		t.Fatalf("session %s not in pinned list after client disconnect: %v", sessionId, pinned)
 	}
-	if lc, ok := entry["listenerCount"].(float64); ok && lc != 0 {
-		t.Errorf("expected listenerCount=0, got %v", lc)
+	if entry.ListenerCount != 0 {
+		t.Errorf("expected listenerCount=0, got %v", entry.ListenerCount)
 	}
 
 	// Client B loads — the pinned session should auto-open.
@@ -407,7 +408,7 @@ func TestPinnedSessionSurvivesClientDisconnect(t *testing.T) {
 	t.Logf("pinned pane id on client B: %v", pinnedPaneId)
 
 	// Give the terminal extra time to receive and render historical output from the
-	// server's circular buffer (sent on WS connect as history_start/binary frames).
+	// server's circular buffer (sent on WS connect as historyStart/binary frames).
 	time.Sleep(3 * time.Second)
 
 	// Read history from the specific pinned pane rather than the active pane
@@ -448,7 +449,7 @@ Host fav2
 	// Clean up leaked pinned sessions from previous tests because session.GlobalManager is global
 	token := getToken(t, page)
 	for _, p := range pinnedSessions(t, url, token) {
-		apiPost(t, url, token, "/api/tabs/unpin", map[string]string{"id": p["id"].(string)})
+		apiPost(t, url, token, "/api/tabs/unpin", &models.TabsUnpinRequest{Id: p.Id})
 	}
 
 	// Now open the target URL directly (since token is in localStorage for this origin, it will skip login)
@@ -520,7 +521,7 @@ Host fav2
 	// Clean up leaked pinned sessions from previous tests
 	token := getToken(t, page)
 	for _, p := range pinnedSessions(t, url, token) {
-		apiPost(t, url, token, "/api/tabs/unpin", map[string]string{"id": p["id"].(string)})
+		apiPost(t, url, token, "/api/tabs/unpin", &models.TabsUnpinRequest{Id: p.Id})
 	}
 
 	// Now open the tag URL directly

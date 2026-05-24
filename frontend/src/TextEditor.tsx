@@ -74,15 +74,18 @@ export default function TextEditor({ fileName, initialContent, onSave, onClose, 
     }}>
       <AppBar position="static" color="default" elevation={1} sx={{ bgcolor: '#f4f6f8' }}>
         <Toolbar variant="dense">
-          <Typography variant="h6" sx={{ flexGrow: 1, fontFamily: 'monospace', fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <Typography variant="h6" sx={{
+            flexGrow: 1, fontFamily: 'monospace', fontSize: '0.9rem',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+          }}>
             Editing: {fileName}
           </Typography>
-          <Button 
-            variant="contained" 
-            color="primary" 
-            size="small" 
-            sx={{ mr: 2 }} 
-            onClick={() => onSave(content)} 
+          <Button
+            variant="contained"
+            color="primary"
+            size="small"
+            sx={{ mr: 2 }}
+            onClick={() => onSave(content)}
             disabled={!hasChanged || isSaving}
           >
             {isSaving ? 'Saving...' : 'Save'}
@@ -92,7 +95,10 @@ export default function TextEditor({ fileName, initialContent, onSave, onClose, 
           </IconButton>
         </Toolbar>
       </AppBar>
-      <Box sx={{ flexGrow: 1, overflow: 'auto', '& .cm-theme-light': { height: '100%' }, '& .cm-editor': { height: '100%' } }}>
+      <Box sx={{
+        flexGrow: 1, overflow: 'auto', '& .cm-theme-light': { height: '100%' },
+        '& .cm-editor': { height: '100%' }
+      }}>
         <CodeMirror
           value={content}
           height="100%"

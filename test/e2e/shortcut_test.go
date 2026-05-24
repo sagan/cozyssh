@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"cozyssh/models"
 	"fmt"
 	"testing"
 	"time"
@@ -22,7 +23,7 @@ func TestKeyboardShortcuts(t *testing.T) {
 
 	// Clean up leaked pinned sessions from previous tests
 	for _, p := range pinnedSessions(t, url, token) {
-		apiPost(t, url, token, "/api/tabs/unpin", map[string]string{"id": p["id"].(string)})
+		apiPost(t, url, token, "/api/tabs/unpin", &models.TabsUnpinRequest{Id: p.Id})
 	}
 
 	// Wait for default local shell

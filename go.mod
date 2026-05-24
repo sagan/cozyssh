@@ -4,11 +4,13 @@ go 1.25.5
 
 require (
 	github.com/aymanbagabas/go-pty v0.2.2
+	github.com/go-http-utils/headers v0.0.0-20181008091004-fed159eddc2a
 	github.com/gorilla/websocket v1.5.3
 	github.com/kevinburke/ssh_config v1.6.0
 	github.com/ory/dockertest/v4 v4.0.0
 	github.com/pkg/sftp v1.13.10
 	github.com/playwright-community/playwright-go v0.5700.1
+	github.com/tkrajina/typescriptify-golang-structs v0.2.0
 	golang.org/x/crypto v0.50.0
 	golang.org/x/sys v0.43.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -38,6 +40,7 @@ require (
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
+	github.com/tkrajina/go-reflector v0.5.5 // indirect
 	github.com/u-root/gobusybox/src v0.0.0-20260319180309-6fd46286597e // indirect
 	github.com/u-root/u-root v0.16.0 // indirect
 	go.mongodb.org/mongo-driver v1.17.9 // indirect

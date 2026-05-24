@@ -7,6 +7,8 @@ package e2e
 import (
 	"context"
 	"cozyssh"
+	"cozyssh/constants"
+	"cozyssh/models"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-http-utils/headers"
 	"github.com/ory/dockertest/v4"
 	"github.com/playwright-community/playwright-go"
 )
@@ -260,8 +263,8 @@ func apiPost(t *testing.T, baseURL, token, path string, body any) *http.Response
 	if err != nil {
 		t.Fatalf("apiPost request: %v", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(headers.Authorization, constants.HEADER_AUTHORIZATION_BEARER_PREFIX+token)
+	req.Header.Set(headers.ContentType, constants.MIME_JSON)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("apiPost do: %v", err)
@@ -276,7 +279,7 @@ func apiGet(t *testing.T, baseURL, token, path string) any {
 	if err != nil {
 		t.Fatalf("apiGet request: %v", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set(headers.Authorization, constants.HEADER_AUTHORIZATION_BEARER_PREFIX+token)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("apiGet do: %v", err)
@@ -293,7 +296,7 @@ func apiGet(t *testing.T, baseURL, token, path string) any {
 // getToken extracts the cozy_token from a logged-in page's localStorage.
 func getToken(t *testing.T, page playwright.Page) string {
 	t.Helper()
-	tok, err := page.Evaluate("() => localStorage.getItem('cozy_token')")
+	tok, err := page.Evaluate(`() => localStorage.getItem('` + constants.BROWSER_STORAGE_KEY_TOKEN + `')`)
 	if err != nil || tok == nil {
 		t.Fatal("could not get cozy_token from localStorage")
 	}
@@ -301,14 +304,14 @@ func getToken(t *testing.T, page playwright.Page) string {
 }
 
 // pinnedSessions fetches /api/sessions/pinned and returns the parsed slice.
-func pinnedSessions(t *testing.T, baseURL, token string) []map[string]any {
+func pinnedSessions(t *testing.T, baseURL, token string) []*models.SessionPinned {
 	t.Helper()
 	v := apiGet(t, baseURL, token, "/api/sessions/pinned")
 	if v == nil {
 		return nil
 	}
 	raw, _ := json.Marshal(v)
-	var result []map[string]any
+	var result []*models.SessionPinned
 	json.Unmarshal(raw, &result)
 	return result
 }

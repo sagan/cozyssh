@@ -1,41 +1,41 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Route, Routes, Navigate } from 'react-router-dom';
+
+import type { FullData, PreflightResponse } from './api';
+import { BROWSER_STORAGE_KEY_TOKEN } from './constants';
 import Login from './Login';
 import Dashboard from './Dashboard';
 import InsecureWarning from './InsecureWarning';
 
 function App() {
-  const [securityCheck, setSecurityCheck] = useState<{ is_secure: boolean, insecure_allowed: boolean } | null>(null);
-  const [hasAuth, setHasAuth] = useState(!!localStorage.getItem('cozy_token'));
-  const [fullData, setFullData] = useState<any>(null);
+  const [securityCheck, setSecurityCheck] = useState<PreflightResponse | undefined>(undefined);
+  const [hasAuth, setHasAuth] = useState(!!localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN));
+  const [fullData, setFullData] = useState<FullData | undefined>(undefined);
 
   useEffect(() => {
-    const isHttpNonLocal = window.location.protocol === 'http:' && 
-                           window.location.hostname !== 'localhost' && 
-                           window.location.hostname !== '127.0.0.1';
-    
-    if (isHttpNonLocal) {
+    if (!window.isSecureContext) {
       fetch('/api/preflight')
-        .then(res => res.json())
+        .then(res => res.json() as Promise<PreflightResponse>)
         .then(data => {
           setSecurityCheck({
-            is_secure: data.is_secure,
-            insecure_allowed: data.insecure_allowed
+            isSecure: data.isSecure,
+            insecureAllowed: data.insecureAllowed
           });
         })
         .catch(err => {
           console.error("Failed to fetch preflight info", err);
         });
     } else {
-      setSecurityCheck({ is_secure: true, insecure_allowed: true });
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSecurityCheck({ isSecure: true, insecureAllowed: true });
     }
   }, []);
 
-  if (securityCheck && !securityCheck.is_secure && !securityCheck.insecure_allowed) {
+  if (securityCheck && !securityCheck.isSecure && !securityCheck.insecureAllowed) {
     return <InsecureWarning />;
   }
 
-  const handleLoginSuccess = (data: any) => {
+  const handleLoginSuccess = (data: FullData) => {
     setFullData(data);
     setHasAuth(true);
   };

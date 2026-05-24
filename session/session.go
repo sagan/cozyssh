@@ -1,6 +1,7 @@
 package session
 
 import (
+	"cozyssh/models"
 	"io"
 	"log"
 	"strings"
@@ -43,11 +44,11 @@ func (b *CircularBuffer) Bytes() []byte {
 
 // Session represents a persistent terminal session (PTY or SSH).
 type Session struct {
-	ID        string
-	Host      string
-	Title     string
-	IsPinned  bool
-	IsLocked  bool
+	ID         string
+	Host       string
+	Title      string
+	IsPinned   bool
+	IsLocked   bool
 	Reader     io.Reader
 	Writer     io.Writer
 	CloseFunc  func() error
@@ -55,7 +56,7 @@ type Session struct {
 	RetryFunc  func() (io.Reader, io.Writer, error)
 	Buffer     *CircularBuffer
 	SSHClient  any // Will hold *sshmanager.PooledClient
-	
+
 	mu        sync.Mutex
 	listeners []chan []byte
 }
@@ -71,7 +72,7 @@ func NewSession(id, host string, r io.Reader, w io.Writer, closeFunc func() erro
 		Buffer:     NewCircularBuffer(50000), // ~50KB buffer
 		listeners:  make([]chan []byte, 0),
 	}
-	
+
 	go s.run()
 	return s
 }
@@ -91,7 +92,7 @@ func (s *Session) run() {
 			data := make([]byte, n)
 			copy(data, buf[:n])
 			s.Buffer.Write(data)
-			
+
 			s.mu.Lock()
 			for _, l := range s.listeners {
 				// Non-blocking send
@@ -108,7 +109,7 @@ func (s *Session) run() {
 			}
 
 			if s.RetryFunc != nil {
-				// Broadcast state change to listeners (hack: push a special text/binary indicator if needed, 
+				// Broadcast state change to listeners (hack: push a special text/binary indicator if needed,
 				// but let's notify the front-end via ws.go that ssh disconnected)
 				reconnected := false
 				for i := 0; i < 30; i++ { // Retry up to 30 times (1 min) or indefinitely? Requirements say "always re-try"
@@ -139,7 +140,7 @@ func (s *Session) run() {
 			}
 			s.listeners = nil
 			s.mu.Unlock()
-			// If session is pinned, we might want it to auto-restart? 
+			// If session is pinned, we might want it to auto-restart?
 			// For now, if the process dies, the session is dead.
 			GlobalManager.Remove(s.ID)
 			break
@@ -150,7 +151,7 @@ func (s *Session) run() {
 func (s *Session) AddListener() (chan []byte, []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	ch := make(chan []byte, 100)
 	s.listeners = append(s.listeners, ch)
 	return ch, s.Buffer.Bytes()
@@ -159,7 +160,7 @@ func (s *Session) AddListener() (chan []byte, []byte) {
 func (s *Session) RemoveListener(ch chan []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	for i, l := range s.listeners {
 		if l == ch {
 			s.listeners = append(s.listeners[:i], s.listeners[i+1:]...)
@@ -181,7 +182,7 @@ func (s *Session) Broadcast(data []byte) {
 
 func (s *Session) BroadcastTabState() {
 	s.mu.Lock()
-	stateMsg := append([]byte("STATE:"), []byte(`{"type":"tab_state","is_pinned":`+boolToStr(s.IsPinned)+`,"is_locked":`+boolToStr(s.IsLocked)+`}`)...)
+	stateMsg := append([]byte(models.WS_MSG_PREFIX_STATE), models.GetWsTabStateMsg(s.IsPinned, s.IsLocked)...)
 	for _, l := range s.listeners {
 		select {
 		case l <- stateMsg:
@@ -204,7 +205,7 @@ func (s *Session) Close() error {
 
 func (s *Session) Steal() {
 	s.mu.Lock()
-	stolenMsg := append([]byte("STATE:"), []byte(`{"type":"state","state":"stolen"}`)...)
+	stolenMsg := append([]byte(models.WS_MSG_PREFIX_STATE), models.WsMsgStateStolen...)
 	for _, l := range s.listeners {
 		select {
 		case l <- stolenMsg:
@@ -286,7 +287,7 @@ func (m *SessionManager) RemoveListener(id string, ch chan []byte) {
 	m.mu.Lock()
 	s, ok := m.sessions[id]
 	m.mu.Unlock()
-	
+
 	if ok {
 		s.RemoveListener(ch)
 		m.ClearInactive(id)
@@ -296,13 +297,13 @@ func (m *SessionManager) RemoveListener(id string, ch chan []byte) {
 func (m *SessionManager) ClearInactive(id string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	if s, ok := m.sessions[id]; ok {
 		s.mu.Lock()
 		listenerCount := len(s.listeners)
 		isPinned := s.IsPinned || s.IsLocked
 		s.mu.Unlock()
-		
+
 		if !isPinned && listenerCount == 0 {
 			// Start 1 minute timer before closing
 			if _, exists := m.disconnectTimers[id]; !exists {
@@ -335,19 +336,19 @@ func (m *SessionManager) CancelDisconnectTimer(id string) {
 	}
 }
 
-func (m *SessionManager) GetPinned() []map[string]any {
+func (m *SessionManager) GetPinned() []*models.SessionPinned {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	var pinned []map[string]any
+	var pinned []*models.SessionPinned
 	for _, s := range m.sessions {
 		s.mu.Lock()
 		if s.IsPinned || s.IsLocked {
-			pinned = append(pinned, map[string]any{
-				"id":            s.ID,
-				"host":          s.Host,
-				"title":         s.Title,
-				"isLocked":      s.IsLocked,
-				"listenerCount": len(s.listeners),
+			pinned = append(pinned, &models.SessionPinned{
+				Id:            s.ID,
+				Host:          s.Host,
+				Title:         s.Title,
+				IsLocked:      s.IsLocked,
+				ListenerCount: len(s.listeners),
 			})
 		}
 		s.mu.Unlock()
