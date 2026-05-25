@@ -1,6 +1,7 @@
 package recents
 
 import (
+	"cozyssh/constants"
 	"cozyssh/models"
 	"encoding/json"
 	"os"
@@ -49,7 +50,7 @@ func Save() error {
 }
 
 func Add(host string) {
-	if host == "local" || host == "" {
+	if host == constants.LOCAL_NAME || host == "" {
 		return
 	}
 

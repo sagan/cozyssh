@@ -96,6 +96,7 @@ export type CSEventDetailTerminalNew = {
   sessionId: string;
   host: string;
   params: URLSearchParams;
+  websocket_protocols: string[];
   is_active_terminal: boolean;
 };
 
@@ -382,4 +383,10 @@ export function searchString(input: string, needle: string): string {
 
   // Replace multi-line breaks, tabs, or consecutive spaces with a single space
   return snippet.replace(/\s+/g, " ").trim();
+}
+
+export function base64urlEncode(input: string): string {
+  const base64 = btoa(input);
+  const base64url = base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return base64url;
 }

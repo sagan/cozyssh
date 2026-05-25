@@ -10,17 +10,14 @@ import { javascript } from '@codemirror/lang-javascript';
 
 import type { HostData, ButtonData } from './api';
 import {
-  BROWSER_STORAGE_KEY_TOKEN,
-  DEFAULT_BUTTON_GROUP,
-  HEADER_AUTHORIZATION, HEADER_AUTHORIZATION_BEARER_PREFIX, HEADER_CONTENT_TYPE,
-  METHOD_POST, MIME_JSON, MISC_FUNCTIONS, TERMINAL_FUNCTIONS,
+  BROWSER_STORAGE_KEY_TOKEN, DEFAULT_BUTTON_GROUP, HEADER_AUTHORIZATION, HEADER_AUTHORIZATION_BEARER_PREFIX,
+  HEADER_CONTENT_TYPE, METHOD_POST, MIME_JSON, MISC_FUNCTIONS, TERMINAL_FUNCTIONS,
 } from './constants';
 import {
+  type Recent, type Toast, type ContextMenu, type NewTabDialogViewMode, type ToastData,
   getKeyCombination, ButtonDataSchema, generatePassword,
-  type Recent, type Toast, type ContextMenu,
-  type NewTabDialogViewMode, type ToastData,
 } from './common';
-import { useDashboardStore, type TabData } from './dashboardStore';
+import { useStore, type TabData } from './store';
 import NewTabDialog from './NewTabDialog';
 import type { ScratchpadHandle } from './Scratchpad';
 import type { TerminalHandle } from './Terminal';
@@ -102,7 +99,7 @@ export default function DialogManager({
   handleAttach, handleRefresh, handleSelectHost, terminalRefs, toasts, setToasts, setEditingButton,
   setInitialBtnFormData, setButtonDialogOpen, setInputDialogOpen, activeGroup
 }: DialogManagerProps) {
-  const { tabs, activeTabId, setActiveTabId, buttons, setActivePaneId } = useDashboardStore();
+  const { tabs, activeTabId, setActiveTabId, buttons, setActivePaneId } = useStore();
 
   const [titleMenuAnchor, setTitleMenuAnchor] = useState<null | HTMLElement>(null);
   const [importTip, setImportTip] = useState<ToastData | null>(null);

@@ -1,11 +1,13 @@
 package ws
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"maps"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -97,6 +99,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	query := r.URL.Query()
 	header := make(http.Header)
 	if protocols := r.Header.Get(constants.HEADER_SEC_WEBSOCKET_PROTOCOL); protocols != "" {
 		parts := strings.SplitSeq(protocols, ",")
@@ -104,28 +107,31 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			p = strings.TrimSpace(p)
 			if strings.HasPrefix(p, "cozy.") {
 				header.Set(constants.HEADER_SEC_WEBSOCKET_PROTOCOL, p)
-				break
+			} else if strings.HasPrefix(p, "query.") {
+				// accepts passing parameters through header to avoid logging
+				if data, err := base64.RawURLEncoding.DecodeString(p[6:]); err == nil && len(data) > 0 {
+					if q, err := url.ParseQuery(string(data)); err == nil {
+						maps.Copy(query, q)
+					}
+				}
 			}
 		}
 	}
 
 	conn, err := upgrader.Upgrade(w, r, header)
 	if err != nil {
-		log.Println("upgrade error:", err)
 		return
 	}
 	defer conn.Close()
 
-	reconnect := r.URL.Query().Get("reconnect") == "1"
-	cloneFrom := r.URL.Query().Get("cloneFrom")
-	host := r.URL.Query().Get("host")
-	sessionID := r.URL.Query().Get("sessionId")
-	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
-	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
-	sessionRemoteCommand := r.URL.Query().Get("remoteCommand")
+	reconnect := query.Get("reconnect") == "1"
+	cloneFrom := query.Get("cloneFrom")
+	host := query.Get("host")
+	sessionID := query.Get("sessionId")
+	cols, _ := strconv.Atoi(query.Get("cols"))
+	rows, _ := strconv.Atoi(query.Get("rows"))
+	sessionRemoteCommand := query.Get("remoteCommand")
 
-	log.Printf("WS: New connection. host=%s, sessionId=%s, reconnect=%v, cloneFrom=%s, size=%dx%d, remoteCommand=%s",
-		host, sessionID, reconnect, cloneFrom, cols, rows, sessionRemoteCommand)
 	if sessionID == "" {
 		sessionID = host // Fallback to host if no unique ID provided
 	}
@@ -139,10 +145,9 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 
 	s := session.GlobalManager.Get(sessionID)
 	if s == nil {
-		if host == "" || host == "local" {
+		if host == "" || host == constants.LOCAL_NAME {
 			ls, err := localpty.Start(sessionRemoteCommand)
 			if err != nil {
-				log.Println("pty start error:", err)
 				return
 			}
 			s = session.NewSession(sessionID, host, ls.Pty, ls.Pty, ls.Close, ls.Resize)
@@ -169,7 +174,6 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if err != nil {
-				log.Println("SSH dial/clone error:", err)
 				errStr := strings.ToLower(err.Error())
 				if strings.Contains(errStr, "mismatch") || strings.Contains(errStr, "auth") {
 					conn.WriteMessage(websocket.TextMessage, models.WsMsgStateDisconnectedFatal)
@@ -190,21 +194,16 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 				// Actually, it's better if getSSHClient returns them or we store them.
 				// For now, let's just use the host name for expansion.
 				expanded := sshmanager.ExpandTokens(remoteCommand, host, "22", "root", host)
-				log.Printf("WS: Starting remote command: %s", expanded)
 				if err := sshSession.Start(expanded); err != nil {
-					log.Println("RemoteCommand err:", err)
 					pClient.Release()
 					return
 				}
 			} else {
-				log.Printf("WS: Requesting shell for %s", sessionID)
 				if err := sshSession.Shell(); err != nil {
-					log.Println("Shell err:", err)
 					pClient.Release()
 					return
 				}
 			}
-			log.Printf("WS: Session started for %s", sessionID)
 			s = session.NewSession(sessionID, host, stdout, stdin, func() error {
 				sshSession.Close()
 				pClient.Release()

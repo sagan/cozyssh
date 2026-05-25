@@ -83,10 +83,11 @@ You can also import any external module, for example from a CDN url.
 
 CozySSH sets some global variables in the browser's window object.
 
-- `window.__CS_AUTORUN_DONE__` : `undefined | 0 | 1` - `1` if all autorun scripts have been executed, unset (undefined) or 0 otherwise. It can be used to determine if the script is executed via auto-run or via clicking the button.
+- `window.__CS_AUTORUN_DONE__` : `undefined | 0 | 1` - `1` - If all autorun scripts have been executed, unset (undefined) or 0 otherwise. It can be used to determine if the script is executed via auto-run or via clicking the button.
 - `window.__CS_MODULECACHE__` : `Record<string, Record<string, any>>` - The module cache of imported scripts. The key is the button internal id.
 - `window.__CS_VERSION__` : `string` - The current frontend version of CozySSH. E.g. `0.1.26`.
 - `window.__CS_PASSTHROUGH_SHORTCUTS__` : `Set<string>` - The list of key combinations that should be passed through to the terminal if terminal has focus. Each element is a key combination string such as `ctrl+shift+m` (all lowercase, modifiers in `ctrl,alt,shift,meta` order). Some key combinations (like `ctrl+c`, `ctrl+d`, etc.) are pre-added to this set by default.
+- `window.__CS_USE_STORE__` : `typeof useStore` - The zustand store hook function that CozySSH uses to manage state.
 
 ## Available global functions
 

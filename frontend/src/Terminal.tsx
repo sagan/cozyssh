@@ -10,7 +10,14 @@ import '@xterm/xterm/css/xterm.css';
 
 import type { WsResizeMsg, WsTerminalMessage } from './api';
 import { BROWSER_STORAGE_KEY_TOKEN } from './constants';
-import { CS_EVENT_TERMINAL_DISCONNECTED, CS_EVENT_SHELL_INTEGRATION, CS_EVENT_TERMINAL_RESIZE, getIntVar, getKeyCombination, type CommandHistoryEntry, type CSEventDetailShellIntegration, type CSEventDetailTerminalConnected, type CSEventDetailTerminalData, type CSEventDetailTerminalDisconnected, type CSEventDetailTerminalResize, type ShellIntegration, CS_EVENT_TERMINAL_DATA, CS_EVENT_TERMINAL_CONNECTED, CS_EVENT_TERMINAL_NEW, type CSEventDetailTerminalNew } from './common';
+import {
+  type CommandHistoryEntry, type CSEventDetailShellIntegration, type CSEventDetailTerminalConnected,
+  type CSEventDetailTerminalData, type CSEventDetailTerminalDisconnected, type CSEventDetailTerminalResize,
+  type ShellIntegration, type CSEventDetailTerminalNew,
+  CS_EVENT_TERMINAL_DATA, CS_EVENT_TERMINAL_CONNECTED, CS_EVENT_TERMINAL_NEW,
+  CS_EVENT_TERMINAL_DISCONNECTED, CS_EVENT_SHELL_INTEGRATION, CS_EVENT_TERMINAL_RESIZE,
+  getIntVar, getKeyCombination,
+} from './common';
 
 export interface TerminalHandle {
   sendData: (data: string) => void;
@@ -534,27 +541,13 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
       return false;
     });
 
-
-
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     const params = new URLSearchParams({
       host,
       sessionId: sessionId || '',
       cloneFrom: cloneFrom || '',
-    })
-
-    window.dispatchEvent(new CustomEvent(CS_EVENT_TERMINAL_NEW, {
-      detail: {
-        terminal: term,
-        sessionId,
-        host,
-        params,
-        is_active_terminal: isActive,
-      } satisfies CSEventDetailTerminalNew,
-    }));
-
-    let wsUrl = `${protocol}//${window.location.host}/api/ws?${params.toString()}`;
+    });
 
     let isDisposed = false;
     let isDead = false;
@@ -584,12 +577,32 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
         ? { cols: term.cols, rows: term.rows }
         : lastKnownSizeRef.current;
 
-      let finalUrl = wsUrl + `&cols=${cols}&rows=${rows}`;
+      params.set("cols", String(cols));
+      params.set("rows", String(rows));
+
+      const websocket_protocols: string[] = [];
+      if (token) {
+        websocket_protocols.push(token);
+      }
+
       if (forceReconnectRef.current) {
-        finalUrl += '&reconnect=1';
+        params.set("reconnect", "1")
         forceReconnectRef.current = false;
         xtermRef.current?.reset();
       }
+
+      window.dispatchEvent(new CustomEvent(CS_EVENT_TERMINAL_NEW, {
+        detail: {
+          terminal: term,
+          sessionId,
+          host,
+          params,
+          websocket_protocols,
+          is_active_terminal: isActive,
+        } satisfies CSEventDetailTerminalNew,
+      }));
+
+      const wsUrl = `${protocol}//${window.location.host}/api/ws?${params.toString()}`;
 
       if (isDisposed) {
         return;
@@ -597,7 +610,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
       isDead = false;
       deathType = null;
       onStateChange?.('connecting to host');
-      const ws = new WebSocket(finalUrl, token ? [token] : undefined);
+      const ws = new WebSocket(wsUrl, websocket_protocols.length > 0 ? websocket_protocols : undefined);
       ws.binaryType = 'arraybuffer';
       wsRef.current = ws;
 

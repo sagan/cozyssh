@@ -6,8 +6,7 @@ import AddIcon from '@mui/icons-material/Add';
 import LockIcon from '@mui/icons-material/Lock';
 
 import type {
-  ScratchpadData, ScratchpadDeleteMsg, ScratchpadHelloMsg,
-  ScratchpadPage, ScratchpadSyncMsg,
+  ScratchpadData, ScratchpadDeleteMsg, ScratchpadHelloMsg, ScratchpadPage, ScratchpadSyncMsg,
 } from './api';
 import { BROWSER_STORAGE_KEY_TOKEN } from './constants';
 import type { ScratchpadSyncState } from './common';

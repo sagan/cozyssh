@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -368,7 +367,6 @@ type TerminalUI interface {
 // DialSSH resolves standard configs and connects via id_ed25519
 // It always returns a new independent connection.
 func DialSSH(name string, term TerminalUI, rows, cols int) (*PooledClient, *ssh.Session, string, error) {
-	log.Printf("DialSSH: dialing %s", name)
 	client, closers, remoteCommand, err := getSSHClient(name, term)
 	if err != nil {
 		return nil, nil, "", err
@@ -394,7 +392,6 @@ func DialSSH(name string, term TerminalUI, rows, cols int) (*PooledClient, *ssh.
 }
 
 func getSSHClient(name string, term TerminalUI) (*ssh.Client, []io.Closer, string, error) {
-	log.Printf("getSSHClient: name=%s", name)
 	configPath := filepath.Join(getSSHDir(), "config")
 	f, err := os.Open(configPath)
 	var cfg *ssh_config.Config
@@ -636,9 +633,7 @@ func getSSHClient(name string, term TerminalUI) (*ssh.Client, []io.Closer, strin
 		return ssh.Dial("tcp", addr, config)
 	}
 
-	log.Printf("getSSHClient: dialing %s:%s as %s", host, port, user)
 	client, err = dialFunc(sshConfig)
-	log.Printf("getSSHClient: dialFunc returned err=%v", err)
 	if err != nil && strings.Contains(err.Error(), "no supported methods remain") && term != nil {
 		// Try password fallback
 		pass, perr := term.PromptMasked(fmt.Sprintf("%s@%s's password: ", user, host))

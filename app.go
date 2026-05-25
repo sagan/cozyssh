@@ -86,13 +86,13 @@ func Run(ctx context.Context, args []string) error {
 
 	getFullData := func(r *http.Request) *models.FullData {
 		scratchpad.Reload()
-		hostname, err := os.Hostname()
-		if err != nil {
-			hostname = "unknown"
-		}
 		displayHostname := cfg.SiteName
 		if displayHostname == "" {
-			displayHostname = hostname
+			if hostname, _ := os.Hostname(); hostname == "" {
+				displayHostname = "unknown"
+			} else {
+				displayHostname = hostname
+			}
 		}
 		hosts, err := sshmanager.ListHosts()
 		if err != nil {
@@ -478,24 +478,11 @@ func Run(ctx context.Context, args []string) error {
 				}
 			}
 			if urlStr == "" {
-				http.Error(w, "Missing X-CozySSH-Url header", http.StatusBadRequest)
+				http.Error(w, "Missing X-Cozyssh-Url header", http.StatusBadRequest)
 				return
 			}
 
-			method := r.Header.Get(constants.HEADER_X_COZYSSH_METHOD)
-			if method == "" {
-				for k, v := range r.Header {
-					if strings.EqualFold(k, constants.HEADER_X_COZYSSH_METHOD) && len(v) > 0 {
-						method = v[0]
-						break
-					}
-				}
-			}
-			if method == "" {
-				method = r.Method
-			}
-
-			req, err := http.NewRequest(method, urlStr, r.Body)
+			req, err := http.NewRequest(r.Method, urlStr, r.Body)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
@@ -577,17 +564,21 @@ func Run(ctx context.Context, args []string) error {
 	fileServer := http.FileServer(http.FS(distFS))
 
 	mux.HandleFunc("/manifest.json", func(w http.ResponseWriter, r *http.Request) {
-		hostname, err := os.Hostname()
-		if err != nil {
-			hostname = "unknown"
-		}
-		displayHostname := cfg.SiteName
-		if displayHostname == "" {
-			displayHostname = hostname
+		shortname := cfg.SiteName
+		sitename := cfg.SiteName
+		if sitename == "" {
+			hostname, _ := os.Hostname()
+			if hostname != "" {
+				sitename = constants.APP_NAME + " " + hostname
+				shortname = hostname
+			} else {
+				sitename = constants.APP_NAME
+				shortname = constants.APP_NAME
+			}
 		}
 		manifest := &models.Manifest{
-			Name:            "CozySSH" + displayHostname,
-			ShortName:       "CozySSH",
+			Name:            sitename,
+			ShortName:       shortname,
 			StartURL:        "/",
 			Display:         "standalone",
 			BackgroundColor: "#ffffff",

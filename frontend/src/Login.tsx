@@ -3,17 +3,22 @@ import { Box, Button, TextField, Typography, Paper, ThemeProvider, CssBaseline }
 
 import { version as PACKAGE_JSON_VERSION } from '../package.json';
 import type { FullData, LoginRequest, LoginResponse, Manifest } from './api';
-import { BROWSER_STORAGE_KEY_TOKEN, HEADER_CONTENT_TYPE, METHOD_POST, MIME_JSON } from './constants';
+import { APP_NAME, BROWSER_STORAGE_KEY_TOKEN, HEADER_CONTENT_TYPE, METHOD_POST, MIME_JSON } from './constants';
 import { loginTheme } from './common';
 
 export default function Login({ onLoginSuccess }: { onLoginSuccess?: (data: FullData) => void }) {
   const [password, setPassword] = useState('');
 
-  const [sitename, setSitename] = useState("CozySSH");
+  const [name, setName] = useState("");
   useEffect(() => {
     fetch("/manifest.json").then((res) => res.json() as Promise<Manifest>).then((data) => {
-      setSitename(data.name);
-      document.title = data.name;
+      let name = data.name;
+      const prefix = APP_NAME + " ";
+      if (name.startsWith(prefix)) {
+        name = name.slice(prefix.length);
+      }
+      setName(name);
+      document.title = prefix + name;
     }).catch(e => console.log(e))
   }, [])
 
@@ -64,8 +69,10 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess?: (data: Full
     <ThemeProvider theme={loginTheme}>
       <CssBaseline />
       <Box sx={{ height: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Paper elevation={3} sx={{ p: 4, width: 350, textAlign: 'center' }}>
-          <Typography variant="h5" gutterBottom sx={{ textAlign: "left", fontWeight: 'bold' }}>{sitename}</Typography>
+        <Paper elevation={3} sx={{ p: 4, width: 500, maxWidth: "80dvw", textAlign: 'center' }}>
+          <Typography variant="h5" gutterBottom sx={{ textAlign: "left", fontWeight: 'bold', wordBreak: 'break-all' }}>
+            {APP_NAME} {name}
+          </Typography>
           <Box component="form" onSubmit={handleLogin} sx={{ mt: 2 }}>
             <TextField
               fullWidth

@@ -13,33 +13,28 @@ import type {
   TabsUnpinRequest, SessionsCloseRequest, TabsRenameRequest, ButtonsMoveRequest, TabsLockRequest
 } from './api';
 import {
-  BROWSER_STORAGE_KEY_ACTIVE_GROUP,
-  BROWSER_STORAGE_KEY_TOKEN,
-  DEFAULT_BUTTON_GROUP,
+  APP_NAME, BROWSER_STORAGE_KEY_ACTIVE_GROUP, BROWSER_STORAGE_KEY_TOKEN, DEFAULT_BUTTON_GROUP,
   DEFAULT_SCROLL_LINES, HEADER_AUTHORIZATION, HEADER_AUTHORIZATION_BEARER_PREFIX, HEADER_CONTENT_TYPE,
-  METHOD_DELETE, METHOD_POST, METHOD_PUT, MIME_JSON,
+  LOCAL_NAME, METHOD_DELETE, METHOD_POST, METHOD_PUT, MIME_JSON, VIBRATE_PATTERN,
 } from './constants';
 import {
-  CS_EVENT_TERMINAL_CHANGE,
-  defaultTheme, getIntVar,
   type ContextMenu, type CSEventDetailTerminalChange, type NewTabDialogViewMode,
   type Recent, type ScratchpadSyncState, type Severity, type Toast,
+  CS_EVENT_TERMINAL_CHANGE,
+  defaultTheme, getIntVar,
 } from './common';
+import { type TabData, useStore, getStore } from './store';
+import { useLocalStorage } from './useLocalStorage';
+import { setupPluginAPI, runScript } from './pluginAPI';
+import { useKeyboardManager } from './useKeyboardManager';
 import Sidebar from './Sidebar';
 import type { TerminalHandle } from './Terminal';
 import type { ScratchpadHandle } from './Scratchpad';
-import { useLocalStorage } from './useLocalStorage';
-import { useDashboardStore, getStore } from './dashboardStore';
-import type { TabData } from './dashboardStore';
-import { setupPluginAPI, runScript } from './pluginAPI';
-import { useKeyboardManager } from './useKeyboardManager';
 import TabBar from './TabBar';
 import TerminalGrid from './TerminalGrid';
 import ButtonBar from './ButtonBar';
 import DialogManager from './DialogManager';
 import AppletWrapper, { type AppletData } from './AppletWrapper';
-
-const VIBRATE_PATTERN = 100;
 
 interface DashboardProps {
   initialData?: FullData;
@@ -57,8 +52,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     hosts, setHosts,
     buttons, setButtons,
     vars, setVars,
-
-  } = useDashboardStore();
+  } = useStore();
 
   // ── UI-only state (stays in React) ────────────────────────────────────
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
@@ -122,7 +116,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   // localVars uses useLocalStorage for persistence; synced into store for pluginAPI
   const [localVars, setLocalVars] = useLocalStorage<Record<string, string | undefined>>("cozy_localvars", {});
-  useEffect(() => { useDashboardStore.getState().setLocalVars(localVars); }, [localVars]);
+  useEffect(() => { useStore.getState().setLocalVars(localVars); }, [localVars]);
 
   // sendScope needs to be readable from stable callbacks
   const sendScopeRef = useRef<0 | 1 | 2>(0);
@@ -567,7 +561,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   const initted = useRef(false);
   useEffect(() => {
-    if (initted.current) return;
+    if (initted.current) {
+      return;
+    }
     initted.current = true;
     const autoload = startupParams.get('noautoload') !== '1';
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
@@ -660,17 +656,17 @@ export default function Dashboard({ initialData }: DashboardProps) {
             }
           } else {
             // Single host mode /#host
-            const host = hash !== "local" ? hostsData.find(h => hash.includes("@")
+            const host = hash !== LOCAL_NAME ? hostsData.find(h => hash.includes("@")
               ? hash == `${h.user || "root"}@${h.hostname}`
-              : h.name === hash || h.hostname === hash) : { name: "local" };
+              : h.name === hash || h.hostname === hash) : { name: LOCAL_NAME };
             if (host) {
               handleSelectHost(host.name);
             } else {
               const initialId = `local-${Date.now()}`;
               const initialPaneId = Math.random().toString(36).substring(2);
               setTabs([{
-                id: initialId, panes: [{ id: initialPaneId, host: 'local' }],
-                activePaneId: initialPaneId, title: 'local'
+                id: initialId, panes: [{ id: initialPaneId, host: LOCAL_NAME }],
+                activePaneId: initialPaneId, title: LOCAL_NAME,
               }]);
               setActiveTabId(initialId);
               setActivePaneId(initialPaneId);
@@ -727,9 +723,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
   useEffect(() => {
     const active = tabs.find(t => t.id === activeTabId);
     if (!active || active.title === 'local') {
-      document.title = `CozySSH ${sysHostname}`;
+      document.title = APP_NAME + " " + sysHostname;
     } else {
-      document.title = `${active.title} - CozySSH ${sysHostname}`;
+      document.title = `${active.title} - ${APP_NAME} ${sysHostname}`;
     }
   }, [tabs, activeTabId, sysHostname]);
 
@@ -1354,7 +1350,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   useEffect(() => {
     if (prevExtraKeysOpen.current === true && extraKeysOpen === false) {
       setIsClosingPanel(true);
-      const timer = setTimeout(() => setIsClosingPanel(false), 350);
+      const timer = setTimeout(() => setIsClosingPanel(false), 200);
       return () => clearTimeout(timer);
     }
     prevExtraKeysOpen.current = extraKeysOpen;
@@ -1455,7 +1451,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
             handleTouchStart={handleTouchStart}
             handleTouchEnd={handleTouchEnd}
             handleSendKey={handleSendKey}
-            VIBRATE_PATTERN={VIBRATE_PATTERN}
             gestureMode={gestureMode}
             onGestureModeChange={setGestureMode}
             extraKeysOpen={extraKeysOpen}

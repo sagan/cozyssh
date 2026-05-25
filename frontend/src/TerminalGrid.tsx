@@ -4,14 +4,13 @@ import MenuIcon from '@mui/icons-material/Menu';
 import AddIcon from '@mui/icons-material/Add';
 import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
 
+import { VIBRATE_PATTERN } from './constants';
 import type { NewTabDialogViewMode, ScratchpadSyncState } from './common';
+import { useStore, type PaneData, type TerminalRefMap } from './store';
 import Scratchpad, { type ScratchpadHandle } from './Scratchpad';
 import TerminalComponent, { type TerminalHandle } from './Terminal';
 import FileBrowser from './FileBrowser';
 import MobileInputBar from './MobileInputBar';
-import type { PaneData } from './dashboardStore';
-import { useDashboardStore } from './dashboardStore';
-import type { TerminalRefMap } from './dashboardStore';
 import type { AppletData } from './AppletWrapper';
 
 export interface TerminalGridProps {
@@ -36,7 +35,6 @@ export interface TerminalGridProps {
   handleTouchStart: (e: React.TouchEvent) => void;
   handleTouchEnd: (e: React.TouchEvent) => void;
   handleSendKey: (key: string) => void;
-  VIBRATE_PATTERN: number;
   gestureMode: boolean;
   onGestureModeChange: (v: boolean) => void;
   extraKeysOpen: boolean;
@@ -50,12 +48,12 @@ export default function TerminalGrid({
   setScratchpadSyncState, onTerminalFocus, onTerminalBlur,
   handleTerminalData, isTouch, isMobile, mobileAppletsOpen, setMobileAppletsOpen,
   applets, setMobileOpen, setNewTabDialogOpen, setNewTabDialogInitialViewMode,
-  handleTouchStart, handleTouchEnd, handleSendKey, VIBRATE_PATTERN,
+  handleTouchStart, handleTouchEnd, handleSendKey,
   gestureMode, onGestureModeChange, extraKeysOpen, onExtraKeysOpenChange,
   keyboardHeight, getActiveTerminal,
 }: TerminalGridProps) {
   const { tabs, setTabs, activeTabId, activePaneId, setActivePaneId, shellIntegrations,
-    setShellIntegrations, vars, localVars } = useDashboardStore();
+    setShellIntegrations, vars, localVars } = useStore();
 
   // ── Gesture-mode: non-passive native touch listeners ─────────────────────
   // React synthetic touch events are passive (cannot preventDefault), so we
@@ -63,10 +61,8 @@ export default function TerminalGrid({
   const termAreaRef = useRef<HTMLDivElement>(null);
   const gestureModeRef = useRef(gestureMode);
   const handleSendKeyRef = useRef(handleSendKey);
-  const vibPatternRef = useRef(VIBRATE_PATTERN);
   useEffect(() => { gestureModeRef.current = gestureMode; }, [gestureMode]);
   useEffect(() => { handleSendKeyRef.current = handleSendKey; }, [handleSendKey]);
-  useEffect(() => { vibPatternRef.current = VIBRATE_PATTERN; }, [VIBRATE_PATTERN]);
 
   useEffect(() => {
     const el = termAreaRef.current;
@@ -114,7 +110,7 @@ export default function TerminalGrid({
       } else {
         handleSendKeyRef.current(diffY > 0 ? '\x1b[B' : '\x1b[A');
       }
-      window.navigator.vibrate?.(vibPatternRef.current);
+      window.navigator.vibrate?.(VIBRATE_PATTERN);
     };
 
     // CRITICAL FIX: Use { capture: true } so this outer wrapper intercepts the 

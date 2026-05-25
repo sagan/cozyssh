@@ -1,11 +1,11 @@
-import { type Terminal } from "@xterm/xterm";
+import type { Terminal } from "@xterm/xterm";
 
-import { type ButtonData, type HostData } from "./api";
-import { type Severity } from "./common";
-import { type AppletPosition, type CsExecResult } from "./pluginAPI";
-import { type TerminalRefMap, type TabData } from "./dashboardStore";
-import { type AppletData } from "./AppletWrapper";
-import { type ShellIntegration } from "./Terminal";
+import type { ButtonData, HostData } from "./api";
+import type { Severity } from "./common";
+import type { AppletPosition, CsExecResult } from "./pluginAPI";
+import type { TerminalRefMap, TabData, UseStore } from "./store";
+import type { AppletData } from "./AppletWrapper";
+import type { ShellIntegration } from "./Terminal";
 
 interface VirtualKeyboard extends EventTarget {
   readonly boundingRect: DOMRect;
@@ -28,6 +28,7 @@ declare global {
     __CS_AUTORUN_DONE__: undefined | number;
     __CS_MODULECACHE__: Record<string, Record<string, unknown>>;
     __CS_VERSION__: string;
+    __CS_USE_STORE__: UseStore;
     __CS_PASSTHROUGH_SHORTCUTS__: Set<string>;
     csFocus: (paneId?: string) => void;
     csNotify: (msg: string, severity: Severity = "info") => void;

@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"cozyssh/constants"
 	"cozyssh/models"
 	"fmt"
 	"net/http"
@@ -87,7 +88,7 @@ func TestPinTab(t *testing.T) {
 	// 2. Pin it via the API (simulates right-click → "Pin tab").
 	resp := apiPost(t, url, token, "/api/tabs/pin", &models.TabsPinRequest{
 		Id:    sessionId,
-		Host:  "local",
+		Host:  constants.LOCAL_NAME,
 		Title: "PIN_TEST",
 	})
 	resp.Body.Close()
@@ -180,7 +181,7 @@ func TestLockTab(t *testing.T) {
 	// Lock the session.
 	resp := apiPost(t, url, token, "/api/tabs/lock", &models.TabsLockRequest{
 		Id:    sessionId,
-		Host:  "local",
+		Host:  constants.LOCAL_NAME,
 		Title: "LOCK_TEST",
 	})
 	resp.Body.Close()
@@ -226,7 +227,7 @@ func TestLockTab(t *testing.T) {
 	// Downgrade: unlock → pin only (so it can be closed).
 	resp = apiPost(t, url, token, "/api/tabs/pin", &models.TabsPinRequest{
 		Id:    sessionId,
-		Host:  "local",
+		Host:  constants.LOCAL_NAME,
 		Title: "LOCK_TEST",
 	})
 	resp.Body.Close()
@@ -273,7 +274,7 @@ func TestAttachStealsSession(t *testing.T) {
 	// Pin the session so it persists when the WS is stolen.
 	resp := apiPost(t, url, tokenA, "/api/tabs/pin", &models.TabsPinRequest{
 		Id:    sessionId,
-		Host:  "local",
+		Host:  constants.LOCAL_NAME,
 		Title: "STEAL_TEST",
 	})
 	resp.Body.Close()
@@ -350,7 +351,7 @@ func TestPinnedSessionSurvivesClientDisconnect(t *testing.T) {
 	// Pin.
 	resp := apiPost(t, url, token, "/api/tabs/pin", &models.TabsPinRequest{
 		Id:    sessionId,
-		Host:  "local",
+		Host:  constants.LOCAL_NAME,
 		Title: "SURVIVE_TEST",
 	})
 	resp.Body.Close()

@@ -44,7 +44,7 @@ func HandleDownloadDirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isLocal := (s.Host == "local")
+	isLocal := (s.Host == constants.LOCAL_NAME)
 	var sftpClient *sftp.Client
 	if !isLocal {
 		pClient, ok := s.SSHClient.(*sshmanager.PooledClient)
@@ -94,7 +94,7 @@ func HandleFS(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
 
 	// Determine if local or remote
-	isLocal := (s.Host == "local")
+	isLocal := (s.Host == constants.LOCAL_NAME)
 
 	var sftpClient *sftp.Client
 	if !isLocal {

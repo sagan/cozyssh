@@ -15,8 +15,7 @@ import CloudDoneIcon from '@mui/icons-material/CloudDone';
 import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
 
 import type { NewTabDialogViewMode, ScratchpadSyncState } from './common';
-import { useDashboardStore } from './dashboardStore';
-import type { TerminalRefMap } from './dashboardStore';
+import { type TerminalRefMap, useStore } from './store';
 import type { AppletData } from './AppletWrapper';
 
 export interface TabBarProps {
@@ -50,7 +49,7 @@ export default function TabBar({
   handleContextMenu, handleCloseTab, handleCloseSearch,
   setNewTabDialogInitialViewMode, setNewTabDialogOpen
 }: TabBarProps) {
-  const { tabs, activeTabId, setActiveTabId, activePaneId, setActivePaneId } = useDashboardStore();
+  const { tabs, activeTabId, setActiveTabId, activePaneId, setActivePaneId } = useStore();
 
   return (
     <>

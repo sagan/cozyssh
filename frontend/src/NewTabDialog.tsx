@@ -31,7 +31,7 @@ import {
   HEADER_AUTHORIZATION_BEARER_PREFIX,
 } from './constants';
 import { filterHosts, searchString } from './common';
-import type { TabData } from './dashboardStore';
+import type { TabData } from './store';
 
 interface Recent {
   host: string;

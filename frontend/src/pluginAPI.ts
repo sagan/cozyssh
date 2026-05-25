@@ -31,15 +31,16 @@ import {
   HEADER_USER_AGENT,
   HEADER_X_COZYSSH_FETCH_PREFIX,
   HEADER_X_COZYSSH_URL,
-  HEADER_X_COZYSSH_METHOD,
   METHOD_DELETE,
   METHOD_GET,
   METHOD_POST,
   METHOD_PUT,
   MIME_JSON,
+  LOCAL_NAME,
+  LOCAL_VAR_PREFIX,
 } from "./constants";
 import { generatePassword, type Severity } from "./common";
-import { getStore, type TerminalRefMap } from "./dashboardStore";
+import { getStore, type TerminalRefMap } from "./store";
 import type { AppletData } from "./AppletWrapper";
 
 window.__CS_VERSION__ = PACKAGE_JSON_VERSION;
@@ -109,7 +110,7 @@ const moduleCache: Record<string, Record<string, unknown>> = {};
 window.__CS_MODULECACHE__ = moduleCache;
 
 export async function runScript(
-  btn: Pick<ButtonData, 'id' | 'name' | 'type' | 'payload'>,
+  btn: Pick<ButtonData, "id" | "name" | "type" | "payload">,
   notify: (msg: string, severity?: Severity) => void,
   getTerminalRefs: () => TerminalRefMap
 ) {
@@ -220,7 +221,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
   window.csGetVar = ((name?: string) => {
     const { vars, localVars } = getStore();
     if (name) {
-      if (name.toLowerCase().startsWith("local")) return localVars[name];
+      if (name.toLowerCase().startsWith(LOCAL_VAR_PREFIX)) return localVars[name];
       return vars[name];
     }
     return { ...vars, ...localVars };
@@ -233,7 +234,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     const localUpdates: Record<string, string | undefined> = {};
 
     if (typeof nameOrVars === "string") {
-      if (nameOrVars.toLowerCase().startsWith("local")) {
+      if (nameOrVars.toLowerCase().startsWith(LOCAL_VAR_PREFIX)) {
         localUpdates[nameOrVars] = value;
       } else {
         updates[nameOrVars] = value === undefined ? null : value;
@@ -241,7 +242,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     } else {
       for (const k in nameOrVars) {
         const v = nameOrVars[k];
-        if (k.toLowerCase().startsWith("local")) {
+        if (k.toLowerCase().startsWith(LOCAL_VAR_PREFIX)) {
           localUpdates[k] = v;
         } else {
           updates[k] = v === undefined ? null : v;
@@ -325,6 +326,10 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
   };
 
   window.csFocus = (paneId?: string) => {
+    // any dialog is open (so the terminal can't get focus)
+    if (document.querySelector("body > div.MuiDialog-root")) {
+      return;
+    }
     const { activePaneId, tabs } = getStore();
     const refs = cb.getTerminalRefs();
     if (paneId) {
@@ -344,15 +349,12 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
 
   window.csFetch = async (url: string, options = {}) => {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    const proxyUrl = `/api/fetch`;
+    const proxyUrl = `/api/fetch?_t=${Date.now()}-${generatePassword(12)}`;
     const rawHeaders = new Headers(options.headers);
     const headers: Record<string, string> = {};
     const restricted = [HEADER_AUTHORIZATION, HEADER_REFERER, HEADER_ORIGIN, HEADER_USER_AGENT, HEADER_COOKIE];
     headers[HEADER_AUTHORIZATION] = HEADER_AUTHORIZATION_BEARER_PREFIX + token;
     headers[HEADER_X_COZYSSH_URL] = url;
-    if (options.method) {
-      headers[HEADER_X_COZYSSH_METHOD] = options.method;
-    }
     for (const key in rawHeaders) {
       if (restricted.includes(key.toLowerCase())) {
         headers[HEADER_X_COZYSSH_FETCH_PREFIX + key] = rawHeaders.get(key)!;
@@ -360,7 +362,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
         headers[key] = rawHeaders.get(key)!;
       }
     }
-    return fetch(proxyUrl, { method: options.method || METHOD_GET, headers, body: options.body });
+    return fetch(proxyUrl, { method: options.method || METHOD_GET, headers, body: options.body, cache: "no-cache" });
   };
 
   window.csExec = async (cmdline: string) => {
@@ -389,7 +391,9 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     const targets = Array.isArray(target) ? target.slice(0, 4) : [target];
     const hostNames = targets.map((t) => {
       if (typeof t === "string") {
-        if (t === "local") return "local";
+        if (t === LOCAL_NAME) {
+          return LOCAL_NAME;
+        }
         const known = hosts.find((h) => h.name === t || h.hostname === t);
         return known ? known.name : t;
       }

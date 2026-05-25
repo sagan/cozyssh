@@ -14,11 +14,10 @@ import StarIcon from '@mui/icons-material/Star';
 import { version as PACKAGE_JSON_VERSION } from '../package.json';
 import type { HostData, PasswordUpdateRequest, SessionPinned } from './api';
 import {
-  METHOD_PUT, METHOD_POST, METHOD_DELETE, HEADER_AUTHORIZATION_BEARER_PREFIX,
-  HEADER_AUTHORIZATION, MIME_JSON, HEADER_CONTENT_TYPE,
-  BROWSER_STORAGE_KEY_TOKEN,
+  METHOD_PUT, METHOD_POST, METHOD_DELETE, HEADER_AUTHORIZATION_BEARER_PREFIX, HEADER_AUTHORIZATION, MIME_JSON,
+  HEADER_CONTENT_TYPE, BROWSER_STORAGE_KEY_TOKEN, APP_NAME,
 } from './constants';
-import { filterHosts, remoteCommandOptions, searchString, type HostForm, type ServiceWorkerStatus } from './common';
+import { type HostForm, type ServiceWorkerStatus, filterHosts, remoteCommandOptions, searchString } from './common';
 
 const drawerWidth = 260;
 
@@ -163,8 +162,18 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
     setTagContextMenuOpen(true);
   };
 
+  const handleOpenAllServersInNewWindow = () => {
+    if (!tagContextMenu) {
+      return;
+    }
+    window.open(`${window.location.origin}/##${tagContextMenu.tag}`, '_blank', 'noopener');
+    closeTagMenu();
+  };
+
   const handleOpenAllServers = () => {
-    if (!tagContextMenu) return;
+    if (!tagContextMenu) {
+      return;
+    }
     const tag = tagContextMenu.tag;
     setFilterStr(`#${tag} `);
     const targets = hosts.filter(h => h.tags && h.tags.includes(tag));
@@ -173,7 +182,9 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   };
 
   const handleOpenSplitServers = () => {
-    if (!tagContextMenu || !onSelectTagAsSplit) return;
+    if (!tagContextMenu || !onSelectTagAsSplit) {
+      return;
+    }
     const tag = tagContextMenu.tag;
     const filtered = hosts.filter(h => h.tags && h.tags.includes(tag));
 
@@ -416,6 +427,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
 
   return (
     <Drawer
+      id="sidebar"
       variant={isMobile ? "temporary" : "permanent"}
       open={isMobile ? mobileOpen : true}
       onClose={onClose}
@@ -428,7 +440,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
     >
       <Toolbar sx={{ justifyContent: 'space-between', pr: 1 }}>
         <Typography variant="h6" noWrap sx={{ fontWeight: 'bold' }}>
-          <span>CozySSH</span>&nbsp;
+          <span>{APP_NAME}</span>&nbsp;
           <span title={sysHostname}>{sysHostname}</span>
         </Typography>
         <IconButton onClick={(e) => setAnchorEl(e.currentTarget)} size="small">
@@ -589,7 +601,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
             return;
           }
           window.open(`${window.location.origin}/#${contextMenu?.target.name}`, '_blank', 'noopener');
-        }}>Open In New Window</MenuItem>
+        }}>Open (New Window)</MenuItem>
         <MenuItem onClick={() => {
           if (!contextMenu) {
             return;
@@ -663,12 +675,13 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
         anchorPosition={tagContextMenu ? { top: tagContextMenu.mouseY, left: tagContextMenu.mouseX } : undefined}
       >
         <MenuItem onClick={handleOpenAllServers}>Open All ({tagContextMenu?.tag})</MenuItem>
-        <MenuItem onClick={handleOpenSplitServers}>Open All in same tab (split)</MenuItem>
+        <MenuItem onClick={handleOpenSplitServers}>Open All (split screen)</MenuItem>
+        <MenuItem onClick={handleOpenAllServersInNewWindow}>Open All (new window)</MenuItem>
         <MenuItem onClick={handleCopyTagUrl}>Copy URL</MenuItem>
       </Menu>
 
       {/* Dashboard Dialog */}
-      <Dialog open={settingsOpen} onClose={() => {
+      <Dialog id="dashboard-dialog" open={settingsOpen} onClose={() => {
         setSettingsOpen(false);
         setTimeout(() => window.csFocus(), 0);
       }} fullWidth maxWidth="sm" sx={{ '& .MuiDialog-paper': { overflow: 'hidden' } }}>

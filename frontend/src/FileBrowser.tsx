@@ -23,12 +23,11 @@ import { Menu, MenuItem, TableSortLabel, InputBase } from '@mui/material';
 
 import type { FileInfo, FileMkdirRequest, FileRenameRequest, FsList, FsToken } from './api';
 import {
-  BROWSER_STORAGE_KEY_TOKEN,
-  HEADER_AUTHORIZATION, HEADER_AUTHORIZATION_BEARER_PREFIX,
+  BROWSER_STORAGE_KEY_TOKEN, HEADER_AUTHORIZATION, HEADER_AUTHORIZATION_BEARER_PREFIX,
   HEADER_CONTENT_TYPE, METHOD_POST, MIME_JSON,
 } from './constants';
-import TextEditor from './TextEditor';
 import type { Order } from './common';
+import TextEditor from './TextEditor';
 
 interface FileBrowserProps {
   sessionId: string;

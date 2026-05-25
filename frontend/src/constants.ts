@@ -9,16 +9,23 @@ export const HEADER_COOKIE = "Cookie";
 export const HEADER_ORIGIN = "Origin";
 export const HEADER_REFERER = "Referer";
 export const HEADER_USER_AGENT = "User-Agent";
-export const HEADER_X_COZYSSH_FETCH_PREFIX = "X-CozySSH-Fetch-";
-export const HEADER_X_COZYSSH_URL = "X-CozySSH-Url";
-export const HEADER_X_COZYSSH_METHOD = "X-CozySSH-Method";
+export const HEADER_X_COZYSSH_FETCH_PREFIX = "X-Cozssh-Fetch-";
+export const HEADER_X_COZYSSH_URL = "X-Cozyssh-Url";
 export const MIME_JSON = "application/json";
+export const APP_NAME = "CozySSH";
+/**
+ * local shell name
+ */
+export const LOCAL_NAME = "local";
 
 // export const WS_MSG_PREFIX_STATE = "STATE:";
 export const BROWSER_STORAGE_KEY_TOKEN = "cozy_token";
 export const BROWSER_STORAGE_KEY_ACTIVE_GROUP = "cozy_active_group";
+export const LOCAL_VAR_PREFIX = "local";
 
 export const DEFAULT_BUTTON_GROUP = "Default";
+
+export const VIBRATE_PATTERN = 100;
 
 export const TERMINAL_FUNCTIONS = [
   { value: "COPY", label: "COPY (Buffer)" },

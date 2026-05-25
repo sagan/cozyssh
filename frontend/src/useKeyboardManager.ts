@@ -11,14 +11,14 @@
 import { useEffect } from "react";
 
 import { type ButtonData } from "./api";
-import { BROWSER_STORAGE_KEY_ACTIVE_GROUP, DEFAULT_BUTTON_GROUP, DEFAULT_SCROLL_LINES } from "./constants";
+import { BROWSER_STORAGE_KEY_ACTIVE_GROUP, DEFAULT_BUTTON_GROUP, DEFAULT_SCROLL_LINES, LOCAL_NAME } from "./constants";
 import {
-  CS_EVENT_ACTIVE_GROUP_CHANGE,
-  getKeyCombination,
   type CSEventDetailActiveGroupChange,
   type NewTabDialogViewMode,
+  CS_EVENT_ACTIVE_GROUP_CHANGE,
+  getKeyCombination,
 } from "./common";
-import { getStore, type TerminalRefMap } from "./dashboardStore";
+import { type TerminalRefMap, getStore } from "./store";
 
 export interface KeyboardManagerOptions {
   /** Called when a button shortcut is triggered */
@@ -130,7 +130,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
 
         case "alt+n":
           e.preventDefault();
-          handleSelectHost("local");
+          handleSelectHost(LOCAL_NAME);
           return;
 
         case "alt+s":

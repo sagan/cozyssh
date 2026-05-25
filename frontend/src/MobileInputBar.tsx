@@ -136,7 +136,7 @@ const EXTRA_ROWS: KeyDef[][] = [
     { label: '^C', seq: '\x03', wide: true }, // Ctrl+C
     { label: '^L', seq: '\x0c', wide: true }, // Ctrl+L
     { label: '^Z', seq: '\x1a', wide: true }, // Ctrl+Z
-    { label: '^S', seq: '\x13', wide: true }, // Ctrl+S
+    { label: '^D', seq: '\x04', wide: true }, // Ctrl+D
   ],
 ];
 
@@ -261,31 +261,43 @@ export default function MobileInputBar({
     {gestureMode ? <PanToolIcon fontSize="small" /> : <PanToolOutlinedIcon fontSize="small" />}
   </IconButton>
 
-  /** Ctrl toggle — fixed width prevents layout shift when toggling outlined↔contained */
-  const CtrlBtn = <Button
-    size="small"
-    variant={isCtrlActive ? 'contained' : 'outlined'}
-    {...getTapProps(() => { vibe(); setIsCtrlActive(!isCtrlActive); })}
-    sx={{
-      width: 44, minWidth: 44, height: 28, px: 0, fontWeight: 700,
-      flexShrink: 0, fontSize: '0.72rem', boxSizing: 'border-box'
-    }}
-  >
-    Ctrl
-  </Button>;
-
-  /** Alt toggle — same fixed-width pattern, auto-clears after next key */
-  const AltBtn = <Button
-    size="small"
-    variant={isAltActive ? 'contained' : 'outlined'}
-    {...getTapProps(() => { vibe(); setIsAltActive(!isAltActive); })}
-    sx={{
-      width: 38, minWidth: 38, height: 28, px: 0, fontWeight: 700,
-      flexShrink: 0, fontSize: '0.72rem', boxSizing: 'border-box'
-    }}
-  >
-    Alt
-  </Button>;
+  const topBar = <>
+    <Button
+      size="small"
+      variant={isCtrlActive ? 'contained' : 'outlined'}
+      {...getTapProps(() => { vibe(); setIsCtrlActive(!isCtrlActive); })}
+      sx={{
+        width: 44, minWidth: 44, height: 28, px: 0, fontWeight: 700,
+        flexShrink: 0, fontSize: '0.72rem', boxSizing: 'border-box'
+      }}
+    >
+      Ctrl
+    </Button>
+    <Button
+      size="small"
+      variant={isAltActive ? 'contained' : 'outlined'}
+      {...getTapProps(() => { vibe(); setIsAltActive(!isAltActive); })}
+      sx={{
+        width: 38, minWidth: 38, height: 28, px: 0, fontWeight: 700,
+        flexShrink: 0, fontSize: '0.72rem', boxSizing: 'border-box'
+      }}
+    >
+      Alt
+    </Button>
+    {BAR_GROUPS.map((group, gi) => (
+      <ButtonGroup key={gi} size="small" variant="outlined" sx={{ flexShrink: 0 }}>
+        {group.map((k) => (
+          <Button
+            key={k.label}
+            {...getTapProps(() => sendKey(k.seq))}
+            sx={BTN_SX(k.wide)}
+          >
+            <KeyIcon label={k.label} />
+          </Button>
+        ))}
+      </ButtonGroup>
+    ))}
+  </>;
 
   return (
     <Box
@@ -353,19 +365,7 @@ export default function MobileInputBar({
                 overflow: 'hidden',
               }}
             >
-              {CtrlBtn}
-              {AltBtn}
-              {/* Esc + Tab + arrows — fits on most screens without scrolling */}
-              <ButtonGroup size="small" variant="outlined" sx={{ flexShrink: 0 }}>
-                <Button {...getTapProps(() => sendKey('\x1b'))} sx={BTN_SX()}>Esc</Button>
-                <Button {...getTapProps(() => sendKey('\x09'))} sx={BTN_SX()}><KeyboardTabIcon sx={ICON_SZ} /></Button>
-              </ButtonGroup>
-              <ButtonGroup size="small" variant="outlined" sx={{ flexShrink: 0 }}>
-                <Button {...getTapProps(() => sendKey('\x1b[A'))} sx={BTN_SX()}><NorthIcon sx={ICON_SZ} /></Button>
-                <Button {...getTapProps(() => sendKey('\x1b[B'))} sx={BTN_SX()}><SouthIcon sx={ICON_SZ} /></Button>
-                <Button {...getTapProps(() => sendKey('\x1b[D'))} sx={BTN_SX()}><WestIcon sx={ICON_SZ} /></Button>
-                <Button {...getTapProps(() => sendKey('\x1b[C'))} sx={BTN_SX()}><EastIcon sx={ICON_SZ} /></Button>
-              </ButtonGroup>
+              {topBar}
             </Box>
 
             <Divider orientation="vertical" flexItem sx={{ my: 0.5 }} />
@@ -461,21 +461,7 @@ export default function MobileInputBar({
               scrollbarWidth: 'none',
             }}
           >
-            {CtrlBtn}
-            {AltBtn}
-            {BAR_GROUPS.map((group, gi) => (
-              <ButtonGroup key={gi} size="small" variant="outlined" sx={{ flexShrink: 0 }}>
-                {group.map((k) => (
-                  <Button
-                    key={k.label}
-                    {...getTapProps(() => sendKey(k.seq))}
-                    sx={BTN_SX(k.wide)}
-                  >
-                    <KeyIcon label={k.label} />
-                  </Button>
-                ))}
-              </ButtonGroup>
-            ))}
+            {topBar}
           </Box>
 
           <Divider orientation="vertical" flexItem sx={{ my: 0.5 }} />

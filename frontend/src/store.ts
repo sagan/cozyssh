@@ -1,10 +1,10 @@
 /**
- * dashboardStore.ts
+ * store.ts
  *
- * Zustand store for core Dashboard state that must be accessible from
+ * Zustand store for core state that must be accessible from
  * non-reactive contexts (global window.cs* functions, keyboard event listeners).
  *
- * Use `useDashboardStore` inside React components for reactive subscriptions.
+ * Use `useStore` inside React components for reactive subscriptions.
  * Use `getStore()` inside callbacks/event handlers for a synchronous, always-fresh snapshot.
  */
 
@@ -37,7 +37,7 @@ export interface TabData {
 
 export type TerminalRefMap = Record<string, TerminalHandle | ScratchpadHandle | null>;
 
-interface DashboardState {
+interface MainState {
   tabs: TabData[];
   activeTabId: string;
   activePaneId: string;
@@ -49,7 +49,7 @@ interface DashboardState {
   shellIntegrations: Record<string, ShellIntegration>;
 }
 
-interface DashboardActions {
+interface MainActions {
   setTabs: (tabs: TabData[] | ((prev: TabData[]) => TabData[])) => void;
   setActiveTabId: (id: string) => void;
   setActivePaneId: (id: string) => void;
@@ -64,9 +64,9 @@ interface DashboardActions {
   ) => void;
 }
 
-type DashboardStore = DashboardState & DashboardActions;
+type DashboardStore = MainState & MainActions;
 
-export const useDashboardStore = create<DashboardStore>((set) => ({
+export const useStore = create<DashboardStore>((set) => ({
   // ── State ──────────────────────────────────────────────────────────────
   tabs: [],
   activeTabId: "",
@@ -97,4 +97,8 @@ export const useDashboardStore = create<DashboardStore>((set) => ({
  * Synchronous, non-reactive getter — safe to call from event handlers,
  * setTimeout callbacks, and window.cs* plugin functions.
  */
-export const getStore = () => useDashboardStore.getState();
+export const getStore = () => useStore.getState();
+
+export type UseStore = typeof useStore;
+
+window.__CS_USE_STORE__ = useStore;
