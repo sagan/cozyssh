@@ -29,6 +29,7 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
     - [`csUpdateHost(host: Host): Promise<void>`](#csupdatehosthost-host-promisevoid)
     - [`csDeleteHost(name: string): Promise<void>`](#csdeletehostname-string-promisevoid)
   - [Client-side Events](#client-side-events)
+    - [`cs:terminal-new`](#csterminal-new)
     - [`cs:terminal-change`](#csterminal-change)
     - [`cs:terminal-connected`](#csterminal-connected)
     - [`cs:terminal-disconnected`](#csterminal-disconnected)
@@ -85,11 +86,7 @@ CozySSH sets some global variables in the browser's window object.
 - `window.__CS_AUTORUN_DONE__` : `undefined | 0 | 1` - `1` if all autorun scripts have been executed, unset (undefined) or 0 otherwise. It can be used to determine if the script is executed via auto-run or via clicking the button.
 - `window.__CS_MODULECACHE__` : `Record<string, Record<string, any>>` - The module cache of imported scripts. The key is the button internal id.
 - `window.__CS_VERSION__` : `string` - The current frontend version of CozySSH. E.g. `0.1.26`.
-
-Some variables are not set by CozySSH, but rather can be set by script to modify the behavior of CozySSH. The default value of those variables is unset (undefined):
-
-- `window.__CS_PASSTHROUGH_SHORTCUTS__` : `Set<string> | string[]` - The (additional) list of key combinations that should be passed through to the terminal if terminal has focus. Each element is a key combination string such as `ctrl+shift+m` (all lowercase, modifiers in `ctrl,alt,shift,meta` order). Note that some key combinations (like `ctrl+c`, `ctrl+d`, etc.) are hardcoded to always be passed through to the terminal.
-
+- `window.__CS_PASSTHROUGH_SHORTCUTS__` : `Set<string>` - The list of key combinations that should be passed through to the terminal if terminal has focus. Each element is a key combination string such as `ctrl+shift+m` (all lowercase, modifiers in `ctrl,alt,shift,meta` order). Some key combinations (like `ctrl+c`, `ctrl+d`, etc.) are pre-added to this set by default.
 
 ## Available global functions
 
@@ -334,14 +331,32 @@ csNotify("Host deleted");
 
 CozySSH dispatches various `cs:*` events to the `window` object. You can listen for these events in your scripts (especially those with **Auto-run** enabled) to react to application state changes.
 
+### `cs:terminal-new`
+
+Fired when a new terminal is created. At this time, the terminal is not yet connected to the backend, so the WebSocket is not yet opened.
+
+- `detail.terminal`: `Terminal`, the xterm.js Terminal instance.
+- `detail.sessionId`: `string`, the session ID.
+- `detail.host`: `string`, the host name. `local` for local terminal.
+- `detail.is_active_terminal`: `boolean`, whether this is the active terminal.
+- `detail.params`: `URLSearchParams`, the connection parameters for the terminal. You can modify it, but don't reassign the `detail.params` variable itself. The parameters (default values):
+  - `host`: the host name. `local` for local terminal.
+  - `sessionId`: the session ID.
+  - `cloneFrom`: optional session ID to clone from.
+  - `rows`: optional terminal rows.
+  - `cols`: optional terminal columns.
+  - `remoteCommand`: optional command to execute on the remote host.
+
 ### `cs:terminal-change`
 
 Fired when the active terminal pane changes.
+
 - `detail.activePaneId`: The ID of the newly activated pane.
 
 ### `cs:terminal-connected`
 
 Fired when a terminal successfully connects to the backend.
+
 - `detail.terminal`: The `xterm.js` instance.
 - `detail.sessionId`: The session ID.
 - `detail.host`: The host name.
@@ -350,23 +365,27 @@ Fired when a terminal successfully connects to the backend.
 ### `cs:terminal-disconnected`
 
 Fired when a terminal connection is closed.
+
 - `detail.reason`: `'normal' | 'stolen' | 'fatal'`.
 - `detail.terminal`, `detail.sessionId`, `detail.host`, `detail.is_active_terminal`.
 
 ### `cs:terminal-resize`
 
 Fired when a terminal is resized.
+
 - `detail.cols`, `detail.rows`: New dimensions.
 - `detail.terminal`, `detail.sessionId`, `detail.host`, `detail.is_active_terminal`.
 
 ### `cs:terminal-data`
 
 Fired when data is received from the backend (excluding history restoration).
+
 - `detail.terminal`, `detail.sessionId`, `detail.host`, `detail.is_active_terminal`.
 
 ### `cs:shell-integration`
 
 Fired when any property of the shell integration state (CWD, command status, history) changes.
+
 - `detail.cwd`, `detail.user`, `detail.hostname`, `detail.isExecuting`, `detail.recentCommands`.
 - `detail.terminal`, `detail.sessionId`, `detail.host`, `detail.is_active_terminal`.
 

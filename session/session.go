@@ -192,13 +192,6 @@ func (s *Session) BroadcastTabState() {
 	s.mu.Unlock()
 }
 
-func boolToStr(b bool) string {
-	if b {
-		return "true"
-	}
-	return "false"
-}
-
 func (s *Session) Close() error {
 	return s.CloseFunc()
 }

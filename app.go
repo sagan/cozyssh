@@ -468,13 +468,34 @@ func Run(ctx context.Context, args []string) error {
 
 	mux.Handle("/api/fetch", securityMiddleware(auth.Middleware(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
-			urlStr := r.URL.Query().Get("url")
+			urlStr := r.Header.Get(constants.HEADER_X_COZYSSH_URL)
 			if urlStr == "" {
-				http.Error(w, "Missing url", http.StatusBadRequest)
+				for k, v := range r.Header {
+					if strings.EqualFold(k, constants.HEADER_X_COZYSSH_URL) && len(v) > 0 {
+						urlStr = v[0]
+						break
+					}
+				}
+			}
+			if urlStr == "" {
+				http.Error(w, "Missing X-CozySSH-Url header", http.StatusBadRequest)
 				return
 			}
 
-			req, err := http.NewRequest(r.Method, urlStr, r.Body)
+			method := r.Header.Get(constants.HEADER_X_COZYSSH_METHOD)
+			if method == "" {
+				for k, v := range r.Header {
+					if strings.EqualFold(k, constants.HEADER_X_COZYSSH_METHOD) && len(v) > 0 {
+						method = v[0]
+						break
+					}
+				}
+			}
+			if method == "" {
+				method = r.Method
+			}
+
+			req, err := http.NewRequest(method, urlStr, r.Body)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
@@ -485,8 +506,10 @@ func Run(ctx context.Context, args []string) error {
 					continue
 				}
 				targetKey := k
-				if strings.HasPrefix(strings.ToLower(k), "x-cozyssh-") {
-					targetKey = k[10:]
+				if strings.HasPrefix(strings.ToLower(k), constants.HEADER_X_COZYSSH_FETCH_PREFIX_LOWERCASE) {
+					targetKey = k[len(constants.HEADER_X_COZYSSH_FETCH_PREFIX_LOWERCASE):]
+				} else if strings.HasPrefix(strings.ToLower(k), constants.HEADER_X_COZYSSH_PREFIX_LOWERCASE) {
+					continue
 				}
 				for _, v := range vv {
 					req.Header.Add(targetKey, v)

@@ -130,7 +130,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent(CS_EVENT_TERMINAL_CHANGE, {
-      detail: { activePaneId } as CSEventDetailTerminalChange,
+      detail: { activePaneId } satisfies CSEventDetailTerminalChange,
     }));
   }, [activePaneId]);
 
@@ -221,7 +221,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
             [HEADER_CONTENT_TYPE]: MIME_JSON
           },
-          body: JSON.stringify({ host } as RecentUpdateRequest),
+          body: JSON.stringify({ host } satisfies RecentUpdateRequest),
         });
 
         // Optimistic update for local recents
@@ -274,7 +274,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
         [HEADER_CONTENT_TYPE]: MIME_JSON
       },
-      body: JSON.stringify({ id } as SessionsAttachRequest)
+      body: JSON.stringify({ id } satisfies SessionsAttachRequest)
     });
     const frontendId = `${id}-${Date.now()}`;
     setTabs(prev => [...prev, {
@@ -795,7 +795,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
         [HEADER_CONTENT_TYPE]: MIME_JSON,
       },
-      body: JSON.stringify({ id: backendSessionId } as TabsUnpinRequest)
+      body: JSON.stringify({ id: backendSessionId } satisfies TabsUnpinRequest)
     });
     setContextMenu(null);
   }, [tabs]);
@@ -816,7 +816,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
               [HEADER_CONTENT_TYPE]: MIME_JSON,
             },
-            body: JSON.stringify({ id: p.sessionId || p.id } as SessionsCloseRequest)
+            body: JSON.stringify({ id: p.sessionId || p.id } satisfies SessionsCloseRequest)
           }).catch(e => console.error(e));
         }
       });
@@ -857,7 +857,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
               [HEADER_CONTENT_TYPE]: MIME_JSON
             },
-            body: JSON.stringify({ id: paneToClose.sessionId || paneToClose.id } as SessionsCloseRequest)
+            body: JSON.stringify({ id: paneToClose.sessionId || paneToClose.id } satisfies SessionsCloseRequest)
           }).catch(e => console.error(e));
         }
       }
@@ -887,7 +887,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
         [HEADER_CONTENT_TYPE]: MIME_JSON,
       },
-      body: JSON.stringify({ id: backendSessionId, host, title: tab.title } as TabsPinRequest)
+      body: JSON.stringify({ id: backendSessionId, host, title: tab.title } satisfies TabsPinRequest)
     });
     setTabs(prev => prev.map(t => t.id === id ? { ...t, isPinned: true } : t));
     setContextMenu(null);
@@ -912,7 +912,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
         [HEADER_CONTENT_TYPE]: MIME_JSON,
       },
-      body: JSON.stringify({ id: backendSessionId, host, title: tab.title } as TabsLockRequest)
+      body: JSON.stringify({ id: backendSessionId, host, title: tab.title } satisfies TabsLockRequest)
     });
     setTabs(prev => prev.map(t => t.id === id ? { ...t, isLocked: true } : t));
     setContextMenu(null);
@@ -936,7 +936,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
         [HEADER_CONTENT_TYPE]: MIME_JSON,
       },
-      body: JSON.stringify({ id: paneId, host, title: tab.title } as TabsPinRequest)
+      body: JSON.stringify({ id: paneId, host, title: tab.title } satisfies TabsPinRequest)
     });
     setTabs(prev => prev.map(t => t.id === id ? { ...t, isLocked: false } : t));
     if (activeTabId === id) setActiveTabId(paneId);
@@ -960,7 +960,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
             [HEADER_CONTENT_TYPE]: MIME_JSON,
           },
-          body: JSON.stringify({ id: backendSessionId, title: newTitle } as TabsRenameRequest),
+          body: JSON.stringify({ id: backendSessionId, title: newTitle } satisfies TabsRenameRequest),
         });
       }
       setTabs(prev => prev.map(t => t.id === targetId ? { ...t, title: newTitle } : t));
@@ -1041,7 +1041,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setContextMenu(null);
   };
 
-  const handleButtonClick = useCallback(async (btn: ButtonData) => {
+  const handleButtonClick = useCallback(async (btn: Pick<ButtonData, 'id' | 'name' | 'type' | 'payload'>) => {
     window.navigator.vibrate?.(VIBRATE_PATTERN);
     switch (btn.type) {
       case 'send_string':
@@ -1315,7 +1315,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
         [HEADER_CONTENT_TYPE]: MIME_JSON,
       },
-      body: JSON.stringify({ id, direction } as ButtonsMoveRequest)
+      body: JSON.stringify({ id, direction } satisfies ButtonsMoveRequest)
     });
     setBtnMenuAnchor(null);
     fetch('/api/buttons', {
@@ -1371,6 +1371,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
     ? Math.max(0, panelHeight - keyboardHeight - barHeight)
     : 0);
 
+  const onTerminalFocus = useCallback(() => {
+  }, []);
+  const onTerminalBlur = useCallback(() => {
+    setExtraKeysOpen(false);
+  }, []);
 
   const [muiTheme, setMuiTheme] = useState(defaultTheme);
 
@@ -1399,7 +1404,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
           style={{
             // Pass the calculated height perfectly to CSS
             // '--keyboard-spacer-height': spacerHeight
-          } as React.CSSProperties}
+          } satisfies React.CSSProperties}
           sx={{
             flexGrow: 1,
             display: 'flex',
@@ -1430,6 +1435,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
           />
           <TerminalGrid
             terminalRefs={terminalRefs}
+            onTerminalBlur={onTerminalBlur}
+            onTerminalFocus={onTerminalFocus}
             isCtrlActive={isCtrlActive}
             setIsCtrlActive={setIsCtrlActive}
             isAltActive={isAltActive}

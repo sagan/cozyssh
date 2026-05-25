@@ -9,6 +9,9 @@ export const HEADER_COOKIE = "Cookie";
 export const HEADER_ORIGIN = "Origin";
 export const HEADER_REFERER = "Referer";
 export const HEADER_USER_AGENT = "User-Agent";
+export const HEADER_X_COZYSSH_FETCH_PREFIX = "X-CozySSH-Fetch-";
+export const HEADER_X_COZYSSH_URL = "X-CozySSH-Url";
+export const HEADER_X_COZYSSH_METHOD = "X-CozySSH-Method";
 export const MIME_JSON = "application/json";
 
 // export const WS_MSG_PREFIX_STATE = "STATE:";
@@ -47,13 +50,13 @@ export const BUILTIN_BUTTONS = [
   ...TERMINAL_FUNCTIONS.map((f) => ({
     id: `builtin-${f.value}`,
     name: f.label,
-    type: "terminal_function",
+    type: "terminal_function" as const,
     payload: f.value,
   })),
   ...MISC_FUNCTIONS.map((f) => ({
     id: `builtin-${f.value}`,
     name: f.label,
-    type: "misc",
+    type: "misc" as const,
     payload: f.value,
   })),
 ] as const;

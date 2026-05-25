@@ -29,6 +29,9 @@ import {
   HEADER_ORIGIN,
   HEADER_REFERER,
   HEADER_USER_AGENT,
+  HEADER_X_COZYSSH_FETCH_PREFIX,
+  HEADER_X_COZYSSH_URL,
+  HEADER_X_COZYSSH_METHOD,
   METHOD_DELETE,
   METHOD_GET,
   METHOD_POST,
@@ -106,7 +109,7 @@ const moduleCache: Record<string, Record<string, unknown>> = {};
 window.__CS_MODULECACHE__ = moduleCache;
 
 export async function runScript(
-  btn: ButtonData,
+  btn: Pick<ButtonData, 'id' | 'name' | 'type' | 'payload'>,
   notify: (msg: string, severity?: Severity) => void,
   getTerminalRefs: () => TerminalRefMap
 ) {
@@ -341,14 +344,18 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
 
   window.csFetch = async (url: string, options = {}) => {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    const proxyUrl = `/api/fetch?url=${encodeURIComponent(url)}`;
+    const proxyUrl = `/api/fetch`;
     const rawHeaders = new Headers(options.headers);
     const headers: Record<string, string> = {};
     const restricted = [HEADER_AUTHORIZATION, HEADER_REFERER, HEADER_ORIGIN, HEADER_USER_AGENT, HEADER_COOKIE];
     headers[HEADER_AUTHORIZATION] = HEADER_AUTHORIZATION_BEARER_PREFIX + token;
+    headers[HEADER_X_COZYSSH_URL] = url;
+    if (options.method) {
+      headers[HEADER_X_COZYSSH_METHOD] = options.method;
+    }
     for (const key in rawHeaders) {
       if (restricted.includes(key.toLowerCase())) {
-        headers[`X-CozySSH-${key}`] = rawHeaders.get(key)!;
+        headers[HEADER_X_COZYSSH_FETCH_PREFIX + key] = rawHeaders.get(key)!;
       } else {
         headers[key] = rawHeaders.get(key)!;
       }
@@ -364,7 +371,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
         [HEADER_CONTENT_TYPE]: MIME_JSON,
       },
-      body: JSON.stringify({ cmdline } as ExecRequest),
+      body: JSON.stringify({ cmdline } satisfies ExecRequest),
     });
     if (!res.ok) {
       throw new Error("Exec failed: " + res.statusText);

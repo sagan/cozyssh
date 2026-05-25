@@ -401,7 +401,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
           [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
           [HEADER_CONTENT_TYPE]: MIME_JSON
         },
-        body: JSON.stringify({ newPath } as FileRenameRequest),
+        body: JSON.stringify({ newPath } satisfies FileRenameRequest),
       });
       if (res.ok) {
         fetchFiles(currentPath);
@@ -452,7 +452,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
           [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
           [HEADER_CONTENT_TYPE]: MIME_JSON,
         },
-        body: JSON.stringify({ name } as FileMkdirRequest)
+        body: JSON.stringify({ name } satisfies FileMkdirRequest)
       });
       if (res.ok) {
         fetchFiles(currentPath);

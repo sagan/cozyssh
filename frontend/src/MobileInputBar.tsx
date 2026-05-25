@@ -52,9 +52,9 @@ const BAR_GROUPS: KeyDef[][] = [
     { label: 'Esc', seq: '\x1b' },
     { label: '⇥', seq: '\x09' }],
   [
+    { label: '←', seq: '\x1b[D' },
     { label: '↑', seq: '\x1b[A' },
     { label: '↓', seq: '\x1b[B' },
-    { label: '←', seq: '\x1b[D' },
     { label: '→', seq: '\x1b[C' },
   ],
   [
@@ -69,9 +69,9 @@ const BAR_GROUPS: KeyDef[][] = [
 const EXTRA_ROWS: KeyDef[][] = [
   // Arrow keys first — always reachable even on narrow screens where the top row overflows
   [
+    { label: '←', seq: '\x1b[D' },
     { label: '↑', seq: '\x1b[A' },
     { label: '↓', seq: '\x1b[B' },
-    { label: '←', seq: '\x1b[D' },
     { label: '→', seq: '\x1b[C' },
     { label: '|', seq: '|' },
     { label: '/', seq: '/' },

@@ -30,7 +30,7 @@ export interface ButtonBarProps {
   setActiveGroup: (g: string) => void;
   groups: string[];
   filteredButtons: ButtonData[];
-  handleButtonClick: (btn: ButtonData) => void;
+  handleButtonClick: (btn: Pick<ButtonData, 'id' | 'name' | 'type' | 'payload'>) => void;
   setBtnMenuAnchor: (obj: { anchor: HTMLElement, btn: ButtonData } | null) => void;
   setLastMenuBtn: (btn: ButtonData) => void;
   onNewButtonClick: () => void;

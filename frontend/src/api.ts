@@ -29,12 +29,12 @@ export interface HostData {
     hostname: string;
     port: string;
     user: string;
-    proxy_jump: string;
-    remote_command: string;
-    tags: string[];
-    comment: string;
-    source: "config" | "known_hosts" | "";
-    identity_file: string;
+    proxy_jump?: string;
+    remote_command?: string;
+    tags?: string[];
+    comment?: string;
+    source?: "config" | "known_hosts" | "";
+    identity_file?: string;
     is_auto?: boolean;
     is_favourite?: boolean;
 }
@@ -143,7 +143,7 @@ export interface ScratchpadPage {
     id: string;
     title: string;
     content: string;
-    locked: boolean;
+    locked?: boolean;
     lastUpdated: number;
 }
 export interface ScratchpadData {

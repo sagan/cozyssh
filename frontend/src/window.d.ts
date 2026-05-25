@@ -28,7 +28,7 @@ declare global {
     __CS_AUTORUN_DONE__: undefined | number;
     __CS_MODULECACHE__: Record<string, Record<string, unknown>>;
     __CS_VERSION__: string;
-    __CS_PASSTHROUGH_SHORTCUTS__: undefined | Set<string> | string[];
+    __CS_PASSTHROUGH_SHORTCUTS__: Set<string>;
     csFocus: (paneId?: string) => void;
     csNotify: (msg: string, severity: Severity = "info") => void;
     csOpen: (target: HostData | string | (HostData | string)[], options?: { name?: string }) => void;

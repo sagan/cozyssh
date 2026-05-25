@@ -16,6 +16,7 @@ import (
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 
+	"cozyssh/common"
 	"cozyssh/config"
 	"cozyssh/models"
 )
@@ -404,10 +405,7 @@ func getSSHClient(name string, term TerminalUI) (*ssh.Client, []io.Closer, strin
 
 	host := name
 	port := "22"
-	user := os.Getenv("USER")
-	if user == "" {
-		user = "root"
-	}
+	user := common.GetUserName()
 	var password string
 
 	// Handle user:pass@host:port or user@host:port format
@@ -710,10 +708,7 @@ func ExpandTokens(cmd, host, port, user, name string) string {
 	)
 
 	// %u is local user
-	localUser := os.Getenv("USER")
-	if localUser == "" {
-		localUser = os.Getenv("USERNAME") // Windows
-	}
+	localUser := common.GetUserName()
 	if localUser != "" {
 		cmd = strings.ReplaceAll(cmd, "%u", localUser)
 	}

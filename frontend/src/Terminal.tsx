@@ -10,7 +10,7 @@ import '@xterm/xterm/css/xterm.css';
 
 import type { WsResizeMsg, WsTerminalMessage } from './api';
 import { BROWSER_STORAGE_KEY_TOKEN } from './constants';
-import { CS_EVENT_TERMINAL_DISCONNECTED, CS_EVENT_SHELL_INTEGRATION, CS_EVENT_TERMINAL_RESIZE, getIntVar, getKeyCombination, type CommandHistoryEntry, type CSEventDetailShellIntegration, type CSEventDetailTerminalConnected, type CSEventDetailTerminalData, type CSEventDetailTerminalDisconnected, type CSEventDetailTerminalResize, type ShellIntegration, CS_EVENT_TERMINAL_DATA, CS_EVENT_TERMINAL_CONNECTED } from './common';
+import { CS_EVENT_TERMINAL_DISCONNECTED, CS_EVENT_SHELL_INTEGRATION, CS_EVENT_TERMINAL_RESIZE, getIntVar, getKeyCombination, type CommandHistoryEntry, type CSEventDetailShellIntegration, type CSEventDetailTerminalConnected, type CSEventDetailTerminalData, type CSEventDetailTerminalDisconnected, type CSEventDetailTerminalResize, type ShellIntegration, CS_EVENT_TERMINAL_DATA, CS_EVENT_TERMINAL_CONNECTED, CS_EVENT_TERMINAL_NEW, type CSEventDetailTerminalNew } from './common';
 
 export interface TerminalHandle {
   sendData: (data: string) => void;
@@ -37,12 +37,14 @@ export interface TerminalHandle {
 
 interface TerminalProps {
   host: string;
-  sessionId?: string;
-  isActive?: boolean;
+  sessionId: string;
+  isActive: boolean;
   isCtrlActive?: boolean;
   onCtrlDone?: () => void;
   isAltActive?: boolean;
   onAltDone?: () => void;
+  onTerminalFocus: () => void;
+  onTerminalBlur: () => void;
   onStateChange?: (state: string) => void;
   onTabStateChange?: (state: { isPinned: boolean, isLocked: boolean }) => void;
   onStolen?: () => void;
@@ -98,10 +100,13 @@ const terminalKeyShortcuts = new Set([
   "alt+.",   // Insert last argument of previous command
 ]);
 
+window.__CS_PASSTHROUGH_SHORTCUTS__ = terminalKeyShortcuts;
+
 const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
   host, sessionId, isActive, isCtrlActive, onCtrlDone, isAltActive, onAltDone, onStateChange, onTabStateChange,
   onStolen, onManualReconnect, onCwdChange, onShellIntegrationChange, onDataReceived,
   cloneFrom, isTouch, vars, localVars,
+  onTerminalBlur, onTerminalFocus,
 }, ref) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
@@ -123,12 +128,12 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
     onShellIntegrationChange?.(shellIntegrationRef.current);
     window.dispatchEvent(new CustomEvent(CS_EVENT_SHELL_INTEGRATION, {
       detail: {
-        terminal: xtermRef.current,
+        terminal: xtermRef.current!,
         sessionId,
         host,
         is_active_terminal: isActiveRef.current,
         shellIntegration: shellIntegrationRef.current,
-      } as CSEventDetailShellIntegration,
+      } satisfies CSEventDetailShellIntegration,
     }));
     if (updates.cwd) {
       onCwdChange?.(updates.cwd);
@@ -280,14 +285,21 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
     term.open(terminalRef.current!);
     xtermRef.current = term;
 
-    if (getIntVar(vars, localVars, "cs_nocompletions") === 1) {
-      const textarea = term.textarea;
-      if (textarea) {
+
+    const textarea = term.textarea;
+    if (textarea) {
+      if (getIntVar(vars, localVars, "cs_nocompletions") === 1) {
         textarea.setAttribute('autocomplete', 'off');
         textarea.setAttribute('autocorrect', 'off');
         textarea.setAttribute('autocapitalize', 'off');
         textarea.setAttribute('spellcheck', 'false');
       }
+      textarea.addEventListener("blur", () => {
+        onTerminalBlur();
+      })
+      textarea.addEventListener("focus", () => {
+        onTerminalFocus();
+      })
     }
 
     if (getIntVar(vars, localVars, "cs_noimage") !== 1) {
@@ -486,7 +498,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
       window.dispatchEvent(new CustomEvent(CS_EVENT_TERMINAL_RESIZE, {
         detail: {
           terminal: term, cols, rows, sessionId, host, is_active_terminal: isActive
-        } as CSEventDetailTerminalResize,
+        } satisfies CSEventDetailTerminalResize,
       }));
     });
 
@@ -499,7 +511,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
           lastKnownSizeRef.current = { cols: term.cols, rows: term.rows };
           const ws = wsRef.current;
           if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows } as WsResizeMsg));
+            ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows } satisfies WsResizeMsg));
           }
         });
       }
@@ -519,19 +531,30 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
       if (terminalKeyShortcuts.has(kcomb)) {
         return true;
       }
-      const passthrough = window.__CS_PASSTHROUGH_SHORTCUTS__;
-      if (passthrough && ("has" in passthrough ? passthrough.has(kcomb) : passthrough.includes?.(kcomb))) {
-        return true;
-      }
       return false;
     });
 
+
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    let wsUrl = `${protocol}//${window.location.host}/api/ws?host=${encodeURIComponent(host)}&sessionId=${encodeURIComponent(sessionId || '')}`;
-    if (cloneFrom) {
-      wsUrl += `&cloneFrom=${encodeURIComponent(cloneFrom)}`;
-    }
+    const params = new URLSearchParams({
+      host,
+      sessionId: sessionId || '',
+      cloneFrom: cloneFrom || '',
+    })
+
+    window.dispatchEvent(new CustomEvent(CS_EVENT_TERMINAL_NEW, {
+      detail: {
+        terminal: term,
+        sessionId,
+        host,
+        params,
+        is_active_terminal: isActive,
+      } satisfies CSEventDetailTerminalNew,
+    }));
+
+    let wsUrl = `${protocol}//${window.location.host}/api/ws?${params.toString()}`;
 
     let isDisposed = false;
     let isDead = false;
@@ -563,7 +586,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
 
       let finalUrl = wsUrl + `&cols=${cols}&rows=${rows}`;
       if (forceReconnectRef.current) {
-        finalUrl += '&reconnect=true';
+        finalUrl += '&reconnect=1';
         forceReconnectRef.current = false;
         xtermRef.current?.reset();
       }
@@ -584,11 +607,11 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
           return;
         }
         // Send initial resize using correct dimensions
-        ws.send(JSON.stringify({ type: 'resize', cols, rows } as WsResizeMsg));
+        ws.send(JSON.stringify({ type: 'resize', cols, rows } satisfies WsResizeMsg));
         window.dispatchEvent(new CustomEvent(CS_EVENT_TERMINAL_CONNECTED, {
           detail: {
             terminal: term, sessionId, host, is_active_terminal: isActive
-          } as CSEventDetailTerminalConnected,
+          } satisfies CSEventDetailTerminalConnected,
         }));
       };
 
@@ -620,7 +643,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
                 window.dispatchEvent(new CustomEvent(CS_EVENT_TERMINAL_DISCONNECTED, {
                   detail: {
                     terminal: term, sessionId, host, is_active_terminal: isActive, reason: deathType
-                  } as CSEventDetailTerminalDisconnected,
+                  } satisfies CSEventDetailTerminalDisconnected,
                 }));
                 return;
               }
@@ -636,7 +659,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
             window.dispatchEvent(new CustomEvent(CS_EVENT_TERMINAL_DATA, {
               detail: {
                 terminal: term, sessionId, host, is_active_terminal: isActive
-              } as CSEventDetailTerminalData,
+              } satisfies CSEventDetailTerminalData,
             }));
           }
           term.write(ev.data);
@@ -654,7 +677,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
               window.dispatchEvent(new CustomEvent(CS_EVENT_TERMINAL_DATA, {
                 detail: {
                   terminal: term, sessionId, host, is_active_terminal: isActive
-                } as CSEventDetailTerminalData,
+                } satisfies CSEventDetailTerminalData,
               }));
             }
             term.write(buffer);
@@ -670,7 +693,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
         window.dispatchEvent(new CustomEvent(CS_EVENT_TERMINAL_DISCONNECTED, {
           detail: {
             terminal: term, sessionId, host, is_active_terminal: isActive, reason: 'normal'
-          } as CSEventDetailTerminalDisconnected,
+          } satisfies CSEventDetailTerminalDisconnected,
         }));
         reconnectTimer = setTimeout(connectWS, 2000);
       };
@@ -826,7 +849,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
           lastKnownSizeRef.current = { cols, rows };
           const ws = wsRef.current;
           if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'resize', cols, rows } as WsResizeMsg));
+            ws.send(JSON.stringify({ type: 'resize', cols, rows } satisfies WsResizeMsg));
           }
         }
       }, 100);

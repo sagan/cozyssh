@@ -3,6 +3,7 @@ package localpty
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/aymanbagabas/go-pty"
@@ -26,28 +27,39 @@ func init() {
 			}
 		}
 
-		// Windows: try common shells
+		var shells []string
+		// try common shells
 		if os.PathSeparator == '\\' {
-			for _, shell := range []string{"pwsh", "powershell"} {
-				if path, err := exec.LookPath(shell); err == nil {
-					return path
-				}
+			shells = []string{"pwsh", "powershell"}
+		} else {
+			shells = []string{"zsh", "bash", "sh"}
+		}
+		for _, shell := range shells {
+			if path, err := exec.LookPath(shell); err == nil {
+				return path
 			}
 		}
-
-		// Linux/macOS: default to bash
-		return "bash"
+		return "sh"
 	})()
 
-	if strings.HasSuffix(DefaultShell, "/powershell.exe") || strings.HasSuffix(DefaultShell, `\powershell.exe`) {
+	shellBasename := strings.TrimSuffix(strings.ToLower(filepath.Base(DefaultShell)), ".exe")
+	if shellBasename == "powershell" {
 		DefaultShellIsLegacyPowershell = true
 	}
 }
 
-func Start() (*LocalSession, error) {
+func Start(initialCmd string) (*LocalSession, error) {
 	args := []string{}
 	if !DefaultShellIsLegacyPowershell {
 		args = append(args, "-l") // linux shell / pwsh has -l flag to set up a login shell
+	}
+
+	if initialCmd != "" {
+		if DefaultShellIsLegacyPowershell {
+			args = append(args, "-Command", initialCmd)
+		} else {
+			args = append(args, "-c", initialCmd)
+		}
 	}
 
 	p, err := pty.New()

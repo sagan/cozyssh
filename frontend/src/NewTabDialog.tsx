@@ -50,7 +50,7 @@ interface NewTabDialogProps {
   onSelect: (host: string) => void;
   onSelectTab: (tabId: string) => void;
   onAttachPinned: (id: string, host: string, title: string, isLocked: boolean) => void;
-  onExecuteButton: (btn: ButtonData) => void;
+  onExecuteButton: (btn: Pick<ButtonData, 'id' | 'name' | 'type' | 'payload'>) => void;
 }
 
 export default function NewTabDialog({
@@ -136,7 +136,9 @@ export default function NewTabDialog({
   }, [localPinned, tabs, filter, viewMode]);
 
   const allFilteredButtons = useMemo(() => {
-    if (viewMode !== 'buttons') return { matchedUser: [], matchedBuiltin: [] };
+    if (viewMode !== 'buttons') {
+      return { matchedUser: [], matchedBuiltin: [] };
+    }
     const f = filter.toLowerCase();
 
     const matchedUser = buttons.filter(b =>
@@ -165,7 +167,9 @@ export default function NewTabDialog({
   }, [allFilteredButtons, activeGroup, viewMode]);
 
   const builtinButtons = useMemo(() => {
-    if (viewMode !== 'buttons') return [];
+    if (viewMode !== 'buttons') {
+      return [];
+    }
     return allFilteredButtons.matchedBuiltin;
   }, [allFilteredButtons, viewMode]);
 
@@ -181,7 +185,7 @@ export default function NewTabDialog({
       id?: string,
       host?: string,
       isLocked?: boolean,
-      btn?: ButtonData,
+      btn?: Pick<ButtonData, 'id' | 'name' | 'type' | 'payload'>,
       tags?: string[]
     }[] = [];
 
@@ -297,7 +301,7 @@ export default function NewTabDialog({
           value: b.id,
           label: b.name,
           subtitle: `Built-in | Type: ${b.type} | Payload: ${b.payload}`,
-          btn: b as ButtonData,
+          btn: b,
         });
       });
     }
@@ -452,6 +456,8 @@ export default function NewTabDialog({
 
   return (
     <Dialog
+      id="new-tab-dialog"
+      data-view={viewMode}
       open={open}
       onClose={onClose}
       fullWidth

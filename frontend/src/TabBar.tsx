@@ -86,6 +86,8 @@ export default function TabBar({
             >
               {tabs.map((tab) => (
                 <Tab
+                  className='tab'
+                  data-tab-id={tab.id}
                   key={tab.id}
                   value={tab.id}
                   onContextMenu={(e) => handleContextMenu(e, tab.id)}
@@ -142,7 +144,7 @@ export default function TabBar({
             </Tabs>
           </Box>
           <IconButton
-            size="small" title='New Tab (Alt+T)'
+            size="small" title='New Tab (Alt+O)'
             onClick={() => {
               setNewTabDialogInitialViewMode('servers');
               setNewTabDialogOpen(true);

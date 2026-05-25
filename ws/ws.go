@@ -99,8 +99,8 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 
 	header := make(http.Header)
 	if protocols := r.Header.Get(constants.HEADER_SEC_WEBSOCKET_PROTOCOL); protocols != "" {
-		parts := strings.Split(protocols, ",")
-		for _, p := range parts {
+		parts := strings.SplitSeq(protocols, ",")
+		for p := range parts {
 			p = strings.TrimSpace(p)
 			if strings.HasPrefix(p, "cozy.") {
 				header.Set(constants.HEADER_SEC_WEBSOCKET_PROTOCOL, p)
@@ -116,15 +116,16 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	reconnect := r.URL.Query().Get("reconnect") == "true"
+	reconnect := r.URL.Query().Get("reconnect") == "1"
 	cloneFrom := r.URL.Query().Get("cloneFrom")
 	host := r.URL.Query().Get("host")
 	sessionID := r.URL.Query().Get("sessionId")
 	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
 	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
+	sessionRemoteCommand := r.URL.Query().Get("remoteCommand")
 
-	log.Printf("WS: New connection. host=%s, sessionId=%s, reconnect=%v, cloneFrom=%s, size=%dx%d",
-		host, sessionID, reconnect, cloneFrom, cols, rows)
+	log.Printf("WS: New connection. host=%s, sessionId=%s, reconnect=%v, cloneFrom=%s, size=%dx%d, remoteCommand=%s",
+		host, sessionID, reconnect, cloneFrom, cols, rows, sessionRemoteCommand)
 	if sessionID == "" {
 		sessionID = host // Fallback to host if no unique ID provided
 	}
@@ -139,7 +140,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	s := session.GlobalManager.Get(sessionID)
 	if s == nil {
 		if host == "" || host == "local" {
-			ls, err := localpty.Start()
+			ls, err := localpty.Start(sessionRemoteCommand)
 			if err != nil {
 				log.Println("pty start error:", err)
 				return
@@ -177,6 +178,10 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			}
 			stdout, _ := sshSession.StdoutPipe()
 			stdin, _ := sshSession.StdinPipe()
+
+			if sessionRemoteCommand != "" {
+				remoteCommand = sessionRemoteCommand
+			}
 
 			if remoteCommand != "" {
 				// Expand tokens

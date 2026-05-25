@@ -5,21 +5,12 @@ import { EditorView } from "@codemirror/view";
 import AddIcon from '@mui/icons-material/Add';
 import LockIcon from '@mui/icons-material/Lock';
 
+import type {
+  ScratchpadData, ScratchpadDeleteMsg, ScratchpadHelloMsg,
+  ScratchpadPage, ScratchpadSyncMsg,
+} from './api';
 import { BROWSER_STORAGE_KEY_TOKEN } from './constants';
 import type { ScratchpadSyncState } from './common';
-import type { ScratchpadDeleteMsg, ScratchpadHelloMsg, ScratchpadSyncMsg } from './api';
-
-export interface ScratchpadPage {
-  id: string;
-  title: string;
-  content: string;
-  locked?: boolean;
-  lastUpdated: number;
-}
-
-export interface ScratchpadData {
-  pages: ScratchpadPage[];
-}
 
 export interface ScratchpadHandle {
   focus: () => void;
@@ -112,11 +103,13 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
 
     ws.onopen = () => {
       setSyncState('synced');
-      if (onSyncStateChange) onSyncStateChange('synced');
-      ws.send(JSON.stringify({ type: 'hello' } as ScratchpadHelloMsg));
+      if (onSyncStateChange) {
+        onSyncStateChange('synced');
+      }
+      ws.send(JSON.stringify({ type: 'hello' } satisfies ScratchpadHelloMsg));
       // Push any offline modifications unconditionally. Backend resolves conflicts.
       if (dataRef.current.pages.length > 0) {
-        ws.send(JSON.stringify({ type: 'sync', data: dataRef.current } as ScratchpadSyncMsg));
+        ws.send(JSON.stringify({ type: 'sync', data: dataRef.current } satisfies ScratchpadSyncMsg));
       }
     };
 
@@ -169,7 +162,9 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
 
     ws.onclose = () => {
       setSyncState('offline');
-      if (onSyncStateChange) onSyncStateChange('offline');
+      if (onSyncStateChange) {
+        onSyncStateChange('offline');
+      }
       if (wsRef.current === ws) {
         wsRef.current = null;
         clearTimeout(wsTimerRef.current);
@@ -204,18 +199,25 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
   }, []);
 
   const triggerSync = (forceAll = false) => {
-    if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+    if (wsRef.current?.readyState !== WebSocket.OPEN) {
+      return;
+    }
 
     const dataToSend: ScratchpadData = { pages: [] };
     if (forceAll) {
       dataToSend.pages = dataRef.current.pages;
     } else {
-      const dirty = Array.from(dirtyRef.current).map(id => dataRef.current.pages.find(p => p.id === id)).filter(Boolean) as ScratchpadPage[];
-      if (dirty.length === 0) return;
+      const dirty: ScratchpadPage[] = Array.from(dirtyRef.current).flatMap(id => {
+        const page = dataRef.current.pages.find(p => p.id === id);
+        return page ? [page] : [];
+      });
+      if (dirty.length === 0) {
+        return;
+      }
       dataToSend.pages = dirty;
     }
 
-    const payload = JSON.stringify({ type: 'sync', data: dataToSend } as ScratchpadSyncMsg);
+    const payload = JSON.stringify({ type: 'sync', data: dataToSend } satisfies ScratchpadSyncMsg);
     if (payload === lastSyncDataRef.current && !forceAll) {
       return;
     }
@@ -317,7 +319,7 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
       if (onSyncStateChange) {
         onSyncStateChange('syncing');
       }
-      wsRef.current?.send(JSON.stringify({ type: 'delete', id: contextMenu.pageId } as ScratchpadDeleteMsg));
+      wsRef.current?.send(JSON.stringify({ type: 'delete', id: contextMenu.pageId } satisfies ScratchpadDeleteMsg));
       if (activePageId === contextMenu.pageId) {
         setActivePageId(newData.pages[0].id);
       }

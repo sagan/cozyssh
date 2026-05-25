@@ -20,6 +20,8 @@ export interface TerminalGridProps {
   setIsCtrlActive: (v: boolean) => void;
   isAltActive: boolean;
   setIsAltActive: (v: boolean) => void;
+  onTerminalFocus: () => void;
+  onTerminalBlur: () => void;
   scratchpadSyncState: ScratchpadSyncState;
   setScratchpadSyncState: (v: ScratchpadSyncState) => void;
   handleTerminalData: (tabId: string) => void;
@@ -45,7 +47,7 @@ export interface TerminalGridProps {
 
 export default function TerminalGrid({
   terminalRefs, isCtrlActive, setIsCtrlActive, isAltActive, setIsAltActive,
-  setScratchpadSyncState,
+  setScratchpadSyncState, onTerminalFocus, onTerminalBlur,
   handleTerminalData, isTouch, isMobile, mobileAppletsOpen, setMobileAppletsOpen,
   applets, setMobileOpen, setNewTabDialogOpen, setNewTabDialogInitialViewMode,
   handleTouchStart, handleTouchEnd, handleSendKey, VIBRATE_PATTERN,
@@ -68,13 +70,17 @@ export default function TerminalGrid({
 
   useEffect(() => {
     const el = termAreaRef.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
 
     let startX = 0;
     let startY = 0;
 
     const onTouchStart = (e: TouchEvent) => {
-      if (!gestureModeRef.current) return;
+      if (!gestureModeRef.current) {
+        return;
+      }
       // CRITICAL: Stop the event from ever reaching xterm.js
       e.stopPropagation();
       e.preventDefault();
@@ -83,19 +89,25 @@ export default function TerminalGrid({
     };
 
     const onTouchMove = (e: TouchEvent) => {
-      if (!gestureModeRef.current) return;
+      if (!gestureModeRef.current) {
+        return;
+      }
       e.stopPropagation();
       e.preventDefault();
     };
 
     const onTouchEnd = (e: TouchEvent) => {
-      if (!gestureModeRef.current) return;
+      if (!gestureModeRef.current) {
+        return;
+      }
       e.stopPropagation();
       e.preventDefault();
       const diffX = e.changedTouches[0].clientX - startX;
       const diffY = e.changedTouches[0].clientY - startY;
       const THRESHOLD = 40;
-      if (Math.abs(diffX) < THRESHOLD && Math.abs(diffY) < THRESHOLD) return;
+      if (Math.abs(diffX) < THRESHOLD && Math.abs(diffY) < THRESHOLD) {
+        return;
+      }
       const isHoriz = Math.abs(diffX) > Math.abs(diffY);
       if (isHoriz) {
         handleSendKeyRef.current(diffX > 0 ? '\x1b[C' : '\x1b[D');
@@ -132,6 +144,7 @@ export default function TerminalGrid({
           <Box
             className="terminal-tab-wrap"
             key={tab.id}
+            data-tab-id={tab.id}
             sx={{
               position: 'absolute',
               inset: 0,
@@ -178,6 +191,8 @@ export default function TerminalGrid({
                         isActive={activeTabId === tab.id && activePaneId === pane.id}
                         isCtrlActive={isCtrlActive}
                         onCtrlDone={() => setIsCtrlActive(false)}
+                        onTerminalBlur={onTerminalBlur}
+                        onTerminalFocus={onTerminalFocus}
                         isAltActive={isAltActive}
                         onAltDone={() => setIsAltActive(false)}
                         onStateChange={(state) => {
@@ -290,7 +305,7 @@ export default function TerminalGrid({
                   <MenuIcon sx={{ fontSize: 32 }} />
                 </IconButton>
               </Tooltip>
-              <Tooltip title="New Tab (Alt+T)">
+              <Tooltip title="New Tab (Alt+O)">
                 <IconButton
                   onClick={() => { setNewTabDialogInitialViewMode('servers'); setNewTabDialogOpen(true); }}
                   color="primary"

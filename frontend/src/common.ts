@@ -91,6 +91,14 @@ export type CSEventDetailActiveGroupChange = {
   group: string;
 };
 
+export type CSEventDetailTerminalNew = {
+  terminal: Terminal;
+  sessionId: string;
+  host: string;
+  params: URLSearchParams;
+  is_active_terminal: boolean;
+};
+
 export type CSEventDetailTerminalChange = {
   activePaneId: string;
 };
@@ -135,6 +143,7 @@ export type CSEventDetailShellIntegration = {
 };
 
 export const CS_EVENT_SHELL_INTEGRATION = "cs:shell-integration";
+export const CS_EVENT_TERMINAL_NEW = "cs:terminal-new";
 export const CS_EVENT_TERMINAL_CHANGE = "cs:terminal-change";
 export const CS_EVENT_TERMINAL_RESIZE = "cs:terminal-resize";
 export const CS_EVENT_TERMINAL_CONNECTED = "cs:terminal-connected";

@@ -194,7 +194,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           // custom event so Dashboard can update its local activeGroup state.
           window.dispatchEvent(
             new CustomEvent(CS_EVENT_ACTIVE_GROUP_CHANGE, {
-              detail: { group: groups[nextIdx] } as CSEventDetailActiveGroupChange,
+              detail: { group: groups[nextIdx] } satisfies CSEventDetailActiveGroupChange,
             })
           );
           return;

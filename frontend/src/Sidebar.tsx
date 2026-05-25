@@ -121,7 +121,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
         [HEADER_CONTENT_TYPE]: MIME_JSON,
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
       },
-      body: JSON.stringify({ new_password: newPwd } as PasswordUpdateRequest)
+      body: JSON.stringify({ new_password: newPwd } satisfies PasswordUpdateRequest)
     });
     if (res.ok) {
       alert('Password updated! You will be logged out.');
@@ -585,14 +585,24 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
       >
         <MenuItem onClick={handleEditOpen}>Edit {contextMenu?.target.name}</MenuItem>
         <MenuItem onClick={() => {
-          if (!contextMenu) return;
+          if (!contextMenu) {
+            return;
+          }
+          window.open(`${window.location.origin}/#${contextMenu?.target.name}`, '_blank', 'noopener');
+        }}>Open In New Window</MenuItem>
+        <MenuItem onClick={() => {
+          if (!contextMenu) {
+            return;
+          }
           const url = `${window.location.origin}/#${contextMenu?.target.source !== 'known_hosts'
             ? contextMenu.target.name : `${contextMenu.target.user || "root"}@${contextMenu.target.hostname}`}`;
           navigator.clipboard.writeText(url);
           closeMenu();
         }}>Copy URL</MenuItem>
         <MenuItem onClick={() => {
-          if (!contextMenu) return;
+          if (!contextMenu) {
+            return;
+          }
           let command = `ssh`;
           if (contextMenu.target.identity_file) {
             command += ` -i "${contextMenu.target.identity_file}"`;
@@ -625,7 +635,9 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
           closeMenu();
         }}>Copy SSH Command</MenuItem>
         <MenuItem onClick={() => {
-          if (!contextMenu) return;
+          if (!contextMenu) {
+            return;
+          }
           let command = `ssh-copy-id`;
           if (contextMenu.target.identity_file) {
             command += ` -i "${contextMenu.target.identity_file}"`;
@@ -767,8 +779,9 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
       </Dialog>
 
       {/* Host CRUD Dialog */}
-      <Dialog open={dialogOpen} onClose={handleCloseHostDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>{editingName ? `Edit Host: ${editingName}` : 'Add New Server'}</DialogTitle>
+      <Dialog id="edit-host-dialog" data-host-name={editingName}
+        open={dialogOpen} onClose={handleCloseHostDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>{editingName ? `Edit Host ${editingName}` : 'Add Host'}</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <TextField fullWidth label="Alias Name" size="small" value={formData.name}

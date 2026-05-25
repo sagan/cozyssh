@@ -75,7 +75,7 @@ export interface DialogManagerProps {
   terminalRefs: React.RefObject<{ [key: string]: TerminalHandle | ScratchpadHandle | null }>;
   toasts: Toast[];
   setToasts: React.Dispatch<React.SetStateAction<Toast[]>>;
-  handleButtonClick: (btn: ButtonData) => Promise<void>;
+  handleButtonClick: (btn: Pick<ButtonData, 'id' | 'name' | 'type' | 'payload'>) => Promise<void>;
 }
 
 const PluginManagerUrl = "https://raw.githubusercontent.com/sagan/cozyssh-plugins/refs/heads/master/PluginManager.tsx";
@@ -391,7 +391,8 @@ export default function DialogManager({
           sx={{ color: 'error.main' }}>Delete Button</MenuItem>
       </Menu>
 
-      <Dialog open={buttonDialogOpen} onClose={handleCloseBtnDialog} fullWidth maxWidth="lg">
+      <Dialog id="edit-button-dialog" data-button-id={editingButton?.id || ""}
+        open={buttonDialogOpen} onClose={handleCloseBtnDialog} fullWidth maxWidth="lg">
         <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pr: 1.5 }}>
           <span>{editingButton ? 'Edit Button ' + editingButton.id : 'Add Button'}</span>
           <IconButton
@@ -715,7 +716,7 @@ export default function DialogManager({
                     hostname: hostname,
                     user: user,
                     port: '22'
-                  } as HostData)
+                  } satisfies HostData)
                 });
                 handleRefresh(); // Refresh hosts list
               } catch (e) {

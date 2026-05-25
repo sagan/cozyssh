@@ -28,7 +28,7 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess?: (data: Full
       headers: {
         [HEADER_CONTENT_TYPE]: MIME_JSON,
       },
-      body: JSON.stringify({ password } as LoginRequest),
+      body: JSON.stringify({ password } satisfies LoginRequest),
     });
     if (res.ok) {
       const data: LoginResponse = await res.json();

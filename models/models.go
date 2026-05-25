@@ -37,13 +37,13 @@ type HostData struct {
 	HostName      string   `json:"hostname"`
 	Port          string   `json:"port"`
 	User          string   `json:"user"`
-	ProxyJump     string   `json:"proxy_jump"`
-	RemoteCommand string   `json:"remote_command"`
-	Tags          []string `json:"tags"`
-	Comment       string   `json:"comment"`
+	ProxyJump     string   `json:"proxy_jump,omitempty"`
+	RemoteCommand string   `json:"remote_command,omitempty"`
+	Tags          []string `json:"tags,omitempty"`
+	Comment       string   `json:"comment,omitempty"`
 	// "config", "known_hosts", ""
-	Source       string `json:"source" ts_type:"\"config\" | \"known_hosts\" | \"\""`
-	IdentityFile string `json:"identity_file"`
+	Source       string `json:"source,omitempty" ts_type:"\"config\" | \"known_hosts\" | \"\""`
+	IdentityFile string `json:"identity_file,omitempty"`
 	// true if from known_hosts and not config
 	IsAuto      bool `json:"is_auto,omitempty"`
 	IsFavourite bool `json:"is_favourite,omitempty"`
@@ -186,7 +186,7 @@ type ScratchpadPage struct {
 	Id          string `json:"id"`
 	Title       string `json:"title"`
 	Content     string `json:"content"`
-	Locked      bool   `json:"locked"`
+	Locked      bool   `json:"locked,omitempty"`
 	LastUpdated int64  `json:"lastUpdated"`
 }
 
