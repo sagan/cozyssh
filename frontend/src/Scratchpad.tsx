@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle, useCallback } from 'react';
 import { Box, Typography, IconButton, Tabs, Tab, Menu, MenuItem } from '@mui/material';
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { EditorView } from "@codemirror/view";
@@ -9,7 +9,8 @@ import type {
   ScratchpadData, ScratchpadDeleteMsg, ScratchpadHelloMsg, ScratchpadPage, ScratchpadSyncMsg,
 } from './api';
 import { BROWSER_STORAGE_KEY_TOKEN } from './constants';
-import type { ScratchpadSyncState } from './common';
+import { generatePassword, type ScratchpadSyncState } from './common';
+import { dialogs } from './Dialogs';
 
 export interface ScratchpadHandle {
   focus: () => void;
@@ -53,13 +54,13 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
   const debounceTimerRef = useRef<number | undefined>(undefined);
   const cmRef = useRef<ReactCodeMirrorRef>(null);
 
-  const focusEditor = () => {
+  const focusEditor = useCallback(() => {
     if (cmRef.current?.view) {
       cmRef.current.view.focus();
       const length = cmRef.current.view.state.doc.length;
       cmRef.current.view.dispatch({ selection: { anchor: length, head: length } });
     }
-  };
+  }, []);
 
   useImperativeHandle(ref, () => ({
     focus: focusEditor
@@ -68,7 +69,7 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
   useEffect(() => {
     const timer = setTimeout(focusEditor, 50);
     return () => clearTimeout(timer);
-  }, [activePageId]);
+  }, [activePageId, focusEditor]);
 
   // Update refs synchronously to avoid stale data in callbacks
   useEffect(() => {
@@ -86,7 +87,7 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
     }
   }, [data.pages, activePageId]);
 
-  const connectWS = () => {
+  const connectWS = useCallback(() => {
     if (wsRef.current) {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       try { wsRef.current.close(); } catch (e) { /* empty */ }
@@ -174,7 +175,7 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
     ws.onerror = () => {
       ws.close();
     };
-  };
+  }, [onSyncStateChange]);
 
   useEffect(() => {
     localStorage.setItem('cozy_scratchpad_sync_state', syncState);
@@ -197,7 +198,7 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const triggerSync = (forceAll = false) => {
+  const triggerSync = useCallback((forceAll = false) => {
     if (wsRef.current?.readyState !== WebSocket.OPEN) {
       return;
     }
@@ -228,7 +229,7 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
     wsRef.current.send(payload);
     lastSyncDataRef.current = payload;
     setDirtyPageIds(new Set());
-  };
+  }, [onSyncStateChange]);
 
   useEffect(() => {
     if (dirtyPageIds.size > 0) {
@@ -240,22 +241,22 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dirtyPageIds]);
 
-  const handleEditorChange = (value: string) => {
+  const handleEditorChange = useCallback((value: string) => {
     const updatedNow = Date.now();
     setData(prev => ({
       ...prev,
-      pages: prev.pages.map(p => p.id === activePageId ? { ...p, content: value, lastUpdated: updatedNow } : p)
+      pages: prev.pages.map(p => p.id === activePageId ? { ...p, content: value, lastUpdated: updatedNow } : p),
     }));
     setSyncState('dirty');
     if (onSyncStateChange) {
       onSyncStateChange('dirty');
     }
     setDirtyPageIds(prev => new Set(prev).add(activePageId));
-  };
+  }, [activePageId, onSyncStateChange]);
 
-  const handleAddPage = () => {
+  const handleAddPage = useCallback(() => {
     const updatedNow = Date.now();
-    const newId = Math.random().toString(36).substring(2);
+    const newId = generatePassword(12);
     const newPageTitle = `Page ${data.pages.length + 1}`;
     const newPage = { id: newId, title: newPageTitle, content: '', lastUpdated: updatedNow };
 
@@ -269,90 +270,94 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
     }
     setDirtyPageIds(prev => new Set(prev).add(newId));
     setActivePageId(newId);
-  };
+  }, [data.pages.length, onSyncStateChange]);
 
-  const handleContextMenu = (e: React.MouseEvent, pageId: string) => {
+  const handleContextMenu = useCallback((e: React.MouseEvent, pageId: string) => {
     e.preventDefault();
     setContextMenu({ mouseX: e.clientX - 2, mouseY: e.clientY - 4, pageId });
-  };
+  }, []);
 
-  const handleRename = () => {
+  const handleRename = useCallback(async () => {
     if (!contextMenu) {
       return;
     }
-    const targetPage = data.pages.find(p => p.id === contextMenu.pageId);
+    const pageId = contextMenu.pageId;
+    setContextMenu(null);
+    const targetPage = data.pages.find(p => p.id === pageId);
     if (!targetPage) {
       return;
     }
-    const newTitle = prompt("Rename page:", targetPage.title);
+    const newTitle = await dialogs.prompt("Rename page:", targetPage.title);
     if (newTitle && newTitle !== targetPage.title) {
       const updatedNow = Date.now();
       setData(prev => ({
         ...prev,
-        pages: prev.pages.map(p => p.id === contextMenu.pageId ? { ...p, title: newTitle, lastUpdated: updatedNow } : p)
+        pages: prev.pages.map(p => p.id === pageId ? { ...p, title: newTitle, lastUpdated: updatedNow } : p),
       }));
       setSyncState('dirty');
       if (onSyncStateChange) onSyncStateChange('dirty');
-      setDirtyPageIds(prev => new Set(prev).add(contextMenu.pageId));
+      setDirtyPageIds(prev => new Set(prev).add(pageId));
     }
-    setContextMenu(null);
-  };
+  }, [contextMenu, data.pages, onSyncStateChange]);
 
-  const handleDelete = () => {
+  const handleDelete = useCallback(async () => {
     if (!contextMenu) {
       return;
     }
+    const pageId = contextMenu.pageId;
+    setContextMenu(null);
     if (data.pages.length <= 1) {
-      alert("Cannot delete the last page.");
-      setContextMenu(null);
+      dialogs.alert("Cannot delete the last page.");
       return;
     }
-    const activePage = data.pages.find(p => p.id === contextMenu.pageId)
-    if (confirm(`Delete page "${activePage?.title}"?`)) {
-      const newData = {
-        ...data,
-        pages: data.pages.filter(p => p.id !== contextMenu.pageId)
-      };
-      setData(newData);
-      setSyncState('syncing');
-      if (onSyncStateChange) {
-        onSyncStateChange('syncing');
-      }
-      wsRef.current?.send(JSON.stringify({ type: 'delete', id: contextMenu.pageId } satisfies ScratchpadDeleteMsg));
-      if (activePageId === contextMenu.pageId) {
-        setActivePageId(newData.pages[0].id);
-      }
+    const activePage = data.pages.find(p => p.id === pageId);
+    if (!await dialogs.confirm(`Delete page "${activePage?.title}"?`)) {
+      return;
     }
-    setContextMenu(null);
-  };
+    const newData = {
+      ...data,
+      pages: data.pages.filter(p => p.id !== pageId),
+    };
+    setData(newData);
+    setSyncState('syncing');
+    if (onSyncStateChange) {
+      onSyncStateChange('syncing');
+    }
+    wsRef.current?.send(JSON.stringify({ type: 'delete', id: pageId } satisfies ScratchpadDeleteMsg));
+    if (activePageId === pageId) {
+      setActivePageId(newData.pages[0].id);
+    }
+  }, [activePageId, contextMenu, data, onSyncStateChange]);
 
-  const handleToggleLock = () => {
+  const handleToggleLock = useCallback(() => {
     if (!contextMenu) {
       return;
     }
+    const pageId = contextMenu.pageId;
+    setContextMenu(null);
     const updatedNow = Date.now();
     setData(prev => ({
       ...prev,
-      pages: prev.pages.map(p => p.id === contextMenu.pageId ? { ...p, locked: !p.locked, lastUpdated: updatedNow } : p)
+      pages: prev.pages.map(p => p.id === pageId ? { ...p, locked: !p.locked, lastUpdated: updatedNow } : p),
     }));
     setSyncState('dirty');
     if (onSyncStateChange) {
       onSyncStateChange('dirty');
     }
-    setDirtyPageIds(prev => new Set(prev).add(contextMenu.pageId));
-    setContextMenu(null);
-  };
+    setDirtyPageIds(prev => new Set(prev).add(pageId));
+  }, [contextMenu, onSyncStateChange]);
 
-  const handleCopy = () => {
+  const handleCopy = useCallback(() => {
     if (!contextMenu) {
       return;
     }
-    const targetPage = data.pages.find(p => p.id === contextMenu.pageId);
+    const pageId = contextMenu.pageId;
+    setContextMenu(null);
+    const targetPage = data.pages.find(p => p.id === pageId);
     if (targetPage) {
       navigator.clipboard.writeText(targetPage.content);
     }
-    setContextMenu(null);
-  };
+  }, [contextMenu, data.pages]);
 
   const cPage = data.pages.find(p => p.id === activePageId) || data.pages[0];
 

@@ -411,3 +411,17 @@ export function formatSize(size: number) {
   }
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+/**
+ * If name is "Foo", return "Foo (1)";
+ * If name is already "Foo (1)" style, return "Foo (2)".
+ */
+export function nextName(name: string): string {
+  const match = name.match(/^(.*) \((\d+)\)$/);
+  if (match) {
+    const base = match[1];
+    const num = parseInt(match[2], 10);
+    return `${base} (${num + 1})`;
+  }
+  return `${name} (1)`;
+}

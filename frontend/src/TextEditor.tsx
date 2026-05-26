@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Box, Button, AppBar, Toolbar, Typography, IconButton } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import CodeMirror from '@uiw/react-codemirror';
@@ -11,6 +11,7 @@ import { json } from '@codemirror/lang-json';
 import { markdown } from '@codemirror/lang-markdown';
 import { cpp } from '@codemirror/lang-cpp';
 import { yaml } from '@codemirror/lang-yaml';
+import { dialogs } from './Dialogs';
 
 const getLanguageExtension = (fileName: string) => {
   const ext = fileName.split('.').pop()?.toLowerCase();
@@ -51,14 +52,14 @@ export default function TextEditor({ fileName, initialContent, onSave, onClose, 
   const [content, setContent] = useState(initialContent);
   const hasChanged = content !== initialContent;
 
-  const handleClose = () => {
+  const handleClose = useCallback(async () => {
     if (hasChanged) {
-      if (!confirm("You have unsaved changes. Discard them and close?")) {
+      if (!await dialogs.confirm("You have unsaved changes. Discard them and close?")) {
         return;
       }
     }
     onClose();
-  };
+  }, [hasChanged, onClose]);
 
   return (
     <Box sx={{

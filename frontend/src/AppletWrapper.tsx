@@ -29,7 +29,7 @@ export default function AppletWrapper({
   applet,
   onClose,
   onSwitchPosition,
-  onFocus
+  onFocus,
 }: AppletWrapperProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -37,11 +37,11 @@ export default function AppletWrapper({
   const [expanded, setExpanded] = useState(true);
   const [size, setSize] = useState(() => ({
     width: applet.width || 320,
-    height: applet.height || 250
+    height: applet.height || 250,
   }));
   const [position, setPosition] = useState(() => ({
     x: Math.max(0, window.innerWidth - (applet.width || 320) - 20),
-    y: Math.max(0, window.innerHeight - (applet.height || 250) - 20)
+    y: Math.max(0, window.innerHeight - (applet.height || 250) - 20),
   }));
   const dragStartRef = useRef({ x: 0, y: 0, pos: { x: 0, y: 0 } });
 
@@ -121,7 +121,7 @@ export default function AppletWrapper({
       }
       setPosition({
         x: dragStartRef.current.pos.x + (e.clientX - dragStartRef.current.x),
-        y: dragStartRef.current.pos.y + (e.clientY - dragStartRef.current.y)
+        y: dragStartRef.current.pos.y + (e.clientY - dragStartRef.current.y),
       });
     };
     const handleMouseUp = () => setIsDragging(false);
@@ -143,7 +143,7 @@ export default function AppletWrapper({
         display: 'flex',
         flexDirection: 'column',
         flex: expanded ? 1 : '0 0 auto',
-        minHeight: expanded ? 0 : 'auto'
+        minHeight: expanded ? 0 : 'auto',
       }}>
         <Box
           onClick={() => setExpanded(!expanded)}
@@ -152,7 +152,7 @@ export default function AppletWrapper({
             minHeight: 40, bgcolor: '#00000014', color: 'text.primary',
             borderBottom: 1, borderColor: 'divider',
             cursor: 'pointer', userSelect: 'none', flexShrink: 0,
-            '&:hover': { bgcolor: '#00000028' }
+            '&:hover': { bgcolor: '#00000028' },
           }}
         >
           {expanded ? <KeyboardArrowDownIcon /> : <KeyboardArrowRightIcon />}
@@ -171,7 +171,7 @@ export default function AppletWrapper({
           flexDirection: 'column',
           flex: 1,
           minHeight: 0,
-          overflow: 'auto'
+          overflow: 'auto',
         }}>
           {!(applet.node instanceof Node) ? (
             React.isValidElement(applet.node) ? applet.node
@@ -223,14 +223,13 @@ export default function AppletWrapper({
         border: 1,
         borderColor: 'divider',
         borderRadius: 1,
-        userSelect: isDragging ? 'none' : 'auto'
+        userSelect: isDragging ? 'none' : 'auto',
       }}>
       <Box
         onMouseDown={handleMouseDown}
         sx={{
           display: 'flex', alignItems: 'center', px: 1, py: 0.5, bgcolor: '#f0f4f8', color: 'text.secondary',
-          borderBottom: 1, borderColor: 'divider',
-          cursor: 'move', flexShrink: 0
+          borderBottom: 1, borderColor: 'divider', cursor: 'move', flexShrink: 0,
         }}
       >
         <Typography variant="subtitle2" sx={{ flexGrow: 1, fontWeight: 'bold' }}>{applet.name}</Typography>

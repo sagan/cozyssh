@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useSearchParams } from "react-router";
 import {
   Autocomplete, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Drawer, Toolbar, Typography, Box,
@@ -18,6 +18,7 @@ import {
   HEADER_CONTENT_TYPE, BROWSER_STORAGE_KEY_TOKEN, APP_NAME,
 } from './constants';
 import { type HostForm, type ServiceWorkerStatus, filterHosts, remoteCommandOptions, searchString } from './common';
+import { dialogs } from './Dialogs';
 
 const drawerWidth = 260;
 
@@ -108,9 +109,9 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
     if (loading && hosts.length > 0) setLoading(false);
   }, [hosts, loading]);
 
-  const handleSavePassword = async () => {
+  const handleSavePassword = useCallback(async () => {
     if (newPwd !== confirmPwd) {
-      alert("Passwords don't match");
+      dialogs.alert("Passwords don't match");
       return;
     }
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
@@ -123,17 +124,17 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
       body: JSON.stringify({ new_password: newPwd } satisfies PasswordUpdateRequest)
     });
     if (res.ok) {
-      alert('Password updated! You will be logged out.');
+      dialogs.alert('Password updated! You will be logged out.');
       if (onLogout) {
         onLogout();
       }
     } else {
-      alert('Failed to update password');
+      dialogs.alert('Failed to update password');
     }
-  };
+  }, [confirmPwd, newPwd, onLogout]);
 
-  const handleClearCache = async () => {
-    if (!confirm("This will unregister the Service Worker, clear all caches and reload. Proceed?")) {
+  const handleClearCache = useCallback(async () => {
+    if (!await dialogs.confirm("This will unregister the Service Worker, clear all caches and reload. Proceed?")) {
       return;
     }
     if ('serviceWorker' in navigator) {
@@ -149,47 +150,46 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
       }
       window.location.reload();
     }
-  };
+  }, []);
 
-  const handleContextMenu = (e: React.MouseEvent, host: HostData) => {
+  const handleContextMenu = useCallback((e: React.MouseEvent, host: HostData) => {
     e.preventDefault();
     setContextMenu({ mouseX: e.clientX - 2, mouseY: e.clientY - 4, target: host });
     setContextMenuOpen(true);
-  };
+  }, []);
 
-  const closeMenu = () => setContextMenuOpen(false);
-  const closeTagMenu = () => setTagContextMenuOpen(false);
-
-  const handleTagContextMenu = (e: React.MouseEvent, tag: string) => {
+  const handleTagContextMenu = useCallback((e: React.MouseEvent, tag: string) => {
     e.preventDefault();
     setTagContextMenu({ mouseX: e.clientX - 2, mouseY: e.clientY - 4, tag });
     setTagContextMenuOpen(true);
-  };
+  }, []);
 
-  const handleOpenAllServersInNewWindow = () => {
-    if (!tagContextMenu) {
-      return;
-    }
-    window.open(`${window.location.origin}/##${tagContextMenu.tag}`, '_blank', 'noopener');
-    closeTagMenu();
-  };
-
-  const handleOpenAllServers = () => {
+  const handleOpenAllServersInNewWindow = useCallback(() => {
     if (!tagContextMenu) {
       return;
     }
     const tag = tagContextMenu.tag;
+    setTagContextMenuOpen(false);
+    window.open(`${window.location.origin}/##${tag}`, '_blank', 'noopener');
+  }, [tagContextMenu]);
+
+  const handleOpenAllServers = useCallback(() => {
+    if (!tagContextMenu) {
+      return;
+    }
+    const tag = tagContextMenu.tag;
+    setTagContextMenuOpen(false);
     setFilterStr(`#${tag} `);
     const targets = hosts.filter(h => h.tags && h.tags.includes(tag));
     targets.forEach(h => onSelect(h.name));
-    closeTagMenu();
-  };
+  }, [hosts, onSelect, tagContextMenu]);
 
-  const handleOpenSplitServers = () => {
+  const handleOpenSplitServers = useCallback(() => {
     if (!tagContextMenu || !onSelectTagAsSplit) {
       return;
     }
     const tag = tagContextMenu.tag;
+    setTagContextMenuOpen(false);
     const filtered = hosts.filter(h => h.tags && h.tags.includes(tag));
 
     const nameSorter = (a: HostData, b: HostData) => a.name.localeCompare(b.name);
@@ -208,19 +208,19 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
     if (targets.length > 0) {
       onSelectTagAsSplit(tag, targets.map(h => h.name));
     }
-    closeTagMenu();
-  };
+  }, [hosts, onSelectTagAsSplit, tagContextMenu]);
 
-  const handleCopyTagUrl = () => {
+  const handleCopyTagUrl = useCallback(() => {
     if (!tagContextMenu) {
       return;
     }
-    const url = `${window.location.origin}/##${tagContextMenu.tag}`;
+    const tag = tagContextMenu.tag;
+    setTagContextMenuOpen(false);
+    const url = `${window.location.origin}/##${tag}`;
     navigator.clipboard.writeText(url);
-    closeTagMenu();
-  };
+  }, [tagContextMenu]);
 
-  const handleAddOpen = () => {
+  const handleAddOpen = useCallback(() => {
     const data: HostForm = {
       name: "", hostname: '', user: 'root', port: '22', source: "",
       identity_file: '', proxy_jump: '', remote_command: '', tags: "", comment: '',
@@ -229,39 +229,42 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
     setFormData(data);
     setInitialHostFormData(data);
     setDialogOpen(true);
-  };
+  }, []);
 
-  const handleEditOpen = () => {
+  const handleEditOpen = useCallback(() => {
     if (!contextMenu) {
       return;
     }
-    const isAuto = contextMenu.target.source === 'known_hosts';
+    const target = contextMenu.target;
+    setContextMenuOpen(false);
+    const isAuto = target.source === 'known_hosts';
     const data: HostForm = {
-      name: isAuto ? contextMenu.target.hostname : contextMenu.target.name,
-      hostname: contextMenu.target.hostname,
-      user: contextMenu.target.user || 'root',
-      port: contextMenu.target.port || '22',
+      name: isAuto ? target.hostname : target.name,
+      hostname: target.hostname,
+      user: target.user || 'root',
+      port: target.port || '22',
       source: "",
-      identity_file: contextMenu.target.identity_file || '',
-      proxy_jump: contextMenu.target.proxy_jump || '',
-      remote_command: contextMenu.target.remote_command || '',
-      tags: contextMenu.target.tags ? contextMenu.target.tags.join(' ') : '',
-      comment: contextMenu.target.comment || ''
+      identity_file: target.identity_file || '',
+      proxy_jump: target.proxy_jump || '',
+      remote_command: target.remote_command || '',
+      tags: target.tags ? target.tags.join(' ') : '',
+      comment: target.comment || '',
     };
-    setEditingName(isAuto ? null : contextMenu.target.name);
+    setEditingName(isAuto ? null : target.name);
     setFormData(data);
     setInitialHostFormData(data);
-    closeMenu();
     setDialogOpen(true);
-  };
+  }, [contextMenu]);
 
-  const handleDelete = async () => {
+  const handleDelete = useCallback(async () => {
     if (!contextMenu) {
       return;
     }
-    if (confirm(`Are you extremely certain you want to permanently delete "${contextMenu.target.name}"?`)) {
+    const target = contextMenu.target;
+    setContextMenuOpen(false);
+    if (await dialogs.confirm(`Are you extremely certain you want to permanently delete "${target.name}"?`)) {
       const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-      await fetch(`/api/hosts/${contextMenu.target.name}`, {
+      await fetch(`/api/hosts/${target.name}`, {
         method: METHOD_DELETE,
         headers: {
           [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
@@ -269,18 +272,18 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
       });
       fetchHosts();
     }
-    closeMenu();
-  };
+  }, [contextMenu, fetchHosts]);
 
-  const handleToggleFavourite = async () => {
+  const handleToggleFavourite = useCallback(async () => {
     if (!contextMenu) {
       return;
     }
-    const host = contextMenu.target;
+    const target = contextMenu.target;
+    setContextMenuOpen(false);
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
 
-    let newTags = host.tags ? [...host.tags] : [];
-    if (host.is_favourite) {
+    let newTags = target.tags ? [...target.tags] : [];
+    if (target.is_favourite) {
       newTags = newTags.filter(t => t !== 'fav');
     } else {
       if (!newTags.includes('fav')) {
@@ -289,20 +292,20 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
     }
 
     const payload: HostData = {
-      name: host.source === 'known_hosts' ? host.hostname : host.name,
-      hostname: host.hostname,
-      user: host.user || 'root',
-      port: host.port || '22',
-      identity_file: host.identity_file || '',
-      proxy_jump: host.proxy_jump || '',
-      remote_command: host.remote_command || '',
-      source: host.source || "",
-      comment: host.comment || "",
+      name: target.source === 'known_hosts' ? target.hostname : target.name,
+      hostname: target.hostname,
+      user: target.user || 'root',
+      port: target.port || '22',
+      identity_file: target.identity_file || '',
+      proxy_jump: target.proxy_jump || '',
+      remote_command: target.remote_command || '',
+      source: target.source || "",
+      comment: target.comment || "",
       tags: newTags
     };
 
-    const url = host.source === 'config' ? `/api/hosts/${host.name}` : `/api/hosts`;
-    const method = host.source === 'config' ? METHOD_PUT : METHOD_POST;
+    const url = target.source === 'config' ? `/api/hosts/${target.name}` : `/api/hosts`;
+    const method = target.source === 'config' ? METHOD_PUT : METHOD_POST;
 
     await fetch(url, {
       method,
@@ -312,12 +315,10 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
       },
       body: JSON.stringify(payload)
     });
-
-    closeMenu();
     fetchHosts();
-  };
+  }, [contextMenu, fetchHosts]);
 
-  const handleSaveHost = async () => {
+  const handleSaveHost = useCallback(async () => {
     if (!formData.hostname) {
       return;
     }
@@ -346,16 +347,16 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
     setInitialHostFormData(null); // Reset dirty state on successful save
     setDialogOpen(false);
     fetchHosts();
-  };
+  }, [editingName, fetchHosts, formData]);
 
-  const handleCloseHostDialog = (_e: unknown, reason: string) => {
+  const handleCloseHostDialog = useCallback((_e: unknown, reason: string) => {
     const isDirty = initialHostFormData && JSON.stringify(formData) !== JSON.stringify(initialHostFormData);
     if (isDirty && (reason === 'backdropClick' || reason === 'escapeKeyDown')) {
       return;
     }
     setDialogOpen(false);
     setTimeout(() => window.csFocus(), 0);
-  };
+  }, [formData, initialHostFormData]);
 
   const filteredHosts = useMemo(() => {
     const filtered = filterHosts(hosts, filterStr);
@@ -403,7 +404,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, []);
 
-  const handleFilterKeyDown = (e: React.KeyboardEvent) => {
+  const handleFilterKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown' || (e.altKey && e.key === 'j')) {
       e.preventDefault();
       e.stopPropagation();
@@ -419,7 +420,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
         filterRef.current?.blur();
       }
     }
-  };
+  }, [flatFilteredHosts, onSelect, selectedIndex]);
 
   const uniqueTags = useMemo(() => {
     const set = new Set<string>();
@@ -603,7 +604,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
       {/* Host Context Menu */}
       <Menu
         open={contextMenuOpen}
-        onClose={closeMenu}
+        onClose={() => setContextMenuOpen(false)}
         anchorReference="anchorPosition"
         anchorPosition={contextMenu ? { top: contextMenu.mouseY, left: contextMenu.mouseX } : undefined}
       >
@@ -618,21 +619,24 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
           if (!contextMenu) {
             return;
           }
-          const url = `${window.location.origin}/#${contextMenu?.target.source !== 'known_hosts'
-            ? contextMenu.target.name : `${contextMenu.target.user || "root"}@${contextMenu.target.hostname}`}`;
+          const target = contextMenu.target;
+          setContextMenuOpen(false);
+          const url = `${window.location.origin}/#${target.source !== 'known_hosts'
+            ? target.name : `${target.user || "root"}@${target.hostname}`}`;
           navigator.clipboard.writeText(url);
-          closeMenu();
         }}>Copy URL</MenuItem>
         <MenuItem onClick={() => {
           if (!contextMenu) {
             return;
           }
+          const target = contextMenu.target;
+          setContextMenuOpen(false);
           let command = `ssh`;
-          if (contextMenu.target.identity_file) {
-            command += ` -i "${contextMenu.target.identity_file}"`;
+          if (target.identity_file) {
+            command += ` -i "${target.identity_file}"`;
           }
-          if (contextMenu.target.proxy_jump) {
-            const jumpServers = contextMenu.target.proxy_jump.split(',').map(name => {
+          if (target.proxy_jump) {
+            const jumpServers = target.proxy_jump.split(',').map(name => {
               name = name.trim();
               const server = hosts.find(h => h.name === name);
               if (!server) {
@@ -645,33 +649,33 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
             });
             command += ` -J ${jumpServers.join(',')}`;
           }
-          if (contextMenu.target.remote_command) {
-            if (/\b(?:sudo|vim|vi|nano|top|htop|btop|tmux|screen)\b/.test(contextMenu.target.remote_command)) {
+          if (target.remote_command) {
+            if (/\b(?:sudo|vim|vi|nano|top|htop|btop|tmux|screen)\b/.test(target.remote_command)) {
               command += ` -t`;
             }
-            command += ` -o "RemoteCommand=${contextMenu.target.remote_command}"`;
+            command += ` -o "RemoteCommand=${target.remote_command}"`;
           }
-          if (contextMenu.target.port !== "22") {
-            command += ` -p ${contextMenu.target.port}`;
+          if (target.port !== "22") {
+            command += ` -p ${target.port}`;
           }
-          command += ` ${contextMenu.target.user}@${contextMenu.target.hostname}`;
+          command += ` ${target.user}@${target.hostname}`;
           navigator.clipboard.writeText(command);
-          closeMenu();
         }}>Copy SSH Command</MenuItem>
         <MenuItem onClick={() => {
           if (!contextMenu) {
             return;
           }
+          const target = contextMenu.target;
+          setContextMenuOpen(false);
           let command = `ssh-copy-id`;
-          if (contextMenu.target.identity_file) {
-            command += ` -i "${contextMenu.target.identity_file}"`;
+          if (target.identity_file) {
+            command += ` -i "${target.identity_file}"`;
           }
-          if (contextMenu.target.port !== "22") {
-            command += ` -p ${contextMenu.target.port}`;
+          if (target.port !== "22") {
+            command += ` -p ${target.port}`;
           }
-          command += ` ${contextMenu.target.user}@${contextMenu.target.hostname}`;
+          command += ` ${target.user}@${target.hostname}`;
           navigator.clipboard.writeText(command);
-          closeMenu();
         }}>Copy ssh-copy-id Command</MenuItem>
         <MenuItem onClick={handleToggleFavourite}>
           {contextMenu?.target.is_favourite ? 'Remove From Favourite' : 'Add To Favourite'}
@@ -682,7 +686,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
 
       <Menu
         open={tagContextMenuOpen}
-        onClose={closeTagMenu}
+        onClose={() => setTagContextMenuOpen(false)}
         anchorReference="anchorPosition"
         anchorPosition={tagContextMenu ? { top: tagContextMenu.mouseY, left: tagContextMenu.mouseX } : undefined}
       >
@@ -764,6 +768,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
                   <b>Alt + S</b> : Open scratchpad<br />
                   <b>Alt + H / Alt + L</b> : Switch to previous / next tab<br />
                   <b>Alt + 1-9,0</b> : Switch to tab 1-9, last tab<br />
+                  <b>Alt + C</b> : Clone current tab or pane<br />
                   <b>Alt + W</b> : Close current tab or pane<br />
                   <b>Alt + I</b> : Focus sidebar search filter, use ↑ ↓ to select, Enter to open<br />
                   <b>Alt + G</b> : Focus active terminal session<br />

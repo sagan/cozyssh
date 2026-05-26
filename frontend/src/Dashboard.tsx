@@ -21,10 +21,10 @@ import {
   type ContextMenu, type CSEventDetailTerminalChange, type NewTabDialogViewMode,
   type Recent, type ScratchpadSyncState, type Severity, type Toast,
   CS_EVENT_TERMINAL_CHANGE,
-  defaultTheme, generatePassword, getIntVar,
+  defaultTheme, generatePassword, getIntVar, nextName,
 } from './common';
 import {
-  type TabData,
+  type TabData, type PaneData,
   useStore, getStore, setTabs, setActiveTabId, setActivePaneId, setHosts, setButtons, setVars,
 } from './store';
 import { useLocalStorage } from './useLocalStorage';
@@ -38,7 +38,7 @@ import TerminalGrid from './TerminalGrid';
 import ButtonBar from './ButtonBar';
 import DialogManager from './DialogManager';
 import AppletWrapper, { type AppletData } from './AppletWrapper';
-import { dialogs } from './AsyncDialogContext';
+import { dialogs } from './Dialogs';
 
 interface DashboardProps {
   initialData?: FullData;
@@ -201,7 +201,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, [applets]);
 
   const handleSelectHost = useCallback(async (host: string, customTitle?: string) => {
-    const id = Math.random().toString(36).substring(2);
+    const id = generatePassword(12);
     console.log('handleSelectHost called for:', host, customTitle, 'ID:', id);
     const newTab: TabData = {
       id: id,
@@ -221,7 +221,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
           method: METHOD_POST,
           headers: {
             [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-            [HEADER_CONTENT_TYPE]: MIME_JSON
+            [HEADER_CONTENT_TYPE]: MIME_JSON,
           },
           body: JSON.stringify({ host } satisfies RecentUpdateRequest),
         });
@@ -245,9 +245,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, [setRecents]);
 
   const handleSelectTagAsSplit = useCallback((tag: string, hosts: string[]) => {
-    const tabId = Math.random().toString(36).substring(2);
+    const tabId = generatePassword(12);
     const panes = hosts.map(host => ({
-      id: Math.random().toString(36).substring(2),
+      id: generatePassword(12),
       host
     }));
     const newTab: TabData = {
@@ -671,7 +671,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               handleSelectTagAsSplit(tag, targets.map(h => h.name));
             } else {
               const initialId = `local-${Date.now()}`;
-              const initialPaneId = Math.random().toString(36).substring(2);
+              const initialPaneId = generatePassword(12);
               setTabs([{
                 id: initialId, panes: [{ id: initialPaneId, host: 'local' }],
                 activePaneId: initialPaneId, title: 'local'
@@ -688,14 +688,14 @@ export default function Dashboard({ initialData }: DashboardProps) {
               handleSelectHost(host.name);
             } else {
               const initialId = `local-${Date.now()}`;
-              const initialPaneId = Math.random().toString(36).substring(2);
+              const initialPaneId = generatePassword(12);
               setTabs([{
                 id: initialId, panes: [{ id: initialPaneId, host: LOCAL_NAME }],
                 activePaneId: initialPaneId, title: LOCAL_NAME,
               }]);
               setActiveTabId(initialId);
               setActivePaneId(initialPaneId);
-              setTimeout(() => alert(`SSH server "${hash}" not found in config.`), 100);
+              setTimeout(() => dialogs.alert(`SSH server "${hash}" not found in config.`), 100);
             }
           }
         } else if (autoload) {
@@ -719,7 +719,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               }
             } else {
               const initialId = `local-${Date.now()}`;
-              const initialPaneId = Math.random().toString(36).substring(2);
+              const initialPaneId = generatePassword(12);
               setTabs(prev => prev.length > 0 ? prev : [{
                 id: initialId, panes: [{ id: initialPaneId, host: 'local' }],
                 activePaneId: initialPaneId, title: 'local'
@@ -733,7 +733,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             }
           } else {
             const initialId = `local-${Date.now()}`;
-            const initialPaneId = Math.random().toString(36).substring(2);
+            const initialPaneId = generatePassword(12);
             setTabs(prev => prev.length > 0 ? prev : [{
               id: initialId, panes: [{ id: initialPaneId, host: 'local' }],
               activePaneId: initialPaneId, title: 'local'
@@ -820,6 +820,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, []);
 
   const handleUnpinTab = useCallback(async (id: string) => {
+    setContextMenu(null);
     const tab = getStore().tabs.find(t => t.id === id);
     if (!tab) {
       return;
@@ -834,7 +835,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
       },
       body: JSON.stringify({ id: backendSessionId } satisfies TabsUnpinRequest)
     });
-    setContextMenu(null);
   }, []);
 
   const handleCloseTab = useCallback((e: React.MouseEvent | null, id: string) => {
@@ -910,12 +910,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, [handleCloseTab]);
 
   const handlePinTab = useCallback(async (id: string) => {
+    setContextMenu(null);
     const tab = getStore().tabs.find(t => t.id === id);
     if (!tab) {
       return;
     }
     if (tab.panes.length > 1) {
-      alert("Only single-pane tabs can be pinned.");
+      dialogs.alert("Only single-pane tabs can be pinned.");
       return;
     }
     const pane = tab.panes[0];
@@ -935,16 +936,16 @@ export default function Dashboard({ initialData }: DashboardProps) {
       body: JSON.stringify({ id: backendSessionId, host, title: tab.title } satisfies TabsPinRequest)
     });
     setTabs(prev => prev.map(t => t.id === id ? { ...t, isPinned: true } : t));
-    setContextMenu(null);
   }, []);
 
   const handleLockTab = useCallback(async (id: string) => {
+    setContextMenu(null);
     const tab = getStore().tabs.find(t => t.id === id);
     if (!tab) {
       return;
     }
     if (tab.panes.length > 1) {
-      alert("Only single-pane tabs can be locked.");
+      dialogs.alert("Only single-pane tabs can be locked.");
       return;
     }
     const pane = tab.panes[0];
@@ -963,16 +964,16 @@ export default function Dashboard({ initialData }: DashboardProps) {
       body: JSON.stringify({ id: backendSessionId, host, title: tab.title } satisfies TabsLockRequest)
     });
     setTabs(prev => prev.map(t => t.id === id ? { ...t, isLocked: true } : t));
-    setContextMenu(null);
   }, []);
 
   const handleUnlockTab = useCallback(async (id: string) => {
+    setContextMenu(null);
     const tab = getStore().tabs.find(t => t.id === id);
     if (!tab) {
       return;
     }
     if (tab.panes.length > 1) {
-      alert("Only single-pane tabs can be unlocked.");
+      dialogs.alert("Only single-pane tabs can be unlocked.");
       return;
     }
     const pane = tab.panes[0];
@@ -994,7 +995,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
     if (getStore().activeTabId === id) {
       setActiveTabId(paneId);
     }
-    setContextMenu(null);
   }, []);
 
   const handleRename = useCallback(async () => {
@@ -1002,12 +1002,17 @@ export default function Dashboard({ initialData }: DashboardProps) {
       return;
     }
     const targetId = contextMenu.targetTabId;
+    setContextMenu(null);
     const targetTab = getStore().tabs.find(t => t.id === targetId);
     if (!targetTab) {
       return;
     }
-    const newTitle = prompt("Enter new tab name:", targetTab.title);
-    if (newTitle && newTitle.trim() !== "") {
+    let newTitle = await dialogs.prompt("Enter new tab name:", targetTab.title);
+    if (!newTitle) {
+      return;
+    }
+    newTitle = newTitle.trim();
+    if (newTitle && newTitle !== targetTab.title) {
       if (targetTab.isPinned) {
         const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
         const backendSessionId = targetTab.panes[0]?.sessionId || targetTab.panes[0]?.id || targetId;
@@ -1022,32 +1027,40 @@ export default function Dashboard({ initialData }: DashboardProps) {
       }
       setTabs(prev => prev.map(t => t.id === targetId ? { ...t, title: newTitle } : t));
     }
-    setContextMenu(null);
   }, [contextMenu]);
 
   const handleCloneSession = useCallback((id: string) => {
-    const targetTab = getStore().tabs.find(t => t.id === id);
-    if (!targetTab) {
+    setContextMenu(null);
+    let pane: PaneData | undefined;
+    let tab: TabData | undefined;
+    outer: for (const t of getStore().tabs) {
+      for (const p of t.panes) {
+        if (p.id === id) {
+          pane = p;
+          tab = t;
+          break outer;
+        }
+      }
+    }
+    if (!tab || !pane) {
       return;
     }
-    // Clone first pane
-    const pane = targetTab.panes[0];
-    const newPaneId = Math.random().toString(36).substring(2);
+    const newPaneId = generatePassword(12);
     const newId = `${pane.host}-${Date.now()}`;
     const backendSessionId = pane.sessionId || pane.id;
     setTabs(prev => [...prev, {
       id: newId,
-      title: targetTab.title + ' (1)',
+      title: nextName(tab.title),
       panes: [{ id: newPaneId, host: pane.host, cloneFrom: backendSessionId, state: pane.state }],
       activePaneId: newPaneId,
-      showFiles: targetTab.showFiles
+      showFiles: false,
     }]);
     setActiveTabId(newId);
     setActivePaneId(newPaneId);
-    setContextMenu(null);
   }, []);
 
   const handleReconnectTab = useCallback((id: string) => {
+    setContextMenu(null);
     const targetTab = getStore().tabs.find(t => t.id === id);
     if (!targetTab) {
       return;
@@ -1058,7 +1071,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
         term.reconnect();
       }
     });
-    setContextMenu(null);
   }, []);
 
   const handleToggleFiles = useCallback(() => {
@@ -1066,8 +1078,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
       return;
     }
     const targetId = contextMenu.targetTabId;
-    setTabs(prev => prev.map(t => t.id === targetId ? { ...t, showFiles: !t.showFiles } : t));
     setContextMenu(null);
+    setTabs(prev => prev.map(t => t.id === targetId ? { ...t, showFiles: !t.showFiles } : t));
   }, [contextMenu]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, id: string) => {
@@ -1083,13 +1095,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
       return;
     }
     const targetId = contextMenu.targetTabId;
+    setContextMenu(null);
     const tab = getStore().tabs.find(t => t.id === targetId);
     setTabs(prev => prev.filter(t => t.id === targetId));
     setActiveTabId(targetId);
     if (tab) {
       setActivePaneId(tab.activePaneId);
     }
-    setContextMenu(null);
   }, [contextMenu]);
 
   const handleCloseRight = useCallback(() => {
@@ -1097,6 +1109,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       return;
     }
     const targetId = contextMenu.targetTabId;
+    setContextMenu(null);
     setTabs(prev => {
       const idx = prev.findIndex(t => t.id === targetId);
       const newTabs = prev.slice(0, idx + 1);
@@ -1107,7 +1120,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
       }
       return newTabs;
     });
-    setContextMenu(null);
   }, [contextMenu]);
 
   const handleButtonClick = useCallback(async (btn: Pick<ButtonData, 'id' | 'name' | 'type' | 'payload'>) => {
@@ -1301,6 +1313,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   // ── Keyboard shortcuts (reads fresh state from store — tiny stable dep array) ──
   useKeyboardManager({
+    handleCloneSession,
     handleButtonClick,
     handleSelectHost,
     handleOpenScratchpad,
@@ -1371,19 +1384,18 @@ export default function Dashboard({ initialData }: DashboardProps) {
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
       }
     });
-    fetch('/api/buttons', {
+    const res = await fetch('/api/buttons', {
       headers: {
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
       }
-    })
-      .then(r => r.json() as Promise<ButtonData[]>)
-      .then(data => {
-        setButtons(data || []);
-        setButtonsLoaded(true);
-      });
+    });
+    const data: ButtonData[] = await res.json();
+    setButtons(data || []);
+    setButtonsLoaded(true);
   }, []);
 
   const handleMoveButton = useCallback(async (id: string, direction: number) => {
+    setBtnMenuAnchor(null);
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     await fetch('/api/buttons/move', {
       method: METHOD_POST,
@@ -1393,17 +1405,14 @@ export default function Dashboard({ initialData }: DashboardProps) {
       },
       body: JSON.stringify({ id, direction } satisfies ButtonsMoveRequest)
     });
-    setBtnMenuAnchor(null);
-    fetch('/api/buttons', {
+    const res = await fetch('/api/buttons', {
       headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
       }
-    })
-      .then(r => r.json() as Promise<ButtonData[]>)
-      .then(data => {
-        setButtons(data || []);
-        setButtonsLoaded(true);
-      });
+    });
+    const data: ButtonData[] = await res.json();
+    setButtons(data || []);
+    setButtonsLoaded(true);
   }, []);
 
   const handleCloseBtnDialog = useCallback((_e: unknown, reason: string) => {

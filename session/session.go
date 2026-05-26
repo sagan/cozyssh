@@ -3,7 +3,6 @@ package session
 import (
 	"cozyssh/models"
 	"io"
-	"log"
 	"strings"
 	"sync"
 	"time"
@@ -104,10 +103,6 @@ func (s *Session) run() {
 			s.mu.Unlock()
 		}
 		if err != nil {
-			if err != io.EOF {
-				log.Printf("Session %s read error: %v", s.ID, err)
-			}
-
 			if s.RetryFunc != nil {
 				// Broadcast state change to listeners (hack: push a special text/binary indicator if needed,
 				// but let's notify the front-end via ws.go that ssh disconnected)
@@ -117,11 +112,10 @@ func (s *Session) run() {
 					nr, nw, rErr := s.RetryFunc()
 					if rErr != nil {
 						errStr := strings.ToLower(rErr.Error())
-						if strings.Contains(errStr, "authenticate") || strings.Contains(errStr, "auth") || strings.Contains(errStr, "mismatch") || strings.HasPrefix(errStr, "fatal:") {
-							log.Printf("SSH fatal failure on reconnect for %s: %v", s.ID, rErr)
+						if strings.Contains(errStr, "authenticate") || strings.Contains(errStr, "auth") ||
+							strings.Contains(errStr, "mismatch") || strings.HasPrefix(errStr, "fatal:") {
 							break
 						}
-						log.Printf("SSH reconnect failed for %s: %v", s.ID, rErr)
 						continue
 					}
 					s.Reader = nr

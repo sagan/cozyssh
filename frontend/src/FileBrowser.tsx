@@ -28,6 +28,7 @@ import {
 } from './constants';
 import { formatSize, type Order } from './common';
 import TextEditor from './TextEditor';
+import { dialogs } from './Dialogs';
 
 interface FileBrowserProps {
   sessionId: string;
@@ -114,11 +115,11 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
           setFilterValue('');
         }
       } else {
-        alert('Failed to list files');
+        dialogs.alert('Failed to list files');
       }
     } catch (e) {
       console.error(e);
-      alert('Error fetching files');
+      dialogs.alert('Error fetching files');
     } finally {
       setLoading(false);
     }
@@ -229,15 +230,15 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
           if (fileInfo.size <= 1048576) {
             handleEditAsText(fileInfo, targetPath);
           } else {
-            alert(`File is too large to open (${formatSize(fileInfo.size)}). Max limit is 1MB.`);
+            dialogs.alert(`File is too large to open (${formatSize(fileInfo.size)}). Max limit is 1MB.`);
           }
         }
       } else {
-        alert('Path not found or error accessing path');
+        dialogs.alert('Path not found or error accessing path');
       }
     } catch (e) {
       console.error(e);
-      alert('Error accessing path');
+      dialogs.alert('Error accessing path');
     } finally {
       setLoading(false);
     }
@@ -271,11 +272,11 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
       if (res.ok) {
         fetchFiles(currentPath);
       } else {
-        alert('Upload failed');
+        dialogs.alert('Upload failed');
       }
     } catch (error) {
       console.error(error);
-      alert('Upload error');
+      dialogs.alert('Upload error');
     } finally {
       setLoading(false);
       if (fileInputRef.current) {
@@ -285,6 +286,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   };
 
   const handleDownload = async (fileName: string) => {
+    setContextMenu(null);
     const join = getPathJoiner(currentPath);
     const targetPath = join(fileName);
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
@@ -307,16 +309,16 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
         a.click();
         document.body.removeChild(a);
       } else {
-        alert("Failed to initiate secure download.");
+        dialogs.alert("Failed to initiate secure download.");
       }
     } catch (e) {
       console.error(e);
-      alert("Error initiating secure download.");
+      dialogs.alert("Error initiating secure download.");
     }
-    setContextMenu(null);
   };
 
   const handleEditAsText = async (file: FileInfo, fullPath?: string) => {
+    setContextMenu(null);
     const targetPath = fullPath || getPathJoiner(currentPath)(file.name);
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     setLoading(true);
@@ -343,17 +345,16 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
           setEditingFile(file);
           setEditingPath(targetPath);
         } else {
-          alert("Failed to download file for editing.");
+          dialogs.alert("Failed to download file for editing.");
         }
       } else {
-        alert("Failed to initiate secure editing.");
+        dialogs.alert("Failed to initiate secure editing.");
       }
     } catch (e) {
       console.error(e);
-      alert("Error fetching file for editing.");
+      dialogs.alert("Error fetching file for editing.");
     } finally {
       setLoading(false);
-      setContextMenu(null);
     }
   };
 
@@ -398,18 +399,19 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
           fetchFiles(currentPath);
         }
       } else {
-        alert('Save failed');
+        dialogs.alert('Save failed');
       }
     } catch (error) {
       console.error(error);
-      alert('Save error');
+      dialogs.alert('Save error');
     } finally {
       setLoading(false);
     }
   };
 
   const handleRename = async (file: FileInfo) => {
-    const newName = prompt(`Rename ${file.name} to:`, file.name);
+    setContextMenu(null);
+    const newName = await dialogs.prompt(`Rename ${file.name} to:`, file.name);
     if (!newName || newName === file.name) {
       return;
     }
@@ -432,16 +434,16 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
       if (res.ok) {
         fetchFiles(currentPath);
       } else {
-        alert('Rename failed');
+        dialogs.alert('Rename failed');
       }
     } catch (e) {
       console.error(e);
     }
-    setContextMenu(null);
   };
 
   const handleDelete = async (file: FileInfo) => {
-    if (!confirm(`Are you sure you want to delete ${file.name}?`)) {
+    setContextMenu(null);
+    if (!await dialogs.confirm(`Are you sure you want to delete ${file.name}?`)) {
       return;
     }
 
@@ -459,16 +461,15 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
       if (res.ok) {
         fetchFiles(currentPath);
       } else {
-        alert('Delete failed');
+        dialogs.alert('Delete failed');
       }
     } catch (e) {
       console.error(e);
     }
-    setContextMenu(null);
   };
 
   const handleMkdir = async () => {
-    const name = prompt('New folder name:');
+    const name = await dialogs.prompt('New folder name:');
     if (!name) {
       return;
     }
@@ -487,7 +488,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
       if (res.ok) {
         fetchFiles(currentPath);
       } else {
-        alert('Failed to create folder');
+        dialogs.alert('Failed to create folder');
       }
     } catch (e) {
       console.error(e);
@@ -495,7 +496,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   };
 
   const handleNewFile = async () => {
-    const name = prompt('New file name:');
+    const name = await dialogs.prompt('New file name:');
     if (!name) {
       return;
     }
@@ -519,20 +520,20 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
       if (res.ok) {
         fetchFiles(currentPath);
       } else {
-        alert('Failed to create file');
+        dialogs.alert('Failed to create file');
       }
     } catch (error) {
       console.error(error);
-      alert('Error creating file');
+      dialogs.alert('Error creating file');
     } finally {
       setLoading(false);
     }
   };
 
   const handleCopyPath = (file: FileInfo) => {
+    setContextMenu(null);
     const join = getPathJoiner(currentPath);
     const fullPath = join(file.name);
-    setContextMenu(null);
     navigator.clipboard.writeText(fullPath);
   };
 

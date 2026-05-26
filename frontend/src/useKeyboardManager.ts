@@ -21,6 +21,7 @@ import {
 import { type TerminalRefMap, getStore, setActivePaneId, setActiveTabId } from "./store";
 
 export interface KeyboardManagerOptions {
+  handleCloneSession: (id: string) => void;
   /** Called when a button shortcut is triggered */
   handleButtonClick: (btn: ButtonData, isAutoRun?: boolean) => void;
   /** Open a local terminal tab */
@@ -43,6 +44,7 @@ export interface KeyboardManagerOptions {
 
 export function useKeyboardManager(options: KeyboardManagerOptions): void {
   const {
+    handleCloneSession,
     handleButtonClick,
     handleSelectHost,
     handleOpenScratchpad,
@@ -110,6 +112,11 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
 
       // ── Named shortcuts ───────────────────────────────────────────────────
       switch (keycomb) {
+        case "alt+c":
+          e.preventDefault();
+          handleCloneSession(activePaneId);
+          return;
+
         case "alt+o":
           e.preventDefault();
           setNewTabDialogInitialViewMode("servers");

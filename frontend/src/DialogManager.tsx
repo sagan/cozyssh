@@ -21,6 +21,7 @@ import { setActivePaneId, setActiveTabId, useStore, type TabData } from './store
 import NewTabDialog from './NewTabDialog';
 import type { ScratchpadHandle } from './Scratchpad';
 import type { TerminalHandle } from './Terminal';
+import { dialogs } from './Dialogs';
 
 export interface DialogManagerProps {
   activeGroup: string;
@@ -158,9 +159,8 @@ export default function DialogManager({
         if (data && typeof data === 'object' && !Array.isArray(data)) {
           isJson = true;
         }
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
       } catch (e) {
-        // Not a JSON document, fallback to treating as a script file
+        console.log(e);
       }
 
       if (isJson) {
@@ -178,7 +178,7 @@ export default function DialogManager({
         const validatedData = result.data;
 
         if (validatedData.id && buttons.find((b) => b.id === validatedData.id)) {
-          if (!confirm(`Button with ID "${validatedData.id}" already exists. Overwrite it?`)) {
+          if (!await dialogs.confirm(`Button with ID "${validatedData.id}" already exists. Overwrite it?`)) {
             return;
           }
         }
@@ -216,7 +216,7 @@ export default function DialogManager({
         }
 
         if (buttonId && buttons.find((b) => b.id === buttonId)) {
-          if (!confirm(`Button with ID "${buttonId}" already exists. Overwrite it?`)) {
+          if (!await dialogs.confirm(`Button with ID "${buttonId}" already exists. Overwrite it?`)) {
             return;
           }
         }
@@ -258,7 +258,7 @@ export default function DialogManager({
   }, [buttonFormData.group, buttonFormData.order, buttons, setButtonFormData]);
 
   const handleAddFromUrl = useCallback(async () => {
-    const url = prompt("Enter URL to load button data from:");
+    const url = await dialogs.prompt("Enter URL to load button data from:");
     if (!url) {
       return;
     }

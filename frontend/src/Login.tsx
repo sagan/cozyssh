@@ -1,15 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Box, Button, TextField, Typography, Paper, ThemeProvider, CssBaseline } from '@mui/material';
 
 import { version as PACKAGE_JSON_VERSION } from '../package.json';
 import type { FullData, LoginRequest, LoginResponse, Manifest } from './api';
 import { APP_NAME, BROWSER_STORAGE_KEY_TOKEN, HEADER_CONTENT_TYPE, METHOD_POST, MIME_JSON } from './constants';
 import { loginTheme } from './common';
+import { dialogs } from './Dialogs';
 
 export default function Login({ onLoginSuccess }: { onLoginSuccess?: (data: FullData) => void }) {
   const [password, setPassword] = useState('');
-
   const [name, setName] = useState("");
+
   useEffect(() => {
     fetch("/manifest.json").then((res) => res.json() as Promise<Manifest>).then((data) => {
       let name = data.name;
@@ -22,10 +23,10 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess?: (data: Full
     }).catch(e => console.log(e))
   }, []);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = useCallback(async (e: React.SubmitEvent) => {
     e.preventDefault();
     if (!password) {
-      alert('Please enter the App Password.');
+      dialogs.alert('Please enter the App Password.');
       return;
     }
     const res = await fetch('/api/login', {
@@ -44,12 +45,12 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess?: (data: Full
         window.location.href = '/';
       }
     } else {
-      alert('Login failed. Check the terminal output for the initial App Password.');
+      dialogs.alert('Login failed. Check the terminal output for the initial App Password.');
     }
-  };
+  }, [onLoginSuccess, password]);
 
-  const handleClearCache = async () => {
-    if (!confirm("This will unregister the Service Worker, clear all caches and reload. Proceed?")) {
+  const handleClearCache = useCallback(async () => {
+    if (!await dialogs.confirm("This will unregister the Service Worker, clear all caches and reload. Proceed?")) {
       return;
     }
     if ('serviceWorker' in navigator) {
@@ -65,7 +66,7 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess?: (data: Full
       }
       window.location.reload();
     }
-  };
+  }, []);
 
   return (
     <ThemeProvider theme={loginTheme}>

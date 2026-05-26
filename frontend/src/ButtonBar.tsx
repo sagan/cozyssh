@@ -43,11 +43,11 @@ export default function ButtonBar({
   return (
     <Box id="button-bar" sx={{
       borderTop: 1, borderColor: 'divider', bgcolor: '#f8f9fa',
-      flexShrink: 0, display: 'flex', alignItems: 'center'
+      flexShrink: 0, display: 'flex', alignItems: 'center',
     }}>
       <Box sx={{
         px: 1, display: 'flex', alignItems: 'center',
-        borderRight: 1, borderColor: 'divider', flexShrink: 0
+        borderRight: 1, borderColor: 'divider', flexShrink: 0,
       }}>
         <TextField
           select
@@ -58,7 +58,7 @@ export default function ButtonBar({
           sx={{
             minWidth: 80,
             '& .MuiInputBase-root': { fontSize: '0.8rem', height: 26 },
-            '& select': { py: 0, pr: '18px !important' }
+            '& select': { py: 0, pr: '18px !important' },
           }}
         >
           {groups.map(g => (
@@ -77,7 +77,7 @@ export default function ButtonBar({
           minHeight: 40,
           minWidth: 0,
           '& .MuiTabs-flexContainer': { gap: 1, px: 2, alignItems: 'center' },
-          '& .MuiTabs-indicator': { display: 'none' }
+          '& .MuiTabs-indicator': { display: 'none' },
         }}
       >
         {filteredButtons.map(btn => (
@@ -102,8 +102,8 @@ export default function ButtonBar({
               color: 'text.primary', margin: '6px 4px', cursor: 'pointer',
               '&:hover': {
                 bgcolor: buttonStyleBgColorHover[btn.type] || buttonStyleBgColorHover[""],
-                color: 'white'
-              }
+                color: 'white',
+              },
             }}
           />
         ))}

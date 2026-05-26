@@ -6,7 +6,7 @@ import { BROWSER_STORAGE_KEY_TOKEN } from './constants';
 import Login from './Login';
 import Dashboard from './Dashboard';
 import InsecureWarning from './InsecureWarning';
-import { AsyncDialogProvider } from './AsyncDialogContext';
+import { AsyncDialogProvider } from './Dialogs';
 
 function App() {
   const [securityCheck, setSecurityCheck] = useState<PreflightResponse | undefined>(undefined);
@@ -17,18 +17,10 @@ function App() {
     if (!window.isSecureContext) {
       fetch('/api/preflight')
         .then(res => res.json() as Promise<PreflightResponse>)
-        .then(data => {
-          setSecurityCheck({
-            isSecure: data.isSecure,
-            insecureAllowed: data.insecureAllowed
-          });
-        })
+        .then(setSecurityCheck)
         .catch(err => {
           console.error("Failed to fetch preflight info", err);
         });
-    } else {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSecurityCheck({ isSecure: true, insecureAllowed: true });
     }
   }, []);
 
