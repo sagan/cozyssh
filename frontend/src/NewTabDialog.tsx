@@ -85,7 +85,9 @@ export default function NewTabDialog({
   const isTouch = useMediaQuery('(pointer: coarse)');
 
   const filteredRecents = useMemo(() => {
-    if (viewMode !== 'servers') return [];
+    if (viewMode !== 'servers') {
+      return [];
+    }
     const f = filter.toLowerCase();
     return recents
       .filter(r => r.host.toLowerCase().includes(f))
@@ -94,14 +96,20 @@ export default function NewTabDialog({
   }, [recents, filter, viewMode]);
 
   const filteredHosts = useMemo(() => {
-    if (viewMode !== 'servers') return [];
+    if (viewMode !== 'servers') {
+      return [];
+    }
     const f = filter.trim();
     if (!f) {
       return hosts.filter(h => h.is_favourite).sort((a, b) => a.name.localeCompare(b.name));
     }
     return filterHosts(hosts, f).sort((a, b) => {
-      if (a.is_favourite && !b.is_favourite) return -1;
-      if (!a.is_favourite && b.is_favourite) return 1;
+      if (a.is_favourite && !b.is_favourite) {
+        return -1;
+      }
+      if (!a.is_favourite && b.is_favourite) {
+        return 1;
+      }
       return a.name.localeCompare(b.name);
     });
   }, [hosts, filter, viewMode]);
@@ -155,13 +163,17 @@ export default function NewTabDialog({
   }, [buttons, filter, viewMode]);
 
   const activeGroupButtons = useMemo(() => {
-    if (viewMode !== 'buttons') return [];
+    if (viewMode !== 'buttons') {
+      return [];
+    }
     return allFilteredButtons.matchedUser.filter(
       b => (b.group || DEFAULT_BUTTON_GROUP) === (activeGroup || DEFAULT_BUTTON_GROUP));
   }, [allFilteredButtons, activeGroup, viewMode]);
 
   const otherGroupButtons = useMemo(() => {
-    if (viewMode !== 'buttons') return [];
+    if (viewMode !== 'buttons') {
+      return [];
+    }
     return allFilteredButtons.matchedUser.filter(
       b => (b.group || DEFAULT_BUTTON_GROUP) !== (activeGroup || DEFAULT_BUTTON_GROUP));
   }, [allFilteredButtons, activeGroup, viewMode]);
@@ -398,13 +410,17 @@ export default function NewTabDialog({
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (!isTouch || !isMobile) return;
+    if (!isTouch || !isMobile) {
+      return;
+    }
     const touch = e.touches[0];
     swipeStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (!isTouch || !isMobile || !swipeStartRef.current) return;
+    if (!isTouch || !isMobile || !swipeStartRef.current) {
+      return;
+    }
     const touch = e.changedTouches[0];
     const diffX = touch.clientX - swipeStartRef.current.x;
     const diffY = touch.clientY - swipeStartRef.current.y;

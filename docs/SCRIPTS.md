@@ -570,7 +570,9 @@ const SettingsApplet = () => {
   const refresh = () => setVariables(csGetVar());
 
   const handleAdd = async () => {
-    if (!newKey.trim()) return;
+    if (!newKey.trim()) {
+      return;
+    }
     await csSetVar(newKey.trim(), newValue);
     setNewKey('');
     setNewValue('');

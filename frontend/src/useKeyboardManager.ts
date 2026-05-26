@@ -18,7 +18,7 @@ import {
   CS_EVENT_ACTIVE_GROUP_CHANGE,
   getKeyCombination,
 } from "./common";
-import { type TerminalRefMap, getStore } from "./store";
+import { type TerminalRefMap, getStore, setActivePaneId, setActiveTabId } from "./store";
 
 export interface KeyboardManagerOptions {
   /** Called when a button shortcut is triggered */
@@ -141,12 +141,14 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         case "alt+h": {
           e.preventDefault();
           const allPanes = tabs.flatMap((t) => t.panes.map((p) => ({ tabId: t.id, paneId: p.id })));
-          if (allPanes.length === 0) return;
+          if (allPanes.length === 0) {
+            return;
+          }
           const idx = allPanes.findIndex((p) => p.paneId === activePaneId);
           const nextIdx = (idx - 1 + allPanes.length) % allPanes.length;
           const target = allPanes[nextIdx];
-          getStore().setActiveTabId(target.tabId);
-          getStore().setActivePaneId(target.paneId);
+          setActiveTabId(target.tabId);
+          setActivePaneId(target.paneId);
           (document.activeElement as HTMLElement)?.blur?.();
           terminalRefs[target.paneId]?.focus();
           setTimeout(() => terminalRefs[target.paneId]?.focus(), 100);
@@ -156,12 +158,14 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         case "alt+l": {
           e.preventDefault();
           const allPanes = tabs.flatMap((t) => t.panes.map((p) => ({ tabId: t.id, paneId: p.id })));
-          if (allPanes.length === 0) return;
+          if (allPanes.length === 0) {
+            return;
+          }
           const idx = allPanes.findIndex((p) => p.paneId === activePaneId);
           const nextIdx = (idx + 1) % allPanes.length;
           const target = allPanes[nextIdx];
-          getStore().setActiveTabId(target.tabId);
-          getStore().setActivePaneId(target.paneId);
+          setActiveTabId(target.tabId);
+          setActivePaneId(target.paneId);
           (document.activeElement as HTMLElement)?.blur?.();
           terminalRefs[target.paneId]?.focus();
           setTimeout(() => terminalRefs[target.paneId]?.focus(), 100);
@@ -178,7 +182,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           const currentTab = tabs.find((t) => t.id === activeTabId);
           if (currentTab && currentTab.panes.length > 0) {
             const pid = currentTab.panes[0].id;
-            getStore().setActivePaneId(pid);
+            setActivePaneId(pid);
             setTimeout(() => terminalRefs[pid]?.focus(), 100);
           }
           return;
@@ -269,8 +273,8 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         idx = idx === 0 ? tabs.length - 1 : idx - 1;
         if (tabs[idx]) {
           const target = tabs[idx];
-          getStore().setActiveTabId(target.id);
-          getStore().setActivePaneId(target.activePaneId);
+          setActiveTabId(target.id);
+          setActivePaneId(target.activePaneId);
           (document.activeElement as HTMLElement)?.blur?.();
           terminalRefs[target.activePaneId]?.focus();
           setTimeout(() => terminalRefs[target.activePaneId]?.focus(), 100);

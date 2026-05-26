@@ -144,12 +144,20 @@ const EXTRA_ROWS: KeyDef[][] = [
 const ICON_SZ = { fontSize: 14 } as const;
 
 function KeyIcon({ label }: { label: string }) {
-  if (label === '↑') return <NorthIcon sx={ICON_SZ} />;
-  if (label === '↓') return <SouthIcon sx={ICON_SZ} />;
-  if (label === '←') return <WestIcon sx={ICON_SZ} />;
-  if (label === '→') return <EastIcon sx={ICON_SZ} />;
-  if (label === '⇥') return <KeyboardTabIcon sx={ICON_SZ} />;
-  return <>{label}</>;
+  switch (label) {
+    case '↑':
+      return <NorthIcon sx={ICON_SZ} />;
+    case '↓':
+      return <SouthIcon sx={ICON_SZ} />;
+    case '←':
+      return <WestIcon sx={ICON_SZ} />;
+    case '→':
+      return <EastIcon sx={ICON_SZ} />;
+    case '⇥':
+      return <KeyboardTabIcon sx={ICON_SZ} />;
+    default:
+      return <>{label}</>;
+  }
 }
 
 const BTN_SX = (wide?: boolean) => ({
@@ -203,7 +211,9 @@ export default function MobileInputBar({
     },
     onPointerUp: (e: React.PointerEvent) => {
       e.preventDefault();
-      if (!startCoords.current) return;
+      if (!startCoords.current) {
+        return;
+      }
       const dx = e.clientX - startCoords.current.x;
       const dy = e.clientY - startCoords.current.y;
       startCoords.current = null;
@@ -228,14 +238,63 @@ export default function MobileInputBar({
 
   const handleExtraKeysToggle = () => {
     const next = !extraKeysOpen;
-    onExtraKeysOpenChange(next);
-    // Suppress / restore system keyboard on the active xterm textarea
-    const term = getActiveTerminal();
-    if (term && "getXterm" in term) {
-      const textarea = term.getXterm()?.textarea;
-      if (textarea) textarea.inputMode = next ? 'none' : '';
-      if (next) {
+
+    if (next) {
+      // ── Opening the extra-keys panel ──────────────────────────────────────
+      // Suppress system keyboard immediately, then show the panel.
+      onExtraKeysOpenChange(true);
+      const term = getActiveTerminal();
+      if (term && "getXterm" in term) {
+        const textarea = term.getXterm()?.textarea;
+        if (textarea) {
+          textarea.inputMode = 'none';
+        }
         navigator.virtualKeyboard?.hide();
+      }
+    } else {
+      // ── Closing the extra-keys panel ──────────────────────────────────────
+      // The system keyboard opens asynchronously.  If we remove the panel
+      // immediately, there's a brief gap where neither the panel nor the
+      // keyboard is covering the bottom of the screen, causing a visible
+      // flick.  Strategy: restore inputMode and focus the textarea first
+      // (which triggers the keyboard to open), then wait for the visual
+      // viewport to shrink before actually removing the panel.
+      const term = getActiveTerminal();
+      if (term && "getXterm" in term) {
+        const textarea = term.getXterm()?.textarea;
+        if (textarea) textarea.inputMode = '';
+        // Focus triggers the system keyboard to begin opening
+        term.focus();
+      }
+
+      const vv = window.visualViewport;
+      if (vv) {
+        const heightAtClose = vv.height;
+        let done = false;
+
+        const finish = () => {
+          if (done) {
+            return;
+          }
+          done = true;
+          vv.removeEventListener('resize', onVVResize);
+          onExtraKeysOpenChange(false);
+        };
+
+        const onVVResize = () => {
+          // The viewport shrank → the system keyboard is now visible
+          if (vv.height < heightAtClose - 30) {
+            finish();
+          }
+        };
+
+        vv.addEventListener('resize', onVVResize);
+        // Safety timeout: if the keyboard doesn't open (e.g. hardware keyboard
+        // attached, or focus fails), remove the panel anyway after 400ms.
+        setTimeout(finish, 400);
+      } else {
+        // No visualViewport API — fall back to a simple delay
+        setTimeout(() => onExtraKeysOpenChange(false), 300);
       }
     }
   };
@@ -307,6 +366,14 @@ export default function MobileInputBar({
         // When open, it takes 0 space in the flex flow to prevent jumping
         height: extraKeysOpen ? 0 : 'auto',
         order: 10,
+        display: {
+          xs: 'block',
+          sm: 'block',
+          md: 'none',
+        },
+        '@media (pointer: coarse)': {
+          display: 'block',
+        },
       }}
     >
       {/* ── Extra-keys panel (replaces the accessory bar when open) ── */}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, TextField, Box, Typography, Button, FormControlLabel,
   Checkbox, Autocomplete, Menu, MenuItem, Alert, IconButton,
@@ -17,7 +17,7 @@ import {
   type Recent, type Toast, type ContextMenu, type NewTabDialogViewMode, type ToastData,
   getKeyCombination, ButtonDataSchema, generatePassword,
 } from './common';
-import { useStore, type TabData } from './store';
+import { setActivePaneId, setActiveTabId, useStore, type TabData } from './store';
 import NewTabDialog from './NewTabDialog';
 import type { ScratchpadHandle } from './Scratchpad';
 import type { TerminalHandle } from './Terminal';
@@ -99,7 +99,7 @@ export default function DialogManager({
   handleAttach, handleRefresh, handleSelectHost, terminalRefs, toasts, setToasts, setEditingButton,
   setInitialBtnFormData, setButtonDialogOpen, setInputDialogOpen, activeGroup
 }: DialogManagerProps) {
-  const { tabs, activeTabId, setActiveTabId, buttons, setActivePaneId } = useStore();
+  const { tabs, activeTabId, buttons } = useStore();
 
   const [titleMenuAnchor, setTitleMenuAnchor] = useState<null | HTMLElement>(null);
   const [importTip, setImportTip] = useState<ToastData | null>(null);
@@ -117,15 +117,15 @@ export default function DialogManager({
     }
   }, [buttonDialogOpen]);
 
-  const handleTitleMenuClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+  const handleTitleMenuClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
     setTitleMenuAnchor(event.currentTarget);
-  };
+  }, []);
 
-  const handleTitleMenuClose = () => {
+  const handleTitleMenuClose = useCallback(() => {
     setTitleMenuAnchor(null);
-  };
+  }, []);
 
-  const importFromUrl = async (url: string) => {
+  const importFromUrl = useCallback(async (url: string) => {
     setImportTip(null);
 
     try {
@@ -255,17 +255,19 @@ export default function DialogManager({
         severity: "error"
       });
     }
-  };
+  }, [buttonFormData.group, buttonFormData.order, buttons, setButtonFormData]);
 
-  const handleAddFromUrl = async () => {
+  const handleAddFromUrl = useCallback(async () => {
     const url = prompt("Enter URL to load button data from:");
-    if (!url) return;
+    if (!url) {
+      return;
+    }
     await importFromUrl(url);
-  };
+  }, [importFromUrl]);
 
-  const handleInstallPluginManager = async () => {
+  const handleInstallPluginManager = useCallback(async () => {
     await importFromUrl(PluginManagerUrl);
-  };
+  }, [importFromUrl]);
 
   return (
     <>
@@ -277,7 +279,9 @@ export default function DialogManager({
       >
         {memoTabId && (() => {
           const tab = tabs.find(t => t.id === memoTabId);
-          if (!tab) return null;
+          if (!tab) {
+            return null;
+          }
           return (
             <>
               {tab.type !== 'scratchpad' && (
@@ -336,7 +340,9 @@ export default function DialogManager({
         onClose={() => setBtnMenuAnchor(null)}
       >
         <MenuItem onClick={() => {
-          if (!btnMenuAnchor) return;
+          if (!btnMenuAnchor) {
+            return;
+          }
           const data = {
             id: "",
             name: btnMenuAnchor.btn.name,

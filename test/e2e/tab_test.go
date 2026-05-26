@@ -57,7 +57,9 @@ func getActiveSessionId(t *testing.T, page playwright.Page) string {
 		const pid = all.activePaneId;
 		for (const tab of all.tabs) {
 			const pane = tab.panes.find(p => p.id === pid);
-			if (pane) return pane.sessionId || pane.id;
+			if (pane) {
+				return pane.sessionId || pane.id;
+			}
 		}
 		return null;
 	}`)
@@ -398,7 +400,9 @@ func TestPinnedSessionSurvivesClientDisconnect(t *testing.T) {
 		const all = csGetAll();
 		for (const tab of all.tabs) {
 			for (const pane of tab.panes) {
-				if ((pane.sessionId || pane.id) === %q) return pane.id;
+				if ((pane.sessionId || pane.id) === %q) {
+					return pane.id;
+				}
 			}
 		}
 		return null;

@@ -26,7 +26,7 @@ import {
   BROWSER_STORAGE_KEY_TOKEN, HEADER_AUTHORIZATION, HEADER_AUTHORIZATION_BEARER_PREFIX,
   HEADER_CONTENT_TYPE, METHOD_POST, MIME_JSON,
 } from './constants';
-import type { Order } from './common';
+import { formatSize, type Order } from './common';
 import TextEditor from './TextEditor';
 
 interface FileBrowserProps {
@@ -61,21 +61,33 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
     const sep = isWin ? '\\' : '/';
     return (child: string) => {
       // If child is an absolute Windows path (C:\) or absolute Unix path (/etc), return as-is
-      if (/^[a-zA-Z]:/.test(child)) return child;
-      if (child.startsWith('/') && !isWin) return child;
+      if (/^[a-zA-Z]:/.test(child)) {
+        return child;
+      }
+      if (child.startsWith('/') && !isWin) {
+        return child;
+      }
 
       // Handle the case where child has a leading slash on Windows (from previous bugs)
       if (isWin && child.startsWith('/')) {
         const stripped = child.substring(1);
-        if (/^[a-zA-Z]:/.test(stripped)) return stripped;
+        if (/^[a-zA-Z]:/.test(stripped)) {
+          return stripped;
+        }
       }
 
-      if (!p || p === '') return child;
+      if (!p || p === '') {
+        return child;
+      }
 
       // If we are at the virtual root, don't use double slashes
-      if (p === '/') return '/' + child;
+      if (p === '/') {
+        return '/' + child;
+      }
 
-      if (p.endsWith('/') || p.endsWith('\\')) return p + child;
+      if (p.endsWith('/') || p.endsWith('\\')) {
+        return p + child;
+      }
       return p + sep + child;
     };
   };
@@ -87,7 +99,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
       const res = await fetch(`/api/fs/list?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(path)}`, {
         headers: {
           [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        }
+        },
       });
       if (res.ok) {
         const data: FsList = await res.json();
@@ -184,7 +196,9 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
 
   const handleGoTo = async () => {
     const val = filterValue.trim();
-    if (!val) return;
+    if (!val) {
+      return;
+    }
 
     const join = getPathJoiner(currentPath);
     let targetPath = val;
@@ -234,7 +248,9 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
+    if (!e.target.files || e.target.files.length === 0) {
+      return;
+    }
     const file = e.target.files[0];
 
     setLoading(true);
@@ -262,7 +278,9 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
       alert('Upload error');
     } finally {
       setLoading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -340,7 +358,9 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   };
 
   const handleSaveTextFile = async (newContent: string) => {
-    if (!editingFile || !editingPath) return;
+    if (!editingFile || !editingPath) {
+      return;
+    }
     setLoading(true);
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     try {
@@ -350,8 +370,13 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
       const lastSep = Math.max(editingPath.lastIndexOf('/'), editingPath.lastIndexOf('\\'));
       if (lastSep !== -1) {
         parentDir = editingPath.substring(0, lastSep);
-        if (parentDir === '' && !isWin) parentDir = '/';
-        if (isWin && parentDir.endsWith(':')) parentDir += '\\';
+        if (isWin) {
+          if (parentDir.endsWith(':')) {
+            parentDir += '\\';
+          }
+        } else if (parentDir === '') {
+          parentDir = '/';
+        }
       }
 
       const blob = new Blob([newContent], { type: 'text/plain' });
@@ -385,7 +410,9 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
 
   const handleRename = async (file: FileInfo) => {
     const newName = prompt(`Rename ${file.name} to:`, file.name);
-    if (!newName || newName === file.name) return;
+    if (!newName || newName === file.name) {
+      return;
+    }
 
     const join = getPathJoiner(currentPath);
     const oldPath = join(file.name);
@@ -414,7 +441,9 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   };
 
   const handleDelete = async (file: FileInfo) => {
-    if (!confirm(`Are you sure you want to delete ${file.name}?`)) return;
+    if (!confirm(`Are you sure you want to delete ${file.name}?`)) {
+      return;
+    }
 
     const join = getPathJoiner(currentPath);
     const path = join(file.name);
@@ -440,7 +469,9 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
 
   const handleMkdir = async () => {
     const name = prompt('New folder name:');
-    if (!name) return;
+    if (!name) {
+      return;
+    }
 
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     try {
@@ -465,7 +496,9 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
 
   const handleNewFile = async () => {
     const name = prompt('New file name:');
-    if (!name) return;
+    if (!name) {
+      return;
+    }
 
     setLoading(true);
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
@@ -499,12 +532,8 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   const handleCopyPath = (file: FileInfo) => {
     const join = getPathJoiner(currentPath);
     const fullPath = join(file.name);
-    navigator.clipboard.writeText(fullPath).then(() => {
-      // maybe a toast?
-    }).catch(err => {
-      console.error('Failed to copy: ', err);
-    });
     setContextMenu(null);
+    navigator.clipboard.writeText(fullPath);
   };
 
   const handleContextMenu = (e: React.MouseEvent, file: FileInfo) => {
@@ -514,12 +543,6 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
       mouseY: e.clientY - 4,
       file
     });
-  };
-
-  const formatSize = (size: number) => {
-    if (size < 1024) return `${size} B`;
-    if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   return (

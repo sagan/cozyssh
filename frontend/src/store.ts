@@ -37,7 +37,7 @@ export interface TabData {
 
 export type TerminalRefMap = Record<string, TerminalHandle | ScratchpadHandle | null>;
 
-interface MainState {
+interface Store {
   tabs: TabData[];
   activeTabId: string;
   activePaneId: string;
@@ -47,26 +47,11 @@ interface MainState {
   /** Local (browser-only) vars. All names have a "local" (case-insensitive) prefix. */
   localVars: Record<string, string | undefined>;
   shellIntegrations: Record<string, ShellIntegration>;
-}
-
-interface MainActions {
-  setTabs: (tabs: TabData[] | ((prev: TabData[]) => TabData[])) => void;
-  setActiveTabId: (id: string) => void;
-  setActivePaneId: (id: string) => void;
-  setHosts: (hosts: HostData[]) => void;
-  setButtons: (buttons: ButtonData[]) => void;
-  setVars: (vars: Record<string, string>) => void;
+  // unstable
   setLocalVars: (localVars: Record<string, string | undefined>) => void;
-  setShellIntegrations: (
-    update:
-      | Record<string, ShellIntegration>
-      | ((prev: Record<string, ShellIntegration>) => Record<string, ShellIntegration>)
-  ) => void;
 }
 
-type DashboardStore = MainState & MainActions;
-
-export const useStore = create<DashboardStore>((set) => ({
+export const useStore = create<Store>((set) => ({
   // ── State ──────────────────────────────────────────────────────────────
   tabs: [],
   activeTabId: "",
@@ -77,21 +62,32 @@ export const useStore = create<DashboardStore>((set) => ({
   localVars: {},
   shellIntegrations: {},
 
-  // ── Actions ────────────────────────────────────────────────────────────
-  setTabs: (tabs) => set((state) => ({ tabs: typeof tabs === "function" ? tabs(state.tabs) : tabs })),
-
-  setActiveTabId: (id) => set({ activeTabId: id }),
-  setActivePaneId: (id) => set({ activePaneId: id }),
-  setHosts: (hosts) => set({ hosts }),
-  setButtons: (buttons) => set({ buttons }),
-  setVars: (vars) => set({ vars }),
   setLocalVars: (localVars) => set({ localVars }),
-
-  setShellIntegrations: (update) =>
-    set((state) => ({
-      shellIntegrations: typeof update === "function" ? update(state.shellIntegrations) : update,
-    })),
 }));
+
+export const setTabs = (update: TabData[] | ((data: TabData[]) => TabData[])) =>
+  useStore.setState((state) => ({
+    tabs: typeof update === "function" ? update(state.tabs) : update,
+  }));
+
+export const setActiveTabId = (activeTabId: string) => useStore.setState({ activeTabId });
+
+export const setActivePaneId = (activePaneId: string) => useStore.setState({ activePaneId });
+
+export const setHosts = (hosts: HostData[]) => useStore.setState({ hosts });
+
+export const setButtons = (buttons: ButtonData[]) => useStore.setState({ buttons });
+
+export const setVars = (vars: Record<string, string>) => useStore.setState({ vars });
+
+export const setShellIntegrations = (
+  update:
+    | Record<string, ShellIntegration>
+    | ((data: Record<string, ShellIntegration>) => Record<string, ShellIntegration>)
+) =>
+  useStore.setState((state) => ({
+    shellIntegrations: typeof update === "function" ? update(state.shellIntegrations) : update,
+  }));
 
 /**
  * Synchronous, non-reactive getter — safe to call from event handlers,

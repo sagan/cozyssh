@@ -124,14 +124,18 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
     });
     if (res.ok) {
       alert('Password updated! You will be logged out.');
-      if (onLogout) onLogout();
+      if (onLogout) {
+        onLogout();
+      }
     } else {
       alert('Failed to update password');
     }
   };
 
   const handleClearCache = async () => {
-    if (!confirm("This will unregister the Service Worker, clear all caches and reload. Proceed?")) return;
+    if (!confirm("This will unregister the Service Worker, clear all caches and reload. Proceed?")) {
+      return;
+    }
     if ('serviceWorker' in navigator) {
       const registrations = await navigator.serviceWorker.getRegistrations();
       for (const registration of registrations) {
@@ -208,7 +212,9 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   };
 
   const handleCopyTagUrl = () => {
-    if (!tagContextMenu) return;
+    if (!tagContextMenu) {
+      return;
+    }
     const url = `${window.location.origin}/##${tagContextMenu.tag}`;
     navigator.clipboard.writeText(url);
     closeTagMenu();
@@ -226,7 +232,9 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   };
 
   const handleEditOpen = () => {
-    if (!contextMenu) return;
+    if (!contextMenu) {
+      return;
+    }
     const isAuto = contextMenu.target.source === 'known_hosts';
     const data: HostForm = {
       name: isAuto ? contextMenu.target.hostname : contextMenu.target.name,
@@ -248,7 +256,9 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   };
 
   const handleDelete = async () => {
-    if (!contextMenu) return;
+    if (!contextMenu) {
+      return;
+    }
     if (confirm(`Are you extremely certain you want to permanently delete "${contextMenu.target.name}"?`)) {
       const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
       await fetch(`/api/hosts/${contextMenu.target.name}`, {
@@ -263,7 +273,9 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
   };
 
   const handleToggleFavourite = async () => {
-    if (!contextMenu) return;
+    if (!contextMenu) {
+      return;
+    }
     const host = contextMenu.target;
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
 

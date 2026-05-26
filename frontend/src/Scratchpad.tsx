@@ -36,7 +36,7 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
       }
     }
     return {
-      pages: []
+      pages: [],
     };
   });
 

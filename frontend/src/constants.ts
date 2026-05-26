@@ -46,6 +46,7 @@ export const TERMINAL_FUNCTIONS = [
   { value: "SCROLL_DOWN", label: "SCROLL (Down)" },
   { value: "SCROLL_PAGE_UP", label: "SCROLL (Page Up)" },
   { value: "SCROLL_PAGE_DOWN", label: "SCROLL (Page Down)" },
+  { value: "CLONE_SESSION", label: "CLONE (Session)" },
   { value: "SEARCH", label: "SEARCH (Buffer)" },
 ] as const;
 

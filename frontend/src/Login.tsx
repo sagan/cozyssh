@@ -20,7 +20,7 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess?: (data: Full
       setName(name);
       document.title = prefix + name;
     }).catch(e => console.log(e))
-  }, [])
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,7 +49,9 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess?: (data: Full
   };
 
   const handleClearCache = async () => {
-    if (!confirm("This will unregister the Service Worker, clear all caches and reload. Proceed?")) return;
+    if (!confirm("This will unregister the Service Worker, clear all caches and reload. Proceed?")) {
+      return;
+    }
     if ('serviceWorker' in navigator) {
       const registrations = await navigator.serviceWorker.getRegistrations();
       for (const registration of registrations) {

@@ -6,12 +6,16 @@ import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
 
 import { VIBRATE_PATTERN } from './constants';
 import type { NewTabDialogViewMode, ScratchpadSyncState } from './common';
-import { useStore, type PaneData, type TerminalRefMap } from './store';
+import {
+  type PaneData, type TerminalRefMap,
+  setActivePaneId, setShellIntegrations, setTabs, useStore,
+} from './store';
+import type { AppletData } from './AppletWrapper';
 import Scratchpad, { type ScratchpadHandle } from './Scratchpad';
 import TerminalComponent, { type TerminalHandle } from './Terminal';
 import FileBrowser from './FileBrowser';
 import MobileInputBar from './MobileInputBar';
-import type { AppletData } from './AppletWrapper';
+
 
 export interface TerminalGridProps {
   terminalRefs: React.MutableRefObject<TerminalRefMap>;
@@ -52,8 +56,7 @@ export default function TerminalGrid({
   gestureMode, onGestureModeChange, extraKeysOpen, onExtraKeysOpenChange,
   keyboardHeight, getActiveTerminal,
 }: TerminalGridProps) {
-  const { tabs, setTabs, activeTabId, activePaneId, setActivePaneId, shellIntegrations,
-    setShellIntegrations, vars, localVars } = useStore();
+  const { tabs, activeTabId, activePaneId, shellIntegrations, vars, localVars } = useStore();
 
   // ── Gesture-mode: non-passive native touch listeners ─────────────────────
   // React synthetic touch events are passive (cannot preventDefault), so we
@@ -234,16 +237,18 @@ export default function TerminalGrid({
                 );
 
                 const n = tab.panes.length;
-                if (n <= 1) return renderPaneInner(tab.panes[0]);
-                if (n === 2) return (
-                  <Box sx={{ display: 'flex', flexDirection: 'row', height: '100%' }}>
+                if (n <= 1) {
+                  return renderPaneInner(tab.panes[0]);
+                }
+                if (n === 2) {
+                  return <Box sx={{ display: 'flex', flexDirection: 'row', height: '100%' }}>
                     {renderPaneInner(tab.panes[0])}
                     <Box sx={{ width: '1px', bgcolor: 'divider', flexShrink: 0 }} />
                     {renderPaneInner(tab.panes[1])}
-                  </Box>
-                );
-                if (n === 3) return (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+                  </Box>;
+                }
+                if (n === 3) {
+                  return <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
                     {renderPaneInner(tab.panes[0])}
                     <Box sx={{ height: '1px', bgcolor: 'divider', flexShrink: 0 }} />
                     <Box sx={{ flex: 1, display: 'flex', flexDirection: 'row', minHeight: 0 }}>
@@ -251,10 +256,10 @@ export default function TerminalGrid({
                       <Box sx={{ width: '1px', bgcolor: 'divider', flexShrink: 0 }} />
                       {renderPaneInner(tab.panes[2])}
                     </Box>
-                  </Box>
-                );
-                if (n === 4) return (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+                  </Box>;
+                }
+                if (n === 4) {
+                  return <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
                     <Box sx={{ flex: 1, display: 'flex', flexDirection: 'row', minHeight: 0 }}>
                       {renderPaneInner(tab.panes[0])}
                       <Box sx={{ width: '1px', bgcolor: 'divider', flexShrink: 0 }} />
@@ -266,8 +271,8 @@ export default function TerminalGrid({
                       <Box sx={{ width: '1px', bgcolor: 'divider', flexShrink: 0 }} />
                       {renderPaneInner(tab.panes[3])}
                     </Box>
-                  </Box>
-                );
+                  </Box>;
+                }
                 return null;
               })()}
             </Box>
@@ -335,22 +340,20 @@ export default function TerminalGrid({
         )}
       </Box>
 
-      {(isMobile || isTouch) && tabs.length > 0 && (
-        <MobileInputBar
-          isCtrlActive={isCtrlActive}
-          setIsCtrlActive={setIsCtrlActive}
-          isAltActive={isAltActive}
-          setIsAltActive={setIsAltActive}
-          handleSendKey={handleSendKey}
-          VIBRATE_PATTERN={VIBRATE_PATTERN}
-          gestureMode={gestureMode}
-          onGestureModeChange={onGestureModeChange}
-          extraKeysOpen={extraKeysOpen}
-          onExtraKeysOpenChange={onExtraKeysOpenChange}
-          keyboardHeight={keyboardHeight}
-          getActiveTerminal={getActiveTerminal}
-        />
-      )}
+      <MobileInputBar
+        isCtrlActive={isCtrlActive}
+        setIsCtrlActive={setIsCtrlActive}
+        isAltActive={isAltActive}
+        setIsAltActive={setIsAltActive}
+        handleSendKey={handleSendKey}
+        VIBRATE_PATTERN={VIBRATE_PATTERN}
+        gestureMode={gestureMode}
+        onGestureModeChange={onGestureModeChange}
+        extraKeysOpen={extraKeysOpen}
+        onExtraKeysOpenChange={onExtraKeysOpenChange}
+        keyboardHeight={keyboardHeight}
+        getActiveTerminal={getActiveTerminal}
+      />
     </>
   );
 }

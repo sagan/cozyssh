@@ -10,7 +10,7 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 
 import type {
   FullData, HostData, ButtonData, RecentUpdateRequest, SessionsAttachRequest, TabsPinRequest,
-  TabsUnpinRequest, SessionsCloseRequest, TabsRenameRequest, ButtonsMoveRequest, TabsLockRequest
+  TabsUnpinRequest, SessionsCloseRequest, TabsRenameRequest, ButtonsMoveRequest, TabsLockRequest,
 } from './api';
 import {
   APP_NAME, BROWSER_STORAGE_KEY_ACTIVE_GROUP, BROWSER_STORAGE_KEY_TOKEN, DEFAULT_BUTTON_GROUP,
@@ -21,9 +21,12 @@ import {
   type ContextMenu, type CSEventDetailTerminalChange, type NewTabDialogViewMode,
   type Recent, type ScratchpadSyncState, type Severity, type Toast,
   CS_EVENT_TERMINAL_CHANGE,
-  defaultTheme, getIntVar,
+  defaultTheme, generatePassword, getIntVar,
 } from './common';
-import { type TabData, useStore, getStore } from './store';
+import {
+  type TabData,
+  useStore, getStore, setTabs, setActiveTabId, setActivePaneId, setHosts, setButtons, setVars,
+} from './store';
 import { useLocalStorage } from './useLocalStorage';
 import { setupPluginAPI, runScript } from './pluginAPI';
 import { useKeyboardManager } from './useKeyboardManager';
@@ -35,6 +38,7 @@ import TerminalGrid from './TerminalGrid';
 import ButtonBar from './ButtonBar';
 import DialogManager from './DialogManager';
 import AppletWrapper, { type AppletData } from './AppletWrapper';
+import { dialogs } from './AsyncDialogContext';
 
 interface DashboardProps {
   initialData?: FullData;
@@ -46,12 +50,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const isTouch = useMediaQuery('(pointer: coarse)');
   // ── Store state (shared with pluginAPI and keyboard manager) ────────────
   const {
-    tabs, setTabs,
-    activeTabId, setActiveTabId,
-    activePaneId, setActivePaneId,
-    hosts, setHosts,
-    buttons, setButtons,
-    vars, setVars,
+    tabs,
+    activeTabId,
+    activePaneId,
+    hosts,
+    buttons,
+    vars,
   } = useStore();
 
   // ── UI-only state (stays in React) ────────────────────────────────────
@@ -89,7 +93,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [initialBtnFormData, setInitialBtnFormData] = useState<ButtonData | null>(null);
   const [btnMenuAnchor, setBtnMenuAnchor] = useState<{ anchor: HTMLElement, btn: ButtonData } | null>(null);
   const [lastMenuBtn, setLastMenuBtn] = useState<ButtonData | null>(null);
-  const handleNewButtonClick = () => {
+  const handleNewButtonClick = useCallback(() => {
     const maxOrder = buttons.length > 0 ? Math.max(...buttons.map(b => b.order || 0)) : 0;
     const data: ButtonData = {
       id: "", name: '', type: 'send_string', payload: '', group: activeGroup,
@@ -99,7 +103,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setButtonFormData(data);
     setInitialBtnFormData(data);
     setButtonDialogOpen(true);
-  };
+  }, [activeGroup, buttons]);
   const [buttonsLoaded, setButtonsLoaded] = useState(false);
   const [inputDialogOpen, setInputDialogOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -128,7 +132,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     }));
   }, [activePaneId]);
 
-  const csNotify = (msg: string, severity: Severity = 'info') => {
+  const csNotify = useCallback((msg: string, severity: Severity = 'info') => {
     toastIdRef.current++;
     const id = toastIdRef.current;
     setToasts(prev => {
@@ -138,20 +142,23 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, 4000);
-  };
+  }, []);
 
-  const handleTerminalData = (tabId: string) => {
+  const handleTerminalData = useCallback((tabId: string) => {
     setUnreadTabIds(prev => {
       // Don't mark active tab or already unread tabs
-      if (tabId === activeTabId || prev.has(tabId)) return prev;
+      if (tabId === getStore().activeTabId || prev.has(tabId)) {
+        return prev;
+      }
       const next = new Set(prev);
       next.add(tabId);
       return next;
     });
-  };
+  }, []);
 
   useEffect(() => {
     if (unreadTabIds.has(activeTabId)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setUnreadTabIds(prev => {
         const next = new Set(prev);
         next.delete(activeTabId);
@@ -179,6 +186,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   useEffect(() => {
     if (buttonsLoaded && !groups.includes(activeGroup)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveGroup(DEFAULT_BUTTON_GROUP);
     }
   }, [groups, buttonsLoaded, activeGroup]);
@@ -192,7 +200,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     };
   }, [applets]);
 
-  const handleSelectHost = React.useCallback(async (host: string, customTitle?: string) => {
+  const handleSelectHost = useCallback(async (host: string, customTitle?: string) => {
     const id = Math.random().toString(36).substring(2);
     console.log('handleSelectHost called for:', host, customTitle, 'ID:', id);
     const newTab: TabData = {
@@ -234,9 +242,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
         console.error('Failed to record recent:', e);
       }
     }
-  }, [setActivePaneId, setActiveTabId, setRecents, setTabs]);
+  }, [setRecents]);
 
-  const handleSelectTagAsSplit = React.useCallback((tag: string, hosts: string[]) => {
+  const handleSelectTagAsSplit = useCallback((tag: string, hosts: string[]) => {
     const tabId = Math.random().toString(36).substring(2);
     const panes = hosts.map(host => ({
       id: Math.random().toString(36).substring(2),
@@ -251,9 +259,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setTabs(prev => [...prev, newTab]);
     setActiveTabId(newTab.id);
     setActivePaneId(panes[0].id);
-  }, [setActivePaneId, setActiveTabId, setTabs]);
+  }, []);
 
-  const handleAttach = React.useCallback(async (id: string, host: string, title: string, isLocked: boolean = false) => {
+  const handleAttach = useCallback(async (id: string, host: string, title: string, isLocked: boolean = false) => {
     const existing = getStore().tabs.find(t => t.panes.some(p => (p.sessionId || p.id) === id && p.state !== 'stolen'));
     if (existing) {
       setActiveTabId(existing.id);
@@ -277,9 +285,32 @@ export default function Dashboard({ initialData }: DashboardProps) {
     }]);
     setActiveTabId(frontendId);
     setActivePaneId(frontendId);
-  }, [setActivePaneId, setActiveTabId, setTabs]);
+  }, []);
 
-  const handleRefresh = React.useCallback(async () => {
+  const [sysHostname, setSysHostname] = useState<string>('');
+  const [appVersion, setAppVersion] = useState<string>('dev');
+
+  const loadFullData = useCallback((data: FullData) => {
+    if (data.sysinfo) {
+      setSysHostname(data.sysinfo.hostname || 'unknown');
+      setAppVersion(data.sysinfo.version || 'dev');
+    }
+    if (data.hosts) {
+      setHosts(data.hosts);
+    }
+    if (data.buttons) {
+      setButtons(data.buttons || []);
+      setButtonsLoaded(true);
+    }
+    if (data.vars) {
+      setVars(data.vars || {});
+    }
+    if (data.recents) {
+      setRecents(data.recents);
+    }
+  }, [setRecents]);
+
+  const handleRefresh = useCallback(async () => {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     try {
       const r = await fetch('/api/fulldata', {
@@ -297,8 +328,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
     } catch (e) {
       console.error(e);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadFullData]);
+
+  const [muiTheme, setMuiTheme] = useState(defaultTheme);
 
   // ── Plugin API setup (single stable effect — no stale closures) ──────────
   useEffect(() => {
@@ -317,8 +349,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       setLocalVars,
       getTerminalRefs: () => terminalRefs.current,
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [csNotify, handleAttach, handleRefresh, handleSelectHost, handleSelectTagAsSplit, isMobile, setLocalVars]);
 
   // csGetApplet needs the reactive applets list — keep as a tiny separate effect
   useEffect(() => {
@@ -330,46 +361,48 @@ export default function Dashboard({ initialData }: DashboardProps) {
     };
   }, [applets]);
 
-  const handleCloseInputDialog = () => {
+  const handleCloseInputDialog = useCallback(() => {
     setInputDialogOpen(false);
     setTimeout(() => {
       terminalRefs.current[activePaneId]?.focus();
     }, 50);
-  };
+  }, [activePaneId]);
 
-  const handleCloseSearch = () => {
+  const handleCloseSearch = useCallback(() => {
     setSearchOpen(false);
     const term = terminalRefs.current[activePaneId];
     if (term && "getXterm" in term) {
       term.clearSearchDecorations();
       setTimeout(() => term.focus(), 50);
     }
-  };
+  }, [activePaneId]);
 
-  const handleSendKey = (key: string) => {
+  const handleSendKey = useCallback((key: string) => {
     const term = terminalRefs.current[activePaneId];
     if (term && "getXterm" in term) {
       term.sendData(key);
       setTimeout(() => term.focus(), 0);
     }
-  };
+  }, [activePaneId]);
 
-  const sendParsedString = async (input: string) => {
+  const sendParsedString = useCallback(async (input: string) => {
     const scope = sendScopeRef.current;
-    const { tabs: currentTabs, activeTabId: currentActiveTabId, activePaneId: currentActivePaneId } = getStore();
+    const { tabs: currentTabs, activeTabId, activePaneId } = getStore();
     let targetPaneIds: string[] = [];
     if (scope === 2) {
       targetPaneIds = currentTabs.flatMap(t => t.panes.map(p => p.id));
     } else if (scope === 1) {
-      const currentTab = currentTabs.find(t => t.id === currentActiveTabId);
-      targetPaneIds = currentTab ? currentTab.panes.map(p => p.id) : [currentActivePaneId];
+      const currentTab = currentTabs.find(t => t.id === activeTabId);
+      targetPaneIds = currentTab ? currentTab.panes.map(p => p.id) : [activePaneId];
     } else {
-      targetPaneIds = [currentActivePaneId];
+      targetPaneIds = [activePaneId];
     }
 
     const parts = input.split(/(<ctrl-[a-z]>)/gi);
     for (const part of parts) {
-      if (!part) continue;
+      if (!part) {
+        continue;
+      }
       const ctrlMatch = part.match(/<ctrl-([a-z])>/i);
       const dataToSend = ctrlMatch
         ? String.fromCharCode(ctrlMatch[1].toLowerCase().charCodeAt(0) - 96)
@@ -385,16 +418,20 @@ export default function Dashboard({ initialData }: DashboardProps) {
       }
       await new Promise(r => setTimeout(r, ctrlMatch ? 50 : 10));
     }
-  };
+  }, []);
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (!isTouch || !isMobile || gestureMode) return; // gesture mode uses native listeners
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (!isTouch || !isMobile || gestureMode) {
+      return; // gesture mode uses native listeners
+    }
     const touch = e.touches[0];
     swipeStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
-  };
+  }, [gestureMode, isMobile, isTouch]);
 
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (!isTouch || !isMobile || gestureMode || !swipeStartRef.current) return;
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (!isTouch || !isMobile || gestureMode || !swipeStartRef.current) {
+      return;
+    }
     const touch = e.changedTouches[0];
     const diffX = touch.clientX - swipeStartRef.current.x;
     const diffY = touch.clientY - swipeStartRef.current.y;
@@ -403,6 +440,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
     // Thresholds: move at least 100px, mostly horizontal, within 500ms
     if (Math.abs(diffX) > 100 && Math.abs(diffX) > Math.abs(diffY) * 2 && diffTime < 500) {
+      const { activeTabId, tabs } = getStore();
       const currentIndex = tabs.findIndex(t => t.id === activeTabId);
       if (diffX > 0 && currentIndex > 0) {
         const newTab = tabs[currentIndex - 1];
@@ -418,9 +456,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
         setTimeout(() => terminalRefs.current[newTab.activePaneId]?.focus(), 50);
       }
     }
-  };
+  }, [gestureMode, isMobile, isTouch]);
 
-  const tabId = useRef(sessionStorage.getItem('cozy_tab_id') || Math.random().toString());
+  const tabId = useRef(sessionStorage.getItem('cozy_tab_id') || generatePassword(12));
 
   useEffect(() => {
     sessionStorage.setItem('cozy_tab_id', tabId.current);
@@ -432,7 +470,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   useEffect(() => {
     const vv = window.visualViewport;
-    if (!vv) return;
+    if (!vv) {
+      return;
+    }
     const handleVVResize = () => {
       // 1. Lock dimensions to perfect integers immediately
       const roundedVVHeight = Math.floor(vv.height);
@@ -504,40 +544,21 @@ export default function Dashboard({ initialData }: DashboardProps) {
     return () => clearTimeout(t);
   }, [extraKeysOpen, activePaneId]);
 
-  const [sysHostname, setSysHostname] = useState<string>('');
-  const [appVersion, setAppVersion] = useState<string>('dev');
+
 
   // Listen for activeGroup changes dispatched by useKeyboardManager
   useEffect(() => {
     const handler = (e: Event) => {
       const group = (e as CustomEvent).detail?.group;
-      if (group) setActiveGroup(group);
+      if (group) {
+        setActiveGroup(group);
+      }
     };
     window.addEventListener('cs:active-group-change', handler);
     return () => window.removeEventListener('cs:active-group-change', handler);
   }, []);
 
-  const loadFullData = (data: FullData) => {
-    if (data.sysinfo) {
-      setSysHostname(data.sysinfo.hostname || 'unknown');
-      setAppVersion(data.sysinfo.version || 'dev');
-    }
-    if (data.hosts) {
-      setHosts(data.hosts);
-    }
-    if (data.buttons) {
-      setButtons(data.buttons || []);
-      setButtonsLoaded(true);
-    }
-    if (data.vars) {
-      setVars(data.vars || {});
-    }
-    if (data.recents) {
-      setRecents(data.recents);
-    }
-  };
-
-  const fetchHosts = async () => {
+  const fetchHosts = useCallback(async () => {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     try {
       const r = await fetch('/api/hosts', {
@@ -555,7 +576,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     } catch (e) {
       console.error(e);
     }
-  };
+  }, []);
 
   const [startupParams] = useSearchParams();
 
@@ -579,9 +600,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
       bc!.onmessage = (e) => {
         if (e.data === 'probe_pinned') {
           const hasPinned = getStore().tabs.some(t => t.isPinned);
-          if (hasPinned) bc?.postMessage('pinned_present');
+          if (hasPinned) {
+            bc?.postMessage('pinned_present');
+          }
         }
-        if (e.data === 'pinned_present') pinnedElsewhere = true;
+        if (e.data === 'pinned_present') {
+          pinnedElsewhere = true;
+        }
       };
 
       console.log('initAsync starting, hash:', hash);
@@ -686,8 +711,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
             });
             if (pinnedTabs.length > 0) {
               setTabs(prev => prev.length > 0 ? prev : pinnedTabs);
-              if (!getStore().activeTabId) setActiveTabId(pinnedTabs[0].id);
-              if (!getStore().activePaneId) setActivePaneId(pinnedTabs[0].activePaneId);
+              if (!getStore().activeTabId) {
+                setActiveTabId(pinnedTabs[0].id);
+              }
+              if (!getStore().activePaneId) {
+                setActivePaneId(pinnedTabs[0].activePaneId);
+              }
             } else {
               const initialId = `local-${Date.now()}`;
               const initialPaneId = Math.random().toString(36).substring(2);
@@ -695,8 +724,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
                 id: initialId, panes: [{ id: initialPaneId, host: 'local' }],
                 activePaneId: initialPaneId, title: 'local'
               }]);
-              if (!getStore().activeTabId) setActiveTabId(initialId);
-              if (!getStore().activePaneId) setActivePaneId(initialPaneId);
+              if (!getStore().activeTabId) {
+                setActiveTabId(initialId);
+              }
+              if (!getStore().activePaneId) {
+                setActivePaneId(initialPaneId);
+              }
             }
           } else {
             const initialId = `local-${Date.now()}`;
@@ -705,8 +738,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
               id: initialId, panes: [{ id: initialPaneId, host: 'local' }],
               activePaneId: initialPaneId, title: 'local'
             }]);
-            if (!getStore().activeTabId) setActiveTabId(initialId);
-            if (!getStore().activePaneId) setActivePaneId(initialPaneId);
+            if (!getStore().activeTabId) {
+              setActiveTabId(initialId);
+            }
+            if (!getStore().activePaneId) {
+              setActivePaneId(initialPaneId);
+            }
           }
         }
       }, 350);
@@ -715,10 +752,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
     initAsync();
 
     return () => {
-      if (bc) bc.close();
+      if (bc) {
+        bc.close();
+      }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialData, handleSelectTagAsSplit, handleSelectHost, startupParams]); // Run ONLY once on mount
+    // Run ONLY once on mount
+  }, [initialData, handleSelectTagAsSplit, handleSelectHost, startupParams, loadFullData, csNotify]);
 
   useEffect(() => {
     const active = tabs.find(t => t.id === activeTabId);
@@ -729,10 +768,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
     }
   }, [tabs, activeTabId, sysHostname]);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     const syncState = localStorage.getItem('cozy_scratchpad_sync_state');
     if (syncState && syncState !== 'synced') {
-      if (!confirm("Scratchpad data is not fully synced to the server. Are you sure you want to log out and clear the local cache?")) {
+      if (!await dialogs.confirm("Scratchpad data is not fully synced to the server. Are you sure you want to log out and clear the local cache?")) {
         return;
       }
     }
@@ -756,10 +795,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
       await caches.delete('manifest-cache');
     }
     window.location.href = '/login';
-  };
+  }, []);
 
   const handleOpenScratchpad = useCallback(() => {
-    const existing = tabs.find(t => t.type === 'scratchpad');
+    const existing = getStore().tabs.find(t => t.type === 'scratchpad');
     if (existing) {
       setActiveTabId(existing.id);
       setActivePaneId(existing.panes[0].id);
@@ -778,11 +817,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setActiveTabId(newTab.id);
     setActivePaneId(tabId);
     setTimeout(() => terminalRefs.current[tabId]?.focus(), 50);
-  }, [setActivePaneId, setActiveTabId, setTabs, tabs]);
+  }, []);
 
   const handleUnpinTab = useCallback(async (id: string) => {
-    const tab = tabs.find(t => t.id === id);
-    if (!tab) return;
+    const tab = getStore().tabs.find(t => t.id === id);
+    if (!tab) {
+      return;
+    }
     const backendSessionId = tab.panes[0]?.sessionId || tab.panes[0]?.id || id;
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     await fetch('/api/tabs/unpin', {
@@ -794,10 +835,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
       body: JSON.stringify({ id: backendSessionId } satisfies TabsUnpinRequest)
     });
     setContextMenu(null);
-  }, [tabs]);
+  }, []);
 
   const handleCloseTab = useCallback((e: React.MouseEvent | null, id: string) => {
     e?.stopPropagation();
+    const { activeTabId, tabs } = getStore();
     const targetTab = tabs.find(t => t.id === id);
     if (targetTab?.isPinned && !targetTab?.isLocked) {
       handleUnpinTab(id);
@@ -833,11 +875,14 @@ export default function Dashboard({ initialData }: DashboardProps) {
       return newTabs;
     });
     setTimeout(() => terminalRefs.current[getStore().activePaneId]?.focus(), 50);
-  }, [activeTabId, handleUnpinTab, setActivePaneId, setActiveTabId, setTabs, tabs]);
+  }, [handleUnpinTab]);
 
   const handleCloseCurrentPaneOrTab = useCallback(() => {
+    const { activeTabId, activePaneId, tabs } = getStore();
     const currentTab = tabs.find(t => t.id === activeTabId);
-    if (!currentTab) return;
+    if (!currentTab) {
+      return;
+    }
     if (currentTab.panes.length > 1) {
       const paneIdx = currentTab.panes.findIndex(p => p.id === activePaneId);
       const newPanes = currentTab.panes.filter(p => p.id !== activePaneId);
@@ -862,17 +907,21 @@ export default function Dashboard({ initialData }: DashboardProps) {
     } else {
       handleCloseTab(null, activeTabId);
     }
-  }, [activePaneId, activeTabId, handleCloseTab, setActivePaneId, setTabs, tabs]);
+  }, [handleCloseTab]);
 
-  const handlePinTab = async (id: string) => {
-    const tab = tabs.find(t => t.id === id);
-    if (!tab) return;
+  const handlePinTab = useCallback(async (id: string) => {
+    const tab = getStore().tabs.find(t => t.id === id);
+    if (!tab) {
+      return;
+    }
     if (tab.panes.length > 1) {
       alert("Only single-pane tabs can be pinned.");
       return;
     }
     const pane = tab.panes[0];
-    if (!pane) return;
+    if (!pane) {
+      return;
+    }
     const backendSessionId = pane.sessionId || pane.id;
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     // Pinning only supports single-pane tabs for now (backend requirement)
@@ -887,18 +936,21 @@ export default function Dashboard({ initialData }: DashboardProps) {
     });
     setTabs(prev => prev.map(t => t.id === id ? { ...t, isPinned: true } : t));
     setContextMenu(null);
-  };
+  }, []);
 
-
-  const handleLockTab = async (id: string) => {
-    const tab = tabs.find(t => t.id === id);
-    if (!tab) return;
+  const handleLockTab = useCallback(async (id: string) => {
+    const tab = getStore().tabs.find(t => t.id === id);
+    if (!tab) {
+      return;
+    }
     if (tab.panes.length > 1) {
       alert("Only single-pane tabs can be locked.");
       return;
     }
     const pane = tab.panes[0];
-    if (!pane) return;
+    if (!pane) {
+      return;
+    }
     const backendSessionId = pane.sessionId || pane.id;
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     const host = pane.host || 'local';
@@ -912,17 +964,21 @@ export default function Dashboard({ initialData }: DashboardProps) {
     });
     setTabs(prev => prev.map(t => t.id === id ? { ...t, isLocked: true } : t));
     setContextMenu(null);
-  };
+  }, []);
 
-  const handleUnlockTab = async (id: string) => {
-    const tab = tabs.find(t => t.id === id);
-    if (!tab) return;
+  const handleUnlockTab = useCallback(async (id: string) => {
+    const tab = getStore().tabs.find(t => t.id === id);
+    if (!tab) {
+      return;
+    }
     if (tab.panes.length > 1) {
       alert("Only single-pane tabs can be unlocked.");
       return;
     }
     const pane = tab.panes[0];
-    if (!pane) return;
+    if (!pane) {
+      return;
+    }
     const paneId = pane.sessionId || pane.id;
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     const host = pane.host || 'local';
@@ -935,16 +991,21 @@ export default function Dashboard({ initialData }: DashboardProps) {
       body: JSON.stringify({ id: paneId, host, title: tab.title } satisfies TabsPinRequest)
     });
     setTabs(prev => prev.map(t => t.id === id ? { ...t, isLocked: false } : t));
-    if (activeTabId === id) setActiveTabId(paneId);
+    if (getStore().activeTabId === id) {
+      setActiveTabId(paneId);
+    }
     setContextMenu(null);
-  };
+  }, []);
 
-  const handleRename = async () => {
-    if (!contextMenu) return;
+  const handleRename = useCallback(async () => {
+    if (!contextMenu) {
+      return;
+    }
     const targetId = contextMenu.targetTabId;
-    const targetTab = tabs.find(t => t.id === targetId);
-    if (!targetTab) return;
-
+    const targetTab = getStore().tabs.find(t => t.id === targetId);
+    if (!targetTab) {
+      return;
+    }
     const newTitle = prompt("Enter new tab name:", targetTab.title);
     if (newTitle && newTitle.trim() !== "") {
       if (targetTab.isPinned) {
@@ -962,11 +1023,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
       setTabs(prev => prev.map(t => t.id === targetId ? { ...t, title: newTitle } : t));
     }
     setContextMenu(null);
-  };
+  }, [contextMenu]);
 
-  const handleCloneSession = (id: string) => {
-    const targetTab = tabs.find(t => t.id === id);
-    if (!targetTab) return;
+  const handleCloneSession = useCallback((id: string) => {
+    const targetTab = getStore().tabs.find(t => t.id === id);
+    if (!targetTab) {
+      return;
+    }
     // Clone first pane
     const pane = targetTab.panes[0];
     const newPaneId = Math.random().toString(36).substring(2);
@@ -982,11 +1045,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setActiveTabId(newId);
     setActivePaneId(newPaneId);
     setContextMenu(null);
-  };
+  }, []);
 
-  const handleReconnectTab = (id: string) => {
-    const targetTab = tabs.find(t => t.id === id);
-    if (!targetTab) return;
+  const handleReconnectTab = useCallback((id: string) => {
+    const targetTab = getStore().tabs.find(t => t.id === id);
+    if (!targetTab) {
+      return;
+    }
     targetTab.panes.forEach(p => {
       const term = terminalRefs.current[p.id];
       if (term && "getXterm" in term) {
@@ -994,55 +1059,63 @@ export default function Dashboard({ initialData }: DashboardProps) {
       }
     });
     setContextMenu(null);
-  };
+  }, []);
 
-  const handleToggleFiles = () => {
-    if (!contextMenu) return;
+  const handleToggleFiles = useCallback(() => {
+    if (!contextMenu) {
+      return;
+    }
     const targetId = contextMenu.targetTabId;
     setTabs(prev => prev.map(t => t.id === targetId ? { ...t, showFiles: !t.showFiles } : t));
     setContextMenu(null);
-  };
+  }, [contextMenu]);
 
-  const handleContextMenu = (e: React.MouseEvent, id: string) => {
+  const handleContextMenu = useCallback((e: React.MouseEvent, id: string) => {
     e.preventDefault();
     setMemoTabId(id);
     setContextMenu({ mouseX: e.clientX + 2, mouseY: e.clientY - 6, targetTabId: id });
-  };
+  }, []);
 
-  const handleCloseMenu = () => setContextMenu(null);
+  const handleCloseMenu = useCallback(() => setContextMenu(null), []);
 
-  const handleCloseOther = () => {
-    if (!contextMenu) return;
+  const handleCloseOther = useCallback(() => {
+    if (!contextMenu) {
+      return;
+    }
     const targetId = contextMenu.targetTabId;
-    const tab = tabs.find(t => t.id === targetId);
+    const tab = getStore().tabs.find(t => t.id === targetId);
     setTabs(prev => prev.filter(t => t.id === targetId));
     setActiveTabId(targetId);
-    if (tab) setActivePaneId(tab.activePaneId);
+    if (tab) {
+      setActivePaneId(tab.activePaneId);
+    }
     setContextMenu(null);
-  };
+  }, [contextMenu]);
 
-  const handleCloseRight = () => {
-    if (!contextMenu) return;
+  const handleCloseRight = useCallback(() => {
+    if (!contextMenu) {
+      return;
+    }
     const targetId = contextMenu.targetTabId;
     setTabs(prev => {
       const idx = prev.findIndex(t => t.id === targetId);
       const newTabs = prev.slice(0, idx + 1);
       const targetTab = newTabs[idx];
-      if (activeTabId !== targetId) {
+      if (getStore().activeTabId !== targetId) {
         setActiveTabId(targetId);
         setActivePaneId(targetTab.activePaneId);
       }
       return newTabs;
     });
     setContextMenu(null);
-  };
+  }, [contextMenu]);
 
   const handleButtonClick = useCallback(async (btn: Pick<ButtonData, 'id' | 'name' | 'type' | 'payload'>) => {
     window.navigator.vibrate?.(VIBRATE_PATTERN);
     switch (btn.type) {
       case 'send_string':
         await sendParsedString(btn.payload);
-        terminalRefs.current[activePaneId]?.focus();
+        terminalRefs.current[getStore().activePaneId]?.focus();
         break;
 
       case 'open_terminal':
@@ -1050,7 +1123,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         break;
 
       case 'terminal_function': {
-        const term = terminalRefs.current[activePaneId];
+        const term = terminalRefs.current[getStore().activePaneId];
         if (!term || !("getXterm" in term)) {
           return;
         }
@@ -1178,6 +1251,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
             term.focus();
             break;
 
+          case 'CLONE_SESSION':
+            handleCloneSession(getStore().activePaneId);
+            break;
+
           case 'SEARCH':
             setSearchOpen(true);
             setTimeout(() => searchInputRef.current?.focus(), 100);
@@ -1209,7 +1286,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
           default:
             break;
         }
-        terminalRefs.current[activePaneId]?.focus();
+        terminalRefs.current[getStore().activePaneId]?.focus();
         break;
 
       case 'run_script':
@@ -1219,7 +1296,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
       default:
         break;
     }
-  }, [activeGroup, activePaneId, groups, handleCloseCurrentPaneOrTab, handleOpenScratchpad, handleSelectHost]);
+  }, [sendParsedString, handleSelectHost, csNotify, handleCloseCurrentPaneOrTab,
+    handleCloneSession, handleOpenScratchpad, groups, activeGroup]);
 
   // ── Keyboard shortcuts (reads fresh state from store — tiny stable dep array) ──
   useKeyboardManager({
@@ -1234,7 +1312,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     getTerminalRefs: () => terminalRefs.current,
   });
 
-  const handleSaveButton = async () => {
+  const handleSaveButton = useCallback(async () => {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     const method = editingButton ? METHOD_PUT : METHOD_POST;
     const url = editingButton ? `/api/buttons/${editingButton.id}` : '/api/buttons';
@@ -1258,7 +1336,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         setButtons(data || []);
         setButtonsLoaded(true);
       });
-  };
+  }, [buttonFormData, editingButton]);
 
   const noautorun = getIntVar(vars, localVars, "cs_noautorun");
 
@@ -1267,7 +1345,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       window.__CS_AUTORUN_DONE__ = 0;
       (async () => {
         if (noautorun !== 1 && startupParams.get("noautorun") !== "1") {
-          const scriptsToRun = buttons.filter(b => b.type === 'run_script' && b.autorun === 1);
+          const scriptsToRun = getStore().buttons.filter(b => b.type === 'run_script' && b.autorun === 1);
           for (const btn of scriptsToRun) {
             try {
               await handleButtonClick(btn);
@@ -1279,10 +1357,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
         window.__CS_AUTORUN_DONE__ = 1;
       })();
     }
-  }, [startupParams, buttonsLoaded, buttons, noautorun, handleButtonClick]);
+  }, [startupParams, buttonsLoaded, noautorun, handleButtonClick]);
 
-  const handleDeleteButton = async (id: string, name: string) => {
-    if (!confirm(`Delete button "${name}"?`)) return;
+  const handleDeleteButton = useCallback(async (id: string, name: string) => {
+    setBtnMenuAnchor(null);
+    if (!await dialogs.confirm(`Delete button "${name}"?`)) {
+      return;
+    }
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     await fetch(`/api/buttons/${id}`, {
       method: METHOD_DELETE,
@@ -1290,7 +1371,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
       }
     });
-    setBtnMenuAnchor(null);
     fetch('/api/buttons', {
       headers: {
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
@@ -1301,9 +1381,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
         setButtons(data || []);
         setButtonsLoaded(true);
       });
-  };
+  }, []);
 
-  const handleMoveButton = async (id: string, direction: number) => {
+  const handleMoveButton = useCallback(async (id: string, direction: number) => {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     await fetch('/api/buttons/move', {
       method: METHOD_POST,
@@ -1324,17 +1404,16 @@ export default function Dashboard({ initialData }: DashboardProps) {
         setButtons(data || []);
         setButtonsLoaded(true);
       });
-  };
+  }, []);
 
-  const handleCloseBtnDialog = (_e: unknown, reason: string) => {
+  const handleCloseBtnDialog = useCallback((_e: unknown, reason: string) => {
     const isDirty = initialBtnFormData && JSON.stringify(buttonFormData) !== JSON.stringify(initialBtnFormData);
     if (isDirty && (reason === 'backdropClick' || reason === 'escapeKeyDown')) {
       return;
     }
     setButtonDialogOpen(false);
     setTimeout(() => window.csFocus(), 0);
-  };
-
+  }, [buttonFormData, initialBtnFormData]);
 
   const [lastKeyboardHeight, setLastKeyboardHeight] = useState(0);
 
@@ -1343,12 +1422,16 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const prevExtraKeysOpen = useRef(extraKeysOpen);
 
   useEffect(() => {
-    if (keyboardHeight > 60) setLastKeyboardHeight(keyboardHeight);
+    if (keyboardHeight > 60) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLastKeyboardHeight(keyboardHeight);
+    }
   }, [keyboardHeight]);
 
   // 2. Track when the panel closes to hold the spacer momentarily
   useEffect(() => {
     if (prevExtraKeysOpen.current === true && extraKeysOpen === false) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsClosingPanel(true);
       const timer = setTimeout(() => setIsClosingPanel(false), 200);
       return () => clearTimeout(timer);
@@ -1373,8 +1456,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setExtraKeysOpen(false);
   }, []);
 
-  const [muiTheme, setMuiTheme] = useState(defaultTheme);
-
   return (
     <ThemeProvider theme={muiTheme}>
       <Box id="main-ui" sx={{ display: 'flex', height: viewportHeight, overflow: 'hidden' }}>
@@ -1397,10 +1478,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
         <Box
           id="ui-fix-spacer"
           component="main"
-          style={{
-            // Pass the calculated height perfectly to CSS
-            // '--keyboard-spacer-height': spacerHeight
-          } satisfies React.CSSProperties}
           sx={{
             flexGrow: 1,
             display: 'flex',

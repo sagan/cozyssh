@@ -191,8 +191,12 @@ export function getVar(
   name: string,
   defaultValue = ""
 ): string {
-  if (localVars["local_" + name]) return localVars["local_" + name]!;
-  if (vars[name]) return vars[name]!;
+  if (localVars["local_" + name]) {
+    return localVars["local_" + name]!;
+  }
+  if (vars[name]) {
+    return vars[name]!;
+  }
   return defaultValue;
 }
 
@@ -212,7 +216,9 @@ export function getIntVar(
   defaultValue = 0
 ): number {
   const value = getVar(vars, localVars, name);
-  if (value === "") return defaultValue;
+  if (value === "") {
+    return defaultValue;
+  }
   const parsed = parseInt(value);
   return isNaN(parsed) ? defaultValue : parsed;
 }
@@ -341,7 +347,9 @@ export function filterHosts(hosts: HostData[], filterStr: string): HostData[] {
  * @returns Snippet with the needle highlighted and centered
  */
 export function searchString(input: string, needle: string): string {
-  if (!input || !needle) return "";
+  if (!input || !needle) {
+    return "";
+  }
 
   const lowerInput = input.toLowerCase();
   const lowerNeedle = needle.toLowerCase();
@@ -389,4 +397,17 @@ export function base64urlEncode(input: string): string {
   const base64 = btoa(input);
   const base64url = base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   return base64url;
+}
+
+/**
+ * 1024 => "1.0 KB"
+ */
+export function formatSize(size: number) {
+  if (size < 1024) {
+    return `${size} B`;
+  }
+  if (size < 1024 * 1024) {
+    return `${(size / 1024).toFixed(1)} KB`;
+  }
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }

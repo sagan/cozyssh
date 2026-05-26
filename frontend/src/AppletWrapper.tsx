@@ -64,7 +64,9 @@ export default function AppletWrapper({
 
   useEffect(() => {
     const handleWindowResize = () => {
-      if (applet.position !== 'widget' || !wrapperRef.current) return;
+      if (applet.position !== 'widget' || !wrapperRef.current) {
+        return;
+      }
       const winW = window.innerWidth;
       const winH = window.innerHeight;
 
@@ -89,7 +91,9 @@ export default function AppletWrapper({
         const h = target.offsetHeight;
         if (w > 0 && h > 0) {
           setSize(prev => {
-            if (Math.abs(prev.width - w) < 1 && Math.abs(prev.height - h) < 1) return prev;
+            if (Math.abs(prev.width - w) < 1 && Math.abs(prev.height - h) < 1) {
+              return prev;
+            }
             return { width: w, height: h };
           });
         }
@@ -100,15 +104,21 @@ export default function AppletWrapper({
   }, [applet.position]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (applet.position !== 'widget') return;
-    if ((e.target as HTMLElement).closest('button')) return;
+    if (applet.position !== 'widget') {
+      return;
+    }
+    if ((e.target as HTMLElement).closest('button')) {
+      return;
+    }
     setIsDragging(true);
     dragStartRef.current = { x: e.clientX, y: e.clientY, pos: position };
   };
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging) return;
+      if (!isDragging) {
+        return;
+      }
       setPosition({
         x: dragStartRef.current.pos.x + (e.clientX - dragStartRef.current.x),
         y: dragStartRef.current.pos.y + (e.clientY - dragStartRef.current.y)

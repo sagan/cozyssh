@@ -257,7 +257,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
     getXterm: () => xtermRef.current,
     setInputMode: (mode: string) => {
       const textarea = xtermRef.current?.textarea;
-      if (textarea) (textarea as HTMLTextAreaElement).inputMode = mode;
+      if (textarea) {
+        textarea.inputMode = mode;
+      }
     },
   }));
 
@@ -291,7 +293,6 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
     console.log('Opening xterm for', host, 'on', terminalRef.current);
     term.open(terminalRef.current!);
     xtermRef.current = term;
-
 
     const textarea = term.textarea;
     if (textarea) {
@@ -580,8 +581,6 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
       params.set("cols", String(cols));
       params.set("rows", String(rows));
 
-
-
       if (forceReconnectRef.current) {
         params.set("reconnect", "1")
         forceReconnectRef.current = false;
@@ -837,7 +836,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
       if (container) {
         container.removeEventListener('contextmenu', handleContextMenu);
       }
-      if (wsRef.current) wsRef.current.close();
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
 
       // <-- Dispose of markers
       markersRef.current.start?.dispose();

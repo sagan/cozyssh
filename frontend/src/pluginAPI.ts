@@ -40,7 +40,7 @@ import {
   LOCAL_VAR_PREFIX,
 } from "./constants";
 import { generatePassword, type Severity } from "./common";
-import { getStore, type TerminalRefMap } from "./store";
+import { getStore, setActiveTabId, setButtons, setHosts, setVars, type TerminalRefMap } from "./store";
 import type { AppletData } from "./AppletWrapper";
 
 window.__CS_VERSION__ = PACKAGE_JSON_VERSION;
@@ -126,9 +126,12 @@ export async function runScript(
       const blobUrl = virtualModules[matchedModule];
 
       // Reconstruct the string using the mapped Blob URL
-      if (p1 && p3) return `${p1}${blobUrl}${p3}`; // Standard & Side-effect import
-      if (p4 && p6) return `${p4}${blobUrl}${p6}`; // Dynamic import
-
+      if (p1 && p3) {
+        return `${p1}${blobUrl}${p3}`; // Standard & Side-effect import
+      }
+      if (p4 && p6) {
+        return `${p4}${blobUrl}${p6}`; // Dynamic import
+      }
       return match; // Fallback
     });
     try {
@@ -225,7 +228,9 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
   window.csGetVar = ((name?: string) => {
     const { vars, localVars } = getStore();
     if (name) {
-      if (name.toLowerCase().startsWith(LOCAL_VAR_PREFIX)) return localVars[name];
+      if (name.toLowerCase().startsWith(LOCAL_VAR_PREFIX)) {
+        return localVars[name];
+      }
       return vars[name];
     }
     return { ...vars, ...localVars };
@@ -257,7 +262,9 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     if (Object.keys(localUpdates).length > 0) {
       cb.setLocalVars({ ...localVars, ...localUpdates });
     }
-    if (Object.keys(updates).length === 0) return;
+    if (Object.keys(updates).length === 0) {
+      return;
+    }
 
     const r = await fetch("/api/vars", {
       method: METHOD_PUT,
@@ -267,15 +274,20 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
       },
       body: JSON.stringify(updates),
     });
-    if (!r.ok) throw new Error(await r.text());
+    if (!r.ok) {
+      throw new Error(await r.text());
+    }
 
     const nextVars = { ...vars };
     for (const k in updates) {
       const v = updates[k];
-      if (v === null) delete nextVars[k];
-      else nextVars[k] = v;
+      if (v === null) {
+        delete nextVars[k];
+      } else {
+        nextVars[k] = v;
+      }
     }
-    getStore().setVars(nextVars);
+    setVars(nextVars);
   };
 
   // ── Terminal API ──────────────────────────────────────────────────────────
@@ -324,7 +336,9 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     const start = lineCount <= 0 ? 0 : Math.max(0, end - lineCount);
     for (let i = start; i <= end; i++) {
       const line = buffer.getLine(i);
-      if (line) lines.push(line.translateToString().trimEnd());
+      if (line) {
+        lines.push(line.translateToString().trimEnd());
+      }
     }
     return lines.join("\n");
   };
@@ -338,11 +352,15 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     const refs = cb.getTerminalRefs();
     if (paneId) {
       const allPanes = tabs.flatMap((t) => t.panes.map((p) => ({ tabId: t.id, paneId: p.id })));
-      if (allPanes.length === 0) return;
+      if (allPanes.length === 0) {
+        return;
+      }
       const idx = allPanes.findIndex((p) => p.paneId === paneId);
-      if (idx < 0) return;
+      if (idx < 0) {
+        return;
+      }
       const target = allPanes[idx];
-      getStore().setActiveTabId(target.tabId);
+      setActiveTabId(target.tabId);
       setTimeout(() => refs[target.paneId]?.focus(), 10);
     } else if (activePaneId) {
       setTimeout(() => refs[activePaneId]?.focus(), 0);
@@ -506,7 +524,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     });
     if (refreshRes.ok) {
       const data: ButtonData[] = await refreshRes.json();
-      getStore().setButtons(data || []);
+      setButtons(data || []);
     }
 
     return targetId;
@@ -533,7 +551,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     });
     if (refreshRes.ok) {
       const data: ButtonData[] = await refreshRes.json();
-      getStore().setButtons(data || []);
+      setButtons(data || []);
     }
   };
 
@@ -579,7 +597,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     });
     if (refreshRes.ok) {
       const data: HostData[] = await refreshRes.json();
-      getStore().setHosts(data || []);
+      setHosts(data || []);
     }
   };
 
@@ -604,7 +622,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     });
     if (refreshRes.ok) {
       const data: HostData[] = await refreshRes.json();
-      getStore().setHosts(data || []);
+      setHosts(data || []);
     }
   };
 
