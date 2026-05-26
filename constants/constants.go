@@ -14,5 +14,8 @@ const (
 	VAR_TOKEN                               = "token"
 	BROWSER_STORAGE_KEY_TOKEN               = "cozy_token"
 	APP_NAME                                = "CozySSH"
-	LOCAL_NAME                              = "local" // local shell name
+	LOCAL_NAME                              = "local" // local shell "server name"
+	COZYSSH_TOKEN_PREFIX                    = "cozytoken."
+	WS_PROTOCOL_QUERY_PREFIX                = "query."    // pass query parameters in ws protocol to prevent logging
+	WS_PROTOCOL_IDENTITY_PREFIX             = "identity." // pass identity in ws protocol to prevent logging
 )

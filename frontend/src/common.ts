@@ -96,7 +96,7 @@ export type CSEventDetailTerminalNew = {
   sessionId: string;
   host: string;
   params: URLSearchParams;
-  websocket_protocols: string[];
+  promises: PromiseLike<unknown>[];
   is_active_terminal: boolean;
 };
 

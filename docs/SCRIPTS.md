@@ -330,11 +330,11 @@ csNotify("Host deleted");
 
 ## Client-side Events
 
-CozySSH dispatches various `cs:*` events to the `window` object. You can listen for these events in your scripts (especially those with **Auto-run** enabled) to react to application state changes.
+CozySSH dispatches various `cs:*` DOM [CustomEvent](https://developer.mozilla.org/en-US/docs/Web/API/CustomEvent) events to the `window` object. You can listen for these events in your scripts (especially those with **Auto-run** enabled) to react to application state changes. Event details is put in `CustomEvent.detail`.
 
 ### `cs:terminal-new`
 
-Fired when a new terminal is created. At this time, the terminal is not yet connected to the backend, so the WebSocket is not yet opened.
+Fired when a new terminal is created. At this time, the terminal is not yet connected to the backend, so the WebSocket is not yet opened. It's able for script to block the connection or change connection params using this event handle.
 
 - `detail.terminal`: `Terminal`, the xterm.js Terminal instance.
 - `detail.sessionId`: `string`, the session ID.
@@ -347,6 +347,21 @@ Fired when a new terminal is created. At this time, the terminal is not yet conn
   - `rows`: optional terminal rows.
   - `cols`: optional terminal columns.
   - `remoteCommand`: optional command to execute on the remote host.
+- `detail.promises`: `PromiseLike<unknown>[]`, initial is empty, scripts can add promises to it, CozySSH will wait for them to resolve before establishing the backend connection. E.g.
+  ```ts
+  // If local shell, delay 1s, then throw an error, CozySSH will abort connecting
+  window.addEventListener('cs:terminal-new', (e) => {
+    const { detail } = e as CustomEvent<CSEventDetailTerminalNew>;
+    if (detail.host !== 'local') {
+      return;
+    }
+    detail.promises.push((async () => {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      throw new Error('Cancelled by user');
+    })());
+  });
+  export const cache = true;
+  ```
 
 ### `cs:terminal-change`
 

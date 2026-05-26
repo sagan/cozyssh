@@ -95,7 +95,7 @@ func HandleWS(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(protocols, ",")
 		for _, p := range parts {
 			p = strings.TrimSpace(p)
-			if strings.HasPrefix(p, "cozy.") {
+			if strings.HasPrefix(p, constants.COZYSSH_TOKEN_PREFIX) {
 				header.Set(constants.HEADER_SEC_WEBSOCKET_PROTOCOL, p)
 				break
 			}

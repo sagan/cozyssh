@@ -131,12 +131,16 @@ export async function runScript(
 
       return match; // Fallback
     });
-    scriptCode = transform(scriptCode, { transforms: ["typescript", "jsx"] }).code;
-
+    try {
+      scriptCode = transform(scriptCode, { transforms: ["typescript", "jsx"] }).code;
+    } catch (e) {
+      console.error(`Script ${btn.name} Transform Error:`, e);
+      notify(`Script ${btn.name} Transform Error: ${e}`, "error");
+      return;
+    }
     const blob = new Blob([scriptCode], { type: "application/javascript" });
     // Create a temporary URL pointing to that Blob
     const url = URL.createObjectURL(blob);
-
     try {
       moduleObj = await import(url);
     } catch (e) {

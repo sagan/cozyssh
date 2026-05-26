@@ -64,7 +64,7 @@ func generateToken() string {
 	// Adding a random salt/signature intent parameter
 	mac.Write([]byte("cozyssh-session-v1"))
 	sig := hex.EncodeToString(mac.Sum(nil))
-	return "cozy." + sig
+	return constants.COZYSSH_TOKEN_PREFIX + sig
 }
 
 func SignDownloadToken(id, path string, expires int64) string {
@@ -127,7 +127,7 @@ func WSAuth(r *http.Request) bool {
 			parts := strings.SplitSeq(protocols, ",")
 			for p := range parts {
 				p = strings.TrimSpace(p)
-				if strings.HasPrefix(p, "cozy.") {
+				if strings.HasPrefix(p, constants.COZYSSH_TOKEN_PREFIX) {
 					token = p
 					break
 				}

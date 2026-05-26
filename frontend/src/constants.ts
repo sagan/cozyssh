@@ -26,6 +26,8 @@ export const LOCAL_VAR_PREFIX = "local";
 export const DEFAULT_BUTTON_GROUP = "Default";
 
 export const VIBRATE_PATTERN = 100;
+export const COZYSSH_TOKEN_PREFIX = "cozytoken.";
+export const WS_PROTOCOL_QUERY_PREFIX = "query.";
 
 export const TERMINAL_FUNCTIONS = [
   { value: "COPY", label: "COPY (Buffer)" },

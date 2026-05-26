@@ -9,14 +9,14 @@ import { Box } from '@mui/material';
 import '@xterm/xterm/css/xterm.css';
 
 import type { WsResizeMsg, WsTerminalMessage } from './api';
-import { BROWSER_STORAGE_KEY_TOKEN } from './constants';
+import { BROWSER_STORAGE_KEY_TOKEN, WS_PROTOCOL_QUERY_PREFIX } from './constants';
 import {
   type CommandHistoryEntry, type CSEventDetailShellIntegration, type CSEventDetailTerminalConnected,
   type CSEventDetailTerminalData, type CSEventDetailTerminalDisconnected, type CSEventDetailTerminalResize,
   type ShellIntegration, type CSEventDetailTerminalNew,
   CS_EVENT_TERMINAL_DATA, CS_EVENT_TERMINAL_CONNECTED, CS_EVENT_TERMINAL_NEW,
   CS_EVENT_TERMINAL_DISCONNECTED, CS_EVENT_SHELL_INTEGRATION, CS_EVENT_TERMINAL_RESIZE,
-  getIntVar, getKeyCombination,
+  getIntVar, getKeyCombination, base64urlEncode,
 } from './common';
 
 export interface TerminalHandle {
@@ -556,7 +556,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
     let deathType: 'fatal' | 'stolen' | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout>;
 
-    const connectWS = () => {
+    const connectWS = async () => {
       if (wsRef.current) {
         wsRef.current.onclose = null;
         wsRef.current.close();
@@ -580,10 +580,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
       params.set("cols", String(cols));
       params.set("rows", String(rows));
 
-      const websocket_protocols: string[] = [];
-      if (token) {
-        websocket_protocols.push(token);
-      }
+
 
       if (forceReconnectRef.current) {
         params.set("reconnect", "1")
@@ -591,26 +588,40 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
         xtermRef.current?.reset();
       }
 
+      const promises: PromiseLike<unknown>[] = [];
       window.dispatchEvent(new CustomEvent(CS_EVENT_TERMINAL_NEW, {
         detail: {
           terminal: term,
           sessionId,
           host,
           params,
-          websocket_protocols,
+          promises,
           is_active_terminal: isActive,
         } satisfies CSEventDetailTerminalNew,
       }));
+      try {
+        await Promise.all(promises);
+      } catch (error) {
+        window.csNotify(`Error in terminal setup: ${error}`, 'error');
+        return;
+      }
 
-      const wsUrl = `${protocol}//${window.location.host}/api/ws?${params.toString()}`;
+      const wsUrl = `${protocol}//${window.location.host}/api/ws`;
 
       if (isDisposed) {
         return;
       }
+
+      const websocket_protocols: string[] = [];
+      if (token) {
+        websocket_protocols.push(token);
+      }
+      websocket_protocols.push(WS_PROTOCOL_QUERY_PREFIX + base64urlEncode(params.toString()));
+
       isDead = false;
       deathType = null;
       onStateChange?.('connecting to host');
-      const ws = new WebSocket(wsUrl, websocket_protocols.length > 0 ? websocket_protocols : undefined);
+      const ws = new WebSocket(wsUrl, websocket_protocols);
       ws.binaryType = 'arraybuffer';
       wsRef.current = ws;
 

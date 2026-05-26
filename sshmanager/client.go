@@ -366,8 +366,9 @@ type TerminalUI interface {
 
 // DialSSH resolves standard configs and connects via id_ed25519
 // It always returns a new independent connection.
-func DialSSH(name string, term TerminalUI, rows, cols int) (*PooledClient, *ssh.Session, string, error) {
-	client, closers, remoteCommand, err := getSSHClient(name, term)
+func DialSSH(name string, term TerminalUI, rows, cols int, identity string, noPublicKey bool) (
+	*PooledClient, *ssh.Session, string, error) {
+	client, closers, remoteCommand, err := getSSHClient(name, term, identity, noPublicKey)
 	if err != nil {
 		return nil, nil, "", err
 	}
@@ -391,7 +392,11 @@ func DialSSH(name string, term TerminalUI, rows, cols int) (*PooledClient, *ssh.
 	return pClient, session, remoteCommand, nil
 }
 
-func getSSHClient(name string, term TerminalUI) (*ssh.Client, []io.Closer, string, error) {
+// name: server name, or [username[:password]@]hostname[:port].
+// identity: directly set the content of the identity file.
+// noPublicKey: skip default public key authentication.
+func getSSHClient(name string, term TerminalUI, identity string,
+	noPublicKey bool) (*ssh.Client, []io.Closer, string, error) {
 	configPath := filepath.Join(getSSHDir(), "config")
 	f, err := os.Open(configPath)
 	var cfg *ssh_config.Config
@@ -454,7 +459,9 @@ func getSSHClient(name string, term TerminalUI) (*ssh.Client, []io.Closer, strin
 		remoteCommand, _ = cfg.Get(name, "RemoteCommand")
 	}
 
-	if identityFile == "" || identityFile == "~/.ssh/identity" {
+	if noPublicKey {
+		identityFile = ""
+	} else if identityFile == "" {
 		identityFile = filepath.Join(getSSHDir(), "id_ed25519")
 		if _, err := os.Stat(identityFile); os.IsNotExist(err) {
 			identityFile = filepath.Join(getSSHDir(), "id_rsa")
@@ -470,15 +477,24 @@ func getSSHClient(name string, term TerminalUI) (*ssh.Client, []io.Closer, strin
 	if password != "" {
 		authMethods = append(authMethods, ssh.Password(password))
 	}
-	keyData, err := os.ReadFile(identityFile)
-	if err == nil {
-		signer, err := ssh.ParsePrivateKey(keyData)
+
+	if identity != "" {
+		signer, err := ssh.ParsePrivateKey([]byte(identity))
 		if err == nil {
 			authMethods = append(authMethods, ssh.PublicKeys(signer))
 		}
+	} else if identityFile != "" {
+		keyData, err := os.ReadFile(identityFile)
+		if err == nil {
+			signer, err := ssh.ParsePrivateKey(keyData)
+			if err == nil {
+				authMethods = append(authMethods, ssh.PublicKeys(signer))
+			}
+		}
 	}
 
-	authMethods = append(authMethods, ssh.KeyboardInteractive(func(user, instruction string, questions []string, echos []bool) ([]string, error) {
+	authMethods = append(authMethods, ssh.KeyboardInteractive(func(user,
+		instruction string, questions []string, echos []bool) ([]string, error) {
 		if len(questions) == 0 {
 			return nil, nil
 		}
@@ -538,7 +554,7 @@ func getSSHClient(name string, term TerminalUI) (*ssh.Client, []io.Closer, strin
 		ssh.KeyAlgoECDSA256,
 		ssh.KeyAlgoECDSA384,
 		ssh.KeyAlgoECDSA521,
-		ssh.KeyAlgoDSA,
+		// ssh.KeyAlgoDSA,
 	}
 
 	algoMap := make(map[string]bool)
@@ -612,7 +628,7 @@ func getSSHClient(name string, term TerminalUI) (*ssh.Client, []io.Closer, strin
 
 	dialFunc := func(config *ssh.ClientConfig) (*ssh.Client, error) {
 		if proxyJumpAlias != "" {
-			proxyClient, proxyClosers, _, err := getSSHClient(proxyJumpAlias, term)
+			proxyClient, proxyClosers, _, err := getSSHClient(proxyJumpAlias, term, "", false)
 			if err != nil {
 				return nil, fmt.Errorf("failed to connect to ProxyJump %s: %w", proxyJumpAlias, err)
 			}

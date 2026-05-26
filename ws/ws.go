@@ -101,18 +101,25 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 
 	query := r.URL.Query()
 	header := make(http.Header)
+	identity := ""
 	if protocols := r.Header.Get(constants.HEADER_SEC_WEBSOCKET_PROTOCOL); protocols != "" {
 		parts := strings.SplitSeq(protocols, ",")
 		for p := range parts {
 			p = strings.TrimSpace(p)
-			if strings.HasPrefix(p, "cozy.") {
+			if strings.HasPrefix(p, constants.COZYSSH_TOKEN_PREFIX) {
 				header.Set(constants.HEADER_SEC_WEBSOCKET_PROTOCOL, p)
-			} else if strings.HasPrefix(p, "query.") {
-				// accepts passing parameters through header to avoid logging
-				if data, err := base64.RawURLEncoding.DecodeString(p[6:]); err == nil && len(data) > 0 {
+			} else if strings.HasPrefix(p, constants.WS_PROTOCOL_QUERY_PREFIX) {
+				// accepts passing parameters through ws protocol header to avoid logging
+				if data, err := base64.RawURLEncoding.DecodeString(
+					p[len(constants.WS_PROTOCOL_QUERY_PREFIX):]); err == nil && len(data) > 0 {
 					if q, err := url.ParseQuery(string(data)); err == nil {
 						maps.Copy(query, q)
 					}
+				}
+			} else if strings.HasPrefix(p, constants.WS_PROTOCOL_IDENTITY_PREFIX) {
+				if data, err := base64.RawURLEncoding.DecodeString(
+					p[len(constants.WS_PROTOCOL_IDENTITY_PREFIX):]); err == nil && len(data) > 0 {
+					identity = string(data)
 				}
 			}
 		}
@@ -131,9 +138,15 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	cols, _ := strconv.Atoi(query.Get("cols"))
 	rows, _ := strconv.Atoi(query.Get("rows"))
 	sessionRemoteCommand := query.Get("remoteCommand")
+	noPublicKey := query.Get("noPublicKey") == "1"
 
 	if sessionID == "" {
-		sessionID = host // Fallback to host if no unique ID provided
+		// Fallback to hostname if no unique ID provided
+		if _, hostname, found := strings.Cut(host, "@"); found {
+			sessionID = hostname
+		} else {
+			sessionID = host
+		}
 	}
 
 	if reconnect {
@@ -170,7 +183,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if pClient == nil {
-				pClient, sshSession, remoteCommand, err = sshmanager.DialSSH(host, term, rows, cols)
+				pClient, sshSession, remoteCommand, err = sshmanager.DialSSH(host, term, rows, cols, identity, noPublicKey)
 			}
 
 			if err != nil {
@@ -216,7 +229,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			s.RetryFunc = func() (io.Reader, io.Writer, error) {
 				s.Broadcast(append([]byte(models.WS_MSG_PREFIX_STATE), models.WsMsgStateDisconnected...))
 
-				newPClient, newSess, newRC, err := sshmanager.DialSSH(host, nil, rows, cols)
+				newPClient, newSess, newRC, err := sshmanager.DialSSH(host, nil, rows, cols, identity, noPublicKey)
 				if err != nil {
 					errStr := strings.ToLower(err.Error())
 					if strings.Contains(errStr, "mismatch") || strings.Contains(errStr, "auth") ||
