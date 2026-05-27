@@ -13,9 +13,9 @@ import type {
   TabsUnpinRequest, SessionsCloseRequest, TabsRenameRequest, ButtonsMoveRequest, TabsLockRequest,
 } from './api';
 import {
-  APP_NAME, BROWSER_STORAGE_KEY_ACTIVE_GROUP, BROWSER_STORAGE_KEY_TOKEN, DEFAULT_BUTTON_GROUP,
-  DEFAULT_SCROLL_LINES, HEADER_AUTHORIZATION, HEADER_AUTHORIZATION_BEARER_PREFIX, HEADER_CONTENT_TYPE,
-  LOCAL_NAME, METHOD_DELETE, METHOD_POST, METHOD_PUT, MIME_JSON, VIBRATE_PATTERN,
+  APP_NAME, BROWSER_STORAGE_KEY_ACTIVE_GROUP, BROWSER_STORAGE_KEY_LOCAL_VARS, BROWSER_STORAGE_KEY_RECENTS, BROWSER_STORAGE_KEY_TOKEN,
+  DEFAULT_BUTTON_GROUP, DEFAULT_SCROLL_LINES, HEADER_AUTHORIZATION, HEADER_AUTHORIZATION_BEARER_PREFIX,
+  HEADER_CONTENT_TYPE, LOCAL_NAME, METHOD_DELETE, METHOD_POST, METHOD_PUT, MIME_JSON, VIBRATE_PATTERN,
 } from './constants';
 import {
   type ContextMenu, type CSEventDetailTerminalChange, type NewTabDialogViewMode,
@@ -26,6 +26,7 @@ import {
 import {
   type TabData, type PaneData,
   useStore, getStore, setTabs, setActiveTabId, setActivePaneId, setHosts, setButtons, setVars,
+  setLocalVars as storeSetLocalVars,
 } from './store';
 import { useLocalStorage } from './useLocalStorage';
 import { setupPluginAPI, runScript } from './pluginAPI';
@@ -39,6 +40,7 @@ import ButtonBar from './ButtonBar';
 import DialogManager from './DialogManager';
 import AppletWrapper, { type AppletData } from './AppletWrapper';
 import { dialogs } from './Dialogs';
+import { useWakeLock } from './useWakeLock';
 
 interface DashboardProps {
   initialData?: FullData;
@@ -111,7 +113,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [sendScope, setSendScope] = useState<0 | 1 | 2>(0);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastIdRef = useRef(0);
-  const [recents, setRecents] = useLocalStorage<Recent[]>('cozy_recents', []);
+  const [recents, setRecents] = useLocalStorage<Recent[]>(BROWSER_STORAGE_KEY_RECENTS, []);
   const [newTabDialogOpen, setNewTabDialogOpen] = useState(false);
   const [newTabDialogInitialViewMode, setNewTabDialogInitialViewMode] = useState<NewTabDialogViewMode>('servers');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -119,8 +121,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // localVars uses useLocalStorage for persistence; synced into store for pluginAPI
-  const [localVars, setLocalVars] = useLocalStorage<Record<string, string | undefined>>("cozy_localvars", {});
-  useEffect(() => { useStore.getState().setLocalVars(localVars); }, [localVars]);
+  const [localVars, setLocalVars] = useLocalStorage<Record<string, string>>(BROWSER_STORAGE_KEY_LOCAL_VARS, {});
+  useEffect(() => { storeSetLocalVars(localVars); }, [localVars]);
 
   // sendScope needs to be readable from stable callbacks
   const sendScopeRef = useRef<0 | 1 | 2>(0);
@@ -398,12 +400,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
       targetPaneIds = [activePaneId];
     }
 
-    const parts = input.split(/(<ctrl-[a-z]>)/gi);
+    const parts = input.split(/(<ctrl-\S>)/gi);
     for (const part of parts) {
       if (!part) {
         continue;
       }
-      const ctrlMatch = part.match(/<ctrl-([a-z])>/i);
+      const ctrlMatch = part.match(/<ctrl-(\S)>/i);
       const dataToSend = ctrlMatch
         ? String.fromCharCode(ctrlMatch[1].toLowerCase().charCodeAt(0) - 96)
         : part;
@@ -578,7 +580,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
     }
   }, []);
 
+  // these variables are only used in initial phrase, so don't add them to dependency array
   const [startupParams] = useSearchParams();
+  const noautoload = getIntVar(vars, localVars, "cs_noautoload");
+  const noautorun = getIntVar(vars, localVars, "cs_noautorun");
+
+  useWakeLock(tabs.length > 0 && getIntVar(vars, localVars, "cs_nowakelock") !== 1);
 
   const initted = useRef(false);
   useEffect(() => {
@@ -586,7 +593,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       return;
     }
     initted.current = true;
-    const autoload = startupParams.get('noautoload') !== '1';
+    const autoload = noautoload !== 1 && startupParams.get('noautoload') !== '1';
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     const hash = window.location.hash.substring(1);
     if (hash) {
@@ -757,7 +764,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
       }
     };
     // Run ONLY once on mount
-  }, [initialData, handleSelectTagAsSplit, handleSelectHost, startupParams, loadFullData, csNotify]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialData, handleSelectTagAsSplit, handleSelectHost, loadFullData, csNotify]);
 
   useEffect(() => {
     const active = tabs.find(t => t.id === activeTabId);
@@ -790,6 +798,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       });
     }
     localStorage.clear();
+    sessionStorage.clear();
     if (window.caches) {
       await caches.delete('api-data-cache');
       await caches.delete('manifest-cache');
@@ -1029,7 +1038,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     }
   }, [contextMenu]);
 
-  const handleCloneSession = useCallback((id: string) => {
+  const handleCloneSession = useCallback((id: string, cloneInSameTab?: boolean) => {
     setContextMenu(null);
     let pane: PaneData | undefined;
     let tab: TabData | undefined;
@@ -1042,20 +1051,29 @@ export default function Dashboard({ initialData }: DashboardProps) {
         }
       }
     }
-    if (!tab || !pane) {
+    if (!tab || !pane || (cloneInSameTab && tab.panes.length >= 4)) {
       return;
     }
     const newPaneId = generatePassword(12);
     const newId = `${pane.host}-${Date.now()}`;
     const backendSessionId = pane.sessionId || pane.id;
-    setTabs(prev => [...prev, {
-      id: newId,
-      title: nextName(tab.title),
-      panes: [{ id: newPaneId, host: pane.host, cloneFrom: backendSessionId, state: pane.state }],
-      activePaneId: newPaneId,
-      showFiles: false,
-    }]);
-    setActiveTabId(newId);
+    setTabs(prev => {
+      const newPane = { id: newPaneId, host: pane.host, cloneFrom: backendSessionId, state: pane.state };
+      if (cloneInSameTab) {
+        return prev.map(t => t.id === tab.id && t.panes.length < 4
+          ? { ...t, panes: [...t.panes, newPane], activePaneId: newPaneId } : t);
+      }
+      return [...prev, {
+        id: newId,
+        title: nextName(tab.title),
+        panes: [newPane],
+        activePaneId: newPaneId,
+        showFiles: false,
+      }]
+    });
+    if (!cloneInSameTab) {
+      setActiveTabId(newId);
+    }
     setActivePaneId(newPaneId);
   }, []);
 
@@ -1267,6 +1285,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
             handleCloneSession(getStore().activePaneId);
             break;
 
+          case 'CLONE_SESSION_IN_SAME_TAB':
+            handleCloneSession(getStore().activePaneId, true);
+            break;
+
           case 'SEARCH':
             setSearchOpen(true);
             setTimeout(() => searchInputRef.current?.focus(), 100);
@@ -1351,8 +1373,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
       });
   }, [buttonFormData, editingButton]);
 
-  const noautorun = getIntVar(vars, localVars, "cs_noautorun");
-
   useEffect(() => {
     if (window.__CS_AUTORUN_DONE__ === undefined && buttonsLoaded) {
       window.__CS_AUTORUN_DONE__ = 0;
@@ -1370,7 +1390,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
         window.__CS_AUTORUN_DONE__ = 1;
       })();
     }
-  }, [startupParams, buttonsLoaded, noautorun, handleButtonClick]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buttonsLoaded, handleButtonClick]);
 
   const handleDeleteButton = useCallback(async (id: string, name: string) => {
     setBtnMenuAnchor(null);

@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
 export function useLocalStorage<T>(key: string, initialValue: T) {
-  // 1. Prevent infinite loops by storing initialValue in a ref
   const initialValueRef = useRef(initialValue);
 
   const readValue = useCallback((): T => {
@@ -12,25 +11,22 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
       const item = window.localStorage.getItem(key);
       return item ? (JSON.parse(item) as T) : initialValueRef.current;
     } catch (error) {
-      console.warn(`Error reading localStorage key “${key}”:`, error);
+      console.warn(`Error reading localStorage key "${key}":`, error);
       return initialValueRef.current;
     }
   }, [key]);
 
-  // 2. Prevent SSR hydration errors by always starting with initial value
-  // eslint-disable-next-line react-hooks/refs
-  const [storedValue, setStoredValue] = useState<T>(initialValueRef.current);
+  // FIX: Initialize state immediately using the readValue function
+  const [storedValue, setStoredValue] = useState<T>(() => readValue());
 
   const setValue = useCallback(
     (value: T | ((val: T) => T)) => {
       try {
-        // 3. Fix stale closures by using the functional update form
         setStoredValue((prev) => {
           const valueToStore = value instanceof Function ? value(prev) : value;
 
           if (typeof window !== "undefined") {
             window.localStorage.setItem(key, JSON.stringify(valueToStore));
-            // 4. Dispatch a custom event so other components in the SAME tab sync up
             window.dispatchEvent(new Event("local-storage-sync"));
           }
 
@@ -43,15 +39,11 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
     [key]
   );
 
-  // Hydrate state from localStorage on initial client mount
-  useEffect(() => {
-    setStoredValue(readValue());
-  }, [readValue]);
+  // REMOVED: The useEffect that re-hydrated state on mount is no longer needed!
 
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === key) {
-        // 5. Handle deletion by falling back to initial value if e.newValue is null
         setStoredValue(e.newValue ? JSON.parse(e.newValue) : initialValueRef.current);
       }
     };

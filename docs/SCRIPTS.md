@@ -9,10 +9,11 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
   - [Available global functions](#available-global-functions)
     - [`csOpenApplet(name: string, node: Node | React.ComponentType, options?: { position?: 'widget' | 'sidebar' | 'dialog', width?: number, height?: number }): void`](#csopenappletname-string-node-node--reactcomponenttype-options--position-widget--sidebar--dialog-width-number-height-number--void)
     - [`csCloseApplet(name: string): void`](#cscloseappletname-string-void)
-    - [`csGetApplet(name?: string): AppletData | AppletData[]`](#csgetappletname-string-appletdata--appletdata)
+    - [`csGetApplet(name: string): AppletData | undefined`, `csGetApplet(): AppletData[]`](#csgetappletname-string-appletdata--undefined-csgetapplet-appletdata)
     - [`csGetVar(name: string): string | undefined`, `csGetVar(): Record<string, string>`](#csgetvarname-string-string--undefined-csgetvar-recordstring-string)
     - [`csSetVar(name: string, value: string | undefined): Promise<void>`, `csSetVar(vars: Record<string, string | undefined>): Promise<void>`](#cssetvarname-string-value-string--undefined-promisevoid-cssetvarvars-recordstring-string--undefined-promisevoid)
     - [`csGetTerminal(paneId?: string): Terminal | undefined`](#csgetterminalpaneid-string-terminal--undefined)
+    - [`csGetTerminalHandle(paneId?: string): TerminalHandle | undefined`](#csgetterminalhandlepaneid-string-terminalhandle--undefined)
     - [`csGetShellIntegration(paneId?: string): ShellIntegration | undefined`](#csgetshellintegrationpaneid-string-shellintegration--undefined)
     - [`csSendData(data: string, paneId?: string): void`](#cssenddatadata-string-paneid-string-void)
     - [`csGetTerminalContents(lines = 100, paneId?: string) : string`](#csgetterminalcontentslines--100-paneid-string--string)
@@ -104,11 +105,11 @@ Opens a custom UI applet. The applet is essentially a floating widget, a section
 
 Closes the custom UI applet with the matching `name`.
 
-### `csGetApplet(name?: string): AppletData | AppletData[]`
+### `csGetApplet(name: string): AppletData | undefined`, `csGetApplet(): AppletData[]`
 
 Returns information about currently open applets.
-- `name`: Optional. If provided, returns the data for the specific applet.
-- If omitted, returns an array of all open applet objects.
+
+- `name`: The name of the applet to return the data for. If provided, returns the data for the specific applet. If omitted, returns an array of all open applet objects.
 
 Sample Applet object:
 ```json
@@ -139,6 +140,10 @@ Variables which name starts with `local` (case insensitive) are saved only in th
 ### `csGetTerminal(paneId?: string): Terminal | undefined`
 
 Returns the `xterm.js` [Terminal](https://xtermjs.org/docs/api/terminal/classes/terminal/) instance if `paneId` is provided, the active instance otherwise. Returns `undefined` if the specified terminal is not found.
+
+### `csGetTerminalHandle(paneId?: string): TerminalHandle | undefined`
+
+Returns the terminal handle for the specified terminal if `paneId` is provided, the active instance otherwise. Returns `undefined` if the specified terminal is not found.
 
 ### `csGetShellIntegration(paneId?: string): ShellIntegration | undefined`
 
@@ -1041,7 +1046,7 @@ const CmdHistoryApplet = () => {
     // Listener for shell integration updates (command finished, etc.)
     const handleIntegration = (e) => {
       if (e.detail.is_active_terminal) {
-        setHistory(e.detail.recentCommands || []);
+        setHistory(e.detail.shellIntegration?.recentCommands || []);
       }
     };
 

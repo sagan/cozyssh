@@ -40,6 +40,14 @@ export interface TerminalHandle {
   getXterm: () => Terminal | null;
   /** Set the inputMode on the hidden xterm textarea (e.g. 'none' to suppress system keyboard) */
   setInputMode: (mode: string) => void;
+  /**
+   * Atomically replace whatever the user has typed at the shell prompt with
+   * `newText`, without executing it.
+   *
+   * Sends: Ctrl+E (go to end of line) → Ctrl+U (kill to beginning) → newText.
+   * Only works while the shell is at an interactive prompt (not mid-execution).
+   */
+  replaceCmdLine: (newText: string) => void;
 }
 
 interface TerminalProps {
@@ -129,6 +137,11 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
   const lastKnownSizeRef = useRef<{ cols: number; rows: number }>({ cols: 80, rows: 24 });
   const shellIntegrationRef = useRef<ShellIntegration>({});
   const markersRef = useRef<{ start?: IMarker, end?: IMarker }>({});
+  /**
+   * Cursor position recorded at OSC 133;B (right after the prompt, where user
+   * input starts). Used to extract the live cmdline from the xterm buffer.
+   */
+  const promptEndRef = useRef<{ col: number; absLine: number } | null>(null);
 
   const updateShellIntegration = (updates: Partial<ShellIntegration>) => {
     shellIntegrationRef.current = { ...shellIntegrationRef.current, ...updates };
@@ -261,6 +274,15 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
         textarea.inputMode = mode;
       }
     },
+    replaceCmdLine: (newText: string) => {
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        // \x05 = Ctrl+E  — move cursor to end of line (no-op if already there)
+        // \x15 = Ctrl+U  — kill from cursor to start of line (readline unix-line-discard)
+        // newText        — the replacement command text to type
+        ws.send(new TextEncoder().encode('\x05\x15' + newText));
+      }
+    },
   }));
 
   useEffect(() => {
@@ -296,11 +318,13 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
 
     const textarea = term.textarea;
     if (textarea) {
-      if (getIntVar(vars, localVars, "cs_nocompletions") === 1) {
+      // Still a problem. See https://github.com/xtermjs/xterm.js/issues/3600
+      if (getIntVar(vars, localVars, "cs_nomodtextarea") !== 1) {
         textarea.setAttribute('autocomplete', 'off');
         textarea.setAttribute('autocorrect', 'off');
         textarea.setAttribute('autocapitalize', 'off');
         textarea.setAttribute('spellcheck', 'false');
+        textarea.setAttribute('data-gramm', 'false');
       }
       textarea.addEventListener("blur", () => {
         onTerminalBlur();
@@ -413,6 +437,10 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
           if (type === 'command') {
             updates.commandId = info.start;
             updates.isExecuting = true;
+            updates.promptPhase = 'output';
+            updates.currentCmdLine = undefined;
+            promptEndRef.current = null;
+
             // Initialize/Reset command string for new command execution
             updates.command = info.cmd || '';
 
@@ -445,12 +473,27 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
           } else if (type === 'shell') {
             updates.shellId = info.start;
             updates.isExecuting = false;
+            // Shell is back at the prompt. Activate live cmdline tracking.
+            updates.promptPhase = 'prompt';
+            updates.currentCmdLine = '';
+            // Capture cursor position as fallback anchor for readCurrentCmdLine().
+            // OSC 3008 has no explicit "prompt-end" marker (unlike OSC 133;B), so
+            // we record the cursor right now — it sits at the start of user-input
+            // area once the prompt finishes drawing, which is when this OSC fires.
+            const buf = term.buffer.active;
+            promptEndRef.current = {
+              col:     buf.cursorX,
+              absLine: buf.cursorY + buf.baseY,
+            };
           }
         }
 
         if (info.end) {
           if (info.end === shellIntegrationRef.current.commandId) {
             updates.isExecuting = false;
+            updates.promptPhase = 'finished';
+            updates.currentCmdLine = undefined;
+            promptEndRef.current = null;
 
             // <-- Set the end marker right after the command finishes, before the new prompt
             markersRef.current.end = term.registerMarker(0);
@@ -484,9 +527,11 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
     term.onTitleChange((title) => {
       // Often shells set the window title to the running command.
       // If we are executing, this is likely the command name or full command.
+      const titleUpdates: Partial<ShellIntegration> = { windowTitle: title };
       if (shellIntegrationRef.current.isExecuting) {
-        updateShellIntegration({ command: title });
+        titleUpdates.command = title;
       }
+      updateShellIntegration(titleUpdates);
     });
 
     term.parser.registerOscHandler(633, (data) => {
@@ -499,6 +544,165 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
       } catch (e) {
         console.error('Error parsing OSC 633:', e);
       }
+      return true;
+    });
+
+    // -------------------------------------------------------------------------
+    // OSC 133 — Shell prompt / command lifecycle (FTCS / VS Code shell integration)
+    //
+    //   OSC 133 ; A ST  — Prompt mark: the shell is drawing a new prompt
+    //   OSC 133 ; B ST  — Command start: user pressed Enter, command text begins
+    //   OSC 133 ; C ST  — Output start: command has started producing output
+    //   OSC 133 ; D [; <exitCode>] ST  — Command finished, optional exit code
+    // -------------------------------------------------------------------------
+    term.parser.registerOscHandler(133, (data) => {
+      try {
+        const parts = data.split(';');
+        const subCmd = parts[0];
+
+        if (subCmd === 'A') {
+          // Prompt is starting — shell is idle, new prompt being drawn
+          updateShellIntegration({ promptPhase: 'prompt', isExecuting: false });
+
+        } else if (subCmd === 'B') {
+          // Command input starting — user is typing / about to hit Enter.
+          // The cursor is now positioned at the very start of user input,
+          // i.e. immediately after the prompt. Capture this position so we
+          // can read the live cmdline from the buffer on each keypress.
+          const buf = term.buffer.active;
+          promptEndRef.current = {
+            col:     buf.cursorX,
+            absLine: buf.cursorY + buf.baseY,
+          };
+          updateShellIntegration({ promptPhase: 'input' });
+
+        } else if (subCmd === 'C') {
+          // Output starting — command is now running and producing output
+          // Place the start marker here so getLastCommandOutput() captures from this point
+          markersRef.current.start?.dispose();
+          markersRef.current.end?.dispose();
+          markersRef.current.start = term.registerMarker(0);
+          promptEndRef.current = null;
+          updateShellIntegration({ promptPhase: 'output', isExecuting: true, currentCmdLine: undefined });
+
+        } else if (subCmd === 'D') {
+          // Command finished — optional exit code in parts[1]
+          const exitCodeStr = parts[1];
+          const exitStatus = (exitCodeStr !== undefined && exitCodeStr !== '')
+            ? parseInt(exitCodeStr, 10)
+            : undefined;
+
+          // Place end marker right here before the new prompt renders
+          markersRef.current.end = term.registerMarker(0);
+
+          const updates: Partial<ShellIntegration> = {
+            promptPhase: 'finished',
+            isExecuting: false,
+          };
+
+          if (exitStatus !== undefined && !isNaN(exitStatus)) {
+            updates.exitStatus = exitStatus;
+
+            // Record in recent-commands history
+            const entry: CommandHistoryEntry = {
+              commandId: shellIntegrationRef.current.commandId || String(Date.now()),
+              command: shellIntegrationRef.current.command,
+              exitStatus,
+              timestamp: Date.now(),
+            };
+            const oldHistory = shellIntegrationRef.current.recentCommands || [];
+            updates.recentCommands = [entry, ...oldHistory].slice(0, RECENT_COMMANDS_NUM);
+          }
+
+          promptEndRef.current = null;
+          updateShellIntegration(updates);
+        }
+      } catch (e) {
+        console.error('Error parsing OSC 133:', e);
+      }
+      return true;
+    });
+
+    // -------------------------------------------------------------------------
+    // OSC 52 — System clipboard access
+    //
+    //   OSC 52 ; <clipboardTarget> ; <base64data> ST
+    //
+    // <clipboardTarget> is typically 'c' (clipboard) or 'p' (primary / X11).
+    // We only act on write requests ('c' or 'p') — read requests are ignored
+    // for security reasons (the remote shell could silently exfiltrate clipboard).
+    // -------------------------------------------------------------------------
+    term.parser.registerOscHandler(52, (data) => {
+      try {
+        const firstSemi = data.indexOf(';');
+        if (firstSemi === -1) return true;
+
+        // Everything after the first ';' is the base64 payload.
+        // We intentionally ignore the clipboard-target field — we always
+        // write to the OS clipboard (navigator.clipboard).
+        const b64 = data.substring(firstSemi + 1);
+
+        // '?' means the remote is requesting a clipboard read — deny silently.
+        if (b64 === '?') return true;
+
+        // Decode the base64 payload and write to the OS clipboard
+        const decoded = atob(b64);
+        navigator.clipboard.writeText(decoded).catch(err => {
+          console.warn('OSC 52: clipboard write failed:', err);
+        });
+      } catch (e) {
+        console.error('Error parsing OSC 52:', e);
+      }
+      return true;
+    });
+
+    // -------------------------------------------------------------------------
+    // OSC 1337 — iTerm2 extensions (proprietary)
+    //
+    // We support the CurrentDir= sub-command for CWD reporting (some shells
+    // emit this instead of / in addition to OSC 7).
+    // Image/file-transfer payloads are intentionally left to the ImageAddon.
+    // -------------------------------------------------------------------------
+    term.parser.registerOscHandler(1337, (data) => {
+      try {
+        if (data.startsWith('CurrentDir=')) {
+          const path = data.substring(11).trim();
+          if (path) {
+            updateShellIntegration({ cwd: path });
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing OSC 1337:', e);
+      }
+      return true;
+    });
+
+    // -------------------------------------------------------------------------
+    // OSC 0 / OSC 1 / OSC 2 — Window icon and title
+    //
+    //   OSC 0 ; <string> ST  — Set both icon title AND window title
+    //   OSC 1 ; <string> ST  — Set icon (minimised-window) title only
+    //   OSC 2 ; <string> ST  — Set window title only
+    //
+    // xterm.js fires onTitleChange() for OSC 0 and OSC 2 by default.
+    // We register explicit OSC 1 handler so we can also capture the icon title,
+    // and we hook onTitleChange for OSC 0/2 to keep everything in sync.
+    // -------------------------------------------------------------------------
+    // OSC 1 — icon title
+    term.parser.registerOscHandler(1, (data) => {
+      updateShellIntegration({ iconTitle: data });
+      return true;
+    });
+
+    // OSC 2 — window title (also covers OSC 0 via onTitleChange below)
+    term.parser.registerOscHandler(2, (data) => {
+      updateShellIntegration({ windowTitle: data });
+      return true;
+    });
+
+    // OSC 0 — both icon + window title simultaneously
+    term.parser.registerOscHandler(0, (data) => {
+      updateShellIntegration({ windowTitle: data, iconTitle: data });
       return true;
     });
 
@@ -784,6 +988,72 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
         }
 
         ws.send(new TextEncoder().encode(data));
+      }
+    });
+
+    // -------------------------------------------------------------------------
+    // Live cmdline tracking
+    //
+    // Reads the xterm buffer from the prompt-end cursor position (captured at
+    // OSC 133;B) after each server write (echo).  Falls back to a heuristic
+    // prompt-strip when 133;B hasn't fired (e.g. shells that only emit 133;A/D).
+    //
+    // This fires on onWriteParsed — i.e. after server-echoed data has been
+    // rendered into the xterm buffer — so the buffer reflects what the user sees.
+    // -------------------------------------------------------------------------
+    const readCurrentCmdLine = (): string => {
+      const phase = shellIntegrationRef.current.promptPhase;
+      if (phase !== 'prompt' && phase !== 'input') return '';
+
+      const buffer = term.buffer.active;
+      const promptEnd = promptEndRef.current;
+
+      if (promptEnd && promptEnd.col > 0) {
+        // --- Primary path: use the exact cursor anchor from OSC 133;B or OSC 3008 ---
+        // col > 0 guard: if col is 0, the OSC fired before the prompt was drawn
+        // (cursor was at the start of the line), so we can't safely use it as
+        // the input start — fall through to the heuristic instead.
+        const { col: startCol, absLine: startAbsLine } = promptEnd;
+        const cursorAbsLine = buffer.cursorY + buffer.baseY;
+
+        const segments: string[] = [];
+        for (let absLine = startAbsLine; absLine <= cursorAbsLine; absLine++) {
+          const line = buffer.getLine(absLine);
+          if (!line) continue;
+          const fullText = line.translateToString(false);
+          const text = absLine === startAbsLine
+            ? fullText.substring(startCol)
+            : fullText;
+          segments.push(text);
+        }
+        // Trim trailing spaces per-segment, then join logical lines with \n
+        return segments.map(s => s.trimEnd()).join('\n').trimEnd();
+
+      } else {
+        // --- Fallback: heuristic strip of the prompt on the cursor line ---
+        // Used when:
+        //  - no anchor is available (promptEndRef is null), or
+        //  - the anchor was captured at col 0 (OSC fired before prompt rendered)
+        const cursorLine = buffer.getLine(buffer.cursorY + buffer.baseY);
+        if (!cursorLine) return '';
+        const text = cursorLine.translateToString(true);
+        // Strip everything up to and including the last $, #, %, or > followed by a space
+        const lastPrompt = Math.max(
+          text.lastIndexOf('$ '),
+          text.lastIndexOf('# '),
+          text.lastIndexOf('% '),
+          text.lastIndexOf('> '),
+        );
+        return lastPrompt !== -1 ? text.substring(lastPrompt + 2) : text;
+      }
+    };
+
+    term.onWriteParsed(() => {
+      const phase = shellIntegrationRef.current.promptPhase;
+      if (phase !== 'prompt' && phase !== 'input') return;
+      const live = readCurrentCmdLine();
+      if (live !== shellIntegrationRef.current.currentCmdLine) {
+        updateShellIntegration({ currentCmdLine: live });
       }
     });
 

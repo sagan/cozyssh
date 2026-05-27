@@ -19,8 +19,12 @@ export const APP_NAME = "CozySSH";
 export const LOCAL_NAME = "local";
 
 // export const WS_MSG_PREFIX_STATE = "STATE:";
-export const BROWSER_STORAGE_KEY_TOKEN = "cozy_token";
 export const BROWSER_STORAGE_KEY_ACTIVE_GROUP = "cozy_active_group";
+export const BROWSER_STORAGE_KEY_LOCAL_VARS = "cozy_localvars";
+export const BROWSER_STORAGE_KEY_RECENTS = "cozy_recents";
+export const BROWSER_STORAGE_KEY_TOKEN = "cozy_token";
+export const BROWSER_STORAGE_KEY_VARS = "cozy_vars";
+
 export const LOCAL_VAR_PREFIX = "local";
 
 export const DEFAULT_BUTTON_GROUP = "Default";
@@ -47,6 +51,7 @@ export const TERMINAL_FUNCTIONS = [
   { value: "SCROLL_PAGE_UP", label: "SCROLL (Page Up)" },
   { value: "SCROLL_PAGE_DOWN", label: "SCROLL (Page Down)" },
   { value: "CLONE_SESSION", label: "CLONE (Session)" },
+  { value: "CLONE_SESSION_IN_SAME_TAB", label: "CLONE (Session In Same Tab)" },
   { value: "SEARCH", label: "SEARCH (Buffer)" },
 ] as const;
 

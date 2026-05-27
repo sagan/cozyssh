@@ -45,6 +45,8 @@ import type { AppletData } from "./AppletWrapper";
 
 window.__CS_VERSION__ = PACKAGE_JSON_VERSION;
 
+window.csGetApplet = () => undefined; // initial dummy implementation
+
 export type AppletPosition = "widget" | "sidebar" | "dialog";
 
 export interface CsExecResult {
@@ -208,7 +210,7 @@ export interface PluginAPICallbacks {
   /** Ref for the next z-index to assign to a widget applet */
   maxZIndexRef: React.MutableRefObject<number>;
   /** Update localVars in the store (and sync to localStorage via Dashboard) */
-  setLocalVars: (v: Record<string, string | undefined>) => void;
+  setLocalVars: (v: Record<string, string>) => void;
   /** Getter for the live terminal ref map (avoids store coupling) */
   getTerminalRefs: () => TerminalRefMap;
 }
@@ -260,7 +262,15 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     }
 
     if (Object.keys(localUpdates).length > 0) {
-      cb.setLocalVars({ ...localVars, ...localUpdates });
+      const newLocalVars = { ...localVars };
+      for (const [key, value] of Object.entries(localUpdates)) {
+        if (value === undefined) {
+          delete newLocalVars[key];
+        } else {
+          newLocalVars[key] = value;
+        }
+      }
+      cb.setLocalVars(newLocalVars);
     }
     if (Object.keys(updates).length === 0) {
       return;
@@ -297,6 +307,13 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     const refs = cb.getTerminalRefs();
     const term = refs[paneId ?? activePaneId];
     return term && "getXterm" in term ? term.getXterm() : undefined;
+  };
+
+  window.csGetTerminalHandle = (paneId?: string) => {
+    const { activePaneId } = getStore();
+    const refs = cb.getTerminalRefs();
+    const ref = refs[paneId ?? activePaneId];
+    return ref && "getXterm" in ref ? ref : undefined;
   };
 
   window.csGetShellIntegration = (paneId?: string) => {
@@ -633,6 +650,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
       "csGetVar",
       "csSetVar",
       "csGetTerminal",
+      "csGetTerminalHandle",
       "csGetShellIntegration",
       "csGetAll",
       "csSendData",

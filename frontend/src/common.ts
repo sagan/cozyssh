@@ -71,6 +71,15 @@ export interface CommandHistoryEntry {
   timestamp: number;
 }
 
+/**
+ * OSC 133 prompt lifecycle phase:
+ * - 'prompt'   — OSC 133;A  (prompt drawing started)
+ * - 'input'    — OSC 133;B  (user hit Enter; command text beginning)
+ * - 'output'   — OSC 133;C  (command output starting)
+ * - 'finished' — OSC 133;D  (command finished, exit code available)
+ */
+export type PromptPhase = 'prompt' | 'input' | 'output' | 'finished';
+
 export interface ShellIntegration {
   cwd?: string;
   user?: string;
@@ -85,6 +94,23 @@ export interface ShellIntegration {
   exitSignal?: string;
   isExecuting?: boolean;
   recentCommands?: CommandHistoryEntry[];
+  /** Current OSC 133 prompt lifecycle phase */
+  promptPhase?: PromptPhase;
+  /** Window title set by OSC 2 (or OSC 0) */
+  windowTitle?: string;
+  /** Icon/minimized-window title set by OSC 1 (or OSC 0) */
+  iconTitle?: string;
+  /**
+   * Live command line currently being typed at the shell prompt.
+   * Updated on every server echo (onWriteParsed) while promptPhase is
+   * 'prompt' or 'input'.  Cleared to undefined when the command starts
+   * running (133;C) or finishes (133;D).
+   *
+   * Requires the shell to emit at minimum OSC 133;A (prompt start).
+   * When OSC 133;B (prompt end) is also emitted, the value is exact;
+   * otherwise a heuristic prompt-strip is used as fallback.
+   */
+  currentCmdLine?: string;
 }
 
 export type CSEventDetailActiveGroupChange = {

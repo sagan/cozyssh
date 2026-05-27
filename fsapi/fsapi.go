@@ -3,7 +3,6 @@ package fsapi
 import (
 	"encoding/json"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -106,7 +105,6 @@ func HandleFS(w http.ResponseWriter, r *http.Request) {
 		var err error
 		sftpClient, err = sftp.NewClient(pClient.Client)
 		if err != nil {
-			log.Printf("Failed to create SFTP client: %v", err)
 			http.Error(w, "Failed to create SFTP client", http.StatusInternalServerError)
 			return
 		}

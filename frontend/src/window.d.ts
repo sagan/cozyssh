@@ -34,6 +34,7 @@ declare global {
     csNotify: (msg: string, severity: Severity = "info") => void;
     csOpen: (target: HostData | string | (HostData | string)[], options?: { name?: string }) => void;
     csGetTerminal: (paneId?: string) => Terminal | undefined | null;
+    csGetTerminalHandle: (paneId?: string) => TerminalHandle | undefined;
     csGetTerminalContents: (lineCount?: number, paneId?: string) => string;
     csGetShellIntegration: (paneId?: string) => ShellIntegration | undefined;
     csSendData: (data: string, paneId?: string) => void;
@@ -64,7 +65,7 @@ declare global {
       options?: { position?: AppletPosition; width?: number; height?: number }
     ): void;
     csCloseApplet: (name: string) => void;
-    csGetApplet: (name: string) => AppletData;
+    csGetApplet: (name: string) => AppletData | undefined;
     csGetApplet: () => AppletData[];
     csRefresh: () => Promise<void>;
     csSetTheme: (options: unknown, ...args: unknown[]) => void;

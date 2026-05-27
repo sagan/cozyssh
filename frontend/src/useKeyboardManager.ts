@@ -21,7 +21,7 @@ import {
 import { type TerminalRefMap, getStore, setActivePaneId, setActiveTabId } from "./store";
 
 export interface KeyboardManagerOptions {
-  handleCloneSession: (id: string) => void;
+  handleCloneSession: (id: string, cloneInSameTab?: boolean) => void;
   /** Called when a button shortcut is triggered */
   handleButtonClick: (btn: ButtonData, isAutoRun?: boolean) => void;
   /** Open a local terminal tab */
@@ -115,6 +115,11 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         case "alt+c":
           e.preventDefault();
           handleCloneSession(activePaneId);
+          return;
+
+        case "alt+shift+c":
+          e.preventDefault();
+          handleCloneSession(activePaneId, true);
           return;
 
         case "alt+o":
