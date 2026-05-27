@@ -213,6 +213,8 @@ export interface PluginAPICallbacks {
   setLocalVars: (v: Record<string, string>) => void;
   /** Getter for the live terminal ref map (avoids store coupling) */
   getTerminalRefs: () => TerminalRefMap;
+  /** Close tab or pane */
+  handleCloseTabOrPane: (tabOrPaneId?: string) => void;
 }
 
 // ── Setup / teardown ───────────────────────────────────────────────────────────
@@ -322,8 +324,18 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
   };
 
   window.csGetAll = () => {
-    const { activePaneId, shellIntegrations, tabs, hosts, buttons, vars, localVars } = getStore();
-    return { activePaneId, terminals: cb.getTerminalRefs(), shellIntegrations, tabs, hosts, buttons, vars, localVars };
+    const { activeTabId, activePaneId, shellIntegrations, tabs, hosts, buttons, vars, localVars } = getStore();
+    return {
+      activeTabId,
+      activePaneId,
+      terminals: cb.getTerminalRefs(),
+      shellIntegrations,
+      tabs,
+      hosts,
+      buttons,
+      vars,
+      localVars,
+    };
   };
 
   window.csSendData = (data: string, paneId?: string) => {
@@ -452,6 +464,10 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
 
   window.csRefresh = async () => {
     await cb.handleRefresh();
+  };
+
+  window.csClose = (tabOrPaneId?: string) => {
+    cb.handleCloseTabOrPane(tabOrPaneId);
   };
 
   // ── Applet API ────────────────────────────────────────────────────────────
@@ -663,6 +679,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
       "csOpen",
       "csAttach",
       "csRefresh",
+      "csClose",
       "csOpenApplet",
       "csCloseApplet",
       "csGetApplet",

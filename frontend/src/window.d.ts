@@ -33,13 +33,15 @@ declare global {
     csFocus: (paneId?: string) => void;
     csNotify: (msg: string, severity: Severity = "info") => void;
     csOpen: (target: HostData | string | (HostData | string)[], options?: { name?: string }) => void;
+    csClose: (tabOrPaneId?: string) => void;
     csGetTerminal: (paneId?: string) => Terminal | undefined | null;
     csGetTerminalHandle: (paneId?: string) => TerminalHandle | undefined;
     csGetTerminalContents: (lineCount?: number, paneId?: string) => string;
     csGetShellIntegration: (paneId?: string) => ShellIntegration | undefined;
     csSendData: (data: string, paneId?: string) => void;
     csGetAll: () => {
-      activePaneId: string;
+      activeTabId: string | undefined;
+      activePaneId: string | undefined;
       terminals: TerminalRefMap;
       shellIntegrations: Record<string, ShellIntegration>;
       tabs: TabData[];

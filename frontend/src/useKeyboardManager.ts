@@ -29,7 +29,7 @@ export interface KeyboardManagerOptions {
   /** Open (or switch to) the scratchpad tab */
   handleOpenScratchpad: () => void;
   /** Close the active pane, or the whole tab if it's the last pane */
-  handleCloseCurrentPaneOrTab: () => void;
+  handleCloseTabOrPane: (tabOrPaneId?: string) => void;
   /** Open / close the new-tab dialog */
   setNewTabDialogOpen: (open: boolean) => void;
   /** Set the initial view mode of the new-tab dialog */
@@ -48,7 +48,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
     handleButtonClick,
     handleSelectHost,
     handleOpenScratchpad,
-    handleCloseCurrentPaneOrTab,
+    handleCloseTabOrPane,
     setNewTabDialogOpen,
     setNewTabDialogInitialViewMode,
     searchInputRef,
@@ -186,7 +186,12 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
 
         case "alt+w":
           e.preventDefault();
-          handleCloseCurrentPaneOrTab();
+          handleCloseTabOrPane();
+          return;
+
+        case "alt+shift+w":
+          e.preventDefault();
+          handleCloseTabOrPane(activeTabId);
           return;
 
         case "alt+g": {
@@ -316,7 +321,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
     handleButtonClick,
     handleSelectHost,
     handleOpenScratchpad,
-    handleCloseCurrentPaneOrTab,
+    handleCloseTabOrPane,
     setNewTabDialogOpen,
     setNewTabDialogInitialViewMode,
     searchInputRef,

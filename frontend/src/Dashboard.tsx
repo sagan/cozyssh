@@ -334,25 +334,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   const [muiTheme, setMuiTheme] = useState(defaultTheme);
 
-  // ── Plugin API setup (single stable effect — no stale closures) ──────────
-  useEffect(() => {
-    return setupPluginAPI({
-      notify: csNotify,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setTheme: (options: any, ...args: any[]) => setMuiTheme(createTheme(options, ...args)),
-      handleSelectHost,
-      handleSelectTagAsSplit,
-      handleAttach,
-      handleRefresh,
-      setApplets,
-      setMobileAppletsOpen,
-      isMobile,
-      maxZIndexRef,
-      setLocalVars,
-      getTerminalRefs: () => terminalRefs.current,
-    });
-  }, [csNotify, handleAttach, handleRefresh, handleSelectHost, handleSelectTagAsSplit, isMobile, setLocalVars]);
-
   // csGetApplet needs the reactive applets list — keep as a tiny separate effect
   useEffect(() => {
     window.csGetApplet = ((name?: string) => {
@@ -886,20 +867,44 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setTimeout(() => terminalRefs.current[getStore().activePaneId]?.focus(), 50);
   }, [handleUnpinTab]);
 
-  const handleCloseCurrentPaneOrTab = useCallback(() => {
+  const handleCloseTabOrPane = useCallback((tabOrPaneId?: string) => {
     const { activeTabId, activePaneId, tabs } = getStore();
-    const currentTab = tabs.find(t => t.id === activeTabId);
-    if (!currentTab) {
+    const wasOmitted = tabOrPaneId === undefined || tabOrPaneId === null || tabOrPaneId === "";
+    const targetId = wasOmitted ? activePaneId : tabOrPaneId;
+    if (!targetId) {
       return;
     }
-    if (currentTab.panes.length > 1) {
-      const paneIdx = currentTab.panes.findIndex(p => p.id === activePaneId);
-      const newPanes = currentTab.panes.filter(p => p.id !== activePaneId);
-      const nextPaneId = newPanes[Math.max(0, paneIdx - 1)].id;
 
-      if (!currentTab.isLocked) {
-        const paneToClose = currentTab.panes.find(p => p.id === activePaneId);
-        if (paneToClose && paneToClose.state !== 'stolen') {
+    // 1. Check if targetId is a Tab ID
+    const targetTab = tabs.find(t => t.id === targetId);
+    if (targetTab) {
+      handleCloseTab(null, targetId);
+      return;
+    }
+
+    // 2. Check if targetId is a Pane ID
+    let parentTab: TabData | undefined;
+    let targetPane: PaneData | undefined;
+    for (const t of tabs) {
+      const p = t.panes.find(pane => pane.id === targetId);
+      if (p) {
+        parentTab = t;
+        targetPane = p;
+        break;
+      }
+    }
+
+    if (parentTab && targetPane) {
+      if (parentTab.panes.length > 1) {
+        // Multi-pane tab: close the pane
+        const paneIdx = parentTab.panes.findIndex(p => p.id === targetId);
+        const newPanes = parentTab.panes.filter(p => p.id !== targetId);
+        let nextPaneId = parentTab.activePaneId;
+        if (parentTab.activePaneId === targetId) {
+          nextPaneId = newPanes[Math.max(0, paneIdx - 1)].id;
+        }
+
+        if (!parentTab.isLocked && targetPane.state !== 'stolen') {
           const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
           fetch('/api/sessions/close', {
             method: METHOD_POST,
@@ -907,14 +912,24 @@ export default function Dashboard({ initialData }: DashboardProps) {
               [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
               [HEADER_CONTENT_TYPE]: MIME_JSON
             },
-            body: JSON.stringify({ id: paneToClose.sessionId || paneToClose.id } satisfies SessionsCloseRequest)
+            body: JSON.stringify({ id: targetPane.sessionId || targetPane.id } satisfies SessionsCloseRequest)
           }).catch(e => console.error(e));
         }
+
+        setTabs(prev => prev.map(t => t.id === parentTab!.id ? { ...t, panes: newPanes, activePaneId: nextPaneId } : t));
+
+        if (activeTabId === parentTab.id) {
+          setActivePaneId(nextPaneId);
+          setTimeout(() => terminalRefs.current[nextPaneId]?.focus(), 50);
+        }
+      } else {
+        // Single pane tab:
+        // - If tabOrPaneId was omitted (defaulted to activePaneId), we close the tab
+        // - If tabOrPaneId was explicitly passed, we do nothing (only close if it's a multiple panes tab)
+        if (wasOmitted) {
+          handleCloseTab(null, parentTab.id);
+        }
       }
-      setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, panes: newPanes, activePaneId: nextPaneId } : t));
-      setActivePaneId(nextPaneId);
-    } else {
-      handleCloseTab(null, activeTabId);
     }
   }, [handleCloseTab]);
 
@@ -1140,6 +1155,26 @@ export default function Dashboard({ initialData }: DashboardProps) {
     });
   }, [contextMenu]);
 
+  useEffect(() => {
+    return setupPluginAPI({
+      notify: csNotify,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setTheme: (options: any, ...args: any[]) => setMuiTheme(createTheme(options, ...args)),
+      handleSelectHost,
+      handleSelectTagAsSplit,
+      handleAttach,
+      handleRefresh,
+      setApplets,
+      setMobileAppletsOpen,
+      isMobile,
+      maxZIndexRef,
+      setLocalVars,
+      getTerminalRefs: () => terminalRefs.current,
+      handleCloseTabOrPane,
+    });
+  }, [csNotify, handleAttach, handleRefresh, handleSelectHost, handleSelectTagAsSplit, isMobile,
+    setLocalVars, handleCloseTabOrPane]);
+
   const handleButtonClick = useCallback(async (btn: Pick<ButtonData, 'id' | 'name' | 'type' | 'payload'>) => {
     window.navigator.vibrate?.(VIBRATE_PATTERN);
     switch (btn.type) {
@@ -1242,8 +1277,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
             break;
 
           case 'CLOSE':
-            handleCloseCurrentPaneOrTab();
+            handleCloseTabOrPane();
             break;
+
+          case 'CLOSE_TAB': {
+            handleCloseTabOrPane(getStore().activeTabId);
+            break;
+          }
 
           case 'SCROLL_TO_TOP':
             term.scrollToTop();
@@ -1330,7 +1370,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       default:
         break;
     }
-  }, [sendParsedString, handleSelectHost, csNotify, handleCloseCurrentPaneOrTab,
+  }, [sendParsedString, handleSelectHost, csNotify, handleCloseTabOrPane,
     handleCloneSession, handleOpenScratchpad, groups, activeGroup]);
 
   // ── Keyboard shortcuts (reads fresh state from store — tiny stable dep array) ──
@@ -1339,7 +1379,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     handleButtonClick,
     handleSelectHost,
     handleOpenScratchpad,
-    handleCloseCurrentPaneOrTab,
+    handleCloseTabOrPane,
     setNewTabDialogOpen,
     setNewTabDialogInitialViewMode,
     searchInputRef,

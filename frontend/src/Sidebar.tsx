@@ -768,9 +768,10 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
                   <b>Alt + S</b> : Open scratchpad<br />
                   <b>Alt + H / Alt + L</b> : Switch to previous / next tab<br />
                   <b>Alt + 1-9,0</b> : Switch to tab 1-9, last tab<br />
-                  <b>Alt + C</b> : Clone current tab or pane in new tab<br />
-                  <b>Alt + Shift + C</b> : Clone current tab or pane in same tab (Max 4 panes per tab)<br />
-                  <b>Alt + W</b> : Close current tab or pane<br />
+                  <b>Alt + C</b> : Clone current pane in new tab<br />
+                  <b>Alt + Shift + C</b> : Clone current pane in same tab (Max 4 panes per tab)<br />
+                  <b>Alt + W</b> : Close current pane<br />
+                  <b>Alt + Shift + W</b> : Close current tab<br />
                   <b>Alt + I</b> : Focus sidebar search filter, use ↑ ↓ to select, Enter to open<br />
                   <b>Alt + G</b> : Focus active terminal session<br />
                   <b>Alt + V / Alt + Shift + V</b> : Switch to next / previous group in button bar<br />

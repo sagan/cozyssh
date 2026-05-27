@@ -21,6 +21,7 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
     - [`csNotify(msg: string, severity: 'success' | 'info' | 'warning' | 'error' = 'info'): void`](#csnotifymsg-string-severity-success--info--warning--error--info-void)
     - [`csGetAll(): AllObject`](#csgetall-allobject)
     - [`csOpen(target: Host | string | (Host | string)[], options?: { name?: string }): void`](#csopentarget-host--string--host--string-options--name-string--void)
+    - [`csClose(tabOrPaneId?: string): void`](#csclosetaborpaneid-string-void)
     - [`csFetch(url: string, options?: RequestInit): Promise<Response>`](#csfetchurl-string-options-requestinit-promiseresponse)
     - [`csExec(cmdline: string): Promise<{ error: unknown, stdout: string, stderr: string }>`](#csexeccmdline-string-promise-error-unknown-stdout-string-stderr-string-)
     - [`csRefresh(): Promise<void>`](#csrefresh-promisevoid)
@@ -125,6 +126,7 @@ Sample Applet object:
 ### `csGetVar(name: string): string | undefined`, `csGetVar(): Record<string, string>`
 
 Returns the value of a persistent variable stored in the CozySSH configuration.
+
 - `name`: Optional. If provided, returns the value of that specific variable. If omitted, returns an object containing all variables.
 
 ### `csSetVar(name: string, value: string | undefined): Promise<void>`, `csSetVar(vars: Record<string, string | undefined>): Promise<void>`
@@ -150,6 +152,7 @@ Returns the terminal handle for the specified terminal if `paneId` is provided, 
 Returns the shell integration state for the specified terminal if `paneId` is provided, the active instance otherwise. Returns `undefined` if the specified terminal is not found.
 
 Sample `ShellIntegration` object:
+
 ```json
 {
   "cwd": "/root/files",
@@ -196,7 +199,8 @@ Returns an object containing all the data from the CozySSH application. Sample o
 
 ```json
 {
-  "activePaneId": "local-123456",
+  "activePaneId": "1UshaCrimvV0",
+  "activeTabId": "local-1779873498006",
   "terminals": {
     "local-123456": {}
   },
@@ -231,12 +235,20 @@ Returns an object containing all the data from the CozySSH application. Sample o
 ### `csOpen(target: Host | string | (Host | string)[], options?: { name?: string }): void`
 
 Opens a new tab or split-screen tab.
+
 - `target`: A single host object, a connection string (e.g., `user@host`), a special string `"local"` to open a local shell, or an array of up to 4 targets for split-screen.
 - `options.name`: Optional title for the new tab.
+
+### `csClose(tabOrPaneId?: string): void`
+
+Closes a tab or a split-screen pane.
+
+- `tabOrPaneId`: The ID of the tab to close, or the pane to close. If it's a pane ID, it will only close the pane if it is part of a multi-pane tab. If it is omitted or empty, it defaults to the current active pane (which will close the active pane if the current tab has multiple panes, or close the active tab otherwise).
 
 ### `csFetch(url: string, options?: RequestInit): Promise<Response>`
 
 Performs an HTTP request via the CozySSH backend proxy to bypass browser CORS restrictions.
+
 - **Restricted Headers**: You can set browser-restricted headers (like `Referer`, `Origin`, `User-Agent`, or `Cookie`) directly in the `{ headers }` fetch option. `csFetch` automatically handles these to ensure they are correctly forwarded to the target.
 
 ### `csExec(cmdline: string): Promise<{ error: unknown, stdout: string, stderr: string }>`
