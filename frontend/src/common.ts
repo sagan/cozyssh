@@ -78,7 +78,7 @@ export interface CommandHistoryEntry {
  * - 'output'   — OSC 133;C  (command output starting)
  * - 'finished' — OSC 133;D  (command finished, exit code available)
  */
-export type PromptPhase = 'prompt' | 'input' | 'output' | 'finished';
+export type PromptPhase = "prompt" | "input" | "output" | "finished";
 
 export interface ShellIntegration {
   cwd?: string;
@@ -212,8 +212,8 @@ export const loginTheme = createTheme({
  * @param defaultValue fallback value, default is ""
  */
 export function getVar(
-  vars: Record<string, string | undefined>,
-  localVars: Record<string, string | undefined>,
+  vars: Record<string, string>,
+  localVars: Record<string, string>,
   name: string,
   defaultValue = ""
 ): string {
@@ -236,8 +236,8 @@ export function getVar(
  * @param defaultValue fallback value, default is 0. Used if variable not found, or not a valid integer.
  */
 export function getIntVar(
-  vars: Record<string, string | undefined>,
-  localVars: Record<string, string | undefined>,
+  vars: Record<string, string>,
+  localVars: Record<string, string>,
   name: string,
   defaultValue = 0
 ): number {

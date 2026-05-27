@@ -159,9 +159,7 @@ export default function DialogManager({
         if (data && typeof data === 'object' && !Array.isArray(data)) {
           isJson = true;
         }
-      } catch (e) {
-        console.log(e);
-      }
+      } catch { /* empty */ }
 
       if (isJson) {
         const result = ButtonDataSchema.safeParse(data);

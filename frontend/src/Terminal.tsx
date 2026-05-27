@@ -9,7 +9,7 @@ import { Box } from '@mui/material';
 import '@xterm/xterm/css/xterm.css';
 
 import type { WsResizeMsg, WsTerminalMessage } from './api';
-import { BROWSER_STORAGE_KEY_TOKEN, WS_PROTOCOL_QUERY_PREFIX } from './constants';
+import { BROWSER_STORAGE_KEY_TOKEN, VAR_CS_NOIMAGE, VAR_CS_NOMODTEXTAREA, VAR_CS_NOWEBGL, VAR_CS_NOWEBLINKS, WS_PROTOCOL_QUERY_PREFIX } from './constants';
 import {
   type CommandHistoryEntry, type CSEventDetailShellIntegration, type CSEventDetailTerminalConnected,
   type CSEventDetailTerminalData, type CSEventDetailTerminalDisconnected, type CSEventDetailTerminalResize,
@@ -69,8 +69,8 @@ interface TerminalProps {
   onDataReceived?: () => void;
   cloneFrom?: string;
   isTouch?: boolean;
-  vars: Record<string, string | undefined>;
-  localVars: Record<string, string | undefined>;
+  vars: Record<string, string>;
+  localVars: Record<string, string>;
 }
 
 const RECENT_COMMANDS_NUM = 10;
@@ -319,7 +319,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
     const textarea = term.textarea;
     if (textarea) {
       // Still a problem. See https://github.com/xtermjs/xterm.js/issues/3600
-      if (getIntVar(vars, localVars, "cs_nomodtextarea") !== 1) {
+      if (getIntVar(vars, localVars, VAR_CS_NOMODTEXTAREA) !== 1) {
         textarea.setAttribute('autocomplete', 'off');
         textarea.setAttribute('autocorrect', 'off');
         textarea.setAttribute('autocapitalize', 'off');
@@ -334,16 +334,16 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
       })
     }
 
-    if (getIntVar(vars, localVars, "cs_noimage") !== 1) {
+    if (getIntVar(vars, localVars, VAR_CS_NOIMAGE) !== 1) {
       const imageAddon = new ImageAddon();
       term.loadAddon(imageAddon);
     }
-    if (getIntVar(vars, localVars, "cs_noweblinks") !== 1) {
+    if (getIntVar(vars, localVars, VAR_CS_NOWEBLINKS) !== 1) {
       term.loadAddon(new WebLinksAddon());
     }
 
     // Load WebGL Addon
-    if (getIntVar(vars, localVars, "cs_nowebgl") !== 1) {
+    if (getIntVar(vars, localVars, VAR_CS_NOWEBGL) !== 1) {
       try {
         webglAddon = new WebglAddon();
         webglAddon.onContextLoss(() => {
@@ -482,7 +482,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
             // area once the prompt finishes drawing, which is when this OSC fires.
             const buf = term.buffer.active;
             promptEndRef.current = {
-              col:     buf.cursorX,
+              col: buf.cursorX,
               absLine: buf.cursorY + buf.baseY,
             };
           }
@@ -571,7 +571,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
           // can read the live cmdline from the buffer on each keypress.
           const buf = term.buffer.active;
           promptEndRef.current = {
-            col:     buf.cursorX,
+            col: buf.cursorX,
             absLine: buf.cursorY + buf.baseY,
           };
           updateShellIntegration({ promptPhase: 'input' });

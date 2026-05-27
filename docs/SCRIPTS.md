@@ -30,6 +30,7 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
     - [`csDeleteButton(id: string): Promise<void>`](#csdeletebuttonid-string-promisevoid)
     - [`csUpdateHost(host: Host): Promise<void>`](#csupdatehosthost-host-promisevoid)
     - [`csDeleteHost(name: string): Promise<void>`](#csdeletehostname-string-promisevoid)
+    - [csAlert, csConfirm, csPrompt](#csalert-csconfirm-csprompt)
   - [Client-side Events](#client-side-events)
     - [`cs:terminal-new`](#csterminal-new)
     - [`cs:terminal-change`](#csterminal-change)
@@ -343,6 +344,14 @@ await csDeleteHost("staging-server");
 csNotify("Host deleted");
 ```
 
+### csAlert, csConfirm, csPrompt
+
+- `csAlert: (message?: string, detail?: string) => Promise<void>`
+- `csConfirm: (message?: string, detail?: string) => Promise<boolean>`,
+- `csPrompt: (message?: string, defaultValue?: string, options?: {placeholder?: string; alidate?: (value: string) => string;}) => Promise<string | null>`
+
+The async (non-blocking) version of DOM `alert, confirm, prompt` functions using MUI Dialog.
+
 ---
 
 ## Client-side Events
@@ -598,7 +607,7 @@ const SettingsApplet = () => {
   };
 
   const handleDelete = async (key) => {
-    if( !confirm(`Delete ${key}?`) ) {
+    if( !await csConfirm(`Delete ${key}?`) ) {
       return;
     }
     await csSetVar(key, undefined);

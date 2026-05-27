@@ -41,11 +41,15 @@ import {
 } from "./constants";
 import { generatePassword, type Severity } from "./common";
 import { getStore, setActiveTabId, setButtons, setHosts, setVars, type TerminalRefMap } from "./store";
+import { dialogs } from "./Dialogs";
 import type { AppletData } from "./AppletWrapper";
 
 window.__CS_VERSION__ = PACKAGE_JSON_VERSION;
 
 window.csGetApplet = () => undefined; // initial dummy implementation
+window.csAlert = dialogs.alert;
+window.csConfirm = dialogs.confirm;
+window.csPrompt = dialogs.prompt;
 
 export type AppletPosition = "widget" | "sidebar" | "dialog";
 

@@ -11,11 +11,18 @@
 import { useEffect } from "react";
 
 import { type ButtonData } from "./api";
-import { BROWSER_STORAGE_KEY_ACTIVE_GROUP, DEFAULT_BUTTON_GROUP, DEFAULT_SCROLL_LINES, LOCAL_NAME } from "./constants";
+import {
+  BROWSER_STORAGE_KEY_ACTIVE_GROUP,
+  DEFAULT_BUTTON_GROUP,
+  DEFAULT_SCROLL_LINES,
+  LOCAL_NAME,
+  VAR_CS_SCROLL_LINES,
+} from "./constants";
 import {
   type CSEventDetailActiveGroupChange,
   type NewTabDialogViewMode,
   CS_EVENT_ACTIVE_GROUP_CHANGE,
+  getIntVar,
   getKeyCombination,
 } from "./common";
 import { type TerminalRefMap, getStore, setActivePaneId, setActiveTabId } from "./store";
@@ -64,8 +71,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
 
       // Derive scrollLines from store vars at call-time
       const { vars, localVars } = getStore();
-      const scrollLinesVar = localVars["local_cs_scroll_lines"] ?? vars["cs_scroll_lines"];
-      const scrollLines = scrollLinesVar ? parseInt(scrollLinesVar) || DEFAULT_SCROLL_LINES : DEFAULT_SCROLL_LINES;
+      const scrollLines = getIntVar(vars, localVars, VAR_CS_SCROLL_LINES, DEFAULT_SCROLL_LINES);
 
       // Derive groups / activeGroup / shortcutButtons from store at call-time
       const activeGroup = localStorage.getItem(BROWSER_STORAGE_KEY_ACTIVE_GROUP) || DEFAULT_BUTTON_GROUP;
@@ -210,7 +216,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           e.preventDefault();
           const idx = groups.indexOf(activeGroup);
           const nextIdx = (e.shiftKey ? idx - 1 + groups.length : idx + 1) % groups.length;
-          localStorage.setItem("cozy_active_group", groups[nextIdx]);
+          localStorage.setItem(BROWSER_STORAGE_KEY_ACTIVE_GROUP, groups[nextIdx]);
           // Dashboard listens to storage or manages activeGroup state; trigger a
           // custom event so Dashboard can update its local activeGroup state.
           window.dispatchEvent(

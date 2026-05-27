@@ -6,6 +6,7 @@ import type { AppletPosition, CsExecResult } from "./pluginAPI";
 import type { TerminalRefMap, TabData, UseStore } from "./store";
 import type { AppletData } from "./AppletWrapper";
 import type { ShellIntegration } from "./Terminal";
+import type { DialogApi } from "./Dialogs";
 
 interface VirtualKeyboard extends EventTarget {
   readonly boundingRect: DOMRect;
@@ -72,5 +73,8 @@ declare global {
     csRefresh: () => Promise<void>;
     csSetTheme: (options: unknown, ...args: unknown[]) => void;
     csAttach: (id: string, host: string, title: string, isLocked = false) => void;
+    csAlert: DialogApi["alert"];
+    csConfirm: DialogApi["confirm"];
+    csPrompt: DialogApi["prompt"];
   }
 }

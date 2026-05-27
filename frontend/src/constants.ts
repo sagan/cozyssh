@@ -24,8 +24,26 @@ export const BROWSER_STORAGE_KEY_LOCAL_VARS = "cozy_localvars";
 export const BROWSER_STORAGE_KEY_RECENTS = "cozy_recents";
 export const BROWSER_STORAGE_KEY_TOKEN = "cozy_token";
 export const BROWSER_STORAGE_KEY_VARS = "cozy_vars";
+export const BROWSER_STORAGE_KEY_TAB_ID = "cozy_tab_id";
+export const BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE = "cozy_scratchpad_sync_state";
+export const BROWSER_STORAGE_KEY_SCRATCCHPAD_CACHE = "cozy_scratchpad_cache";
 
-export const LOCAL_VAR_PREFIX = "local";
+export const LOCAL_VAR_PREFIX = "local_";
+export const VAR_CS_SCROLL_LINES = "cs_scroll_lines";
+export const VAR_CS_NOAUTOLOAD = "cs_noautoload";
+export const VAR_CS_NOAUTORUN = "cs_noautorun";
+export const VAR_CS_NOWAKELOCK = "cs_nowakelock";
+export const VAR_CS_NOMODTEXTAREA = "cs_nomodtextarea";
+export const VAR_CS_NOIMAGE = "cs_noimage";
+export const VAR_CS_NOWEBLINKS = "cs_noweblinks";
+export const VAR_CS_NOWEBGL = "cs_nowebgl";
+
+export const VAR_NOAUTOLOAD = "noautoload";
+export const VAR_NOAUTORUN = "noautorun";
+
+export const BROADCAST_CHANNEL_COZY_TABS = "cozy_tabs";
+export const BROADCAST_CHANNEL_MESSAGE_PROBE_PINNED = "probe_pinned";
+export const BROADCAST_CHANNEL_MESSAGE_PINNED_PRESENT = "pinned_present";
 
 export const DEFAULT_BUTTON_GROUP = "Default";
 

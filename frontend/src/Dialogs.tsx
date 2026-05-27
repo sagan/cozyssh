@@ -10,7 +10,7 @@ import {
   Button
 } from '@mui/material';
 
-interface DialogApi {
+export interface DialogApi {
   alert: (message?: string, detail?: string) => Promise<void>;
   confirm: (message?: string, detail?: string) => Promise<boolean>;
   prompt: (message?: string, defaultValue?: string, options?: {

@@ -66,7 +66,7 @@ function loadVarsFromStorate(key: string): Record<string, string> {
   return vars;
 }
 
-export const useStore = create<Store>((_set) => ({
+export const useStore = create<Store>(() => ({
   tabs: [],
   activeTabId: "",
   activePaneId: "",

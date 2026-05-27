@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -38,6 +38,8 @@ interface Recent {
   last_used: number;
 }
 
+type ViewMode = 'servers' | 'tabs' | 'buttons';
+
 interface NewTabDialogProps {
   open: boolean;
   onClose: () => void;
@@ -46,7 +48,7 @@ interface NewTabDialogProps {
   tabs?: TabData[];
   buttons?: ButtonData[];
   activeGroup?: string;
-  initialViewMode?: 'servers' | 'tabs' | 'buttons';
+  initialViewMode?: ViewMode;
   onSelect: (host: string) => void;
   onSelectTab: (tabId: string) => void;
   onAttachPinned: (id: string, host: string, title: string, isLocked: boolean) => void;
@@ -59,7 +61,7 @@ export default function NewTabDialog({
 }: NewTabDialogProps) {
   const [filter, setFilter] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [viewMode, setViewMode] = useState<'servers' | 'tabs' | 'buttons'>('servers');
+  const [viewMode, setViewMode] = useState<ViewMode>('servers');
   const inputRef = useRef<HTMLInputElement>(null);
   const selectedItemRef = useRef<HTMLDivElement>(null);
   const swipeStartRef = useRef<{ x: number, y: number, time: number } | null>(null);
@@ -341,8 +343,8 @@ export default function NewTabDialog({
     }
   }, [selectedIndex]);
 
-  const cycleViewMode = (direction: 'next' | 'prev') => {
-    const modes: ('servers' | 'tabs' | 'buttons')[] = ['servers', 'tabs', 'buttons'];
+  const cycleViewMode = useCallback((direction: 'next' | 'prev') => {
+    const modes: ViewMode[] = ['servers', 'tabs', 'buttons'];
     setViewMode(prev => {
       const idx = modes.indexOf(prev);
       if (direction === 'next') {
@@ -352,48 +354,9 @@ export default function NewTabDialog({
       }
     });
     setSelectedIndex(0);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown' || (e.altKey && e.key === 'j')) {
-      e.preventDefault();
-      e.stopPropagation();
-      setSelectedIndex(prev => Math.min(prev + 1, items.length - 1));
-    } else if (e.key === 'ArrowUp' || (e.altKey && e.key === 'k')) {
-      e.preventDefault();
-      e.stopPropagation();
-      setSelectedIndex(prev => Math.max(prev - 1, 0));
-    } else if (e.key === 'ArrowLeft' || (e.altKey && e.key === 'h')) {
-      e.stopPropagation();
-      e.preventDefault();
-      cycleViewMode('prev');
-    } else if (e.key === 'ArrowRight' || (e.altKey && e.key === 'l')) {
-      e.stopPropagation();
-      e.preventDefault();
-      cycleViewMode('next');
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (items[selectedIndex]) {
-        handleSelect(items[selectedIndex]);
-      }
-    } else if (e.key === 'Escape') {
-      onClose();
-    }
-  };
-
-  useEffect(() => {
-    const handleGlobalKeydown = (e: KeyboardEvent) => {
-      if (e.altKey && (e.key === 'o' || e.key === 'a' || e.key === 'e')) {
-        e.preventDefault();
-        e.stopPropagation();
-        inputRef.current?.focus();
-      }
-    };
-    window.addEventListener('keydown', handleGlobalKeydown);
-    return () => window.removeEventListener('keydown', handleGlobalKeydown);
   }, []);
 
-  const handleSelect = (item: typeof items[number]) => {
+  const handleSelect = useCallback((item: typeof items[number]) => {
     if (item.type === 'tab') {
       onSelectTab(item.id!);
       onClose();
@@ -407,17 +370,56 @@ export default function NewTabDialog({
       onSelect(item.value);
       onClose();
     }
-  };
+  }, [onAttachPinned, onClose, onExecuteButton, onSelect, onSelectTab]);
 
-  const handleTouchStart = (e: React.TouchEvent) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown' || (e.altKey && e.key === 'j')) {
+      e.preventDefault();
+      e.stopPropagation();
+      setSelectedIndex(prev => Math.min(prev + 1, items.length - 1));
+    } else if (e.key === 'ArrowUp' || (e.altKey && e.key === 'k')) {
+      e.preventDefault();
+      e.stopPropagation();
+      setSelectedIndex(prev => Math.max(prev - 1, 0));
+    } else if (e.key === 'ArrowLeft' && !filter || (e.altKey && e.key === 'h')) {
+      e.stopPropagation();
+      e.preventDefault();
+      cycleViewMode('prev');
+    } else if (e.key === 'ArrowRight' && !filter || (e.altKey && e.key === 'l')) {
+      e.stopPropagation();
+      e.preventDefault();
+      cycleViewMode('next');
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (items[selectedIndex]) {
+        handleSelect(items[selectedIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      onClose();
+    }
+  }, [cycleViewMode, filter, handleSelect, items, onClose, selectedIndex]);
+
+  useEffect(() => {
+    const handleGlobalKeydown = (e: KeyboardEvent) => {
+      if (e.altKey && (e.key === 'o' || e.key === 'a' || e.key === 'e')) {
+        e.preventDefault();
+        e.stopPropagation();
+        inputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeydown);
+    return () => window.removeEventListener('keydown', handleGlobalKeydown);
+  }, []);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (!isTouch || !isMobile) {
       return;
     }
     const touch = e.touches[0];
     swipeStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
-  };
+  }, [isMobile, isTouch]);
 
-  const handleTouchEnd = (e: React.TouchEvent) => {
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
     if (!isTouch || !isMobile || !swipeStartRef.current) {
       return;
     }
@@ -435,17 +437,17 @@ export default function NewTabDialog({
         cycleViewMode('next');
       }
     }
-  };
+  }, [cycleViewMode, isMobile, isTouch]);
 
   const getItemIcon = (item: typeof items[number], index: number, selectedIndex: number) => {
     // Use 'as const' so TS knows these are exact literal values, not generic strings
     const baseProps = {
-      fontSize: 'small' as const
+      fontSize: 'small' as const,
     };
     const activeProps = {
       ...baseProps,
       color: 'primary' as const,
-      sx: { color: selectedIndex === index ? 'white' : 'primary.main' }
+      sx: { color: selectedIndex === index ? 'white' : 'primary.main' },
     };
     switch (item.type) {
       case 'recent':

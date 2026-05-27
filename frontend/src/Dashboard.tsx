@@ -13,9 +13,12 @@ import type {
   TabsUnpinRequest, SessionsCloseRequest, TabsRenameRequest, ButtonsMoveRequest, TabsLockRequest,
 } from './api';
 import {
-  APP_NAME, BROWSER_STORAGE_KEY_ACTIVE_GROUP, BROWSER_STORAGE_KEY_LOCAL_VARS, BROWSER_STORAGE_KEY_RECENTS, BROWSER_STORAGE_KEY_TOKEN,
-  DEFAULT_BUTTON_GROUP, DEFAULT_SCROLL_LINES, HEADER_AUTHORIZATION, HEADER_AUTHORIZATION_BEARER_PREFIX,
-  HEADER_CONTENT_TYPE, LOCAL_NAME, METHOD_DELETE, METHOD_POST, METHOD_PUT, MIME_JSON, VIBRATE_PATTERN,
+  APP_NAME, BROADCAST_CHANNEL_COZY_TABS, BROADCAST_CHANNEL_MESSAGE_PINNED_PRESENT, DEFAULT_SCROLL_LINES,
+  BROADCAST_CHANNEL_MESSAGE_PROBE_PINNED, BROWSER_STORAGE_KEY_ACTIVE_GROUP, BROWSER_STORAGE_KEY_LOCAL_VARS,
+  BROWSER_STORAGE_KEY_RECENTS, BROWSER_STORAGE_KEY_TAB_ID, BROWSER_STORAGE_KEY_TOKEN, DEFAULT_BUTTON_GROUP,
+  HEADER_AUTHORIZATION, HEADER_AUTHORIZATION_BEARER_PREFIX, HEADER_CONTENT_TYPE, LOCAL_NAME, METHOD_DELETE,
+  METHOD_POST, METHOD_PUT, MIME_JSON, VAR_CS_NOAUTOLOAD, VAR_CS_NOAUTORUN, VAR_CS_NOWAKELOCK, VAR_CS_SCROLL_LINES,
+  VAR_NOAUTOLOAD, VAR_NOAUTORUN, VIBRATE_PATTERN, BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE,
 } from './constants';
 import {
   type ContextMenu, type CSEventDetailTerminalChange, type NewTabDialogViewMode,
@@ -74,6 +77,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [memoTabId, setMemoTabId] = useState<string | null>(null);
   const [unreadTabIds, setUnreadTabIds] = useState<Set<string>>(new Set());
   const [applets, setApplets] = useState<AppletData[]>([]);
+  const appletRefs = useRef<AppletData[]>([]);
   const maxZIndexRef = useRef(10000);
   const swipeStartRef = useRef<{ x: number, y: number, time: number } | null>(null);
 
@@ -160,7 +164,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   useEffect(() => {
     if (unreadTabIds.has(activeTabId)) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setUnreadTabIds(prev => {
         const next = new Set(prev);
         next.delete(activeTabId);
@@ -170,7 +173,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, [activeTabId, unreadTabIds]);
 
   useEffect(() => {
-    localStorage.setItem('cozy_active_group', activeGroup);
+    localStorage.setItem(BROWSER_STORAGE_KEY_ACTIVE_GROUP, activeGroup);
   }, [activeGroup]);
 
   const [groups, filteredButtons] = useMemo(() => {
@@ -188,32 +191,37 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   useEffect(() => {
     if (buttonsLoaded && !groups.includes(activeGroup)) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveGroup(DEFAULT_BUTTON_GROUP);
     }
   }, [groups, buttonsLoaded, activeGroup]);
 
   useEffect(() => {
+    appletRefs.current = applets;
+  }, [applets]);
+
+  useEffect(() => {
     window.csGetApplet = ((name?: string) => {
+      const applets = appletRefs.current;
       return name ? applets.find(a => a.name === name) : applets;
     }) as typeof window.csGetApplet;
     return () => {
       delete (window as Partial<Window>).csGetApplet;
     };
-  }, [applets]);
+  }, []);
 
   const handleSelectHost = useCallback(async (host: string, customTitle?: string) => {
-    const id = generatePassword(12);
-    console.log('handleSelectHost called for:', host, customTitle, 'ID:', id);
+    const tabId = `${host}-${Date.now()}`;
+    const paneId = generatePassword(12);
+    console.log('handleSelectHost called for:', host, customTitle, 'ID:', tabId);
     const newTab: TabData = {
-      id: id,
+      id: tabId,
       title: customTitle || host,
-      panes: [{ id: id, host }],
-      activePaneId: id,
+      panes: [{ id: paneId, host }],
+      activePaneId: paneId,
     };
     setTabs(prev => [...prev, newTab]);
-    setActiveTabId(newTab.id);
-    setActivePaneId(id);
+    setActiveTabId(tabId);
+    setActivePaneId(paneId);
 
     // Record recent
     if (host !== 'local') {
@@ -334,16 +342,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   const [muiTheme, setMuiTheme] = useState(defaultTheme);
 
-  // csGetApplet needs the reactive applets list — keep as a tiny separate effect
-  useEffect(() => {
-    window.csGetApplet = ((name?: string) => {
-      return name ? applets.find(a => a.name === name) : applets;
-    }) as typeof window.csGetApplet;
-    return () => {
-      delete (window as Partial<Window>).csGetApplet;
-    };
-  }, [applets]);
-
   const handleCloseInputDialog = useCallback(() => {
     setInputDialogOpen(false);
     setTimeout(() => {
@@ -441,10 +439,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
     }
   }, [gestureMode, isMobile, isTouch]);
 
-  const tabId = useRef(sessionStorage.getItem('cozy_tab_id') || generatePassword(12));
+  const tabId = useRef(sessionStorage.getItem(BROWSER_STORAGE_KEY_TAB_ID) || generatePassword(12));
 
   useEffect(() => {
-    sessionStorage.setItem('cozy_tab_id', tabId.current);
+    sessionStorage.setItem(BROWSER_STORAGE_KEY_TAB_ID, tabId.current);
   }, []);
 
   // 1. Add this ref right above the visualViewport useEffect
@@ -563,10 +561,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   // these variables are only used in initial phrase, so don't add them to dependency array
   const [startupParams] = useSearchParams();
-  const noautoload = getIntVar(vars, localVars, "cs_noautoload");
-  const noautorun = getIntVar(vars, localVars, "cs_noautorun");
+  const noautoload = getIntVar(vars, localVars, VAR_CS_NOAUTOLOAD);
+  const noautorun = getIntVar(vars, localVars, VAR_CS_NOAUTORUN);
 
-  useWakeLock(tabs.length > 0 && getIntVar(vars, localVars, "cs_nowakelock") !== 1);
+  useWakeLock(tabs.length > 0 && getIntVar(vars, localVars, VAR_CS_NOWAKELOCK) !== 1);
 
   const initted = useRef(false);
   useEffect(() => {
@@ -574,25 +572,24 @@ export default function Dashboard({ initialData }: DashboardProps) {
       return;
     }
     initted.current = true;
-    const autoload = noautoload !== 1 && startupParams.get('noautoload') !== '1';
+    const autoload = noautoload !== 1 && startupParams.get(VAR_NOAUTOLOAD) !== '1';
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     const hash = window.location.hash.substring(1);
     if (hash) {
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
     }
 
-    const bc: BroadcastChannel | null = new BroadcastChannel('cozy_tabs');
+    const bc: BroadcastChannel = new BroadcastChannel(BROADCAST_CHANNEL_COZY_TABS);
     let pinnedElsewhere = false;
 
     const initAsync = async () => {
-      bc!.onmessage = (e) => {
-        if (e.data === 'probe_pinned') {
+      bc.onmessage = (e) => {
+        if (e.data === BROADCAST_CHANNEL_MESSAGE_PROBE_PINNED) {
           const hasPinned = getStore().tabs.some(t => t.isPinned);
           if (hasPinned) {
-            bc?.postMessage('pinned_present');
+            bc.postMessage(BROADCAST_CHANNEL_MESSAGE_PINNED_PRESENT);
           }
-        }
-        if (e.data === 'pinned_present') {
+        } else if (e.data === BROADCAST_CHANNEL_MESSAGE_PINNED_PRESENT) {
           pinnedElsewhere = true;
         }
       };
@@ -631,7 +628,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
       loadFullData(data);
 
-      bc!.postMessage('probe_pinned');
+      bc.postMessage(BROADCAST_CHANNEL_MESSAGE_PROBE_PINNED);
 
       setTimeout(() => {
         const pinnedTabsData = data.pinned || [];
@@ -740,9 +737,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     initAsync();
 
     return () => {
-      if (bc) {
-        bc.close();
-      }
+      bc.close();
     };
     // Run ONLY once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -758,7 +753,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, [tabs, activeTabId, sysHostname]);
 
   const handleLogout = useCallback(async () => {
-    const syncState = localStorage.getItem('cozy_scratchpad_sync_state');
+    const syncState = localStorage.getItem(BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE);
     if (syncState && syncState !== 'synced') {
       if (!await dialogs.confirm("Scratchpad data is not fully synced to the server. Are you sure you want to log out and clear the local cache?")) {
         return;
@@ -869,16 +864,15 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   const handleCloseTabOrPane = useCallback((tabOrPaneId?: string) => {
     const { activeTabId, activePaneId, tabs } = getStore();
-    const wasOmitted = tabOrPaneId === undefined || tabOrPaneId === null || tabOrPaneId === "";
-    const targetId = wasOmitted ? activePaneId : tabOrPaneId;
-    if (!targetId) {
+    tabOrPaneId = tabOrPaneId || activePaneId;
+    if (!tabOrPaneId) {
       return;
     }
 
     // 1. Check if targetId is a Tab ID
-    const targetTab = tabs.find(t => t.id === targetId);
+    const targetTab = tabs.find(t => t.id === tabOrPaneId);
     if (targetTab) {
-      handleCloseTab(null, targetId);
+      handleCloseTab(null, tabOrPaneId);
       return;
     }
 
@@ -886,7 +880,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     let parentTab: TabData | undefined;
     let targetPane: PaneData | undefined;
     for (const t of tabs) {
-      const p = t.panes.find(pane => pane.id === targetId);
+      const p = t.panes.find(pane => pane.id === tabOrPaneId);
       if (p) {
         parentTab = t;
         targetPane = p;
@@ -897,10 +891,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
     if (parentTab && targetPane) {
       if (parentTab.panes.length > 1) {
         // Multi-pane tab: close the pane
-        const paneIdx = parentTab.panes.findIndex(p => p.id === targetId);
-        const newPanes = parentTab.panes.filter(p => p.id !== targetId);
+        const paneIdx = parentTab.panes.findIndex(p => p.id === tabOrPaneId);
+        const newPanes = parentTab.panes.filter(p => p.id !== tabOrPaneId);
         let nextPaneId = parentTab.activePaneId;
-        if (parentTab.activePaneId === targetId) {
+        if (parentTab.activePaneId === tabOrPaneId) {
           nextPaneId = newPanes[Math.max(0, paneIdx - 1)].id;
         }
 
@@ -916,19 +910,14 @@ export default function Dashboard({ initialData }: DashboardProps) {
           }).catch(e => console.error(e));
         }
 
-        setTabs(prev => prev.map(t => t.id === parentTab!.id ? { ...t, panes: newPanes, activePaneId: nextPaneId } : t));
+        setTabs(prev => prev.map(t => t.id === parentTab.id ? { ...t, panes: newPanes, activePaneId: nextPaneId } : t));
 
         if (activeTabId === parentTab.id) {
           setActivePaneId(nextPaneId);
           setTimeout(() => terminalRefs.current[nextPaneId]?.focus(), 50);
         }
       } else {
-        // Single pane tab:
-        // - If tabOrPaneId was omitted (defaulted to activePaneId), we close the tab
-        // - If tabOrPaneId was explicitly passed, we do nothing (only close if it's a multiple panes tab)
-        if (wasOmitted) {
-          handleCloseTab(null, parentTab.id);
-        }
+        handleCloseTab(null, parentTab.id);
       }
     }
   }, [handleCloseTab]);
@@ -1297,7 +1286,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
           case 'SCROLL_UP': {
             const scrollLines = getIntVar(getStore().vars, getStore().localVars,
-              'cs_scroll_lines', DEFAULT_SCROLL_LINES);
+              VAR_CS_SCROLL_LINES, DEFAULT_SCROLL_LINES);
             term.scrollLines(-scrollLines);
             term.focus();
             break;
@@ -1305,7 +1294,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
           case 'SCROLL_DOWN': {
             const scrollLines = getIntVar(getStore().vars, getStore().localVars,
-              'cs_scroll_lines', DEFAULT_SCROLL_LINES);
+              VAR_CS_SCROLL_LINES, DEFAULT_SCROLL_LINES);
             term.scrollLines(scrollLines);
             term.focus();
             break;
@@ -1417,7 +1406,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     if (window.__CS_AUTORUN_DONE__ === undefined && buttonsLoaded) {
       window.__CS_AUTORUN_DONE__ = 0;
       (async () => {
-        if (noautorun !== 1 && startupParams.get("noautorun") !== "1") {
+        if (noautorun !== 1 && startupParams.get(VAR_NOAUTORUN) !== "1") {
           const scriptsToRun = getStore().buttons.filter(b => b.type === 'run_script' && b.autorun === 1);
           for (const btn of scriptsToRun) {
             try {
