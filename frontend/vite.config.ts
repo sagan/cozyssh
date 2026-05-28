@@ -12,6 +12,8 @@ export default defineConfig({
       registerType: "autoUpdate",
       injectRegister: "script",
       workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
         navigateFallback: "index.html",
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB

@@ -596,9 +596,21 @@ func Run(ctx context.Context, args []string) error {
 	})
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// Basic SPA routing fallback
+		// For static asset paths, never fall back to index.html — return 404 so
+		// that a stale service worker doesn't get index.html (text/html) in place
+		// of a JS module it expects, which would cause a MIME-type error.
+		isStaticAsset := strings.HasPrefix(r.URL.Path, "/assets/") ||
+			strings.HasPrefix(r.URL.Path, "/workbox-") ||
+			r.URL.Path == "/sw.js" ||
+			r.URL.Path == "/registerSW.js"
+
 		f, err := distFS.Open(r.URL.Path[1:])
 		if os.IsNotExist(err) {
+			if isStaticAsset {
+				http.NotFound(w, r)
+				return
+			}
+			// SPA fallback: serve index.html for navigation routes
 			r.URL.Path = "/"
 		} else if err == nil {
 			f.Close()
