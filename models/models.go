@@ -22,6 +22,7 @@ type Manifest struct {
 	Display         string          `json:"display"`
 	BackgroundColor string          `json:"background_color"`
 	ThemeColor      string          `json:"theme_color"`
+	HandleLinks     string          `json:"handle_links,omitempty"`
 	Icons           []*ManifestIcon `json:"icons"`
 }
 

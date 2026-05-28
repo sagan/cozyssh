@@ -20,11 +20,6 @@ func TestServerManagement(t *testing.T) {
 	ctx, _ := browser.NewContext()
 	page, _ := ctx.NewPage()
 
-	// Auto-accept confirmation dialogs (for deletion)
-	page.OnDialog(func(dialog playwright.Dialog) {
-		dialog.Accept()
-	})
-
 	login(t, page, url, "123456")
 
 	// 1. Add New Server
@@ -132,6 +127,15 @@ func TestServerManagement(t *testing.T) {
 
 	if err := page.GetByText("Delete Host").Click(); err != nil {
 		t.Fatalf("failed to click Delete Host: %v", err)
+	}
+
+	// The delete uses a MUI confirm dialog (not a native browser confirm).
+	// Wait for it and click OK to confirm deletion.
+	if err := page.Locator("#async-modal-dialog button:has-text('OK')").WaitFor(); err != nil {
+		t.Fatalf("timed out waiting for delete confirm dialog: %v", err)
+	}
+	if err := page.Locator("#async-modal-dialog button:has-text('OK')").Click(); err != nil {
+		t.Fatalf("failed to confirm deletion: %v", err)
 	}
 
 	time.Sleep(500 * time.Millisecond)

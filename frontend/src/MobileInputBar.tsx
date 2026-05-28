@@ -24,6 +24,7 @@ import SouthIcon from '@mui/icons-material/South';
 import WestIcon from '@mui/icons-material/West';
 import EastIcon from '@mui/icons-material/East';
 
+import { VIBRATE_PATTERN } from './constants';
 import type { TerminalHandle } from './Terminal';
 import type { ScratchpadHandle } from './Scratchpad';
 
@@ -33,7 +34,6 @@ export interface MobileInputBarProps {
   isAltActive: boolean;
   setIsAltActive: (v: boolean) => void;
   handleSendKey: (key: string) => void;
-  VIBRATE_PATTERN: number;
   gestureMode: boolean;
   onGestureModeChange: (v: boolean) => void;
   extraKeysOpen: boolean;
@@ -184,11 +184,8 @@ const PANEL_BTN_SX = (wide?: boolean) => ({
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function MobileInputBar({
-  isCtrlActive, setIsCtrlActive, isAltActive, setIsAltActive,
-  handleSendKey, VIBRATE_PATTERN,
-  gestureMode, onGestureModeChange,
-  extraKeysOpen, onExtraKeysOpenChange,
-  keyboardHeight, getActiveTerminal,
+  isCtrlActive, setIsCtrlActive, isAltActive, setIsAltActive, handleSendKey, gestureMode, onGestureModeChange,
+  extraKeysOpen, onExtraKeysOpenChange, keyboardHeight, getActiveTerminal,
 }: MobileInputBarProps) {
 
   const [lastKeyboardHeight, setLastKeyboardHeight] = useState(0);

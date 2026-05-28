@@ -1,7 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { EVENT_LOCAL_STORAGE_SYNC } from "./constants";
 
 export function useLocalStorage<T>(key: string, initialValue: T) {
   const initialValueRef = useRef(initialValue);
+
+  // Check if T is a string at runtime based on the initial value
+  const isStringType = typeof initialValueRef.current === "string";
 
   const readValue = useCallback((): T => {
     if (typeof window === "undefined") {
@@ -9,14 +13,19 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
     }
     try {
       const item = window.localStorage.getItem(key);
-      return item ? (JSON.parse(item) as T) : initialValueRef.current;
+      if (item === null) {
+        return initialValueRef.current;
+      }
+
+      // If it's a string, return it directly without JSON.parse
+      return isStringType ? (item as unknown as T) : (JSON.parse(item) as T);
     } catch (error) {
       console.warn(`Error reading localStorage key "${key}":`, error);
       return initialValueRef.current;
     }
-  }, [key]);
+  }, [key, isStringType]);
 
-  // FIX: Initialize state immediately using the readValue function
+  // Initialize state immediately using the readValue function
   const [storedValue, setStoredValue] = useState<T>(() => readValue());
 
   const setValue = useCallback(
@@ -26,8 +35,13 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
           const valueToStore = value instanceof Function ? value(prev) : value;
 
           if (typeof window !== "undefined") {
-            window.localStorage.setItem(key, JSON.stringify(valueToStore));
-            window.dispatchEvent(new Event("local-storage-sync"));
+            // Avoid JSON.stringify if dealing with a raw string
+            const serializedValue = isStringType
+              ? (valueToStore as unknown as string)
+              : JSON.stringify(valueToStore);
+
+            window.localStorage.setItem(key, serializedValue);
+            window.dispatchEvent(new Event(EVENT_LOCAL_STORAGE_SYNC));
           }
 
           return valueToStore;
@@ -36,15 +50,20 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
         console.warn(`Error setting localStorage key “${key}”:`, error);
       }
     },
-    [key]
+    [key, isStringType]
   );
-
-  // REMOVED: The useEffect that re-hydrated state on mount is no longer needed!
 
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === key) {
-        setStoredValue(e.newValue ? JSON.parse(e.newValue) : initialValueRef.current);
+        if (!e.newValue) {
+          setStoredValue(initialValueRef.current);
+        } else {
+          // Sync correctly across tabs depending on type
+          setStoredValue(
+            isStringType ? (e.newValue as unknown as T) : JSON.parse(e.newValue)
+          );
+        }
       }
     };
 
@@ -53,13 +72,13 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
     };
 
     window.addEventListener("storage", handleStorageChange);
-    window.addEventListener("local-storage-sync", handleSameTabSync);
+    window.addEventListener(EVENT_LOCAL_STORAGE_SYNC, handleSameTabSync);
 
     return () => {
       window.removeEventListener("storage", handleStorageChange);
-      window.removeEventListener("local-storage-sync", handleSameTabSync);
+      window.removeEventListener(EVENT_LOCAL_STORAGE_SYNC, handleSameTabSync);
     };
-  }, [key, readValue]);
+  }, [key, readValue, isStringType]);
 
   return [storedValue, setValue] as const;
 }

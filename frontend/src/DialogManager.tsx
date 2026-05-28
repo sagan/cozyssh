@@ -11,7 +11,7 @@ import { javascript } from '@codemirror/lang-javascript';
 import type { HostData, ButtonData } from './api';
 import {
   BROWSER_STORAGE_KEY_TOKEN, DEFAULT_BUTTON_GROUP, HEADER_AUTHORIZATION, HEADER_AUTHORIZATION_BEARER_PREFIX,
-  HEADER_CONTENT_TYPE, METHOD_POST, MIME_JSON, MISC_FUNCTIONS, TERMINAL_FUNCTIONS,
+  HEADER_CONTENT_TYPE, LOCAL_NAME, METHOD_POST, MIME_JSON, MISC_FUNCTIONS, TERMINAL_FUNCTIONS,
 } from './constants';
 import {
   type Recent, type Toast, type ContextMenu, type NewTabDialogViewMode, type ToastData,
@@ -200,6 +200,7 @@ export default function DialogManager({
         // Treat as a direct script/text file URL
         let buttonName = '';
         let buttonId = '';
+        let group = '';
         const jsDocMatch = text.match(/^\s*\/\*\*([\s\S]*?)\*\//);
         if (jsDocMatch) {
           const content = jsDocMatch[1];
@@ -210,6 +211,10 @@ export default function DialogManager({
           const idMatch = content.match(/@id\s+([^\r\n]+)/);
           if (idMatch) {
             buttonId = idMatch[1].trim();
+          }
+          const groupMatch = content.match(/@group\s+([^\r\n]+)/);
+          if (groupMatch) {
+            group = groupMatch[1].trim();
           }
         }
 
@@ -236,7 +241,7 @@ export default function DialogManager({
           name: buttonName,
           type: 'run_script',
           payload: text,
-          group: buttonFormData.group || DEFAULT_BUTTON_GROUP,
+          group: group || buttonFormData.group || DEFAULT_BUTTON_GROUP,
           autorun: 0,
           order: buttonFormData.order || 0,
           shortcut: ''
@@ -302,7 +307,7 @@ export default function DialogManager({
                 <>
                   <MenuItem onClick={() => handleCloneSession(memoTabId)}>Clone session</MenuItem>
                   <MenuItem onClick={handleToggleFiles}>
-                    {tab.showFiles ? 'Close files' : (tab.panes[0]?.host === 'local' ? 'Open files' : 'Open SFTP')}
+                    {tab.showFiles ? 'Close files' : (tab.panes[0]?.host === LOCAL_NAME ? 'Open files' : 'Open SFTP')}
                   </MenuItem>
                 </>
               )}
@@ -461,7 +466,7 @@ export default function DialogManager({
                 type: e.target.value as ButtonData["type"],
                 payload: e.target.value === 'terminal_function' ? 'COPY'
                   : e.target.value === 'misc' ? 'NEXT_BUTTON_GROUP'
-                    : e.target.value === 'open_terminal' ? 'local'
+                    : e.target.value === 'open_terminal' ? LOCAL_NAME
                       : ''
               })}
               slotProps={{ select: { native: true } }}
@@ -554,7 +559,7 @@ export default function DialogManager({
           ) : buttonFormData.type === 'open_terminal' ? (
             <Autocomplete
               freeSolo
-              options={['local', ...hosts.map(h => h.name)]}
+              options={[LOCAL_NAME, ...hosts.map(h => h.name)]}
               value={buttonFormData.payload}
               onChange={(_event, newValue) => {
                 setButtonFormData({ ...buttonFormData, payload: newValue || '' });

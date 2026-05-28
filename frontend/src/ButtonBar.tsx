@@ -61,7 +61,7 @@ export default function ButtonBar({
             '& select': { py: 0, pr: '18px !important' },
           }}
         >
-          {groups.map(g => (
+          {[...new Set([...groups, activeGroup])].map(g => (
             <option key={g} value={g}>{g}</option>
           ))}
         </TextField>

@@ -29,6 +29,7 @@ import type { HostData, SessionPinned, ButtonData } from './api';
 import {
   BROWSER_STORAGE_KEY_TOKEN, BUILTIN_BUTTONS, DEFAULT_BUTTON_GROUP, HEADER_AUTHORIZATION,
   HEADER_AUTHORIZATION_BEARER_PREFIX,
+  LOCAL_NAME,
 } from './constants';
 import { filterHosts, searchString } from './common';
 import type { TabData } from './store';
@@ -216,8 +217,11 @@ export default function NewTabDialog({
         });
       });
 
-      if ('local'.includes(filter.toLowerCase())) {
-        res.push({ type: 'local', value: 'local', label: 'Local Shell', subtitle: 'Run commands on this machine' });
+      if (LOCAL_NAME.includes(filter.toLowerCase())) {
+        res.push({
+          type: "local", value: LOCAL_NAME, label: 'Local Shell',
+          subtitle: 'Run commands on this machine',
+        });
       }
 
       filteredHosts.forEach(h => {

@@ -24,7 +24,7 @@ import {
   type ContextMenu, type CSEventDetailTerminalChange, type NewTabDialogViewMode,
   type Recent, type ScratchpadSyncState, type Severity, type Toast,
   CS_EVENT_TERMINAL_CHANGE,
-  defaultTheme, generatePassword, getIntVar, nextName,
+  defaultTheme, genTabId, getIntVar, nextName, genPaneId, hostTitle,
 } from './common';
 import {
   type TabData, type PaneData,
@@ -32,7 +32,7 @@ import {
   setLocalVars as storeSetLocalVars,
 } from './store';
 import { useLocalStorage } from './useLocalStorage';
-import { setupPluginAPI, runScript } from './pluginAPI';
+import { setupPluginAPI, runScript, moduleCache } from './pluginAPI';
 import { useKeyboardManager } from './useKeyboardManager';
 import Sidebar from './Sidebar';
 import type { TerminalHandle } from './Terminal';
@@ -89,8 +89,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   /** Height of the on-screen keyboard in px (0 when hidden) */
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
-  const [activeGroup, setActiveGroup] = useState<string>(
-    localStorage.getItem(BROWSER_STORAGE_KEY_ACTIVE_GROUP) || DEFAULT_BUTTON_GROUP);
+  const [activeGroup, setActiveGroup] = useLocalStorage(BROWSER_STORAGE_KEY_ACTIVE_GROUP, DEFAULT_BUTTON_GROUP);
   const [buttonDialogOpen, setButtonDialogOpen] = useState(false);
   const [editingButton, setEditingButton] = useState<ButtonData | null>(null);
   const [buttonFormData, setButtonFormData] = useState<ButtonData>({
@@ -210,12 +209,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, []);
 
   const handleSelectHost = useCallback(async (host: string, customTitle?: string) => {
-    const tabId = `${host}-${Date.now()}`;
-    const paneId = generatePassword(12);
-    console.log('handleSelectHost called for:', host, customTitle, 'ID:', tabId);
+    const tabId = genTabId(host);
+    const paneId = genPaneId(host);
     const newTab: TabData = {
       id: tabId,
-      title: customTitle || host,
+      title: customTitle || hostTitle(host),
       panes: [{ id: paneId, host }],
       activePaneId: paneId,
     };
@@ -224,7 +222,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setActivePaneId(paneId);
 
     // Record recent
-    if (host !== 'local') {
+    if (host !== LOCAL_NAME) {
       const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
       try {
         fetch('/api/recents', {
@@ -255,9 +253,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, [setRecents]);
 
   const handleSelectTagAsSplit = useCallback((tag: string, hosts: string[]) => {
-    const tabId = generatePassword(12);
+    const tabId = genTabId(tag);
     const panes = hosts.map(host => ({
-      id: generatePassword(12),
+      id: genPaneId(host),
       host
     }));
     const newTab: TabData = {
@@ -288,13 +286,18 @@ export default function Dashboard({ initialData }: DashboardProps) {
       },
       body: JSON.stringify({ id } satisfies SessionsAttachRequest)
     });
-    const frontendId = `${id}-${Date.now()}`;
+    const tabId = genTabId(host);
+    const paneId = genPaneId(host);
     setTabs(prev => [...prev, {
-      id: frontendId, panes: [{ id: frontendId, sessionId: id, host }],
-      activePaneId: frontendId, title, isPinned: true, isLocked
+      id: tabId,
+      panes: [{ id: paneId, sessionId: id, host }],
+      activePaneId: paneId,
+      title,
+      isPinned: true,
+      isLocked,
     }]);
-    setActiveTabId(frontendId);
-    setActivePaneId(frontendId);
+    setActiveTabId(tabId);
+    setActivePaneId(paneId);
   }, []);
 
   const [sysHostname, setSysHostname] = useState<string>('');
@@ -379,14 +382,16 @@ export default function Dashboard({ initialData }: DashboardProps) {
       targetPaneIds = [activePaneId];
     }
 
-    const parts = input.split(/(<ctrl-\S>)/gi);
+    // <ctrl-x> syntax. x ranges from ! ( 0b00100001 ) to ~ ( 0b01111110 ).
+    // we mask them with 0x1f ( 0b00011111 ) to clear high 3 bits.
+    const parts = input.split(/(<ctrl-[!-~]>)/g);
     for (const part of parts) {
       if (!part) {
         continue;
       }
-      const ctrlMatch = part.match(/<ctrl-(\S)>/i);
+      const ctrlMatch = part.match(/<ctrl-([!-~])>/);
       const dataToSend = ctrlMatch
-        ? String.fromCharCode(ctrlMatch[1].toLowerCase().charCodeAt(0) - 96)
+        ? String.fromCharCode(ctrlMatch[1].charCodeAt(0) & 0x1F)
         : part;
 
       for (const pid of targetPaneIds) {
@@ -439,7 +444,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     }
   }, [gestureMode, isMobile, isTouch]);
 
-  const tabId = useRef(sessionStorage.getItem(BROWSER_STORAGE_KEY_TAB_ID) || generatePassword(12));
+  const tabId = useRef(sessionStorage.getItem(BROWSER_STORAGE_KEY_TAB_ID) || genTabId(""));
 
   useEffect(() => {
     sessionStorage.setItem(BROWSER_STORAGE_KEY_TAB_ID, tabId.current);
@@ -525,20 +530,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
     return () => clearTimeout(t);
   }, [extraKeysOpen, activePaneId]);
 
-
-
-  // Listen for activeGroup changes dispatched by useKeyboardManager
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const group = (e as CustomEvent).detail?.group;
-      if (group) {
-        setActiveGroup(group);
-      }
-    };
-    window.addEventListener('cs:active-group-change', handler);
-    return () => window.removeEventListener('cs:active-group-change', handler);
-  }, []);
-
   const fetchHosts = useCallback(async () => {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     try {
@@ -615,13 +606,16 @@ export default function Dashboard({ initialData }: DashboardProps) {
           data = (await r.json()) as FullData;
         } catch (e) {
           console.error(e);
-          const initialId = `local-${Date.now()}`;
+          const tabId = genTabId(LOCAL_NAME);
+          const paneId = genPaneId(LOCAL_NAME);
           setTabs([{
-            id: initialId, panes: [{ id: initialId, host: 'local' }],
-            activePaneId: initialId, title: 'local'
+            id: tabId,
+            panes: [{ id: paneId, host: LOCAL_NAME }],
+            activePaneId: paneId,
+            title: LOCAL_NAME,
           }]);
-          setActiveTabId(initialId);
-          setActivePaneId(initialId);
+          setActiveTabId(tabId);
+          setActivePaneId(paneId);
           return;
         }
       }
@@ -655,14 +649,16 @@ export default function Dashboard({ initialData }: DashboardProps) {
             if (targets.length > 0) {
               handleSelectTagAsSplit(tag, targets.map(h => h.name));
             } else {
-              const initialId = `local-${Date.now()}`;
-              const initialPaneId = generatePassword(12);
+              const tabId = genTabId(LOCAL_NAME);
+              const paneId = genPaneId(LOCAL_NAME);
               setTabs([{
-                id: initialId, panes: [{ id: initialPaneId, host: 'local' }],
-                activePaneId: initialPaneId, title: 'local'
+                id: tabId,
+                panes: [{ id: paneId, host: LOCAL_NAME }],
+                activePaneId: paneId,
+                title: LOCAL_NAME,
               }]);
-              setActiveTabId(initialId);
-              setActivePaneId(initialPaneId);
+              setActiveTabId(tabId);
+              setActivePaneId(paneId);
             }
           } else {
             // Single host mode /#host
@@ -672,14 +668,16 @@ export default function Dashboard({ initialData }: DashboardProps) {
             if (host) {
               handleSelectHost(host.name);
             } else {
-              const initialId = `local-${Date.now()}`;
-              const initialPaneId = generatePassword(12);
+              const tabId = genTabId(LOCAL_NAME);
+              const paneId = genPaneId(LOCAL_NAME);
               setTabs([{
-                id: initialId, panes: [{ id: initialPaneId, host: LOCAL_NAME }],
-                activePaneId: initialPaneId, title: LOCAL_NAME,
+                id: tabId,
+                panes: [{ id: paneId, host: LOCAL_NAME }],
+                activePaneId: paneId,
+                title: LOCAL_NAME,
               }]);
-              setActiveTabId(initialId);
-              setActivePaneId(initialPaneId);
+              setActiveTabId(tabId);
+              setActivePaneId(paneId);
               setTimeout(() => dialogs.alert(`SSH server "${hash}" not found in config.`), 100);
             }
           }
@@ -703,31 +701,35 @@ export default function Dashboard({ initialData }: DashboardProps) {
                 setActivePaneId(pinnedTabs[0].activePaneId);
               }
             } else {
-              const initialId = `local-${Date.now()}`;
-              const initialPaneId = generatePassword(12);
+              const tabId = genTabId(LOCAL_NAME);
+              const paneId = genPaneId(LOCAL_NAME);
               setTabs(prev => prev.length > 0 ? prev : [{
-                id: initialId, panes: [{ id: initialPaneId, host: 'local' }],
-                activePaneId: initialPaneId, title: 'local'
+                id: tabId,
+                panes: [{ id: paneId, host: LOCAL_NAME }],
+                activePaneId: paneId,
+                title: LOCAL_NAME,
               }]);
               if (!getStore().activeTabId) {
-                setActiveTabId(initialId);
+                setActiveTabId(tabId);
               }
               if (!getStore().activePaneId) {
-                setActivePaneId(initialPaneId);
+                setActivePaneId(paneId);
               }
             }
           } else {
-            const initialId = `local-${Date.now()}`;
-            const initialPaneId = generatePassword(12);
+            const tabId = genTabId(LOCAL_NAME);
+            const paneId = genPaneId(LOCAL_NAME);
             setTabs(prev => prev.length > 0 ? prev : [{
-              id: initialId, panes: [{ id: initialPaneId, host: 'local' }],
-              activePaneId: initialPaneId, title: 'local'
+              id: tabId,
+              panes: [{ id: paneId, host: LOCAL_NAME }],
+              activePaneId: paneId,
+              title: LOCAL_NAME,
             }]);
             if (!getStore().activeTabId) {
-              setActiveTabId(initialId);
+              setActiveTabId(tabId);
             }
             if (!getStore().activePaneId) {
-              setActivePaneId(initialPaneId);
+              setActivePaneId(paneId);
             }
           }
         }
@@ -745,7 +747,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   useEffect(() => {
     const active = tabs.find(t => t.id === activeTabId);
-    if (!active || active.title === 'local') {
+    if (!active || active.title === LOCAL_NAME) {
       document.title = APP_NAME + " " + sysHostname;
     } else {
       document.title = `${active.title} - ${APP_NAME} ${sysHostname}`;
@@ -939,7 +941,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const backendSessionId = pane.sessionId || pane.id;
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     // Pinning only supports single-pane tabs for now (backend requirement)
-    const host = pane.host || 'local';
+    const host = pane.host || LOCAL_NAME;
     await fetch('/api/tabs/pin', {
       method: METHOD_POST,
       headers: {
@@ -967,7 +969,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     }
     const backendSessionId = pane.sessionId || pane.id;
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    const host = pane.host || 'local';
+    const host = pane.host || LOCAL_NAME;
     await fetch('/api/tabs/lock', {
       method: METHOD_POST,
       headers: {
@@ -995,7 +997,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     }
     const paneId = pane.sessionId || pane.id;
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    const host = pane.host || 'local';
+    const host = pane.host || LOCAL_NAME;
     await fetch('/api/tabs/pin', {
       method: METHOD_POST,
       headers: {
@@ -1047,6 +1049,14 @@ export default function Dashboard({ initialData }: DashboardProps) {
     let pane: PaneData | undefined;
     let tab: TabData | undefined;
     outer: for (const t of getStore().tabs) {
+      if (t.id === id) {
+        if (t.panes.length === 0) { // impossible case
+          return;
+        }
+        tab = t;
+        pane = t.panes[0];
+        break;
+      }
       for (const p of t.panes) {
         if (p.id === id) {
           pane = p;
@@ -1058,8 +1068,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
     if (!tab || !pane || (cloneInSameTab && tab.panes.length >= 4)) {
       return;
     }
-    const newPaneId = generatePassword(12);
-    const newId = `${pane.host}-${Date.now()}`;
+    const newPaneId = genPaneId(pane.host);
+    const newTabId = genTabId(pane.host);
     const backendSessionId = pane.sessionId || pane.id;
     setTabs(prev => {
       const newPane = { id: newPaneId, host: pane.host, cloneFrom: backendSessionId, state: pane.state };
@@ -1068,7 +1078,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
           ? { ...t, panes: [...t.panes, newPane], activePaneId: newPaneId } : t);
       }
       return [...prev, {
-        id: newId,
+        id: newTabId,
         title: nextName(tab.title),
         panes: [newPane],
         activePaneId: newPaneId,
@@ -1076,7 +1086,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       }]
     });
     if (!cloneInSameTab) {
-      setActiveTabId(newId);
+      setActiveTabId(newTabId);
     }
     setActivePaneId(newPaneId);
   }, []);
@@ -1173,7 +1183,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         break;
 
       case 'open_terminal':
-        handleSelectHost(btn.payload || 'local');
+        handleSelectHost(btn.payload || LOCAL_NAME);
         break;
 
       case 'terminal_function': {
@@ -1331,15 +1341,33 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
       case 'misc':
         switch (btn.payload) {
+          case 'TABS_SCROLL_LEFT':
+            (document.querySelector('#tabs-bar .MuiTabScrollButton-root:first-of-type') as HTMLElement)?.click();
+            break;
+          case 'TABS_SCROLL_RIGHT':
+            (document.querySelector('#tabs-bar .MuiTabScrollButton-root:last-of-type') as HTMLElement)?.click();
+            break;
+          case 'BUTTONS_SCROLL_LEFT':
+            (document.querySelector('#button-bar .MuiTabScrollButton-root:first-of-type') as HTMLElement)?.click();
+            break;
+          case 'BUTTONS_SCROLL_RIGHT':
+            (document.querySelector('#button-bar .MuiTabScrollButton-root:last-of-type') as HTMLElement)?.click();
+            break;
           case 'NEXT_BUTTON_GROUP': {
             const idx = groups.indexOf(activeGroup);
-            const nextIdx = (idx + 1) % groups.length;
+            let nextIdx = (idx + 1) % groups.length;
+            while (nextIdx !== idx && groups[nextIdx].startsWith("_")) {
+              nextIdx = (nextIdx + 1) % groups.length;
+            }
             setActiveGroup(groups[nextIdx]);
             break;
           }
           case 'PREV_BUTTON_GROUP': {
             const idx = groups.indexOf(activeGroup);
-            const prevIdx = (idx - 1 + groups.length) % groups.length;
+            let prevIdx = (idx - 1 + groups.length) % groups.length;
+            while (prevIdx !== idx && groups[prevIdx].startsWith("_")) {
+              prevIdx = (prevIdx - 1 + groups.length) % groups.length;
+            }
             setActiveGroup(groups[prevIdx]);
             break;
           }
@@ -1380,6 +1408,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     const method = editingButton ? METHOD_PUT : METHOD_POST;
     const url = editingButton ? `/api/buttons/${editingButton.id}` : '/api/buttons';
+    if (editingButton) {
+      delete moduleCache[editingButton.id];
+    }
     await fetch(url, {
       method,
       headers: {

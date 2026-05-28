@@ -47,9 +47,12 @@ export const BROADCAST_CHANNEL_MESSAGE_PINNED_PRESENT = "pinned_present";
 
 export const DEFAULT_BUTTON_GROUP = "Default";
 
+export const EVENT_LOCAL_STORAGE_SYNC = "local-storage-sync";
+
 export const VIBRATE_PATTERN = 100;
 export const COZYSSH_TOKEN_PREFIX = "cozytoken.";
 export const WS_PROTOCOL_QUERY_PREFIX = "query.";
+export const WS_PROTOCOL_DUMMY = "dummy";
 
 export const TERMINAL_FUNCTIONS = [
   { value: "COPY", label: "COPY (Buffer)" },
@@ -75,6 +78,10 @@ export const TERMINAL_FUNCTIONS = [
 ] as const;
 
 export const MISC_FUNCTIONS = [
+  { value: "TABS_SCROLL_LEFT", label: "Tabs Scroll Left" },
+  { value: "TABS_SCROLL_RIGHT", label: "Tabs Scroll Right" },
+  { value: "BUTTONS_SCROLL_LEFT", label: "Buttons Scroll Left" },
+  { value: "BUTTONS_SCROLL_RIGHT", label: "Buttons Scroll Right" },
   { value: "NEXT_BUTTON_GROUP", label: "Next Button Group" },
   { value: "PREV_BUTTON_GROUP", label: "Prev Button Group" },
   { value: "OPEN_SCRATCHPAD", label: "Open Scratchpad" },

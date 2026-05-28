@@ -15,7 +15,7 @@ import { version as PACKAGE_JSON_VERSION } from '../package.json';
 import type { HostData, PasswordUpdateRequest, SessionPinned } from './api';
 import {
   METHOD_PUT, METHOD_POST, METHOD_DELETE, HEADER_AUTHORIZATION_BEARER_PREFIX, HEADER_AUTHORIZATION, MIME_JSON,
-  HEADER_CONTENT_TYPE, BROWSER_STORAGE_KEY_TOKEN, APP_NAME,
+  HEADER_CONTENT_TYPE, BROWSER_STORAGE_KEY_TOKEN, APP_NAME, LOCAL_NAME,
 } from './constants';
 import { type HostForm, type ServiceWorkerStatus, filterHosts, remoteCommandOptions, searchString } from './common';
 import { dialogs } from './Dialogs';
@@ -567,7 +567,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
         {loading ? <Box sx={{ p: 2, alignSelf: 'center' }}><CircularProgress size={24} /></Box> : null}
         <List>
           <ListItem disablePadding>
-            <ListItemButton onClick={() => onSelect('local')}>
+            <ListItemButton onClick={() => onSelect(LOCAL_NAME)}>
               <ListItemIcon><ComputerIcon /></ListItemIcon>
               <ListItemText primary="Local Shell" />
             </ListItemButton>

@@ -45,7 +45,7 @@ interface Store {
   hosts: HostData[];
   buttons: ButtonData[];
   vars: Record<string, string>;
-  /** Local (browser-only) vars. All names have a "local" (case-insensitive) prefix. */
+  /** Local (browser-only) vars. All names have a "local_" (case-insensitive) prefix. */
   localVars: Record<string, string>;
   shellIntegrations: Record<string, ShellIntegration>;
 }

@@ -176,7 +176,6 @@ export const CS_EVENT_TERMINAL_RESIZE = "cs:terminal-resize";
 export const CS_EVENT_TERMINAL_CONNECTED = "cs:terminal-connected";
 export const CS_EVENT_TERMINAL_DISCONNECTED = "cs:terminal-disconnected";
 export const CS_EVENT_TERMINAL_DATA = "cs:terminal-data";
-export const CS_EVENT_ACTIVE_GROUP_CHANGE = "cs:active-group-change";
 
 export const remoteCommandOptions = [
   "tmux attach || tmux new", // Linux / pwsh, tmux or psmux ( https://github.com/psmux/psmux  )
@@ -450,4 +449,21 @@ export function nextName(name: string): string {
     return `${base} (${num + 1})`;
   }
   return `${name} (1)`;
+}
+
+
+export function hostTitle(name: string): string {
+  const i = name.indexOf("@");
+  if (i !== -1) {
+    name = name.slice(i + 1);
+  }
+  return name || "server";
+}
+
+export function genTabId(name: string): string {
+  return `t-${hostTitle(name)}-${generatePassword(12)}`;
+}
+
+export function genPaneId(_name: string): string {
+  return `p-${generatePassword(12)}`;
 }

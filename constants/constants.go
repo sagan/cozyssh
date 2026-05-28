@@ -18,4 +18,5 @@ const (
 	COZYSSH_TOKEN_PREFIX                    = "cozytoken."
 	WS_PROTOCOL_QUERY_PREFIX                = "query."    // pass query parameters in ws protocol to prevent logging
 	WS_PROTOCOL_IDENTITY_PREFIX             = "identity." // pass identity in ws protocol to prevent logging
+	WS_PROTOCOL_DUMMY                       = "dummy"     // used as response sec-websocket-protocol header
 )

@@ -5,10 +5,8 @@ package e2e
 import (
 	"net/http"
 	"testing"
-	"time"
 
 	"github.com/go-http-utils/headers"
-	"github.com/playwright-community/playwright-go"
 )
 
 func TestInvalidLogin(t *testing.T) {
@@ -36,27 +34,29 @@ func TestInvalidLogin(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 3. Setup listener for the alert
-	alertChan := make(chan string, 1)
-	page.OnDialog(func(dialog playwright.Dialog) {
-		alertChan <- dialog.Message()
-		dialog.Dismiss()
-	})
-
-	// 4. Click Sign In
+	// 3. Click Sign In
 	if err := page.Click("button[type=\"submit\"]"); err != nil {
 		t.Fatal(err)
 	}
 
-	// 5. Verify alert appeared
-	select {
-	case msg := <-alertChan:
-		if msg == "" {
-			t.Error("Expected failure alert, but got empty message")
-		}
-		t.Logf("Got expected failure alert: %s", msg)
-	case <-time.After(time.Second * 5):
-		t.Error("Timed out waiting for login failure alert")
+	// 4. Login failure now shows a MUI Dialog (not a native browser alert).
+	//    Wait for the async-modal-dialog to appear and verify it contains a message.
+	dialogLocator := page.Locator("#async-modal-dialog")
+	if err := dialogLocator.WaitFor(); err != nil {
+		t.Errorf("Timed out waiting for login failure alert: %v", err)
+		return
+	}
+
+	// Read the dialog title which holds the failure message
+	msg, err := page.Locator("#async-modal-dialog .MuiDialogTitle-root").TextContent()
+	if err != nil || msg == "" {
+		t.Errorf("Expected non-empty failure message in alert dialog, got: %q (err: %v)", msg, err)
+	}
+	t.Logf("Got expected failure alert: %s", msg)
+
+	// 5. Dismiss the dialog
+	if err := page.Locator("#async-modal-dialog button:has-text('OK')").Click(); err != nil {
+		t.Logf("Warning: could not click OK on failure dialog: %v", err)
 	}
 }
 

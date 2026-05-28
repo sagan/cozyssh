@@ -44,6 +44,12 @@ import { getStore, setActiveTabId, setButtons, setHosts, setVars, type TerminalR
 import { dialogs } from "./Dialogs";
 import type { AppletData } from "./AppletWrapper";
 
+/**
+ * id => moduleObj
+ */
+export const moduleCache: Record<string, Record<string, unknown>> = {};
+
+window.__CS_MODULECACHE__ = moduleCache;
 window.__CS_VERSION__ = PACKAGE_JSON_VERSION;
 
 window.csGetApplet = () => undefined; // initial dummy implementation
@@ -107,13 +113,6 @@ const virtualModulesImportRegex = (() => {
     "g"
   );
 })();
-
-/**
- * id => moduleObj
- */
-const moduleCache: Record<string, Record<string, unknown>> = {};
-
-window.__CS_MODULECACHE__ = moduleCache;
 
 export async function runScript(
   btn: Pick<ButtonData, "id" | "name" | "type" | "payload">,

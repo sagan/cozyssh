@@ -15,16 +15,11 @@ import {
   BROWSER_STORAGE_KEY_ACTIVE_GROUP,
   DEFAULT_BUTTON_GROUP,
   DEFAULT_SCROLL_LINES,
+  EVENT_LOCAL_STORAGE_SYNC,
   LOCAL_NAME,
   VAR_CS_SCROLL_LINES,
 } from "./constants";
-import {
-  type CSEventDetailActiveGroupChange,
-  type NewTabDialogViewMode,
-  CS_EVENT_ACTIVE_GROUP_CHANGE,
-  getIntVar,
-  getKeyCombination,
-} from "./common";
+import { type NewTabDialogViewMode, getIntVar, getKeyCombination } from "./common";
 import { type TerminalRefMap, getStore, setActivePaneId, setActiveTabId } from "./store";
 
 export interface KeyboardManagerOptions {
@@ -215,15 +210,12 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         case "alt+shift+v": {
           e.preventDefault();
           const idx = groups.indexOf(activeGroup);
-          const nextIdx = (e.shiftKey ? idx - 1 + groups.length : idx + 1) % groups.length;
+          let nextIdx = (e.shiftKey ? idx - 1 + groups.length : idx + 1) % groups.length;
+          while (nextIdx !== idx && groups[nextIdx].startsWith("_")) {
+            nextIdx = (e.shiftKey ? nextIdx - 1 + groups.length : nextIdx + 1) % groups.length;
+          }
           localStorage.setItem(BROWSER_STORAGE_KEY_ACTIVE_GROUP, groups[nextIdx]);
-          // Dashboard listens to storage or manages activeGroup state; trigger a
-          // custom event so Dashboard can update its local activeGroup state.
-          window.dispatchEvent(
-            new CustomEvent(CS_EVENT_ACTIVE_GROUP_CHANGE, {
-              detail: { group: groups[nextIdx] } satisfies CSEventDetailActiveGroupChange,
-            })
-          );
+          window.dispatchEvent(new Event(EVENT_LOCAL_STORAGE_SYNC));
           return;
         }
 

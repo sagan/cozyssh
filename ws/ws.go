@@ -100,15 +100,12 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := r.URL.Query()
-	header := make(http.Header)
 	identity := ""
 	if protocols := r.Header.Get(constants.HEADER_SEC_WEBSOCKET_PROTOCOL); protocols != "" {
 		parts := strings.SplitSeq(protocols, ",")
 		for p := range parts {
 			p = strings.TrimSpace(p)
-			if strings.HasPrefix(p, constants.COZYSSH_TOKEN_PREFIX) {
-				header.Set(constants.HEADER_SEC_WEBSOCKET_PROTOCOL, p)
-			} else if strings.HasPrefix(p, constants.WS_PROTOCOL_QUERY_PREFIX) {
+			if strings.HasPrefix(p, constants.WS_PROTOCOL_QUERY_PREFIX) {
 				// accepts passing parameters through ws protocol header to avoid logging
 				if data, err := base64.RawURLEncoding.DecodeString(
 					p[len(constants.WS_PROTOCOL_QUERY_PREFIX):]); err == nil && len(data) > 0 {
@@ -125,6 +122,9 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	header := http.Header{
+		constants.HEADER_SEC_WEBSOCKET_PROTOCOL: []string{constants.WS_PROTOCOL_DUMMY},
+	}
 	conn, err := upgrader.Upgrade(w, r, header)
 	if err != nil {
 		return

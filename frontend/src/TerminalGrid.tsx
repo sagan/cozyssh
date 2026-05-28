@@ -5,7 +5,7 @@ import AddIcon from '@mui/icons-material/Add';
 import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
 
 import { VIBRATE_PATTERN } from './constants';
-import type { NewTabDialogViewMode, ScratchpadSyncState } from './common';
+import { type NewTabDialogViewMode, type ScratchpadSyncState, genPaneId } from './common';
 import {
   type PaneData, type TerminalRefMap,
   setActivePaneId, setShellIntegrations, setTabs, useStore,
@@ -15,7 +15,6 @@ import Scratchpad, { type ScratchpadHandle } from './Scratchpad';
 import TerminalComponent, { type TerminalHandle } from './Terminal';
 import FileBrowser from './FileBrowser';
 import MobileInputBar from './MobileInputBar';
-
 
 export interface TerminalGridProps {
   terminalRefs: React.MutableRefObject<TerminalRefMap>;
@@ -218,14 +217,14 @@ export default function TerminalGrid({
                         }}
                         onManualReconnect={(wasStolen) => {
                           if (wasStolen) {
-                            const newId = `${pane.host}-${Date.now()}`;
+                            const newPaneId = genPaneId(pane.host);
                             setTabs(prev => prev.map(t => t.id === tab.id ? {
                               ...t,
-                              activePaneId: newId,
+                              activePaneId: newPaneId,
                               panes: t.panes.map(p => p.id === pane.id
-                                ? { ...p, id: newId, sessionId: newId, state: 'connecting' } : p)
+                                ? { ...p, id: newPaneId, sessionId: newPaneId, state: 'connecting' } : p)
                             } : t));
-                            setActivePaneId(newId);
+                            setActivePaneId(newPaneId);
                           }
                         }}
                         vars={vars}
@@ -346,7 +345,6 @@ export default function TerminalGrid({
         isAltActive={isAltActive}
         setIsAltActive={setIsAltActive}
         handleSendKey={handleSendKey}
-        VIBRATE_PATTERN={VIBRATE_PATTERN}
         gestureMode={gestureMode}
         onGestureModeChange={onGestureModeChange}
         extraKeysOpen={extraKeysOpen}

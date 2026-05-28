@@ -9,7 +9,10 @@ import { Box } from '@mui/material';
 import '@xterm/xterm/css/xterm.css';
 
 import type { WsResizeMsg, WsTerminalMessage } from './api';
-import { BROWSER_STORAGE_KEY_TOKEN, VAR_CS_NOIMAGE, VAR_CS_NOMODTEXTAREA, VAR_CS_NOWEBGL, VAR_CS_NOWEBLINKS, WS_PROTOCOL_QUERY_PREFIX } from './constants';
+import {
+  BROWSER_STORAGE_KEY_TOKEN, VAR_CS_NOIMAGE, VAR_CS_NOMODTEXTAREA, VAR_CS_NOWEBGL, VAR_CS_NOWEBLINKS,
+  WS_PROTOCOL_DUMMY, WS_PROTOCOL_QUERY_PREFIX,
+} from './constants';
 import {
   type CommandHistoryEntry, type CSEventDetailShellIntegration, type CSEventDetailTerminalConnected,
   type CSEventDetailTerminalData, type CSEventDetailTerminalDisconnected, type CSEventDetailTerminalResize,
@@ -815,7 +818,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
         return;
       }
 
-      const websocket_protocols: string[] = [];
+      const websocket_protocols: string[] = [WS_PROTOCOL_DUMMY];
       if (token) {
         websocket_protocols.push(token);
       }
