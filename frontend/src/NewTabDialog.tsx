@@ -598,6 +598,8 @@ export default function NewTabDialog({
                 ref={selectedIndex === index ? selectedItemRef : null}
                 onClick={() => handleSelect(item)}
                 title={item.tooltip}
+                data-type={item.type}
+                data-value={item.value}
                 sx={{
                   py: 0.5,
                   '&.Mui-selected': {

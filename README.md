@@ -91,7 +91,8 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
   - `Alt + E` : Open new tab dialog - buttons view
   - `Alt + N` : Open new local shell tab
   - `Alt + S` : Open scratchpad
-  - `Alt + H / Alt + L` : Switch to previous / next tab
+  - `Alt + H / Alt + L` : Switch to previous / next pane
+  - `Alt + Shift + H / Alt + Shift + L` : Switch to previous / next tab
   - `Alt + 1-9,0` : Switch to tab 1-9, last tab
   - `Alt + C` : Clone current pane in new tab
   - `Alt + Shift + C` : Clone current pane in same tab (Max 4 panes per tab)

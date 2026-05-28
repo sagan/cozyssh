@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -6,6 +6,34 @@
     <link rel="manifest" href="/manifest.json" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CozySSH</title>
+    <script>
+      (function () {
+        const keys = ["cozy_vars", "cozy_localvars"];
+        for (const key of keys) {
+          const data = localStorage.getItem(key);
+          if (!data) {
+            continue;
+          }
+          try {
+            const vars = JSON.parse(data);
+            if (vars?.class) {
+              let className = document.documentElement.getAttribute("class") || "";
+              if (className != "") {
+                className += " ";
+              }
+              className += vars.class;
+              document.documentElement.setAttribute("class", className);
+            }
+            if (vars?.css) {
+              const styleSheet = document.createElement("style");
+              styleSheet.id = key + "_css";
+              styleSheet.textContent = vars.css;
+              document.head.appendChild(styleSheet);
+            }
+          } catch {}
+        }
+      })();
+    </script>
   </head>
   <body>
     <noscript>Please enable JavaScript to use CozySSH</noscript>

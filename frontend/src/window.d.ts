@@ -52,10 +52,10 @@ declare global {
       localVars: Record<string, string | undefined>;
     };
     csFetch: (url: string, init?: RequestInit) => Promise<Response>;
-    csGetVar(name: string): string | undefined;
-    csGetVar(): Record<string, string>;
-    csSetVar: (nameOrVars: string, value: string | undefined) => Promise<void>;
-    csSetVar: (vars: Record<string, string | undefined>) => Promise<void>;
+    csGetVar: ((name: string) => string | undefined) | (() => Record<string, string>);
+    csSetVar:
+      | ((nameOrVars: string, value: string | undefined) => Promise<void>)
+      | ((vars: Record<string, string | undefined>) => Promise<void>);
     csGetTerminal: (paneId?: string) => unknown;
     csUpdateButton: (btn: ButtonData) => Promise<string>;
     csDeleteButton: (id: string) => Promise<void>;
@@ -68,8 +68,7 @@ declare global {
       options?: { position?: AppletPosition; width?: number; height?: number }
     ): void;
     csCloseApplet: (name: string) => void;
-    csGetApplet: (name: string) => AppletData | undefined;
-    csGetApplet: () => AppletData[];
+    csGetApplet: ((name: string) => AppletData | undefined) | (() => AppletData[]);
     csRefresh: () => Promise<void>;
     csSetTheme: (options: unknown, ...args: unknown[]) => void;
     csAttach: (id: string, host: string, title: string, isLocked = false) => void;

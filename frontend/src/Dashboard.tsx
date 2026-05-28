@@ -192,21 +192,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
     if (buttonsLoaded && !groups.includes(activeGroup)) {
       setActiveGroup(DEFAULT_BUTTON_GROUP);
     }
-  }, [groups, buttonsLoaded, activeGroup]);
+  }, [groups, buttonsLoaded, activeGroup, setActiveGroup]);
 
   useEffect(() => {
     appletRefs.current = applets;
   }, [applets]);
-
-  useEffect(() => {
-    window.csGetApplet = ((name?: string) => {
-      const applets = appletRefs.current;
-      return name ? applets.find(a => a.name === name) : applets;
-    }) as typeof window.csGetApplet;
-    return () => {
-      delete (window as Partial<Window>).csGetApplet;
-    };
-  }, []);
 
   const handleSelectHost = useCallback(async (host: string, customTitle?: string) => {
     const tabId = genTabId(host);
@@ -1169,6 +1159,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       maxZIndexRef,
       setLocalVars,
       getTerminalRefs: () => terminalRefs.current,
+      getApplets: () => appletRefs.current,
       handleCloseTabOrPane,
     });
   }, [csNotify, handleAttach, handleRefresh, handleSelectHost, handleSelectTagAsSplit, isMobile,
@@ -1342,10 +1333,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
       case 'misc':
         switch (btn.payload) {
           case 'TABS_SCROLL_LEFT':
-            (document.querySelector('#tabs-bar .MuiTabScrollButton-root:first-of-type') as HTMLElement)?.click();
+            (document.querySelector('#tab-bar .MuiTabScrollButton-root:first-of-type') as HTMLElement)?.click();
             break;
           case 'TABS_SCROLL_RIGHT':
-            (document.querySelector('#tabs-bar .MuiTabScrollButton-root:last-of-type') as HTMLElement)?.click();
+            (document.querySelector('#tab-bar .MuiTabScrollButton-root:last-of-type') as HTMLElement)?.click();
             break;
           case 'BUTTONS_SCROLL_LEFT':
             (document.querySelector('#button-bar .MuiTabScrollButton-root:first-of-type') as HTMLElement)?.click();
@@ -1387,8 +1378,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
       default:
         break;
     }
-  }, [sendParsedString, handleSelectHost, csNotify, handleCloseTabOrPane,
-    handleCloneSession, handleOpenScratchpad, groups, activeGroup]);
+  }, [sendParsedString, handleSelectHost, csNotify, handleCloseTabOrPane, handleCloneSession, handleOpenScratchpad,
+    groups, activeGroup, setActiveGroup]);
 
   // ── Keyboard shortcuts (reads fresh state from store — tiny stable dep array) ──
   useKeyboardManager({
@@ -1417,7 +1408,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
         [HEADER_CONTENT_TYPE]: MIME_JSON,
       },
-      body: JSON.stringify(buttonFormData)
+      body: JSON.stringify(buttonFormData),
     });
     setInitialBtnFormData(null);
     setButtonDialogOpen(false);
@@ -1430,8 +1421,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
       .then(data => {
         setButtons(data || []);
         setButtonsLoaded(true);
+        setActiveGroup(buttonFormData.group || DEFAULT_BUTTON_GROUP);
       });
-  }, [buttonFormData, editingButton]);
+  }, [buttonFormData, editingButton, setActiveGroup]);
 
   useEffect(() => {
     if (window.__CS_AUTORUN_DONE__ === undefined && buttonsLoaded) {
@@ -1513,7 +1505,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   useEffect(() => {
     if (keyboardHeight > 60) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLastKeyboardHeight(keyboardHeight);
     }
   }, [keyboardHeight]);
@@ -1521,7 +1512,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
   // 2. Track when the panel closes to hold the spacer momentarily
   useEffect(() => {
     if (prevExtraKeysOpen.current === true && extraKeysOpen === false) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsClosingPanel(true);
       const timer = setTimeout(() => setIsClosingPanel(false), 200);
       return () => clearTimeout(timer);

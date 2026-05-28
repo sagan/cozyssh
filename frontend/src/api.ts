@@ -16,6 +16,7 @@ export interface Manifest {
     display: string;
     background_color: string;
     theme_color: string;
+    handle_links?: string;
     icons: ManifestIcon[];
 }
 export interface Sysinfo {

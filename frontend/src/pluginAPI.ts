@@ -52,7 +52,6 @@ export const moduleCache: Record<string, Record<string, unknown>> = {};
 window.__CS_MODULECACHE__ = moduleCache;
 window.__CS_VERSION__ = PACKAGE_JSON_VERSION;
 
-window.csGetApplet = () => undefined; // initial dummy implementation
 window.csAlert = dialogs.alert;
 window.csConfirm = dialogs.confirm;
 window.csPrompt = dialogs.prompt;
@@ -216,6 +215,7 @@ export interface PluginAPICallbacks {
   setLocalVars: (v: Record<string, string>) => void;
   /** Getter for the live terminal ref map (avoids store coupling) */
   getTerminalRefs: () => TerminalRefMap;
+  getApplets: () => AppletData[];
   /** Close tab or pane */
   handleCloseTabOrPane: (tabOrPaneId?: string) => void;
 }
@@ -304,6 +304,11 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     }
     setVars(nextVars);
   };
+
+  window.csGetApplet = ((name?: string) => {
+    const applets = cb.getApplets();
+    return name ? applets.find((a) => a.name === name) : applets;
+  }) as typeof window.csGetApplet;
 
   // ── Terminal API ──────────────────────────────────────────────────────────
 

@@ -526,6 +526,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
                   <Chip
                     key={tag}
                     label={`#${tag}`}
+                    data-tag={tag}
                     size="small"
                     color={isActive ? "primary" : "default"}
                     variant={isActive ? "filled" : "outlined"}
@@ -566,7 +567,7 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
       <Box sx={{ overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
         {loading ? <Box sx={{ p: 2, alignSelf: 'center' }}><CircularProgress size={24} /></Box> : null}
         <List>
-          <ListItem disablePadding>
+          <ListItem disablePadding data-host={LOCAL_NAME}>
             <ListItemButton onClick={() => onSelect(LOCAL_NAME)}>
               <ListItemIcon><ComputerIcon /></ListItemIcon>
               <ListItemText primary="Local Shell" />
@@ -680,8 +681,8 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
         <MenuItem onClick={handleToggleFavourite}>
           {contextMenu?.target.is_favourite ? 'Remove From Favourite' : 'Add To Favourite'}
         </MenuItem>
-        <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>Delete {
-          contextMenu?.target.source === 'config' ? 'Host' : 'Auto Host'}</MenuItem>
+        {contextMenu?.target.source === 'config' &&
+          <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>Delete Host</MenuItem>}
       </Menu>
 
       <Menu
@@ -766,7 +767,8 @@ export default function Sidebar({ sysHostname, appVersion, mobileOpen, onClose, 
                   <b>Alt + E</b> : Open new tab dialog - buttons view<br />
                   <b>Alt + N</b> : Open new local shell tab<br />
                   <b>Alt + S</b> : Open scratchpad<br />
-                  <b>Alt + H / Alt + L</b> : Switch to previous / next tab<br />
+                  <b>Alt + H / Alt + L</b> : Switch to previous / next pane<br />
+                  <b>Alt + Shift + H / Alt + Shift + L</b> : Switch to previous / next tab<br />
                   <b>Alt + 1-9,0</b> : Switch to tab 1-9, last tab<br />
                   <b>Alt + C</b> : Clone current pane in new tab<br />
                   <b>Alt + Shift + C</b> : Clone current pane in same tab (Max 4 panes per tab)<br />
@@ -883,6 +885,7 @@ function HostListItem({ filter, host, onSelect, onContextMenu, isSelected }: {
       ref={itemRef}
       disablePadding
       onContextMenu={(e) => onContextMenu(e, host)}
+      data-host={host.name}
       sx={{
         bgcolor: isSelected ? 'action.hover' : (isFavourite ? 'action.selected' : 'transparent'),
         '&:hover': {

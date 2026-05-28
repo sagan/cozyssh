@@ -451,7 +451,6 @@ export function nextName(name: string): string {
   return `${name} (1)`;
 }
 
-
 export function hostTitle(name: string): string {
   const i = name.indexOf("@");
   if (i !== -1) {
@@ -464,6 +463,7 @@ export function genTabId(name: string): string {
   return `t-${hostTitle(name)}-${generatePassword(12)}`;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function genPaneId(_name: string): string {
   return `p-${generatePassword(12)}`;
 }
