@@ -5,12 +5,9 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
   const initialValueRef = useRef(initialValue);
 
   // Check if T is a string at runtime based on the initial value
-  const isStringType = typeof initialValueRef.current === "string";
+  const isStringType = typeof initialValue === "string";
 
   const readValue = useCallback((): T => {
-    if (typeof window === "undefined") {
-      return initialValueRef.current;
-    }
     try {
       const item = window.localStorage.getItem(key);
       if (item === null) {
@@ -25,8 +22,19 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
     }
   }, [key, isStringType]);
 
-  // Initialize state immediately using the readValue function
-  const [storedValue, setStoredValue] = useState<T>(() => readValue());
+  // Initialize state immediately
+  const [storedValue, setStoredValue] = useState<T>(() => {
+    try {
+      const item = window.localStorage.getItem(key);
+      if (item === null) {
+        return initialValue;
+      }
+      // If it's a string, return it directly without JSON.parse
+      return isStringType ? (item as unknown as T) : (JSON.parse(item) as T);
+    } catch {
+      return initialValue;
+    }
+  });
 
   const setValue = useCallback(
     (value: T | ((val: T) => T)) => {
@@ -48,7 +56,7 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
         console.warn(`Error setting localStorage key “${key}”:`, error);
       }
     },
-    [key, isStringType],
+    [key, isStringType]
   );
 
   useEffect(() => {

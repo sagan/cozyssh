@@ -407,7 +407,7 @@ func getSSHClient(name string, term TerminalUI, identity string,
 
 	host := name
 	port := "22"
-	user := common.GetUserName()
+	user := common.User
 	var password string
 
 	// Handle user:pass@host:port or user@host:port format
@@ -721,9 +721,8 @@ func ExpandTokens(cmd, host, port, user, name, sessionID string) string {
 	)
 
 	// %u is local user
-	localUser := common.GetUserName()
-	if localUser != "" {
-		cmd = strings.ReplaceAll(cmd, "%u", localUser)
+	if common.User != "" {
+		cmd = strings.ReplaceAll(cmd, "%u", common.User)
 	}
 
 	return r.Replace(cmd)

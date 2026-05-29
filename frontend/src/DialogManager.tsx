@@ -43,6 +43,7 @@ import {
   getKeyCombination,
   ButtonDataSchema,
   generatePassword,
+  removePassFromHost,
 } from "./common";
 import { setActivePaneId, setActiveTabId, useStore, type TabData } from "./store";
 import NewTabDialog from "./NewTabDialog";
@@ -295,7 +296,7 @@ export default function DialogManager({
             if (
               btn &&
               !(await dialogs.confirm(
-                `Button "${btn.name}" (id: "${buttonId}") already exists in group "${btn.group}". Overwrite it?`,
+                `Button "${btn.name}" (id: "${buttonId}") already exists in group "${btn.group}". Overwrite it?`
               ))
             ) {
               return;
@@ -337,7 +338,7 @@ export default function DialogManager({
         });
       }
     },
-    [buttonFormData.group, buttonFormData.order, buttons, setButtonFormData],
+    [buttonFormData.group, buttonFormData.order, buttons, setButtonFormData]
   );
 
   const handleAddFromUrl = useCallback(async () => {
@@ -565,10 +566,10 @@ export default function DialogManager({
                     e.target.value === "terminal_function"
                       ? "COPY"
                       : e.target.value === "misc"
-                        ? "NEXT_BUTTON_GROUP"
-                        : e.target.value === "open_terminal"
-                          ? LOCAL_NAME
-                          : "",
+                      ? "NEXT_BUTTON_GROUP"
+                      : e.target.value === "open_terminal"
+                      ? LOCAL_NAME
+                      : "",
                 })
               }
               slotProps={{ select: { native: true } }}
@@ -844,6 +845,7 @@ export default function DialogManager({
           setNewTabDialogOpen(false);
         }}
         onSelect={async (host) => {
+          host = removePassFromHost(host);
           // Check if it's a direct connection and not in known hosts
           if (host.includes(".") || host.includes(":") || host === "localhost") {
             const known = hosts.find((h) => h.name === host || h.hostname === host);

@@ -4,7 +4,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { ImageAddon } from "@xterm/addon-image";
 import { WebLinksAddon } from "@xterm/addon-web-links";
-import { SearchAddon, type ISearchOptions } from "@xterm/addon-search";
+import { type ISearchOptions, SearchAddon } from "@xterm/addon-search";
 import { Box } from "@mui/material";
 import "@xterm/xterm/css/xterm.css";
 
@@ -160,7 +160,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       onTerminalBlur,
       onTerminalFocus,
     },
-    ref,
+    ref
   ) => {
     const terminalRef = useRef<HTMLDivElement>(null);
     const xtermRef = useRef<Terminal | null>(null);
@@ -194,7 +194,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
             is_active_terminal: isActiveRef.current,
             shellIntegration: shellIntegrationRef.current,
           } satisfies CSEventDetailShellIntegration,
-        }),
+        })
       );
       if (updates.cwd) {
         onCwdChange?.(updates.cwd);
@@ -754,7 +754,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
               host,
               is_active_terminal: isActive,
             } satisfies CSEventDetailTerminalResize,
-          }),
+          })
         );
       });
 
@@ -844,7 +844,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
               promises,
               is_active_terminal: isActive,
             } satisfies CSEventDetailTerminalNew,
-          }),
+          })
         );
         try {
           await Promise.all(promises);
@@ -887,7 +887,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
                 host,
                 is_active_terminal: isActive,
               } satisfies CSEventDetailTerminalConnected,
-            }),
+            })
           );
         };
 
@@ -911,7 +911,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
                   ws.close();
                   if (msg.state === "stolen") {
                     term.write(
-                      "\r\n\x1b[31;1m*** Session stolen (attached by another client) *** (Press Enter to reconnect)\x1b[0m\r\n",
+                      "\r\n\x1b[31;1m*** Session stolen (attached by another client) *** (Press Enter to reconnect)\x1b[0m\r\n"
                     );
                     onStolen?.();
                   } else {
@@ -927,7 +927,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
                         is_active_terminal: isActive,
                         reason: deathType,
                       } satisfies CSEventDetailTerminalDisconnected,
-                    }),
+                    })
                   );
                   return;
                 }
@@ -948,7 +948,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
                     host,
                     is_active_terminal: isActive,
                   } satisfies CSEventDetailTerminalData,
-                }),
+                })
               );
             }
             term.write(ev.data);
@@ -971,7 +971,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
                       host,
                       is_active_terminal: isActive,
                     } satisfies CSEventDetailTerminalData,
-                  }),
+                  })
                 );
               }
               term.write(buffer);
@@ -993,7 +993,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
                 is_active_terminal: isActive,
                 reason: "normal",
               } satisfies CSEventDetailTerminalDisconnected,
-            }),
+            })
           );
           reconnectTimer = setTimeout(connectWS, 2000);
         };
@@ -1115,7 +1115,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
             text.lastIndexOf("$ "),
             text.lastIndexOf("# "),
             text.lastIndexOf("% "),
-            text.lastIndexOf("> "),
+            text.lastIndexOf("> ")
           );
           return lastPrompt !== -1 ? text.substring(lastPrompt + 2) : text;
         }
@@ -1230,7 +1230,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
     return (
       <Box className="terminal-pane" ref={terminalRef} sx={{ width: "100%", height: "100%", overflow: "hidden" }} />
     );
-  },
+  }
 );
 
 export default TerminalComponent;

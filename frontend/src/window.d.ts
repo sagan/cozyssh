@@ -1,11 +1,27 @@
 import type { Terminal } from "@xterm/xterm";
 
 import type { ButtonData, HostData } from "./api";
-import type { Severity } from "./common";
+import type {
+  CS_EVENT_SHELL_INTEGRATION,
+  CS_EVENT_TERMINAL_CHANGE,
+  CS_EVENT_TERMINAL_CONNECTED,
+  CS_EVENT_TERMINAL_DATA,
+  CS_EVENT_TERMINAL_DISCONNECTED,
+  CS_EVENT_TERMINAL_NEW,
+  CS_EVENT_TERMINAL_RESIZE,
+  CSEventDetailActiveGroupChange,
+  CSEventDetailShellIntegration,
+  CSEventDetailTerminalConnected,
+  CSEventDetailTerminalData,
+  CSEventDetailTerminalDisconnected,
+  CSEventDetailTerminalNew,
+  CSEventDetailTerminalResize,
+  Severity,
+} from "./common";
 import type { AppletPosition, CsExecResult } from "./pluginAPI";
 import type { TerminalRefMap, TabData, UseStore } from "./store";
 import type { AppletData } from "./AppletWrapper";
-import type { ShellIntegration } from "./Terminal";
+import type { ShellIntegration, TerminalHandle } from "./Terminal";
 import type { DialogApi } from "./Dialogs";
 
 interface VirtualKeyboard extends EventTarget {
@@ -17,7 +33,7 @@ interface VirtualKeyboard extends EventTarget {
   addEventListener(
     type: "geometrychange",
     listener: (this: VirtualKeyboard, ev: Event) => unknown,
-    options?: boolean | AddEventListenerOptions,
+    options?: boolean | AddEventListenerOptions
   ): void;
 }
 
@@ -33,7 +49,7 @@ declare global {
     __CS_PASSTHROUGH_SHORTCUTS__: Set<string>;
     __CS_DISABLE_SHORTCUTS__: Set<string>;
     csFocus: (paneId?: string) => void;
-    csNotify: (msg: string, severity: Severity = "info") => void;
+    csNotify: (msg: string, severity?: Severity) => void;
     csOpen: (target: HostData | string | (HostData | string)[], options?: { name?: string }) => void;
     csClose: (tabOrPaneId?: string) => void;
     csGetTerminal: (paneId?: string) => Terminal | undefined | null;
@@ -57,7 +73,6 @@ declare global {
     csSetVar:
       | ((nameOrVars: string, value: string | undefined) => Promise<void>)
       | ((vars: Record<string, string | undefined>) => Promise<void>);
-    csGetTerminal: (paneId?: string) => unknown;
     csUpdateButton: (btn: ButtonData) => Promise<string>;
     csDeleteButton: (id: string) => Promise<void>;
     csUpdateHost: (btn: HostData) => Promise<void>;
@@ -66,15 +81,26 @@ declare global {
     csOpenApplet(
       name: string,
       node: Node | React.ComponentType,
-      options?: { position?: AppletPosition; width?: number; height?: number },
+      options?: { position?: AppletPosition; width?: number; height?: number }
     ): void;
     csCloseApplet: (name: string) => void;
     csGetApplet: ((name: string) => AppletData | undefined) | (() => AppletData[]);
     csRefresh: () => Promise<void>;
     csSetTheme: (options: unknown, ...args: unknown[]) => void;
-    csAttach: (id: string, host: string, title: string, isLocked = false) => void;
+    csAttach: (id: string, host: string, title: string, isLocked?: boolean) => void;
     csAlert: DialogApi["alert"];
     csConfirm: DialogApi["confirm"];
     csPrompt: DialogApi["prompt"];
   }
+  interface WindowEventMap {
+    [CS_EVENT_TERMINAL_NEW]: CustomEvent<CSEventDetailTerminalNew>;
+    [CS_EVENT_TERMINAL_CONNECTED]: CustomEvent<CSEventDetailTerminalConnected>;
+    [CS_EVENT_TERMINAL_DISCONNECTED]: CustomEvent<CSEventDetailTerminalDisconnected>;
+    [CS_EVENT_TERMINAL_DATA]: CustomEvent<CSEventDetailTerminalData>;
+    [CS_EVENT_TERMINAL_RESIZE]: CustomEvent<CSEventDetailTerminalResize>;
+    [CS_EVENT_TERMINAL_CHANGE]: CustomEvent<CSEventDetailActiveGroupChange>;
+    [CS_EVENT_SHELL_INTEGRATION]: CustomEvent<CSEventDetailShellIntegration>;
+  }
 }
+
+export {};

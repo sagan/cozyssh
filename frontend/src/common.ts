@@ -169,13 +169,13 @@ export type CSEventDetailShellIntegration = {
   shellIntegration: ShellIntegration;
 };
 
-export const CS_EVENT_SHELL_INTEGRATION = "cs:shell-integration";
 export const CS_EVENT_TERMINAL_NEW = "cs:terminal-new";
-export const CS_EVENT_TERMINAL_CHANGE = "cs:terminal-change";
-export const CS_EVENT_TERMINAL_RESIZE = "cs:terminal-resize";
 export const CS_EVENT_TERMINAL_CONNECTED = "cs:terminal-connected";
 export const CS_EVENT_TERMINAL_DISCONNECTED = "cs:terminal-disconnected";
 export const CS_EVENT_TERMINAL_DATA = "cs:terminal-data";
+export const CS_EVENT_TERMINAL_RESIZE = "cs:terminal-resize";
+export const CS_EVENT_TERMINAL_CHANGE = "cs:terminal-change";
+export const CS_EVENT_SHELL_INTEGRATION = "cs:shell-integration";
 
 export const remoteCommandOptions = [
   "tmux attach -t cozy_%i || tmux new -s cozy_%i", // Linux / pwsh, tmux or psmux ( https://github.com/psmux/psmux  )
@@ -214,7 +214,7 @@ export function getVar(
   vars: Record<string, string>,
   localVars: Record<string, string>,
   name: string,
-  defaultValue = "",
+  defaultValue = ""
 ): string {
   if (localVars["local_" + name]) {
     return localVars["local_" + name]!;
@@ -238,7 +238,7 @@ export function getIntVar(
   vars: Record<string, string>,
   localVars: Record<string, string>,
   name: string,
-  defaultValue = 0,
+  defaultValue = 0
 ): number {
   const value = getVar(vars, localVars, name);
   if (value === "") {
@@ -457,6 +457,22 @@ export function hostTitle(name: string): string {
     name = name.slice(i + 1);
   }
   return name || "server";
+}
+
+/**
+ * "user:pass@host" => "user@host"
+ */
+export function removePassFromHost(host: string): string {
+  const i = host.indexOf("@");
+  if (i === -1) {
+    return host;
+  }
+  const userpass = host.slice(0, i);
+  const j = userpass.indexOf(":");
+  if (j === -1) {
+    return host;
+  }
+  return userpass.slice(0, j) + host.slice(i);
 }
 
 export function genTabId(name: string): string {

@@ -79,7 +79,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
       const groups = [
         DEFAULT_BUTTON_GROUP,
         ...Array.from(
-          new Set(buttons.map((b) => b.group || DEFAULT_BUTTON_GROUP).filter((g) => g !== DEFAULT_BUTTON_GROUP)),
+          new Set(buttons.map((b) => b.group || DEFAULT_BUTTON_GROUP).filter((g) => g !== DEFAULT_BUTTON_GROUP))
         ),
       ].sort();
 
@@ -258,7 +258,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         case "alt+shift+g": {
           e.preventDefault();
           const activeTab = tabs.find((t) => t.id === activeTabId);
-          if (activeTab && activeTab.panes.length > 1) {
+          if (activeTab && activeTab.panes.length > 0) {
             const pid = activeTab.panes[0].id;
             setActivePaneId(pid);
             setTabs((tabs) => tabs.map((t) => (t.id === activeTabId ? { ...t, activePaneId: pid } : t)));
