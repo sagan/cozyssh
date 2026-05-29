@@ -206,7 +206,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 				// The pClient doesn't directly expose them but we have the 'host' name and we can guess or use what was used.
 				// Actually, it's better if getSSHClient returns them or we store them.
 				// For now, let's just use the host name for expansion.
-				expanded := sshmanager.ExpandTokens(remoteCommand, host, "22", "root", host)
+				expanded := sshmanager.ExpandTokens(remoteCommand, host, "22", "root", host, sessionID)
 				if err := sshSession.Start(expanded); err != nil {
 					pClient.Release()
 					return
@@ -242,7 +242,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 				nw, _ := newSess.StdinPipe()
 
 				if newRC != "" {
-					expanded := sshmanager.ExpandTokens(newRC, host, "22", "root", host)
+					expanded := sshmanager.ExpandTokens(newRC, host, "22", "root", host, sessionID)
 					if err := newSess.Start(expanded); err != nil {
 						newSess.Close()
 						newPClient.Release()

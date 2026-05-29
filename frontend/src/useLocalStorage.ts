@@ -36,9 +36,7 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
 
           if (typeof window !== "undefined") {
             // Avoid JSON.stringify if dealing with a raw string
-            const serializedValue = isStringType
-              ? (valueToStore as unknown as string)
-              : JSON.stringify(valueToStore);
+            const serializedValue = isStringType ? (valueToStore as unknown as string) : JSON.stringify(valueToStore);
 
             window.localStorage.setItem(key, serializedValue);
             window.dispatchEvent(new Event(EVENT_LOCAL_STORAGE_SYNC));
@@ -50,7 +48,7 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
         console.warn(`Error setting localStorage key “${key}”:`, error);
       }
     },
-    [key, isStringType]
+    [key, isStringType],
   );
 
   useEffect(() => {
@@ -60,9 +58,7 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
           setStoredValue(initialValueRef.current);
         } else {
           // Sync correctly across tabs depending on type
-          setStoredValue(
-            isStringType ? (e.newValue as unknown as T) : JSON.parse(e.newValue)
-          );
+          setStoredValue(isStringType ? (e.newValue as unknown as T) : JSON.parse(e.newValue));
         }
       }
     };

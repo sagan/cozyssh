@@ -40,7 +40,16 @@ import {
   LOCAL_VAR_PREFIX,
 } from "./constants";
 import { generatePassword, type Severity } from "./common";
-import { getStore, setActiveTabId, setButtons, setHosts, setVars, type TerminalRefMap } from "./store";
+import {
+  getStore,
+  setActivePaneId,
+  setActiveTabId,
+  setButtons,
+  setHosts,
+  setTabs,
+  setVars,
+  type TerminalRefMap,
+} from "./store";
 import { dialogs } from "./Dialogs";
 import type { AppletData } from "./AppletWrapper";
 
@@ -109,14 +118,14 @@ const virtualModulesImportRegex = (() => {
   const moduleNames = Object.keys(virtualModules).map(escapeRegExp).join("|");
   return new RegExp(
     `((?:from|import)\\s+['"])(${moduleNames})(['"])|(import\\s*\\(\\s*['"])(${moduleNames})(['"]\\))`,
-    "g"
+    "g",
   );
 })();
 
 export async function runScript(
   btn: Pick<ButtonData, "id" | "name" | "type" | "payload">,
   notify: (msg: string, severity?: Severity) => void,
-  getTerminalRefs: () => TerminalRefMap
+  getTerminalRefs: () => TerminalRefMap,
 ) {
   let moduleObj: Record<string, unknown>;
   let cached = false;
@@ -176,7 +185,7 @@ export async function runScript(
   } else if (cached) {
     notify(
       `Script ${btn.name} is already imported & cached, and has no run function. Reload the page to clear the cache`,
-      "info"
+      "info",
     );
     return;
   }
@@ -387,7 +396,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     }
     const { activePaneId, tabs } = getStore();
     const refs = cb.getTerminalRefs();
-    if (paneId) {
+    if (paneId && paneId !== activePaneId) {
       const allPanes = tabs.flatMap((t) => t.panes.map((p) => ({ tabId: t.id, paneId: p.id })));
       if (allPanes.length === 0) {
         return;
@@ -398,6 +407,8 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
       }
       const target = allPanes[idx];
       setActiveTabId(target.tabId);
+      setActivePaneId(target.paneId);
+      setTabs((tabs) => tabs.map((t) => (t.id === target.tabId ? { ...t, activePaneId: target.paneId } : t)));
       setTimeout(() => refs[target.paneId]?.focus(), 10);
     } else if (activePaneId) {
       setTimeout(() => refs[activePaneId]?.focus(), 0);
@@ -496,7 +507,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
       const existing = prev.find((a) => a.name === name);
       if (existing) {
         return prev.map((a) =>
-          a.name === name ? { ...a, node, width: options.width ?? a.width, height: options.height ?? a.height } : a
+          a.name === name ? { ...a, node, width: options.width ?? a.width, height: options.height ?? a.height } : a,
         );
       }
       return [

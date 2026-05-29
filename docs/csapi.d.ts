@@ -158,7 +158,7 @@ export interface DialogApi {
     options?: {
       placeholder?: string;
       validate?: (value: string) => string | undefined;
-    }
+    },
   ) => Promise<string | null>;
 }
 declare global {
@@ -174,7 +174,7 @@ declare global {
       target: HostData | string | (HostData | string)[],
       options?: {
         name?: string;
-      }
+      },
     ) => void;
     csClose: (tabOrPaneId?: string) => void;
     csGetTerminal: (paneId?: string) => any | undefined | null;
@@ -211,7 +211,7 @@ declare global {
         position?: AppletPosition;
         width?: number;
         height?: number;
-      }
+      },
     ): void;
     csCloseApplet: (name: string) => void;
     csGetApplet: ((name: string) => AppletData | undefined) | (() => AppletData[]);

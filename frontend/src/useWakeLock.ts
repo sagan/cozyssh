@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef } from "react";
 
 /**
  * A React hook that prevents the screen from locking/dimming using the Wake Lock API.
@@ -10,14 +10,14 @@ export function useWakeLock(shouldPreventLock: boolean): void {
   useEffect(() => {
     const requestWakeLock = async () => {
       // Check for API support and ensure a lock isn't already active
-      if ('wakeLock' in navigator && !wakeLockRef.current) {
+      if ("wakeLock" in navigator && !wakeLockRef.current) {
         try {
-          const lock = await navigator.wakeLock.request('screen');
+          const lock = await navigator.wakeLock.request("screen");
           wakeLockRef.current = lock;
 
           // The browser may release the lock automatically (e.g., when minimized).
           // We clear our ref when that happens so we know to request a new one later.
-          lock.addEventListener('release', () => {
+          lock.addEventListener("release", () => {
             wakeLockRef.current = null;
           });
         } catch {
@@ -38,21 +38,21 @@ export function useWakeLock(shouldPreventLock: boolean): void {
     };
 
     const handleVisibilityChange = async () => {
-      if (document.visibilityState === 'visible' && shouldPreventLock) {
+      if (document.visibilityState === "visible" && shouldPreventLock) {
         await requestWakeLock();
       }
     };
 
     if (shouldPreventLock) {
       requestWakeLock();
-      document.addEventListener('visibilitychange', handleVisibilityChange);
+      document.addEventListener("visibilitychange", handleVisibilityChange);
     } else {
       releaseWakeLock();
     }
 
     // Cleanup on unmount or when shouldPreventLock changes
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       releaseWakeLock();
     };
   }, [shouldPreventLock]);

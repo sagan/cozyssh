@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react';
-import { BrowserRouter, Route, Routes, Navigate } from 'react-router-dom';
+import { useEffect, useState } from "react";
+import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 
-import type { FullData, PreflightResponse } from './api';
-import { BROWSER_STORAGE_KEY_TOKEN } from './constants';
-import Login from './Login';
-import Dashboard from './Dashboard';
-import InsecureWarning from './InsecureWarning';
-import { AsyncDialogProvider } from './Dialogs';
+import type { FullData, PreflightResponse } from "./api";
+import { BROWSER_STORAGE_KEY_TOKEN } from "./constants";
+import Login from "./Login";
+import Dashboard from "./Dashboard";
+import InsecureWarning from "./InsecureWarning";
+import { AsyncDialogProvider } from "./Dialogs";
 
 function App() {
   const [securityCheck, setSecurityCheck] = useState<PreflightResponse | undefined>(undefined);
@@ -15,10 +15,10 @@ function App() {
 
   useEffect(() => {
     if (!window.isSecureContext) {
-      fetch('/api/preflight')
-        .then(res => res.json() as Promise<PreflightResponse>)
+      fetch("/api/preflight")
+        .then((res) => res.json() as Promise<PreflightResponse>)
         .then(setSecurityCheck)
-        .catch(err => {
+        .catch((err) => {
           console.error("Failed to fetch preflight info", err);
         });
     }
@@ -37,7 +37,10 @@ function App() {
     <AsyncDialogProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/login" element={!hasAuth ? <Login onLoginSuccess={handleLoginSuccess} /> : <Navigate to="/" />} />
+          <Route
+            path="/login"
+            element={!hasAuth ? <Login onLoginSuccess={handleLoginSuccess} /> : <Navigate to="/" />}
+          />
           <Route path="/" element={hasAuth ? <Dashboard initialData={fullData} /> : <Navigate to="/login" />} />
         </Routes>
       </BrowserRouter>

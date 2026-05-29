@@ -1,20 +1,25 @@
-import { useRef, useEffect } from 'react';
-import { Box, Tooltip, IconButton, Typography } from '@mui/material';
-import MenuIcon from '@mui/icons-material/Menu';
-import AddIcon from '@mui/icons-material/Add';
-import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
+import { useRef, useEffect } from "react";
+import { Box, Tooltip, IconButton, Typography } from "@mui/material";
+import MenuIcon from "@mui/icons-material/Menu";
+import AddIcon from "@mui/icons-material/Add";
+import ViewSidebarIcon from "@mui/icons-material/ViewSidebar";
 
-import { VIBRATE_PATTERN } from './constants';
-import { type NewTabDialogViewMode, type ScratchpadSyncState, genPaneId } from './common';
+import { VIBRATE_PATTERN } from "./constants";
+import { type NewTabDialogViewMode, type ScratchpadSyncState, genPaneId } from "./common";
 import {
-  type PaneData, type TerminalRefMap,
-  setActivePaneId, setShellIntegrations, setTabs, useStore,
-} from './store';
-import type { AppletData } from './AppletWrapper';
-import Scratchpad, { type ScratchpadHandle } from './Scratchpad';
-import TerminalComponent, { type TerminalHandle } from './Terminal';
-import FileBrowser from './FileBrowser';
-import MobileInputBar from './MobileInputBar';
+  type PaneData,
+  type TerminalRefMap,
+  setActivePaneId,
+  setActiveTabId,
+  setShellIntegrations,
+  setTabs,
+  useStore,
+} from "./store";
+import type { AppletData } from "./AppletWrapper";
+import Scratchpad, { type ScratchpadHandle } from "./Scratchpad";
+import TerminalComponent, { type TerminalHandle } from "./Terminal";
+import FileBrowser from "./FileBrowser";
+import MobileInputBar from "./MobileInputBar";
 
 export interface TerminalGridProps {
   terminalRefs: React.MutableRefObject<TerminalRefMap>;
@@ -47,13 +52,32 @@ export interface TerminalGridProps {
 }
 
 export default function TerminalGrid({
-  terminalRefs, isCtrlActive, setIsCtrlActive, isAltActive, setIsAltActive,
-  setScratchpadSyncState, onTerminalFocus, onTerminalBlur,
-  handleTerminalData, isTouch, isMobile, mobileAppletsOpen, setMobileAppletsOpen,
-  applets, setMobileOpen, setNewTabDialogOpen, setNewTabDialogInitialViewMode,
-  handleTouchStart, handleTouchEnd, handleSendKey,
-  gestureMode, onGestureModeChange, extraKeysOpen, onExtraKeysOpenChange,
-  keyboardHeight, getActiveTerminal,
+  terminalRefs,
+  isCtrlActive,
+  setIsCtrlActive,
+  isAltActive,
+  setIsAltActive,
+  setScratchpadSyncState,
+  onTerminalFocus,
+  onTerminalBlur,
+  handleTerminalData,
+  isTouch,
+  isMobile,
+  mobileAppletsOpen,
+  setMobileAppletsOpen,
+  applets,
+  setMobileOpen,
+  setNewTabDialogOpen,
+  setNewTabDialogInitialViewMode,
+  handleTouchStart,
+  handleTouchEnd,
+  handleSendKey,
+  gestureMode,
+  onGestureModeChange,
+  extraKeysOpen,
+  onExtraKeysOpenChange,
+  keyboardHeight,
+  getActiveTerminal,
 }: TerminalGridProps) {
   const { tabs, activeTabId, activePaneId, shellIntegrations, vars, localVars } = useStore();
 
@@ -63,8 +87,12 @@ export default function TerminalGrid({
   const termAreaRef = useRef<HTMLDivElement>(null);
   const gestureModeRef = useRef(gestureMode);
   const handleSendKeyRef = useRef(handleSendKey);
-  useEffect(() => { gestureModeRef.current = gestureMode; }, [gestureMode]);
-  useEffect(() => { handleSendKeyRef.current = handleSendKey; }, [handleSendKey]);
+  useEffect(() => {
+    gestureModeRef.current = gestureMode;
+  }, [gestureMode]);
+  useEffect(() => {
+    handleSendKeyRef.current = handleSendKey;
+  }, [handleSendKey]);
 
   useEffect(() => {
     const el = termAreaRef.current;
@@ -108,24 +136,24 @@ export default function TerminalGrid({
       }
       const isHoriz = Math.abs(diffX) > Math.abs(diffY);
       if (isHoriz) {
-        handleSendKeyRef.current(diffX > 0 ? '\x1b[C' : '\x1b[D');
+        handleSendKeyRef.current(diffX > 0 ? "\x1b[C" : "\x1b[D");
       } else {
-        handleSendKeyRef.current(diffY > 0 ? '\x1b[B' : '\x1b[A');
+        handleSendKeyRef.current(diffY > 0 ? "\x1b[B" : "\x1b[A");
       }
       window.navigator.vibrate?.(VIBRATE_PATTERN);
     };
 
-    // CRITICAL FIX: Use { capture: true } so this outer wrapper intercepts the 
+    // CRITICAL FIX: Use { capture: true } so this outer wrapper intercepts the
     // touches before the inner xterm.js canvas has a chance to process them.
-    el.addEventListener('touchstart', onTouchStart, { passive: false, capture: true });
-    el.addEventListener('touchmove', onTouchMove, { passive: false, capture: true });
-    el.addEventListener('touchend', onTouchEnd, { passive: false, capture: true });
+    el.addEventListener("touchstart", onTouchStart, { passive: false, capture: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false, capture: true });
+    el.addEventListener("touchend", onTouchEnd, { passive: false, capture: true });
 
     return () => {
       // Must include { capture: true } when removing the listeners as well
-      el.removeEventListener('touchstart', onTouchStart, { capture: true });
-      el.removeEventListener('touchmove', onTouchMove, { capture: true });
-      el.removeEventListener('touchend', onTouchEnd, { capture: true });
+      el.removeEventListener("touchstart", onTouchStart, { capture: true });
+      el.removeEventListener("touchmove", onTouchMove, { capture: true });
+      el.removeEventListener("touchend", onTouchEnd, { capture: true });
     };
   }, []); // refs keep values fresh; no re-run needed
 
@@ -134,7 +162,7 @@ export default function TerminalGrid({
       <Box
         id="terminals"
         ref={termAreaRef}
-        sx={{ flexGrow: 1, bgcolor: '#ffffff', overflow: 'hidden', position: 'relative' }}
+        sx={{ flexGrow: 1, bgcolor: "#ffffff", overflow: "hidden", position: "relative" }}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
@@ -144,16 +172,22 @@ export default function TerminalGrid({
             key={tab.id}
             data-tab-id={tab.id}
             sx={{
-              position: 'absolute',
+              position: "absolute",
               inset: 0,
-              display: activeTabId === tab.id ? 'flex' : 'none',
-              flexDirection: 'column'
+              display: activeTabId === tab.id ? "flex" : "none",
+              flexDirection: "column",
             }}
           >
-            <Box className="terminal-tab" sx={{
-              flexGrow: 1, minHeight: 0, position: 'relative',
-              display: 'flex', flexDirection: 'column'
-            }}>
+            <Box
+              className="terminal-tab"
+              sx={{
+                flexGrow: 1,
+                minHeight: 0,
+                position: "relative",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
               {(() => {
                 const renderPaneInner = (pane: PaneData) => (
                   <Box
@@ -161,25 +195,31 @@ export default function TerminalGrid({
                     data-pane-id={pane.id}
                     sx={{
                       flex: 1,
-                      height: '100%',
+                      height: "100%",
                       minWidth: 0,
                       minHeight: 0,
-                      position: 'relative',
-                      outline: activePaneId === pane.id ? '1px solid #1976d2' : '1px solid #ffffff',
+                      position: "relative",
+                      outline: activePaneId === pane.id ? "1px solid #1976d2" : "1px solid #ffffff",
                       outlineOffset: -1,
-                      zIndex: activePaneId === pane.id ? 1 : 0
+                      zIndex: activePaneId === pane.id ? 1 : 0,
                     }}
-                    onClick={() => setActivePaneId(pane.id)}
+                    onClick={() => {
+                      setActiveTabId(tab.id);
+                      setActivePaneId(pane.id);
+                      setTabs((tabs) => tabs.map((t) => (t.id === tab.id ? { ...t, activePaneId: pane.id } : t)));
+                    }}
                   >
-                    {tab.type === 'scratchpad' ? (
+                    {tab.type === "scratchpad" ? (
                       <Scratchpad
-                        ref={el => { terminalRefs.current[pane.id] = el; }}
+                        ref={(el) => {
+                          terminalRefs.current[pane.id] = el;
+                        }}
                         onSyncStateChange={setScratchpadSyncState}
                       />
                     ) : (
                       <TerminalComponent
                         key={pane.id}
-                        ref={el => {
+                        ref={(el) => {
                           if (el) terminalRefs.current[pane.id] = el;
                           else delete terminalRefs.current[pane.id];
                         }}
@@ -194,36 +234,60 @@ export default function TerminalGrid({
                         isAltActive={isAltActive}
                         onAltDone={() => setIsAltActive(false)}
                         onStateChange={(state) => {
-                          setTabs(prev => prev.map(t => t.id === tab.id ? {
-                            ...t,
-                            panes: t.panes.map(p => p.id === pane.id ? { ...p, state } : p)
-                          } : t));
+                          setTabs((prev) =>
+                            prev.map((t) =>
+                              t.id === tab.id
+                                ? {
+                                    ...t,
+                                    panes: t.panes.map((p) => (p.id === pane.id ? { ...p, state } : p)),
+                                  }
+                                : t,
+                            ),
+                          );
                         }}
                         onShellIntegrationChange={(info) => {
-                          setShellIntegrations(prev => ({ ...prev, [pane.id]: info }));
+                          setShellIntegrations((prev) => ({ ...prev, [pane.id]: info }));
                         }}
                         onDataReceived={() => handleTerminalData(tab.id)}
                         onTabStateChange={(state) => {
-                          setTabs(prev => prev.map(t => t.id === tab.id
-                            ? { ...t, isPinned: state.isPinned, isLocked: state.isLocked } : t));
+                          setTabs((prev) =>
+                            prev.map((t) =>
+                              t.id === tab.id ? { ...t, isPinned: state.isPinned, isLocked: state.isLocked } : t,
+                            ),
+                          );
                         }}
                         onStolen={() => {
-                          setTabs(prev => prev.map(t => t.id === tab.id ? {
-                            ...t,
-                            isPinned: false,
-                            isLocked: false,
-                            panes: t.panes.map(p => p.id === pane.id ? { ...p, state: 'stolen' } : p)
-                          } : t));
+                          setTabs((prev) =>
+                            prev.map((t) =>
+                              t.id === tab.id
+                                ? {
+                                    ...t,
+                                    isPinned: false,
+                                    isLocked: false,
+                                    panes: t.panes.map((p) => (p.id === pane.id ? { ...p, state: "stolen" } : p)),
+                                  }
+                                : t,
+                            ),
+                          );
                         }}
                         onManualReconnect={(wasStolen) => {
                           if (wasStolen) {
                             const newPaneId = genPaneId(pane.host);
-                            setTabs(prev => prev.map(t => t.id === tab.id ? {
-                              ...t,
-                              activePaneId: newPaneId,
-                              panes: t.panes.map(p => p.id === pane.id
-                                ? { ...p, id: newPaneId, sessionId: newPaneId, state: 'connecting' } : p)
-                            } : t));
+                            setTabs((prev) =>
+                              prev.map((t) =>
+                                t.id === tab.id
+                                  ? {
+                                      ...t,
+                                      activePaneId: newPaneId,
+                                      panes: t.panes.map((p) =>
+                                        p.id === pane.id
+                                          ? { ...p, id: newPaneId, sessionId: newPaneId, state: "connecting" }
+                                          : p,
+                                      ),
+                                    }
+                                  : t,
+                              ),
+                            );
                             setActivePaneId(newPaneId);
                           }
                         }}
@@ -240,48 +304,54 @@ export default function TerminalGrid({
                   return renderPaneInner(tab.panes[0]);
                 }
                 if (n === 2) {
-                  return <Box sx={{ display: 'flex', flexDirection: 'row', height: '100%' }}>
-                    {renderPaneInner(tab.panes[0])}
-                    <Box sx={{ width: '1px', bgcolor: 'divider', flexShrink: 0 }} />
-                    {renderPaneInner(tab.panes[1])}
-                  </Box>;
+                  return (
+                    <Box sx={{ display: "flex", flexDirection: "row", height: "100%" }}>
+                      {renderPaneInner(tab.panes[0])}
+                      <Box sx={{ width: "1px", bgcolor: "divider", flexShrink: 0 }} />
+                      {renderPaneInner(tab.panes[1])}
+                    </Box>
+                  );
                 }
                 if (n === 3) {
-                  return <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-                    {renderPaneInner(tab.panes[0])}
-                    <Box sx={{ height: '1px', bgcolor: 'divider', flexShrink: 0 }} />
-                    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'row', minHeight: 0 }}>
-                      {renderPaneInner(tab.panes[1])}
-                      <Box sx={{ width: '1px', bgcolor: 'divider', flexShrink: 0 }} />
-                      {renderPaneInner(tab.panes[2])}
+                  return (
+                    <Box sx={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+                      {renderPaneInner(tab.panes[0])}
+                      <Box sx={{ height: "1px", bgcolor: "divider", flexShrink: 0 }} />
+                      <Box sx={{ flex: 1, display: "flex", flexDirection: "row", minHeight: 0 }}>
+                        {renderPaneInner(tab.panes[1])}
+                        <Box sx={{ width: "1px", bgcolor: "divider", flexShrink: 0 }} />
+                        {renderPaneInner(tab.panes[2])}
+                      </Box>
                     </Box>
-                  </Box>;
+                  );
                 }
                 if (n === 4) {
-                  return <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-                    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'row', minHeight: 0 }}>
-                      {renderPaneInner(tab.panes[0])}
-                      <Box sx={{ width: '1px', bgcolor: 'divider', flexShrink: 0 }} />
-                      {renderPaneInner(tab.panes[1])}
+                  return (
+                    <Box sx={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+                      <Box sx={{ flex: 1, display: "flex", flexDirection: "row", minHeight: 0 }}>
+                        {renderPaneInner(tab.panes[0])}
+                        <Box sx={{ width: "1px", bgcolor: "divider", flexShrink: 0 }} />
+                        {renderPaneInner(tab.panes[1])}
+                      </Box>
+                      <Box sx={{ height: "1px", bgcolor: "divider", flexShrink: 0 }} />
+                      <Box sx={{ flex: 1, display: "flex", flexDirection: "row", minHeight: 0 }}>
+                        {renderPaneInner(tab.panes[2])}
+                        <Box sx={{ width: "1px", bgcolor: "divider", flexShrink: 0 }} />
+                        {renderPaneInner(tab.panes[3])}
+                      </Box>
                     </Box>
-                    <Box sx={{ height: '1px', bgcolor: 'divider', flexShrink: 0 }} />
-                    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'row', minHeight: 0 }}>
-                      {renderPaneInner(tab.panes[2])}
-                      <Box sx={{ width: '1px', bgcolor: 'divider', flexShrink: 0 }} />
-                      {renderPaneInner(tab.panes[3])}
-                    </Box>
-                  </Box>;
+                  );
                 }
                 return null;
               })()}
             </Box>
             {tab.showFiles && (
-              <Box sx={{ height: '50%', minHeight: 200, borderTop: 1, borderColor: 'divider' }}>
+              <Box sx={{ height: "50%", minHeight: 200, borderTop: 1, borderColor: "divider" }}>
                 <FileBrowser
                   sessionId={tab.panes.find((p) => p.id === tab.activePaneId)?.sessionId || tab.activePaneId}
                   isActive={activeTabId === tab.id && tab.showFiles}
                   shellCwd={shellIntegrations[tab.activePaneId]?.cwd}
-                  onClose={() => setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, showFiles: false } : t))}
+                  onClose={() => setTabs((prev) => prev.map((t) => (t.id === tab.id ? { ...t, showFiles: false } : t)))}
                 />
               </Box>
             )}
@@ -289,17 +359,27 @@ export default function TerminalGrid({
         ))}
 
         {tabs.length === 0 && (
-          <Box sx={{
-            p: 4, textAlign: 'center', mt: 10, display: 'flex',
-            flexDirection: 'column', alignItems: 'center'
-          }}>
-            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, mb: 4 }}>
+          <Box
+            sx={{
+              p: 4,
+              textAlign: "center",
+              mt: 10,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+            }}
+          >
+            <Box sx={{ display: "flex", justifyContent: "center", gap: 3, mb: 4 }}>
               <Tooltip title="Open Sidebar">
                 <IconButton
                   onClick={() => setMobileOpen(true)}
                   sx={{
-                    display: { md: 'none' }, width: 64, height: 64,
-                    bgcolor: 'background.paper', boxShadow: 2, '&:hover': { bgcolor: 'action.hover' }
+                    display: { md: "none" },
+                    width: 64,
+                    height: 64,
+                    bgcolor: "background.paper",
+                    boxShadow: 2,
+                    "&:hover": { bgcolor: "action.hover" },
                   }}
                 >
                   <MenuIcon sx={{ fontSize: 32 }} />
@@ -307,24 +387,33 @@ export default function TerminalGrid({
               </Tooltip>
               <Tooltip title="New Tab (Alt+O)">
                 <IconButton
-                  onClick={() => { setNewTabDialogInitialViewMode('servers'); setNewTabDialogOpen(true); }}
+                  onClick={() => {
+                    setNewTabDialogInitialViewMode("servers");
+                    setNewTabDialogOpen(true);
+                  }}
                   color="primary"
                   sx={{
-                    width: 64, height: 64, bgcolor: 'background.paper',
-                    boxShadow: 2, '&:hover': { bgcolor: 'action.hover' }
+                    width: 64,
+                    height: 64,
+                    bgcolor: "background.paper",
+                    boxShadow: 2,
+                    "&:hover": { bgcolor: "action.hover" },
                   }}
                 >
                   <AddIcon sx={{ fontSize: 32 }} />
                 </IconButton>
               </Tooltip>
-              {isMobile && applets.filter(a => a.position === 'sidebar').length > 0 && (
+              {isMobile && applets.filter((a) => a.position === "sidebar").length > 0 && (
                 <Tooltip title="Open Applets">
                   <IconButton
                     color="inherit"
                     onClick={() => setMobileAppletsOpen(!mobileAppletsOpen)}
                     sx={{
-                      width: 64, height: 64, bgcolor: 'background.paper',
-                      boxShadow: 2, '&:hover': { bgcolor: 'action.hover' }
+                      width: 64,
+                      height: 64,
+                      bgcolor: "background.paper",
+                      boxShadow: 2,
+                      "&:hover": { bgcolor: "action.hover" },
                     }}
                   >
                     <ViewSidebarIcon />

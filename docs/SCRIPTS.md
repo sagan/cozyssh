@@ -114,6 +114,7 @@ Returns information about currently open applets.
 - `name`: The name of the applet to return the data for. If provided, returns the data for the specific applet. If omitted, returns an array of all open applet objects.
 
 Sample Applet object:
+
 ```json
 {
   "name": "My Widget",
@@ -272,9 +273,9 @@ Sample usage:
 ```ts
 csSetTheme({
   palette: {
-    mode: 'dark',
+    mode: "dark",
     primary: {
-      main: '#90caf9',
+      main: "#90caf9",
     },
   },
 });
@@ -284,12 +285,12 @@ The default theme:
 
 ```json
 {
-  cssVariables: true,
-  palette: {
-    mode: 'light',
-    primary: { main: '#1976d2' },
-    background: { default: '#ffffff', paper: '#f4f6f8' },
-  },
+  "cssVariables": true,
+  "palette": {
+    "mode": "light",
+    "primary": { "main": "#1976d2" },
+    "background": { "default": "#ffffff", "paper": "#f4f6f8" }
+  }
 }
 ```
 
@@ -298,12 +299,13 @@ The default theme:
 Adds or updates a button in the configuration (depending on if `btn.id` is set), and returns the added / edited button's ID. If `btn.id` is not provided, CozySSH will automatically generate a unique 12-character ID for you.
 
 Sample usage:
+
 ```typescript
 const btnId = await csUpdateButton({
   name: "Say Hello",
   type: "send_string",
   payload: "echo 'Hello World!'\n",
-  group: "Default"
+  group: "Default",
 });
 csNotify(`Button created with ID: ${btnId}`);
 ```
@@ -313,6 +315,7 @@ csNotify(`Button created with ID: ${btnId}`);
 Deletes a button from the configuration with the matching `id`.
 
 Sample usage:
+
 ```typescript
 await csDeleteButton("btn-12345");
 csNotify("Button deleted");
@@ -323,13 +326,14 @@ csNotify("Button deleted");
 Adds or updates a host configuration. If the host's `name` already exists in the configured hosts, it will be updated; otherwise, a new host block will be appended to your SSH config.
 
 Sample usage:
+
 ```typescript
 await csUpdateHost({
   name: "staging-server",
   hostname: "192.168.1.50",
   user: "ubuntu",
   port: "22",
-  tags: ["staging", "web"]
+  tags: ["staging", "web"],
 });
 csNotify("Host configuration updated");
 ```
@@ -339,6 +343,7 @@ csNotify("Host configuration updated");
 Deletes a host configuration with the matching `Host my-server` name from your SSH config.
 
 Sample usage:
+
 ```typescript
 await csDeleteHost("staging-server");
 csNotify("Host deleted");
@@ -376,15 +381,17 @@ Fired when a new terminal is created. At this time, the terminal is not yet conn
 - `detail.promises`: `PromiseLike<unknown>[]`, initial is empty, scripts can add promises to it, CozySSH will wait for them to resolve before establishing the backend connection. E.g.
   ```ts
   // If local shell, delay 1s, then throw an error, CozySSH will abort connecting
-  window.addEventListener('cs:terminal-new', (e) => {
+  window.addEventListener("cs:terminal-new", (e) => {
     const { detail } = e as CustomEvent<CSEventDetailTerminalNew>;
-    if (detail.host !== 'local') {
+    if (detail.host !== "local") {
       return;
     }
-    detail.promises.push((async () => {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      throw new Error('Cancelled by user');
-    })());
+    detail.promises.push(
+      (async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        throw new Error("Cancelled by user");
+      })(),
+    );
   });
   export const cache = true;
   ```
@@ -439,7 +446,7 @@ Fired when any property of the shell integration state (CWD, command status, his
 
 ```typescript
 const term = csGetTerminal();
-if(!term) {
+if (!term) {
   csNotify("No active terminal");
 } else {
   csNotify(`Terminal info: ${term.rows} Rows, ${term.cols} Cols`);
@@ -465,7 +472,7 @@ if (!result.error) {
 
 ```typescript
 const { hosts } = csGetAll();
-const productionHosts = hosts.filter(h => h.tags?.includes('prod'));
+const productionHosts = hosts.filter((h) => h.tags?.includes("prod"));
 if (productionHosts.length > 0) {
   csOpen(productionHosts.slice(0, 4), { name: "PROD CLUSTER" });
 }
@@ -493,8 +500,8 @@ csNotify("Current theme: " + theme);
 
 // Bulk updates
 await csSetVar({
-  "KEY_A": "value1",
-  "KEY_B": "value2"
+  KEY_A: "value1",
+  KEY_B: "value2",
 });
 ```
 
@@ -503,7 +510,7 @@ await csSetVar({
 You can create your own floating UI or sidebar using React. This is an example script that opens a widget which displays the current terminal size and updates in real-time as the user resizes the terminal or switches tabs:
 
 ```tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 
 const TerminalSizeApplet = () => {
   // Initialize with the current active terminal size
@@ -532,38 +539,40 @@ const TerminalSizeApplet = () => {
     };
 
     // Register event listeners
-    window.addEventListener('cs:terminal-resize', handleResize);
-    window.addEventListener('cs:terminal-change', handleChange);
-    
+    window.addEventListener("cs:terminal-resize", handleResize);
+    window.addEventListener("cs:terminal-change", handleChange);
+
     // Clean up listeners when applet is closed
     return () => {
-      window.removeEventListener('cs:terminal-resize', handleResize);
-      window.removeEventListener('cs:terminal-change', handleChange);
+      window.removeEventListener("cs:terminal-resize", handleResize);
+      window.removeEventListener("cs:terminal-change", handleChange);
     };
   }, []);
 
   return (
-    <div style={{ 
-      padding: '24px', 
-      textAlign: 'center', 
-      background: '#121212', 
-      color: '#00ff41', // Classic terminal green
-      fontFamily: '"JetBrains Mono", "Fira Code", monospace',
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'center',
-      boxSizing: 'border-box'
-    }}>
-      <div style={{ fontSize: '0.75rem', color: '#888', letterSpacing: '0.1em', marginBottom: '8px' }}>
+    <div
+      style={{
+        padding: "24px",
+        textAlign: "center",
+        background: "#121212",
+        color: "#00ff41", // Classic terminal green
+        fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        boxSizing: "border-box",
+      }}
+    >
+      <div style={{ fontSize: "0.75rem", color: "#888", letterSpacing: "0.1em", marginBottom: "8px" }}>
         ACTIVE TERMINAL
       </div>
-      <div style={{ fontSize: '2.8rem', fontWeight: '900', lineHeight: 1 }}>
-        {size.cols}<span style={{ color: '#444', margin: '0 8px' }}>×</span>{size.rows}
+      <div style={{ fontSize: "2.8rem", fontWeight: "900", lineHeight: 1 }}>
+        {size.cols}
+        <span style={{ color: "#444", margin: "0 8px" }}>×</span>
+        {size.rows}
       </div>
-      <div style={{ marginTop: '12px', fontSize: '0.7rem', color: '#555' }}>
-        COLUMNS × ROWS
-      </div>
+      <div style={{ marginTop: "12px", fontSize: "0.7rem", color: "#555" }}>COLUMNS × ROWS</div>
     </div>
   );
 };
@@ -586,12 +595,12 @@ export const cache = true;
 This is a utility to manage variables in the CozySSH applet.
 
 ```tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 
 const SettingsApplet = () => {
   const [variables, setVariables] = useState(csGetVar());
-  const [newKey, setNewKey] = useState('');
-  const [newValue, setNewValue] = useState('');
+  const [newKey, setNewKey] = useState("");
+  const [newValue, setNewValue] = useState("");
 
   const refresh = () => setVariables(csGetVar());
 
@@ -600,14 +609,14 @@ const SettingsApplet = () => {
       return;
     }
     await csSetVar(newKey.trim(), newValue);
-    setNewKey('');
-    setNewValue('');
+    setNewKey("");
+    setNewValue("");
     refresh();
     csNotify(`Variable "${newKey}" saved`);
   };
 
   const handleDelete = async (key) => {
-    if( !await csConfirm(`Delete ${key}?`) ) {
+    if (!(await csConfirm(`Delete ${key}?`))) {
       return;
     }
     await csSetVar(key, undefined);
@@ -620,7 +629,7 @@ const SettingsApplet = () => {
     setNewKey(key);
     setNewValue(value);
   };
-  
+
   useEffect(() => {
     window.addEventListener("storage", refresh);
     return () => {
@@ -629,54 +638,65 @@ const SettingsApplet = () => {
   }, []);
 
   return (
-    <div style={{ 
-      padding: '16px', 
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '16px'
-    }}>
+    <div
+      style={{
+        padding: "16px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "16px",
+      }}
+    >
       {/* Header Section */}
-      <div style={{ borderBottom: '1px solid #333', paddingBottom: '12px' }}>
-        <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#5d00ff' }}>Variable Manager</h3>
-        <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem' }}>
-          Persist script data in config.yaml
-        </p>
+      <div style={{ borderBottom: "1px solid #333", paddingBottom: "12px" }}>
+        <h3 style={{ margin: 0, fontSize: "1.1rem", color: "#5d00ff" }}>Variable Manager</h3>
+        <p style={{ margin: "4px 0 0 0", fontSize: "0.8rem" }}>Persist script data in config.yaml</p>
       </div>
 
       {/* Add/Edit Variable Form */}
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        gap: '8px',
-        background: '#00000014',
-        padding: '12px',
-        borderRadius: '8px',
-        border: '1px solid #333'
-      }}>
-        <input 
-          placeholder="Header Name (e.g. THEME)" 
-          value={newKey} 
-          onChange={e => setNewKey(e.target.value)}
-          style={{ 
-            border: '1px solid #444', 
-            padding: '6px 10px', borderRadius: '4px', fontSize: '0.9rem' 
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "8px",
+          background: "#00000014",
+          padding: "12px",
+          borderRadius: "8px",
+          border: "1px solid #333",
+        }}
+      >
+        <input
+          placeholder="Header Name (e.g. THEME)"
+          value={newKey}
+          onChange={(e) => setNewKey(e.target.value)}
+          style={{
+            border: "1px solid #444",
+            padding: "6px 10px",
+            borderRadius: "4px",
+            fontSize: "0.9rem",
           }}
         />
-        <input 
-          placeholder="Value..." 
-          value={newValue} 
-          onChange={e => setNewValue(e.target.value)}
-          style={{ 
-            border: '1px solid #444', 
-            padding: '6px 10px', borderRadius: '4px', fontSize: '0.9rem' 
+        <input
+          placeholder="Value..."
+          value={newValue}
+          onChange={(e) => setNewValue(e.target.value)}
+          style={{
+            border: "1px solid #444",
+            padding: "6px 10px",
+            borderRadius: "4px",
+            fontSize: "0.9rem",
           }}
         />
-        <button 
+        <button
           onClick={handleAdd}
-          style={{ 
-            background: '#5d00ff', color: '#fff', border: 'none', 
-            padding: '8px', borderRadius: '4px', cursor: 'pointer',
-            fontWeight: 'bold', marginTop: '4px'
+          style={{
+            background: "#5d00ff",
+            color: "#fff",
+            border: "none",
+            padding: "8px",
+            borderRadius: "4px",
+            cursor: "pointer",
+            fontWeight: "bold",
+            marginTop: "4px",
           }}
         >
           Save Variable
@@ -684,56 +704,71 @@ const SettingsApplet = () => {
       </div>
 
       {/* Variable List */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
         {Object.entries(variables).length === 0 ? (
-          <div style={{ textAlign: 'center', color: '#666', padding: '20px', fontSize: '0.9rem' }}>
+          <div style={{ textAlign: "center", color: "#666", padding: "20px", fontSize: "0.9rem" }}>
             No variables stored.
           </div>
         ) : (
           Object.entries(variables).map(([key, val]) => (
-            <div key={key} style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'space-between',
-              background: '#ffffff05',
-              padding: '10px',
-              borderRadius: '6px',
-              border: '1px solid #222'
-            }}>
-              <div style={{ flex: 1, minWidth: 0, paddingRight: '12px' }}>
-                <div style={{ fontSize: '0.75rem', color: '#5d00ff', fontWeight: 'bold'}}>{key}</div>
-                <div style={{ 
-                  fontSize: '0.95rem', 
-                  whiteSpace: 'nowrap', 
-                  overflow: 'hidden', 
-                  textOverflow: 'ellipsis' 
-                }} title={val}>{val}</div>
+            <div
+              key={key}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                background: "#ffffff05",
+                padding: "10px",
+                borderRadius: "6px",
+                border: "1px solid #222",
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0, paddingRight: "12px" }}>
+                <div style={{ fontSize: "0.75rem", color: "#5d00ff", fontWeight: "bold" }}>{key}</div>
+                <div
+                  style={{
+                    fontSize: "0.95rem",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                  title={val}
+                >
+                  {val}
+                </div>
               </div>
-              
+
               {/* Action Buttons */}
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <button 
+              <div style={{ display: "flex", gap: "6px" }}>
+                <button
                   onClick={() => handleEdit(key, val)}
-                  style={{ 
-                    background: 'transparent', color: '#4da6ff', border: '1px solid #4da6ff33', 
-                    padding: '4px 8px', borderRadius: '4px', cursor: 'pointer',
-                    fontSize: '0.75rem'
+                  style={{
+                    background: "transparent",
+                    color: "#4da6ff",
+                    border: "1px solid #4da6ff33",
+                    padding: "4px 8px",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontSize: "0.75rem",
                   }}
                 >
                   Edit
                 </button>
-                <button 
+                <button
                   onClick={() => handleDelete(key)}
-                  style={{ 
-                    background: 'transparent', color: '#ff4444', border: '1px solid #ff444433', 
-                    padding: '4px 8px', borderRadius: '4px', cursor: 'pointer',
-                    fontSize: '0.75rem'
+                  style={{
+                    background: "transparent",
+                    color: "#ff4444",
+                    border: "1px solid #ff444433",
+                    padding: "4px 8px",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontSize: "0.75rem",
                   }}
                 >
                   Delete
                 </button>
               </div>
-
             </div>
           ))
         )}
@@ -746,7 +781,7 @@ const name = "Variable Manager";
 
 export function run() {
   if (csGetApplet(name)) {
-    csCloseApplet(name)
+    csCloseApplet(name);
   } else {
     csOpenApplet(name, SettingsApplet, { position: "sidebar" });
   }
@@ -760,9 +795,9 @@ export const cache = true;
 This is an example "AI Assistant" that uses the Gemini API to help you with your terminal. You will need to provide your own API key in the settings.
 
 ```tsx
-import React, { useState, useEffect, useRef } from 'react';
-import DOMPurify from 'dompurify';
-import { marked } from 'marked';
+import React, { useState, useEffect, useRef } from "react";
+import DOMPurify from "dompurify";
+import { marked } from "marked";
 
 /**
  * AI Assistant Script for CozySSH
@@ -778,15 +813,15 @@ import { marked } from 'marked';
 const AI_ASSISTANT_NAME = "AI Assistant";
 
 const AIAssistant = () => {
-  const [view, setView] = useState('chat'); // 'chat' | 'settings'
+  const [view, setView] = useState("chat"); // 'chat' | 'settings'
   const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
   // Settings State (Initialized from csGetVar)
-  const [provider, setProvider] = useState(() => csGetVar('AI_PROVIDER') || 'gemini');
-  const [model, setModel] = useState(() => csGetVar('AI_MODEL') || 'gemini-3.1-flash-lite-preview');
-  const [apiKey, setApiKey] = useState(() => csGetVar('AI_API_KEY') || '');
+  const [provider, setProvider] = useState(() => csGetVar("AI_PROVIDER") || "gemini");
+  const [model, setModel] = useState(() => csGetVar("AI_MODEL") || "gemini-3.1-flash-lite-preview");
+  const [apiKey, setApiKey] = useState(() => csGetVar("AI_API_KEY") || "");
 
   const scrollRef = useRef(null);
 
@@ -798,11 +833,14 @@ const AIAssistant = () => {
   }, [messages]);
 
   const handleAsk = async (forcePrompt = null) => {
-    const userPrompt = forcePrompt || input || "Analyze the terminal output, diagnose errors, suggest commands or explain what's happening";
+    const userPrompt =
+      forcePrompt ||
+      input ||
+      "Analyze the terminal output, diagnose errors, suggest commands or explain what's happening";
 
     if (!apiKey) {
       csNotify("Please configure API Key in settings.");
-      setView('settings');
+      setView("settings");
       return;
     }
 
@@ -810,66 +848,67 @@ const AIAssistant = () => {
     if (!terminalOutput) {
       return;
     }
-    const systemPrompt = "You are a helpful terminal assistant. You have access to the recent terminal output buffer. Help the user diagnose issues, explain commands, or provide guidance. Keep responses concise and use markdown formatting.";
-    
-    const newUserMsg = { role: 'user', content: userPrompt };
-    setMessages(prev => [...prev, newUserMsg]);
-    setInput('');
+    const systemPrompt =
+      "You are a helpful terminal assistant. You have access to the recent terminal output buffer. Help the user diagnose issues, explain commands, or provide guidance. Keep responses concise and use markdown formatting.";
+
+    const newUserMsg = { role: "user", content: userPrompt };
+    setMessages((prev) => [...prev, newUserMsg]);
+    setInput("");
     setLoading(true);
 
     try {
       // Build Gemini history
-      const history = messages.map(m => ({
-        role: m.role === 'user' ? 'user' : 'model',
-        parts: [{ text: m.content }]
+      const history = messages.map((m) => ({
+        role: m.role === "user" ? "user" : "model",
+        parts: [{ text: m.content }],
       }));
 
       // Inject terminal context into the current message
       const currentPrompt = `[TERMINAL OUTPUT START]\n${terminalOutput}\n[TERMINAL OUTPUT END]\n\nUser Question: ${userPrompt}`;
-      
+
       const payload = {
-        contents: [
-          ...history,
-          { role: 'user', parts: [{ text: currentPrompt }] }
-        ],
+        contents: [...history, { role: "user", parts: [{ text: currentPrompt }] }],
         systemInstruction: {
-          parts: [{ text: systemPrompt }]
-        }
+          parts: [{ text: systemPrompt }],
+        },
       };
 
-      const response = await csFetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      const response = await csFetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
 
       if (!response.ok) {
         const data = await response.json();
         throw new Error(data.error?.message || "Unknown API error");
       }
 
-      setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
-      
+      setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+
       const reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
-      let assistantMessage = '';
+      let assistantMessage = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        
+
         const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
-        
+        const lines = chunk.split("\n");
+
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
+          if (line.startsWith("data: ")) {
             const dataStr = line.slice(6);
-            if (dataStr.trim() === '[DONE]') continue;
+            if (dataStr.trim() === "[DONE]") continue;
             try {
               const data = JSON.parse(dataStr);
               if (data.candidates && data.candidates[0].content?.parts?.[0]?.text) {
                 assistantMessage += data.candidates[0].content.parts[0].text;
-                setMessages(prev => {
+                setMessages((prev) => {
                   const newMessages = [...prev];
                   newMessages[newMessages.length - 1].content = assistantMessage;
                   return newMessages;
@@ -883,7 +922,7 @@ const AIAssistant = () => {
       }
     } catch (e) {
       csNotify("AI Error: " + e.message);
-      setMessages(prev => [...prev, { role: 'assistant', content: "⚠️ Error: " + e.message }]);
+      setMessages((prev) => [...prev, { role: "assistant", content: "⚠️ Error: " + e.message }]);
     } finally {
       setLoading(false);
     }
@@ -893,22 +932,25 @@ const AIAssistant = () => {
     setLoading(true);
     try {
       // Test the key with a minimal request
-      const response = await csFetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: "ping" }] }] })
-      });
+      const response = await csFetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contents: [{ parts: [{ text: "ping" }] }] }),
+        },
+      );
       const data = await response.json();
       if (data.error) throw new Error(data.error.message);
 
       // Save to persistent storage
       await csSetVar({
-        'AI_PROVIDER': provider,
-        'AI_MODEL': model,
-        'AI_API_KEY': apiKey
+        AI_PROVIDER: provider,
+        AI_MODEL: model,
+        AI_API_KEY: apiKey,
       });
       csNotify("Settings saved!");
-      setView('chat');
+      setView("chat");
     } catch (e) {
       csNotify("Test failed: " + e.message);
     } finally {
@@ -918,56 +960,87 @@ const AIAssistant = () => {
 
   const resetSession = () => {
     setMessages([]);
-    setInput('');
+    setInput("");
   };
 
   // --- Styles ---
   const containerStyle = {
-    display: 'flex', flexDirection: 'column', height: '100%',
-    background: '#0f0f0f', color: '#e0e0e0', fontFamily: 'system-ui, -apple-system, sans-serif'
+    display: "flex",
+    flexDirection: "column",
+    height: "100%",
+    background: "#0f0f0f",
+    color: "#e0e0e0",
+    fontFamily: "system-ui, -apple-system, sans-serif",
   };
 
   const headerStyle = {
-    padding: '12px 16px', background: '#1a1a1a', borderBottom: '1px solid #333',
-    display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+    padding: "12px 16px",
+    background: "#1a1a1a",
+    borderBottom: "1px solid #333",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
   };
 
   const buttonStyle = {
-    background: 'linear-gradient(135deg, #6e8efb, #a777e3)', color: '#fff',
-    border: 'none', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600'
+    background: "linear-gradient(135deg, #6e8efb, #a777e3)",
+    color: "#fff",
+    border: "none",
+    padding: "8px 16px",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontWeight: "600",
   };
 
   const inputStyle = {
-    width: '100%', background: '#1a1a1a', border: '1px solid #333', borderRadius: '8px',
-    padding: '12px', color: '#fff', fontSize: '0.9rem', outline: 'none', resize: 'none'
+    width: "100%",
+    background: "#1a1a1a",
+    border: "1px solid #333",
+    borderRadius: "8px",
+    padding: "12px",
+    color: "#fff",
+    fontSize: "0.9rem",
+    outline: "none",
+    resize: "none",
   };
 
   // --- Render Views ---
 
-  if (view === 'settings') {
+  if (view === "settings") {
     return (
       <div style={containerStyle}>
         <div style={headerStyle}>
-          <span style={{ fontWeight: 'bold' }}>AI Settings</span>
-          <button onClick={() => setView('chat')} style={{ background: 'none', color: '#888', border: 'none', cursor: 'pointer' }}>Back</button>
+          <span style={{ fontWeight: "bold" }}>AI Settings</span>
+          <button
+            onClick={() => setView("chat")}
+            style={{ background: "none", color: "#888", border: "none", cursor: "pointer" }}
+          >
+            Back
+          </button>
         </div>
-        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "16px" }}>
           <div>
-            <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '4px' }}>Provider</label>
-            <select value={provider} onChange={e => setProvider(e.target.value)} style={inputStyle}>
+            <label style={{ fontSize: "0.8rem", color: "#888", display: "block", marginBottom: "4px" }}>Provider</label>
+            <select value={provider} onChange={(e) => setProvider(e.target.value)} style={inputStyle}>
               <option value="gemini">Gemini</option>
             </select>
           </div>
           <div>
-            <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '4px' }}>Model</label>
-            <select value={model} onChange={e => setModel(e.target.value)} style={inputStyle}>
+            <label style={{ fontSize: "0.8rem", color: "#888", display: "block", marginBottom: "4px" }}>Model</label>
+            <select value={model} onChange={(e) => setModel(e.target.value)} style={inputStyle}>
               <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
               <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite</option>
             </select>
           </div>
           <div>
-            <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '4px' }}>API Key</label>
-            <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="Enter API Key" style={inputStyle} />
+            <label style={{ fontSize: "0.8rem", color: "#888", display: "block", marginBottom: "4px" }}>API Key</label>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="Enter API Key"
+              style={inputStyle}
+            />
           </div>
           <button onClick={handleTestAndSave} disabled={loading} style={buttonStyle}>
             {loading ? "Testing..." : "Test & Save"}
@@ -980,53 +1053,80 @@ const AIAssistant = () => {
   return (
     <div style={containerStyle}>
       <div style={headerStyle}>
-        <span style={{ fontWeight: 'bold' }}>{AI_ASSISTANT_NAME}</span>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={resetSession} style={{ background: 'none', color: '#888', border: 'none', cursor: 'pointer', fontSize: '0.8rem' }}>Reset</button>
-          <button onClick={() => setView('settings')} style={{ background: 'none', color: '#888', border: 'none', cursor: 'pointer', fontSize: '0.8rem' }}>⚙️</button>
+        <span style={{ fontWeight: "bold" }}>{AI_ASSISTANT_NAME}</span>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button
+            onClick={resetSession}
+            style={{ background: "none", color: "#888", border: "none", cursor: "pointer", fontSize: "0.8rem" }}
+          >
+            Reset
+          </button>
+          <button
+            onClick={() => setView("settings")}
+            style={{ background: "none", color: "#888", border: "none", cursor: "pointer", fontSize: "0.8rem" }}
+          >
+            ⚙️
+          </button>
         </div>
       </div>
 
-      <div ref={scrollRef} style={{ flex: 1, overflow: 'auto', padding: '16px', display: 'flex', flexDirection: 'column' }}>
+      <div
+        ref={scrollRef}
+        style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column" }}
+      >
         {messages.length === 0 ? (
-          <div style={{ textAlign: 'center', marginTop: '40px', opacity: 0.5 }}>
-            <div style={{ fontSize: '2rem' }}>🤖</div>
+          <div style={{ textAlign: "center", marginTop: "40px", opacity: 0.5 }}>
+            <div style={{ fontSize: "2rem" }}>🤖</div>
             <p>How can I help with your terminal today?</p>
           </div>
         ) : (
           messages.map((m, i) => (
-            <div key={i} style={{
-              alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-              maxWidth: '90%', padding: '10px 14px', borderRadius: '12px',
-              background: m.role === 'user' ? '#3b3b3b' : '#252525',
-              marginBottom: '10px', fontSize: '0.9rem', border: '1px solid #333',
-              overflowX: 'auto'
-            }}>
-              {m.role === 'user' ? (
-                <div style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
+            <div
+              key={i}
+              style={{
+                alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+                maxWidth: "90%",
+                padding: "10px 14px",
+                borderRadius: "12px",
+                background: m.role === "user" ? "#3b3b3b" : "#252525",
+                marginBottom: "10px",
+                fontSize: "0.9rem",
+                border: "1px solid #333",
+                overflowX: "auto",
+              }}
+            >
+              {m.role === "user" ? (
+                <div style={{ whiteSpace: "pre-wrap" }}>{m.content}</div>
               ) : (
-                <div 
-                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(m.content)) }} 
-                  style={{ 
-                    display: 'flex', flexDirection: 'column', gap: '8px' 
+                <div
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(m.content)) }}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
                   }}
                 />
               )}
             </div>
           ))
         )}
-        {loading && <div style={{ fontSize: '0.8rem', opacity: 0.5 }}>AI is thinking...</div>}
+        {loading && <div style={{ fontSize: "0.8rem", opacity: 0.5 }}>AI is thinking...</div>}
       </div>
 
-      <div style={{ padding: '16px', background: '#121212', borderTop: '1px solid #333' }}>
+      <div style={{ padding: "16px", background: "#121212", borderTop: "1px solid #333" }}>
         <textarea
           value={input}
-          onChange={e => setInput(e.target.value)}
+          onChange={(e) => setInput(e.target.value)}
           placeholder="Ask a question..."
-          style={{ ...inputStyle, marginBottom: '8px' }}
-          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAsk(); } }}
+          style={{ ...inputStyle, marginBottom: "8px" }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleAsk();
+            }
+          }}
         />
-        <button onClick={() => handleAsk()} disabled={loading} style={{ ...buttonStyle, width: '100%' }}>
+        <button onClick={() => handleAsk()} disabled={loading} style={{ ...buttonStyle, width: "100%" }}>
           Ask
         </button>
       </div>
@@ -1035,10 +1135,10 @@ const AIAssistant = () => {
 };
 
 export function run() {
-  if( csGetApplet(AI_ASSISTANT_NAME) ) {
+  if (csGetApplet(AI_ASSISTANT_NAME)) {
     csCloseApplet(AI_ASSISTANT_NAME);
   } else {
-    csOpenApplet(AI_ASSISTANT_NAME, AIAssistant, { position: 'sidebar' });
+    csOpenApplet(AI_ASSISTANT_NAME, AIAssistant, { position: "sidebar" });
   }
 }
 
@@ -1052,7 +1152,7 @@ This script creates a sidebar applet that tracks the command history of the acti
 Note: Command History tracking uses OSC 3008 sequence and is only supported in systemd 258+, included in recent version Linux such as Ubuntu 26.04+.
 
 ```tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 
 /**
  * Cmd History Applet for CozySSH
@@ -1076,12 +1176,12 @@ const CmdHistoryApplet = () => {
       setHistory(window.csGetShellIntegration?.()?.recentCommands || []);
     };
 
-    window.addEventListener('cs:shell-integration', handleIntegration);
-    window.addEventListener('cs:terminal-change', handleTerminalChange);
+    window.addEventListener("cs:shell-integration", handleIntegration);
+    window.addEventListener("cs:terminal-change", handleTerminalChange);
 
     return () => {
-      window.removeEventListener('cs:shell-integration', handleIntegration);
-      window.removeEventListener('cs:terminal-change', handleTerminalChange);
+      window.removeEventListener("cs:shell-integration", handleIntegration);
+      window.removeEventListener("cs:terminal-change", handleTerminalChange);
     };
   }, []);
 
@@ -1095,34 +1195,40 @@ const CmdHistoryApplet = () => {
   const handleResend = (e, cmd) => {
     e.stopPropagation(); // Prevent the parent click (copy) from triggering
     if (cmd && window.csSendData) {
-      window.csSendData(cmd + '\n');
+      window.csSendData(cmd + "\n");
       window.csFocus?.();
     }
   };
 
   return (
-    <div style={{ 
-      padding: '12px', 
-      height: '100%', 
-      display: 'flex', 
-      flexDirection: 'column',
-      gap: '8px',
-      fontFamily: 'system-ui, -apple-system, sans-serif'
-    }}>
-      <div style={{ 
-        fontWeight: 'bold', 
-        fontSize: '0.75rem', 
-        color: '#888', 
-        letterSpacing: '0.05em',
-        borderBottom: '1px solid #eee', 
-        paddingBottom: '6px',
-        marginBottom: '4px'
-      }}>
+    <div
+      style={{
+        padding: "12px",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        gap: "8px",
+        fontFamily: "system-ui, -apple-system, sans-serif",
+      }}
+    >
+      <div
+        style={{
+          fontWeight: "bold",
+          fontSize: "0.75rem",
+          color: "#888",
+          letterSpacing: "0.05em",
+          borderBottom: "1px solid #eee",
+          paddingBottom: "6px",
+          marginBottom: "4px",
+        }}
+      >
         RECENT COMMANDS
       </div>
-      <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column", gap: "8px" }}>
         {history.length === 0 ? (
-          <div style={{ textAlign: 'center', color: '#999', marginTop: '30px', fontSize: '0.9rem', fontStyle: 'italic' }}>
+          <div
+            style={{ textAlign: "center", color: "#999", marginTop: "30px", fontSize: "0.9rem", fontStyle: "italic" }}
+          >
             No history detected.
           </div>
         ) : (
@@ -1131,59 +1237,69 @@ const CmdHistoryApplet = () => {
               key={entry.commandId || i}
               onClick={() => handleCopy(entry.command)}
               style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '10px',
-                borderRadius: '8px',
-                background: entry.exitStatus === 0 ? '#f0fdf4' : (entry.exitStatus !== undefined ? '#fef2f2' : '#f8f9fa'),
-                border: '1px solid',
-                borderColor: entry.exitStatus === 0 ? '#dcfce7' : (entry.exitStatus !== undefined ? '#fee2e2' : '#e5e7eb'),
-                cursor: 'pointer',
-                transition: 'background 0.2s'
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "10px",
+                borderRadius: "8px",
+                background: entry.exitStatus === 0 ? "#f0fdf4" : entry.exitStatus !== undefined ? "#fef2f2" : "#f8f9fa",
+                border: "1px solid",
+                borderColor:
+                  entry.exitStatus === 0 ? "#dcfce7" : entry.exitStatus !== undefined ? "#fee2e2" : "#e5e7eb",
+                cursor: "pointer",
+                transition: "background 0.2s",
               }}
-              onMouseEnter={(e) => e.currentTarget.style.background = '#edf2f7'}
-              onMouseLeave={(e) => e.currentTarget.style.background = entry.exitStatus === 0 ? '#f0fdf4' : (entry.exitStatus !== undefined ? '#fef2f2' : '#f8f9fa')}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "#edf2f7")}
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background =
+                  entry.exitStatus === 0 ? "#f0fdf4" : entry.exitStatus !== undefined ? "#fef2f2" : "#f8f9fa")
+              }
             >
-              <div style={{ flex: 1, minWidth: 0, marginRight: '8px' }}>
-                <div style={{ 
-                  fontFamily: '"JetBrains Mono", "Fira Code", monospace', 
-                  fontSize: '0.85rem', 
-                  fontWeight: '600', 
-                  wordBreak: 'break-all',
-                  color: '#1a202c'
-                }}>
-                  {entry.command || '(empty)'}
+              <div style={{ flex: 1, minWidth: 0, marginRight: "8px" }}>
+                <div
+                  style={{
+                    fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+                    fontSize: "0.85rem",
+                    fontWeight: "600",
+                    wordBreak: "break-all",
+                    color: "#1a202c",
+                  }}
+                >
+                  {entry.command || "(empty)"}
                 </div>
-                <div style={{ 
-                  display: 'flex', 
-                  gap: '8px',
-                  marginTop: '6px', 
-                  fontSize: '0.7rem', 
-                  color: '#718096' 
-                }}>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "8px",
+                    marginTop: "6px",
+                    fontSize: "0.7rem",
+                    color: "#718096",
+                  }}
+                >
                   <span>{new Date(entry.timestamp).toLocaleTimeString()}</span>
-                  <span style={{ 
-                    color: entry.exitStatus === 0 ? '#059669' : '#dc2626',
-                    fontWeight: 'bold'
-                  }}>
-                    {entry.exitStatus === 0 ? '✓' : `✗ (${entry.exitStatus})`}
+                  <span
+                    style={{
+                      color: entry.exitStatus === 0 ? "#059669" : "#dc2626",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    {entry.exitStatus === 0 ? "✓" : `✗ (${entry.exitStatus})`}
                   </span>
                 </div>
               </div>
-              
+
               <button
                 onClick={(e) => handleResend(e, entry.command)}
                 style={{
-                  background: '#5d00ff',
-                  color: '#fff',
-                  border: 'none',
-                  padding: '4px 8px',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '0.7rem',
-                  fontWeight: 'bold',
-                  flexShrink: 0
+                  background: "#5d00ff",
+                  color: "#fff",
+                  border: "none",
+                  padding: "4px 8px",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontSize: "0.7rem",
+                  fontWeight: "bold",
+                  flexShrink: 0,
                 }}
               >
                 Resend
@@ -1202,7 +1318,7 @@ export function run() {
   if (csGetApplet(APPLET_ID)) {
     csCloseApplet(APPLET_ID);
   } else {
-    csOpenApplet(APPLET_ID, CmdHistoryApplet, { position: 'sidebar' });
+    csOpenApplet(APPLET_ID, CmdHistoryApplet, { position: "sidebar" });
   }
 }
 

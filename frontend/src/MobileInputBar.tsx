@@ -13,20 +13,20 @@
  *   Fallback             → inputmode="none" (suppresses keyboard on most mobile browsers)
  */
 
-import { useRef, useState, useEffect } from 'react';
-import { Box, Paper, IconButton, Button, ButtonGroup, Divider } from '@mui/material';
-import PanToolIcon from '@mui/icons-material/PanTool';
-import PanToolOutlinedIcon from '@mui/icons-material/PanToolOutlined';
-import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
-import KeyboardTabIcon from '@mui/icons-material/KeyboardTab';
-import NorthIcon from '@mui/icons-material/North';
-import SouthIcon from '@mui/icons-material/South';
-import WestIcon from '@mui/icons-material/West';
-import EastIcon from '@mui/icons-material/East';
+import { useRef, useState, useEffect } from "react";
+import { Box, Paper, IconButton, Button, ButtonGroup, Divider } from "@mui/material";
+import PanToolIcon from "@mui/icons-material/PanTool";
+import PanToolOutlinedIcon from "@mui/icons-material/PanToolOutlined";
+import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
+import KeyboardTabIcon from "@mui/icons-material/KeyboardTab";
+import NorthIcon from "@mui/icons-material/North";
+import SouthIcon from "@mui/icons-material/South";
+import WestIcon from "@mui/icons-material/West";
+import EastIcon from "@mui/icons-material/East";
 
-import { VIBRATE_PATTERN } from './constants';
-import type { TerminalHandle } from './Terminal';
-import type { ScratchpadHandle } from './Scratchpad';
+import { VIBRATE_PATTERN } from "./constants";
+import type { TerminalHandle } from "./Terminal";
+import type { ScratchpadHandle } from "./Scratchpad";
 
 export interface MobileInputBarProps {
   isCtrlActive: boolean;
@@ -44,24 +44,29 @@ export interface MobileInputBarProps {
 }
 
 // ── Key definitions ───────────────────────────────────────────────────────────
-interface KeyDef { label: string; seq: string; wide?: boolean; }
+interface KeyDef {
+  label: string;
+  seq: string;
+  wide?: boolean;
+}
 
 // Groups shown in the scrollable bar (left to right)
 const BAR_GROUPS: KeyDef[][] = [
   [
-    { label: 'Esc', seq: '\x1b' },
-    { label: '⇥', seq: '\x09' }],
-  [
-    { label: '←', seq: '\x1b[D' },
-    { label: '↑', seq: '\x1b[A' },
-    { label: '↓', seq: '\x1b[B' },
-    { label: '→', seq: '\x1b[C' },
+    { label: "Esc", seq: "\x1b" },
+    { label: "⇥", seq: "\x09" },
   ],
   [
-    { label: '|', seq: '|' },
-    { label: '/', seq: '/' },
-    { label: '-', seq: '-' },
-    { label: ';', seq: ';' },
+    { label: "←", seq: "\x1b[D" },
+    { label: "↑", seq: "\x1b[A" },
+    { label: "↓", seq: "\x1b[B" },
+    { label: "→", seq: "\x1b[C" },
+  ],
+  [
+    { label: "|", seq: "|" },
+    { label: "/", seq: "/" },
+    { label: "-", seq: "-" },
+    { label: ";", seq: ";" },
   ],
 ];
 
@@ -69,74 +74,74 @@ const BAR_GROUPS: KeyDef[][] = [
 const EXTRA_ROWS: KeyDef[][] = [
   // Arrow keys first — always reachable even on narrow screens where the top row overflows
   [
-    { label: '←', seq: '\x1b[D' },
-    { label: '↑', seq: '\x1b[A' },
-    { label: '↓', seq: '\x1b[B' },
-    { label: '→', seq: '\x1b[C' },
-    { label: '|', seq: '|' },
-    { label: '/', seq: '/' },
-    { label: '-', seq: '-' },
-    { label: ';', seq: ';' },
+    { label: "←", seq: "\x1b[D" },
+    { label: "↑", seq: "\x1b[A" },
+    { label: "↓", seq: "\x1b[B" },
+    { label: "→", seq: "\x1b[C" },
+    { label: "|", seq: "|" },
+    { label: "/", seq: "/" },
+    { label: "-", seq: "-" },
+    { label: ";", seq: ";" },
   ],
   [
-    { label: '_', seq: '_' },
-    { label: 'Home', seq: '\x1b[H', wide: true },
-    { label: 'End', seq: '\x1b[F', wide: true },
-    { label: 'PgUp', seq: '\x1b[5~', wide: true },
-    { label: 'PgDn', seq: '\x1b[6~', wide: true },
-    { label: 'Ins', seq: '\x1b[2~', wide: true },
-    { label: 'Del', seq: '\x1b[3~', wide: true },
-    { label: 'BS', seq: '\x7f', wide: true }, // Backspace, compatible with Linux & Windows ConPTY
+    { label: "_", seq: "_" },
+    { label: "Home", seq: "\x1b[H", wide: true },
+    { label: "End", seq: "\x1b[F", wide: true },
+    { label: "PgUp", seq: "\x1b[5~", wide: true },
+    { label: "PgDn", seq: "\x1b[6~", wide: true },
+    { label: "Ins", seq: "\x1b[2~", wide: true },
+    { label: "Del", seq: "\x1b[3~", wide: true },
+    { label: "BS", seq: "\x7f", wide: true }, // Backspace, compatible with Linux & Windows ConPTY
   ],
   [
-    { label: '~', seq: '~' },
-    { label: '`', seq: '`' },
+    { label: "~", seq: "~" },
+    { label: "`", seq: "`" },
     { label: '"', seq: '"' },
     { label: "'", seq: "'" },
-    { label: '&', seq: '&' },
-    { label: '*', seq: '*' },
-    { label: '?', seq: '?' },
-    { label: '=', seq: '=' },
+    { label: "&", seq: "&" },
+    { label: "*", seq: "*" },
+    { label: "?", seq: "?" },
+    { label: "=", seq: "=" },
   ],
   [
-    { label: '{', seq: '{' },
-    { label: '}', seq: '}' },
-    { label: '[', seq: '[' },
-    { label: ']', seq: ']' },
-    { label: '(', seq: '(' },
-    { label: ')', seq: ')' },
-    { label: '<', seq: '<' },
-    { label: '>', seq: '>' },
+    { label: "{", seq: "{" },
+    { label: "}", seq: "}" },
+    { label: "[", seq: "[" },
+    { label: "]", seq: "]" },
+    { label: "(", seq: "(" },
+    { label: ")", seq: ")" },
+    { label: "<", seq: "<" },
+    { label: ">", seq: ">" },
   ],
   [
-    { label: '#', seq: '#' },
-    { label: '!', seq: '!' },
-    { label: '@', seq: '@' },
-    { label: '%', seq: '%' },
-    { label: '^', seq: '^' },
-    { label: '+', seq: '+' },
-    { label: ':', seq: ':' },
-    { label: '\\', seq: '\\' },
+    { label: "#", seq: "#" },
+    { label: "!", seq: "!" },
+    { label: "@", seq: "@" },
+    { label: "%", seq: "%" },
+    { label: "^", seq: "^" },
+    { label: "+", seq: "+" },
+    { label: ":", seq: ":" },
+    { label: "\\", seq: "\\" },
   ],
   [
-    { label: 'F1', seq: '\x1bOP', wide: true },
-    { label: 'F2', seq: '\x1bOQ', wide: true },
-    { label: 'F3', seq: '\x1bOR', wide: true },
-    { label: 'F4', seq: '\x1bOS', wide: true },
-    { label: 'F5', seq: '\x1b[15~', wide: true },
-    { label: 'F6', seq: '\x1b[17~', wide: true },
-    { label: 'F7', seq: '\x1b[18~', wide: true },
-    { label: 'F8', seq: '\x1b[19~', wide: true },
+    { label: "F1", seq: "\x1bOP", wide: true },
+    { label: "F2", seq: "\x1bOQ", wide: true },
+    { label: "F3", seq: "\x1bOR", wide: true },
+    { label: "F4", seq: "\x1bOS", wide: true },
+    { label: "F5", seq: "\x1b[15~", wide: true },
+    { label: "F6", seq: "\x1b[17~", wide: true },
+    { label: "F7", seq: "\x1b[18~", wide: true },
+    { label: "F8", seq: "\x1b[19~", wide: true },
   ],
   [
-    { label: 'F9', seq: '\x1b[20~', wide: true },
-    { label: 'F10', seq: '\x1b[21~', wide: true },
-    { label: 'F11', seq: '\x1b[23~', wide: true },
-    { label: 'F12', seq: '\x1b[24~', wide: true },
-    { label: '^C', seq: '\x03', wide: true }, // Ctrl+C
-    { label: '^L', seq: '\x0c', wide: true }, // Ctrl+L
-    { label: '^Z', seq: '\x1a', wide: true }, // Ctrl+Z
-    { label: '^D', seq: '\x04', wide: true }, // Ctrl+D
+    { label: "F9", seq: "\x1b[20~", wide: true },
+    { label: "F10", seq: "\x1b[21~", wide: true },
+    { label: "F11", seq: "\x1b[23~", wide: true },
+    { label: "F12", seq: "\x1b[24~", wide: true },
+    { label: "^C", seq: "\x03", wide: true }, // Ctrl+C
+    { label: "^L", seq: "\x0c", wide: true }, // Ctrl+L
+    { label: "^Z", seq: "\x1a", wide: true }, // Ctrl+Z
+    { label: "^D", seq: "\x04", wide: true }, // Ctrl+D
   ],
 ];
 
@@ -145,49 +150,59 @@ const ICON_SZ = { fontSize: 14 } as const;
 
 function KeyIcon({ label }: { label: string }) {
   switch (label) {
-    case '↑':
+    case "↑":
       return <NorthIcon sx={ICON_SZ} />;
-    case '↓':
+    case "↓":
       return <SouthIcon sx={ICON_SZ} />;
-    case '←':
+    case "←":
       return <WestIcon sx={ICON_SZ} />;
-    case '→':
+    case "→":
       return <EastIcon sx={ICON_SZ} />;
-    case '⇥':
+    case "⇥":
       return <KeyboardTabIcon sx={ICON_SZ} />;
     default:
       return <>{label}</>;
   }
 }
 
-const BTN_SX = (wide?: boolean) => ({
-  minWidth: wide ? 40 : 30,
-  height: 28,
-  px: 0.4,
-  fontSize: '0.7rem',
-  fontFamily: 'monospace',
-  flexShrink: 0,
-  textTransform: 'none',
-} as const);
+const BTN_SX = (wide?: boolean) =>
+  ({
+    minWidth: wide ? 40 : 30,
+    height: 28,
+    px: 0.4,
+    fontSize: "0.7rem",
+    fontFamily: "monospace",
+    flexShrink: 0,
+    textTransform: "none",
+  }) as const;
 
-const PANEL_BTN_SX = (wide?: boolean) => ({
-  flex: wide ? 2 : 1,
-  minWidth: 0,
-  height: 34,
-  px: 0.25,
-  fontSize: '0.72rem',
-  fontFamily: 'monospace',
-  textTransform: 'none',
-  bgcolor: 'background.paper',
-  '&:active': { bgcolor: 'action.selected' },
-} as const);
+const PANEL_BTN_SX = (wide?: boolean) =>
+  ({
+    flex: wide ? 2 : 1,
+    minWidth: 0,
+    height: 34,
+    px: 0.25,
+    fontSize: "0.72rem",
+    fontFamily: "monospace",
+    textTransform: "none",
+    bgcolor: "background.paper",
+    "&:active": { bgcolor: "action.selected" },
+  }) as const;
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function MobileInputBar({
-  isCtrlActive, setIsCtrlActive, isAltActive, setIsAltActive, handleSendKey, gestureMode, onGestureModeChange,
-  extraKeysOpen, onExtraKeysOpenChange, keyboardHeight, getActiveTerminal,
+  isCtrlActive,
+  setIsCtrlActive,
+  isAltActive,
+  setIsAltActive,
+  handleSendKey,
+  gestureMode,
+  onGestureModeChange,
+  extraKeysOpen,
+  onExtraKeysOpenChange,
+  keyboardHeight,
+  getActiveTerminal,
 }: MobileInputBarProps) {
-
   const [lastKeyboardHeight, setLastKeyboardHeight] = useState(0);
 
   useEffect(() => {
@@ -226,7 +241,7 @@ export default function MobileInputBar({
     vibe();
     // Alt prefix: send ESC before the sequence, then auto-clear Alt
     if (isAltActive) {
-      handleSendKey('\x1b' + seq);
+      handleSendKey("\x1b" + seq);
       setIsAltActive(false);
     } else {
       handleSendKey(seq);
@@ -244,7 +259,7 @@ export default function MobileInputBar({
       if (term && "getXterm" in term) {
         const textarea = term.getXterm()?.textarea;
         if (textarea) {
-          textarea.inputMode = 'none';
+          textarea.inputMode = "none";
         }
         navigator.virtualKeyboard?.hide();
       }
@@ -259,7 +274,7 @@ export default function MobileInputBar({
       const term = getActiveTerminal();
       if (term && "getXterm" in term) {
         const textarea = term.getXterm()?.textarea;
-        if (textarea) textarea.inputMode = '';
+        if (textarea) textarea.inputMode = "";
         // Focus triggers the system keyboard to begin opening
         term.focus();
       }
@@ -274,7 +289,7 @@ export default function MobileInputBar({
             return;
           }
           done = true;
-          vv.removeEventListener('resize', onVVResize);
+          vv.removeEventListener("resize", onVVResize);
           onExtraKeysOpenChange(false);
         };
 
@@ -285,7 +300,7 @@ export default function MobileInputBar({
           }
         };
 
-        vv.addEventListener('resize', onVVResize);
+        vv.addEventListener("resize", onVVResize);
         // Safety timeout: if the keyboard doesn't open (e.g. hardware keyboard
         // attached, or focus fails), remove the panel anyway after 400ms.
         setTimeout(finish, 400);
@@ -297,63 +312,84 @@ export default function MobileInputBar({
   };
 
   const activeKbHeight = keyboardHeight > 60 ? keyboardHeight : lastKeyboardHeight;
-  const panelHeight = activeKbHeight > 60 ? (activeKbHeight + 40) : Math.floor(window.innerHeight * 0.38);
+  const panelHeight = activeKbHeight > 60 ? activeKbHeight + 40 : Math.floor(window.innerHeight * 0.38);
 
   // ── Shared sub-components ──────────────────────────────────────────────────
 
   /** The gesture toggle button (leftmost of both bar and panel top row) */
-  const GestureBtn = <IconButton
-    size="small"
-    {...getTapProps(() => { vibe(); onGestureModeChange(!gestureMode); })}
-    sx={{
-      color: gestureMode ? 'primary.main' : 'text.secondary',
-      bgcolor: gestureMode ? 'primary.50' : 'transparent',
-      borderRadius: 1,
-      width: 34,
-      height: 34,
-      flexShrink: 0,
-    }}
-  >
-    {gestureMode ? <PanToolIcon fontSize="small" /> : <PanToolOutlinedIcon fontSize="small" />}
-  </IconButton>
+  const GestureBtn = (
+    <IconButton
+      size="small"
+      {...getTapProps(() => {
+        vibe();
+        onGestureModeChange(!gestureMode);
+      })}
+      sx={{
+        color: gestureMode ? "primary.main" : "text.secondary",
+        bgcolor: gestureMode ? "primary.50" : "transparent",
+        borderRadius: 1,
+        width: 34,
+        height: 34,
+        flexShrink: 0,
+      }}
+    >
+      {gestureMode ? <PanToolIcon fontSize="small" /> : <PanToolOutlinedIcon fontSize="small" />}
+    </IconButton>
+  );
 
-  const topBar = <>
-    <Button
-      size="small"
-      variant={isCtrlActive ? 'contained' : 'outlined'}
-      {...getTapProps(() => { vibe(); setIsCtrlActive(!isCtrlActive); })}
-      sx={{
-        width: 44, minWidth: 44, height: 28, px: 0, fontWeight: 700,
-        flexShrink: 0, fontSize: '0.72rem', boxSizing: 'border-box'
-      }}
-    >
-      Ctrl
-    </Button>
-    <Button
-      size="small"
-      variant={isAltActive ? 'contained' : 'outlined'}
-      {...getTapProps(() => { vibe(); setIsAltActive(!isAltActive); })}
-      sx={{
-        width: 38, minWidth: 38, height: 28, px: 0, fontWeight: 700,
-        flexShrink: 0, fontSize: '0.72rem', boxSizing: 'border-box'
-      }}
-    >
-      Alt
-    </Button>
-    {BAR_GROUPS.map((group, gi) => (
-      <ButtonGroup key={gi} size="small" variant="outlined" sx={{ flexShrink: 0 }}>
-        {group.map((k) => (
-          <Button
-            key={k.label}
-            {...getTapProps(() => sendKey(k.seq))}
-            sx={BTN_SX(k.wide)}
-          >
-            <KeyIcon label={k.label} />
-          </Button>
-        ))}
-      </ButtonGroup>
-    ))}
-  </>;
+  const topBar = (
+    <>
+      <Button
+        size="small"
+        variant={isCtrlActive ? "contained" : "outlined"}
+        {...getTapProps(() => {
+          vibe();
+          setIsCtrlActive(!isCtrlActive);
+        })}
+        sx={{
+          width: 44,
+          minWidth: 44,
+          height: 28,
+          px: 0,
+          fontWeight: 700,
+          flexShrink: 0,
+          fontSize: "0.72rem",
+          boxSizing: "border-box",
+        }}
+      >
+        Ctrl
+      </Button>
+      <Button
+        size="small"
+        variant={isAltActive ? "contained" : "outlined"}
+        {...getTapProps(() => {
+          vibe();
+          setIsAltActive(!isAltActive);
+        })}
+        sx={{
+          width: 38,
+          minWidth: 38,
+          height: 28,
+          px: 0,
+          fontWeight: 700,
+          flexShrink: 0,
+          fontSize: "0.72rem",
+          boxSizing: "border-box",
+        }}
+      >
+        Alt
+      </Button>
+      {BAR_GROUPS.map((group, gi) => (
+        <ButtonGroup key={gi} size="small" variant="outlined" sx={{ flexShrink: 0 }}>
+          {group.map((k) => (
+            <Button key={k.label} {...getTapProps(() => sendKey(k.seq))} sx={BTN_SX(k.wide)}>
+              <KeyIcon label={k.label} />
+            </Button>
+          ))}
+        </ButtonGroup>
+      ))}
+    </>
+  );
 
   return (
     <Box
@@ -361,15 +397,15 @@ export default function MobileInputBar({
       sx={{
         flexShrink: 0,
         // When open, it takes 0 space in the flex flow to prevent jumping
-        height: extraKeysOpen ? 0 : 'auto',
+        height: extraKeysOpen ? 0 : "auto",
         order: 10,
         display: {
-          xs: 'block',
-          sm: 'block',
-          md: 'none',
+          xs: "block",
+          sm: "block",
+          md: "none",
         },
-        '@media (pointer: coarse)': {
-          display: 'block',
+        "@media (pointer: coarse)": {
+          display: "block",
         },
       }}
     >
@@ -381,18 +417,18 @@ export default function MobileInputBar({
           square
           sx={{
             height: panelHeight,
-            position: 'fixed',
+            position: "fixed",
             // bottom: 0, // Set it to 0 or 1 will cause layout shift when extra keys panel is toggled on / off.
             // I don't know exactly why, CSS is difficult
             left: 0,
             right: 0,
-            bgcolor: '#e8eaed',
-            borderTop: '1px solid',
-            borderColor: 'divider',
-            display: 'flex',
-            flexDirection: 'column',
+            bgcolor: "#e8eaed",
+            borderTop: "1px solid",
+            borderColor: "divider",
+            display: "flex",
+            flexDirection: "column",
             zIndex: 10000,
-            overflow: 'hidden',
+            overflow: "hidden",
           }}
         >
           {/* ── Top row: non-scrollable version of the accessory bar ── */}
@@ -401,18 +437,16 @@ export default function MobileInputBar({
             sx={{
               height: 40,
               flexShrink: 0,
-              bgcolor: '#f0f2f5',
-              borderBottom: '1px solid',
-              borderColor: 'divider',
-              display: 'flex',
-              alignItems: 'center',
-              overflow: 'hidden',
+              bgcolor: "#f0f2f5",
+              borderBottom: "1px solid",
+              borderColor: "divider",
+              display: "flex",
+              alignItems: "center",
+              overflow: "hidden",
             }}
           >
             {/* LEFT: gesture toggle */}
-            <Box sx={{ px: 0.5, flexShrink: 0 }}>
-              {GestureBtn}
-            </Box>
+            <Box sx={{ px: 0.5, flexShrink: 0 }}>{GestureBtn}</Box>
 
             <Divider orientation="vertical" flexItem sx={{ my: 0.5 }} />
 
@@ -421,12 +455,12 @@ export default function MobileInputBar({
               id="mobile-input-bar-full-top-center"
               sx={{
                 flex: 1,
-                display: 'flex',
-                alignItems: 'center',
+                display: "flex",
+                alignItems: "center",
                 gap: 0.75,
                 px: 0.75,
-                height: '100%',
-                overflow: 'hidden',
+                height: "100%",
+                overflow: "hidden",
               }}
             >
               {topBar}
@@ -438,10 +472,13 @@ export default function MobileInputBar({
             <Box sx={{ px: 0.5, flexShrink: 0 }}>
               <IconButton
                 size="small"
-                {...getTapProps(() => { vibe(); handleExtraKeysToggle(); })}
+                {...getTapProps(() => {
+                  vibe();
+                  handleExtraKeysToggle();
+                })}
                 sx={{
-                  color: 'primary.main',
-                  bgcolor: 'primary.50',
+                  color: "primary.main",
+                  bgcolor: "primary.50",
                   borderRadius: 1,
                   width: 34,
                   height: 34,
@@ -456,16 +493,16 @@ export default function MobileInputBar({
           <Box
             sx={{
               flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-evenly',
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-evenly",
               px: 0.75,
               py: 0.5,
-              overflowY: 'auto',
+              overflowY: "auto",
             }}
           >
             {EXTRA_ROWS.map((row, ri) => (
-              <Box key={ri} sx={{ display: 'flex', gap: 0.5 }}>
+              <Box key={ri} sx={{ display: "flex", gap: 0.5 }}>
                 {row.map((k) => (
                   <Button
                     key={k.label}
@@ -491,21 +528,19 @@ export default function MobileInputBar({
           square
           sx={{
             height: 40,
-            bgcolor: '#f0f2f5',
-            borderTop: '1px solid',
-            borderColor: 'divider',
-            display: 'flex',
-            alignItems: 'center',
-            overflow: 'hidden',
+            bgcolor: "#f0f2f5",
+            borderTop: "1px solid",
+            borderColor: "divider",
+            display: "flex",
+            alignItems: "center",
+            overflow: "hidden",
             flexShrink: 0,
-            position: 'relative',
+            position: "relative",
             zIndex: 10,
           }}
         >
           {/* LEFT: gesture toggle */}
-          <Box sx={{ px: 0.5, flexShrink: 0 }}>
-            {GestureBtn}
-          </Box>
+          <Box sx={{ px: 0.5, flexShrink: 0 }}>{GestureBtn}</Box>
 
           <Divider orientation="vertical" flexItem sx={{ my: 0.5 }} />
 
@@ -514,15 +549,15 @@ export default function MobileInputBar({
             id="mobile-input-bar-mini-center"
             sx={{
               flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              overflowX: 'auto',
-              overflowY: 'hidden',
+              display: "flex",
+              alignItems: "center",
+              overflowX: "auto",
+              overflowY: "hidden",
               gap: 0.75,
               px: 0.75,
-              height: '100%',
-              '&::-webkit-scrollbar': { display: 'none' },
-              scrollbarWidth: 'none',
+              height: "100%",
+              "&::-webkit-scrollbar": { display: "none" },
+              scrollbarWidth: "none",
             }}
           >
             {topBar}
@@ -534,10 +569,13 @@ export default function MobileInputBar({
           <Box sx={{ px: 0.5, flexShrink: 0 }}>
             <IconButton
               size="small"
-              {...getTapProps(() => { vibe(); handleExtraKeysToggle(); })}
+              {...getTapProps(() => {
+                vibe();
+                handleExtraKeysToggle();
+              })}
               sx={{
-                color: 'text.secondary',
-                bgcolor: 'transparent',
+                color: "text.secondary",
+                bgcolor: "transparent",
                 borderRadius: 1,
                 width: 34,
                 height: 34,

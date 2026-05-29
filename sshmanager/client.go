@@ -709,13 +709,15 @@ func setupSession(session *ssh.Session, rows, cols int) error {
 	return nil
 }
 
-func ExpandTokens(cmd, host, port, user, name string) string {
+func ExpandTokens(cmd, host, port, user, name, sessionID string) string {
 	r := strings.NewReplacer(
 		"%%", "%",
 		"%h", host,
 		"%p", port,
 		"%r", user,
 		"%n", name,
+		"%i", sessionID,
+		"%I", sessionID,
 	)
 
 	// %u is local user

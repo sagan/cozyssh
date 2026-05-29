@@ -1,49 +1,107 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useSearchParams } from "react-router";
 import {
-  Box, CssBaseline, createTheme, ThemeProvider, IconButton, Typography, useMediaQuery, useTheme, Drawer,
-  Dialog, DialogTitle, DialogContent
-} from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
-import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
-import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+  Box,
+  CssBaseline,
+  createTheme,
+  ThemeProvider,
+  IconButton,
+  Typography,
+  useMediaQuery,
+  useTheme,
+  Drawer,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+} from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
+import ViewSidebarIcon from "@mui/icons-material/ViewSidebar";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 
 import type {
-  FullData, HostData, ButtonData, RecentUpdateRequest, SessionsAttachRequest, TabsPinRequest,
-  TabsUnpinRequest, SessionsCloseRequest, TabsRenameRequest, ButtonsMoveRequest, TabsLockRequest,
-} from './api';
+  FullData,
+  HostData,
+  ButtonData,
+  RecentUpdateRequest,
+  SessionsAttachRequest,
+  TabsPinRequest,
+  TabsUnpinRequest,
+  SessionsCloseRequest,
+  TabsRenameRequest,
+  ButtonsMoveRequest,
+  TabsLockRequest,
+} from "./api";
 import {
-  APP_NAME, BROADCAST_CHANNEL_COZY_TABS, BROADCAST_CHANNEL_MESSAGE_PINNED_PRESENT, DEFAULT_SCROLL_LINES,
-  BROADCAST_CHANNEL_MESSAGE_PROBE_PINNED, BROWSER_STORAGE_KEY_ACTIVE_GROUP, BROWSER_STORAGE_KEY_LOCAL_VARS,
-  BROWSER_STORAGE_KEY_RECENTS, BROWSER_STORAGE_KEY_TAB_ID, BROWSER_STORAGE_KEY_TOKEN, DEFAULT_BUTTON_GROUP,
-  HEADER_AUTHORIZATION, HEADER_AUTHORIZATION_BEARER_PREFIX, HEADER_CONTENT_TYPE, LOCAL_NAME, METHOD_DELETE,
-  METHOD_POST, METHOD_PUT, MIME_JSON, VAR_CS_NOAUTOLOAD, VAR_CS_NOAUTORUN, VAR_CS_NOWAKELOCK, VAR_CS_SCROLL_LINES,
-  VAR_NOAUTOLOAD, VAR_NOAUTORUN, VIBRATE_PATTERN, BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE,
-} from './constants';
+  APP_NAME,
+  BROADCAST_CHANNEL_COZY_TABS,
+  BROADCAST_CHANNEL_MESSAGE_PINNED_PRESENT,
+  DEFAULT_SCROLL_LINES,
+  BROADCAST_CHANNEL_MESSAGE_PROBE_PINNED,
+  BROWSER_STORAGE_KEY_ACTIVE_GROUP,
+  BROWSER_STORAGE_KEY_LOCAL_VARS,
+  BROWSER_STORAGE_KEY_RECENTS,
+  BROWSER_STORAGE_KEY_TAB_ID,
+  BROWSER_STORAGE_KEY_TOKEN,
+  DEFAULT_BUTTON_GROUP,
+  HEADER_AUTHORIZATION,
+  HEADER_AUTHORIZATION_BEARER_PREFIX,
+  HEADER_CONTENT_TYPE,
+  LOCAL_NAME,
+  METHOD_DELETE,
+  METHOD_POST,
+  METHOD_PUT,
+  MIME_JSON,
+  VAR_CS_NOAUTOLOAD,
+  VAR_CS_NOAUTORUN,
+  VAR_CS_NOWAKELOCK,
+  VAR_CS_SCROLL_LINES,
+  VAR_NOAUTOLOAD,
+  VAR_NOAUTORUN,
+  VIBRATE_PATTERN,
+  BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE,
+} from "./constants";
 import {
-  type ContextMenu, type CSEventDetailTerminalChange, type NewTabDialogViewMode,
-  type Recent, type ScratchpadSyncState, type Severity, type Toast,
+  type ContextMenu,
+  type CSEventDetailTerminalChange,
+  type NewTabDialogViewMode,
+  type Recent,
+  type ScratchpadSyncState,
+  type Severity,
+  type Toast,
   CS_EVENT_TERMINAL_CHANGE,
-  defaultTheme, genTabId, getIntVar, nextName, genPaneId, hostTitle,
-} from './common';
+  defaultTheme,
+  genTabId,
+  getIntVar,
+  nextName,
+  genPaneId,
+  hostTitle,
+} from "./common";
 import {
-  type TabData, type PaneData,
-  useStore, getStore, setTabs, setActiveTabId, setActivePaneId, setHosts, setButtons, setVars,
+  type TabData,
+  type PaneData,
+  useStore,
+  getStore,
+  setTabs,
+  setActiveTabId,
+  setActivePaneId,
+  setHosts,
+  setButtons,
+  setVars,
   setLocalVars as storeSetLocalVars,
-} from './store';
-import { useLocalStorage } from './useLocalStorage';
-import { setupPluginAPI, runScript, moduleCache } from './pluginAPI';
-import { useKeyboardManager } from './useKeyboardManager';
-import Sidebar from './Sidebar';
-import type { TerminalHandle } from './Terminal';
-import type { ScratchpadHandle } from './Scratchpad';
-import TabBar from './TabBar';
-import TerminalGrid from './TerminalGrid';
-import ButtonBar from './ButtonBar';
-import DialogManager from './DialogManager';
-import AppletWrapper, { type AppletData } from './AppletWrapper';
-import { dialogs } from './Dialogs';
-import { useWakeLock } from './useWakeLock';
+} from "./store";
+import { useLocalStorage } from "./useLocalStorage";
+import { setupPluginAPI, runScript, moduleCache } from "./pluginAPI";
+import { useKeyboardManager } from "./useKeyboardManager";
+import Sidebar from "./Sidebar";
+import type { TerminalHandle } from "./Terminal";
+import type { ScratchpadHandle } from "./Scratchpad";
+import TabBar from "./TabBar";
+import TerminalGrid from "./TerminalGrid";
+import ButtonBar from "./ButtonBar";
+import DialogManager from "./DialogManager";
+import AppletWrapper, { type AppletData } from "./AppletWrapper";
+import { dialogs } from "./Dialogs";
+import { useWakeLock } from "./useWakeLock";
 
 interface DashboardProps {
   initialData?: FullData;
@@ -51,17 +109,10 @@ interface DashboardProps {
 
 export default function Dashboard({ initialData }: DashboardProps) {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const isTouch = useMediaQuery('(pointer: coarse)');
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const isTouch = useMediaQuery("(pointer: coarse)");
   // ── Store state (shared with pluginAPI and keyboard manager) ────────────
-  const {
-    tabs,
-    activeTabId,
-    activePaneId,
-    hosts,
-    buttons,
-    vars,
-  } = useStore();
+  const { tabs, activeTabId, activePaneId, hosts, buttons, vars } = useStore();
 
   // ── UI-only state (stays in React) ────────────────────────────────────
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
@@ -70,16 +121,16 @@ export default function Dashboard({ initialData }: DashboardProps) {
   // terminalRefs is kept as a local ref for all Dashboard-internal usage,
   // and also written into the store so pluginAPI / useKeyboardManager can read it.
   const terminalRefs = useRef<{ [key: string]: TerminalHandle | ScratchpadHandle | null }>({});
-  const [viewportHeight, setViewportHeight] = useState('100dvh');
+  const [viewportHeight, setViewportHeight] = useState("100dvh");
   const [isCtrlActive, setIsCtrlActive] = useState(false);
   const [isAltActive, setIsAltActive] = useState(false);
-  const [scratchpadSyncState, setScratchpadSyncState] = useState<ScratchpadSyncState>('offline');
+  const [scratchpadSyncState, setScratchpadSyncState] = useState<ScratchpadSyncState>("offline");
   const [memoTabId, setMemoTabId] = useState<string | null>(null);
   const [unreadTabIds, setUnreadTabIds] = useState<Set<string>>(new Set());
   const [applets, setApplets] = useState<AppletData[]>([]);
   const appletRefs = useRef<AppletData[]>([]);
   const maxZIndexRef = useRef(10000);
-  const swipeStartRef = useRef<{ x: number, y: number, time: number } | null>(null);
+  const swipeStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
   // ── Mobile bar state ─────────────────────────────────────────────────────
   /** When true, swipe gestures on the terminal send arrow keys instead of switching tabs */
@@ -93,16 +144,29 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [buttonDialogOpen, setButtonDialogOpen] = useState(false);
   const [editingButton, setEditingButton] = useState<ButtonData | null>(null);
   const [buttonFormData, setButtonFormData] = useState<ButtonData>({
-    id: "", name: '', type: 'send_string', payload: '', group: DEFAULT_BUTTON_GROUP, autorun: 0, order: 0, shortcut: '',
+    id: "",
+    name: "",
+    type: "send_string",
+    payload: "",
+    group: DEFAULT_BUTTON_GROUP,
+    autorun: 0,
+    order: 0,
+    shortcut: "",
   });
   const [initialBtnFormData, setInitialBtnFormData] = useState<ButtonData | null>(null);
-  const [btnMenuAnchor, setBtnMenuAnchor] = useState<{ anchor: HTMLElement, btn: ButtonData } | null>(null);
+  const [btnMenuAnchor, setBtnMenuAnchor] = useState<{ anchor: HTMLElement; btn: ButtonData } | null>(null);
   const [lastMenuBtn, setLastMenuBtn] = useState<ButtonData | null>(null);
   const handleNewButtonClick = useCallback(() => {
-    const maxOrder = buttons.length > 0 ? Math.max(...buttons.map(b => b.order || 0)) : 0;
+    const maxOrder = buttons.length > 0 ? Math.max(...buttons.map((b) => b.order || 0)) : 0;
     const data: ButtonData = {
-      id: "", name: '', type: 'send_string', payload: '', group: activeGroup,
-      autorun: 0, order: maxOrder + 10 || 10, shortcut: '',
+      id: "",
+      name: "",
+      type: "send_string",
+      payload: "",
+      group: activeGroup,
+      autorun: 0,
+      order: maxOrder + 10 || 10,
+      shortcut: "",
     };
     setEditingButton(null);
     setButtonFormData(data);
@@ -111,46 +175,52 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, [activeGroup, buttons]);
   const [buttonsLoaded, setButtonsLoaded] = useState(false);
   const [inputDialogOpen, setInputDialogOpen] = useState(false);
-  const [inputValue, setInputValue] = useState('');
+  const [inputValue, setInputValue] = useState("");
   const [appendNewLine, setAppendNewLine] = useState(true);
   const [sendScope, setSendScope] = useState<0 | 1 | 2>(0);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastIdRef = useRef(0);
   const [recents, setRecents] = useLocalStorage<Recent[]>(BROWSER_STORAGE_KEY_RECENTS, []);
   const [newTabDialogOpen, setNewTabDialogOpen] = useState(false);
-  const [newTabDialogInitialViewMode, setNewTabDialogInitialViewMode] = useState<NewTabDialogViewMode>('servers');
+  const [newTabDialogInitialViewMode, setNewTabDialogInitialViewMode] = useState<NewTabDialogViewMode>("servers");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // localVars uses useLocalStorage for persistence; synced into store for pluginAPI
   const [localVars, setLocalVars] = useLocalStorage<Record<string, string>>(BROWSER_STORAGE_KEY_LOCAL_VARS, {});
-  useEffect(() => { storeSetLocalVars(localVars); }, [localVars]);
+  useEffect(() => {
+    storeSetLocalVars(localVars);
+  }, [localVars]);
 
   // sendScope needs to be readable from stable callbacks
   const sendScopeRef = useRef<0 | 1 | 2>(0);
-  useEffect(() => { sendScopeRef.current = sendScope; }, [sendScope]);
+  useEffect(() => {
+    sendScopeRef.current = sendScope;
+  }, [sendScope]);
 
   useEffect(() => {
-    window.dispatchEvent(new CustomEvent(CS_EVENT_TERMINAL_CHANGE, {
-      detail: { activePaneId } satisfies CSEventDetailTerminalChange,
-    }));
+    window.dispatchEvent(
+      new CustomEvent(CS_EVENT_TERMINAL_CHANGE, {
+        detail: { activePaneId } satisfies CSEventDetailTerminalChange,
+      }),
+    );
   }, [activePaneId]);
 
-  const csNotify = useCallback((msg: string, severity: Severity = 'info') => {
+  const csNotify = useCallback((msg: string, severity: Severity = "info") => {
     toastIdRef.current++;
     const id = toastIdRef.current;
-    setToasts(prev => {
+    setToasts((prev) => {
       const newToasts = [...prev, { id, msg, severity }];
       return newToasts.slice(-3); // Keep last 3
     });
     setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
+      setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 4000);
   }, []);
 
   const handleTerminalData = useCallback((tabId: string) => {
-    setUnreadTabIds(prev => {
+    setUnreadTabIds((prev) => {
       // Don't mark active tab or already unread tabs
       if (tabId === getStore().activeTabId || prev.has(tabId)) {
         return prev;
@@ -163,7 +233,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   useEffect(() => {
     if (unreadTabIds.has(activeTabId)) {
-      setUnreadTabIds(prev => {
+      setUnreadTabIds((prev) => {
         const next = new Set(prev);
         next.delete(activeTabId);
         return next;
@@ -179,12 +249,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const groups = [
       DEFAULT_BUTTON_GROUP,
       ...Array.from(
-        new Set(
-          buttons.map(b => b.group || DEFAULT_BUTTON_GROUP).filter(g => g !== DEFAULT_BUTTON_GROUP)
-        )
+        new Set(buttons.map((b) => b.group || DEFAULT_BUTTON_GROUP).filter((g) => g !== DEFAULT_BUTTON_GROUP)),
       ),
     ].sort();
-    const filteredButtons = buttons.filter(b => (b.group || DEFAULT_BUTTON_GROUP) === activeGroup);
+    const filteredButtons = buttons.filter((b) => (b.group || DEFAULT_BUTTON_GROUP) === activeGroup);
     return [groups, filteredButtons];
   }, [buttons, activeGroup]);
 
@@ -198,55 +266,58 @@ export default function Dashboard({ initialData }: DashboardProps) {
     appletRefs.current = applets;
   }, [applets]);
 
-  const handleSelectHost = useCallback(async (host: string, customTitle?: string) => {
-    const tabId = genTabId(host);
-    const paneId = genPaneId(host);
-    const newTab: TabData = {
-      id: tabId,
-      title: customTitle || hostTitle(host),
-      panes: [{ id: paneId, host }],
-      activePaneId: paneId,
-    };
-    setTabs(prev => [...prev, newTab]);
-    setActiveTabId(tabId);
-    setActivePaneId(paneId);
+  const handleSelectHost = useCallback(
+    async (host: string, customTitle?: string) => {
+      const tabId = genTabId(host);
+      const paneId = genPaneId(host);
+      const newTab: TabData = {
+        id: tabId,
+        title: customTitle || hostTitle(host),
+        panes: [{ id: paneId, host }],
+        activePaneId: paneId,
+      };
+      setTabs((prev) => [...prev, newTab]);
+      setActiveTabId(tabId);
+      setActivePaneId(paneId);
 
-    // Record recent
-    if (host !== LOCAL_NAME) {
-      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-      try {
-        fetch('/api/recents', {
-          method: METHOD_POST,
-          headers: {
-            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-            [HEADER_CONTENT_TYPE]: MIME_JSON,
-          },
-          body: JSON.stringify({ host } satisfies RecentUpdateRequest),
-        });
+      // Record recent
+      if (host !== LOCAL_NAME) {
+        const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+        try {
+          fetch("/api/recents", {
+            method: METHOD_POST,
+            headers: {
+              [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+              [HEADER_CONTENT_TYPE]: MIME_JSON,
+            },
+            body: JSON.stringify({ host } satisfies RecentUpdateRequest),
+          });
 
-        // Optimistic update for local recents
-        setRecents(prev => {
-          const now = Math.floor(Date.now() / 1000);
-          const idx = prev.findIndex(r => r.host === host);
-          const next = [...prev];
-          if (idx >= 0) {
-            next[idx] = { ...next[idx], last_used: now };
-          } else {
-            next.push({ host, last_used: now });
-          }
-          return next.sort((a, b) => b.last_used - a.last_used).slice(0, 50);
-        });
-      } catch (e) {
-        console.error('Failed to record recent:', e);
+          // Optimistic update for local recents
+          setRecents((prev) => {
+            const now = Math.floor(Date.now() / 1000);
+            const idx = prev.findIndex((r) => r.host === host);
+            const next = [...prev];
+            if (idx >= 0) {
+              next[idx] = { ...next[idx], last_used: now };
+            } else {
+              next.push({ host, last_used: now });
+            }
+            return next.sort((a, b) => b.last_used - a.last_used).slice(0, 50);
+          });
+        } catch (e) {
+          console.error("Failed to record recent:", e);
+        }
       }
-    }
-  }, [setRecents]);
+    },
+    [setRecents],
+  );
 
   const handleSelectTagAsSplit = useCallback((tag: string, hosts: string[]) => {
     const tabId = genTabId(tag);
-    const panes = hosts.map(host => ({
+    const panes = hosts.map((host) => ({
       id: genPaneId(host),
-      host
+      host,
     }));
     const newTab: TabData = {
       id: tabId,
@@ -254,76 +325,85 @@ export default function Dashboard({ initialData }: DashboardProps) {
       panes: panes,
       activePaneId: panes[0].id,
     };
-    setTabs(prev => [...prev, newTab]);
+    setTabs((prev) => [...prev, newTab]);
     setActiveTabId(newTab.id);
     setActivePaneId(panes[0].id);
   }, []);
 
   const handleAttach = useCallback(async (id: string, host: string, title: string, isLocked: boolean = false) => {
-    const existing = getStore().tabs.find(t => t.panes.some(p => (p.sessionId || p.id) === id && p.state !== 'stolen'));
+    const existing = getStore().tabs.find((t) =>
+      t.panes.some((p) => (p.sessionId || p.id) === id && p.state !== "stolen"),
+    );
     if (existing) {
       setActiveTabId(existing.id);
-      setActivePaneId(existing.panes.find(p => (p.sessionId || p.id) === id
-        && p.state !== 'stolen')?.id || existing.activePaneId);
+      setActivePaneId(
+        existing.panes.find((p) => (p.sessionId || p.id) === id && p.state !== "stolen")?.id || existing.activePaneId,
+      );
       return;
     }
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    await fetch('/api/sessions/attach', {
+    await fetch("/api/sessions/attach", {
       method: METHOD_POST,
       headers: {
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        [HEADER_CONTENT_TYPE]: MIME_JSON
+        [HEADER_CONTENT_TYPE]: MIME_JSON,
       },
-      body: JSON.stringify({ id } satisfies SessionsAttachRequest)
+      body: JSON.stringify({ id } satisfies SessionsAttachRequest),
     });
     const tabId = genTabId(host);
     const paneId = genPaneId(host);
-    setTabs(prev => [...prev, {
-      id: tabId,
-      panes: [{ id: paneId, sessionId: id, host }],
-      activePaneId: paneId,
-      title,
-      isPinned: true,
-      isLocked,
-    }]);
+    setTabs((prev) => [
+      ...prev,
+      {
+        id: tabId,
+        panes: [{ id: paneId, sessionId: id, host }],
+        activePaneId: paneId,
+        title,
+        isPinned: true,
+        isLocked,
+      },
+    ]);
     setActiveTabId(tabId);
     setActivePaneId(paneId);
   }, []);
 
-  const [sysHostname, setSysHostname] = useState<string>('');
-  const [appVersion, setAppVersion] = useState<string>('dev');
+  const [sysHostname, setSysHostname] = useState<string>("");
+  const [appVersion, setAppVersion] = useState<string>("dev");
 
-  const loadFullData = useCallback((data: FullData) => {
-    if (data.sysinfo) {
-      setSysHostname(data.sysinfo.hostname || 'unknown');
-      setAppVersion(data.sysinfo.version || 'dev');
-    }
-    if (data.hosts) {
-      setHosts(data.hosts);
-    }
-    if (data.buttons) {
-      setButtons(data.buttons || []);
-      setButtonsLoaded(true);
-    }
-    if (data.vars) {
-      setVars(data.vars || {});
-    }
-    if (data.recents) {
-      setRecents(data.recents);
-    }
-  }, [setRecents]);
+  const loadFullData = useCallback(
+    (data: FullData) => {
+      if (data.sysinfo) {
+        setSysHostname(data.sysinfo.hostname || "unknown");
+        setAppVersion(data.sysinfo.version || "dev");
+      }
+      if (data.hosts) {
+        setHosts(data.hosts);
+      }
+      if (data.buttons) {
+        setButtons(data.buttons || []);
+        setButtonsLoaded(true);
+      }
+      if (data.vars) {
+        setVars(data.vars || {});
+      }
+      if (data.recents) {
+        setRecents(data.recents);
+      }
+    },
+    [setRecents],
+  );
 
   const handleRefresh = useCallback(async () => {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     try {
-      const r = await fetch('/api/fulldata', {
+      const r = await fetch("/api/fulldata", {
         headers: {
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
-        }
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        },
       });
       if (r.status === 401) {
         localStorage.removeItem(BROWSER_STORAGE_KEY_TOKEN);
-        window.location.href = '/login';
+        window.location.href = "/login";
         return;
       }
       const data: FullData = await r.json();
@@ -351,23 +431,26 @@ export default function Dashboard({ initialData }: DashboardProps) {
     }
   }, [activePaneId]);
 
-  const handleSendKey = useCallback((key: string) => {
-    const term = terminalRefs.current[activePaneId];
-    if (term && "getXterm" in term) {
-      term.sendData(key);
-      setTimeout(() => term.focus(), 0);
-    }
-  }, [activePaneId]);
+  const handleSendKey = useCallback(
+    (key: string) => {
+      const term = terminalRefs.current[activePaneId];
+      if (term && "getXterm" in term) {
+        term.sendData(key);
+        setTimeout(() => term.focus(), 0);
+      }
+    },
+    [activePaneId],
+  );
 
   const sendParsedString = useCallback(async (input: string) => {
     const scope = sendScopeRef.current;
     const { tabs: currentTabs, activeTabId, activePaneId } = getStore();
     let targetPaneIds: string[] = [];
     if (scope === 2) {
-      targetPaneIds = currentTabs.flatMap(t => t.panes.map(p => p.id));
+      targetPaneIds = currentTabs.flatMap((t) => t.panes.map((p) => p.id));
     } else if (scope === 1) {
-      const currentTab = currentTabs.find(t => t.id === activeTabId);
-      targetPaneIds = currentTab ? currentTab.panes.map(p => p.id) : [activePaneId];
+      const currentTab = currentTabs.find((t) => t.id === activeTabId);
+      targetPaneIds = currentTab ? currentTab.panes.map((p) => p.id) : [activePaneId];
     } else {
       targetPaneIds = [activePaneId];
     }
@@ -380,9 +463,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         continue;
       }
       const ctrlMatch = part.match(/<ctrl-([!-~])>/);
-      const dataToSend = ctrlMatch
-        ? String.fromCharCode(ctrlMatch[1].charCodeAt(0) & 0x1F)
-        : part;
+      const dataToSend = ctrlMatch ? String.fromCharCode(ctrlMatch[1].charCodeAt(0) & 0x1f) : part;
 
       for (const pid of targetPaneIds) {
         if (pid && terminalRefs.current[pid]) {
@@ -392,47 +473,53 @@ export default function Dashboard({ initialData }: DashboardProps) {
           }
         }
       }
-      await new Promise(r => setTimeout(r, ctrlMatch ? 50 : 10));
+      await new Promise((r) => setTimeout(r, ctrlMatch ? 50 : 10));
     }
   }, []);
 
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (!isTouch || !isMobile || gestureMode) {
-      return; // gesture mode uses native listeners
-    }
-    const touch = e.touches[0];
-    swipeStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
-  }, [gestureMode, isMobile, isTouch]);
-
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    if (!isTouch || !isMobile || gestureMode || !swipeStartRef.current) {
-      return;
-    }
-    const touch = e.changedTouches[0];
-    const diffX = touch.clientX - swipeStartRef.current.x;
-    const diffY = touch.clientY - swipeStartRef.current.y;
-    const diffTime = Date.now() - swipeStartRef.current.time;
-    swipeStartRef.current = null;
-
-    // Thresholds: move at least 100px, mostly horizontal, within 500ms
-    if (Math.abs(diffX) > 100 && Math.abs(diffX) > Math.abs(diffY) * 2 && diffTime < 500) {
-      const { activeTabId, tabs } = getStore();
-      const currentIndex = tabs.findIndex(t => t.id === activeTabId);
-      if (diffX > 0 && currentIndex > 0) {
-        const newTab = tabs[currentIndex - 1];
-        window.navigator.vibrate?.(VIBRATE_PATTERN);
-        setActiveTabId(newTab.id);
-        setActivePaneId(newTab.activePaneId);
-        setTimeout(() => terminalRefs.current[newTab.activePaneId]?.focus(), 50);
-      } else if (diffX < 0 && currentIndex < tabs.length - 1) {
-        const newTab = tabs[currentIndex + 1];
-        window.navigator.vibrate?.(VIBRATE_PATTERN);
-        setActiveTabId(newTab.id);
-        setActivePaneId(newTab.activePaneId);
-        setTimeout(() => terminalRefs.current[newTab.activePaneId]?.focus(), 50);
+  const handleTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      if (!isTouch || !isMobile || gestureMode) {
+        return; // gesture mode uses native listeners
       }
-    }
-  }, [gestureMode, isMobile, isTouch]);
+      const touch = e.touches[0];
+      swipeStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+    },
+    [gestureMode, isMobile, isTouch],
+  );
+
+  const handleTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      if (!isTouch || !isMobile || gestureMode || !swipeStartRef.current) {
+        return;
+      }
+      const touch = e.changedTouches[0];
+      const diffX = touch.clientX - swipeStartRef.current.x;
+      const diffY = touch.clientY - swipeStartRef.current.y;
+      const diffTime = Date.now() - swipeStartRef.current.time;
+      swipeStartRef.current = null;
+
+      // Thresholds: move at least 100px, mostly horizontal, within 500ms
+      if (Math.abs(diffX) > 100 && Math.abs(diffX) > Math.abs(diffY) * 2 && diffTime < 500) {
+        const { activeTabId, tabs } = getStore();
+        const currentIndex = tabs.findIndex((t) => t.id === activeTabId);
+        if (diffX > 0 && currentIndex > 0) {
+          const newTab = tabs[currentIndex - 1];
+          window.navigator.vibrate?.(VIBRATE_PATTERN);
+          setActiveTabId(newTab.id);
+          setActivePaneId(newTab.activePaneId);
+          setTimeout(() => terminalRefs.current[newTab.activePaneId]?.focus(), 50);
+        } else if (diffX < 0 && currentIndex < tabs.length - 1) {
+          const newTab = tabs[currentIndex + 1];
+          window.navigator.vibrate?.(VIBRATE_PATTERN);
+          setActiveTabId(newTab.id);
+          setActivePaneId(newTab.activePaneId);
+          setTimeout(() => terminalRefs.current[newTab.activePaneId]?.focus(), 50);
+        }
+      }
+    },
+    [gestureMode, isMobile, isTouch],
+  );
 
   const tabId = useRef(sessionStorage.getItem(BROWSER_STORAGE_KEY_TAB_ID) || genTabId(""));
 
@@ -442,7 +529,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   // 1. Add this ref right above the visualViewport useEffect
   const extraKeysOpenRef = useRef(extraKeysOpen);
-  useEffect(() => { extraKeysOpenRef.current = extraKeysOpen; }, [extraKeysOpen]);
+  useEffect(() => {
+    extraKeysOpenRef.current = extraKeysOpen;
+  }, [extraKeysOpen]);
 
   useEffect(() => {
     const vv = window.visualViewport;
@@ -458,9 +547,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
       // 2. Derive the keyboard height using the exact same integers
       setKeyboardHeight(Math.max(0, roundedInnerHeight - roundedVVHeight));
     };
-    vv.addEventListener('resize', handleVVResize);
+    vv.addEventListener("resize", handleVVResize);
     handleVVResize();
-    return () => vv.removeEventListener('resize', handleVVResize);
+    return () => vv.removeEventListener("resize", handleVVResize);
   }, []);
 
   // ── VirtualKeyboard API setup ───────────────────────────────────────────
@@ -475,9 +564,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const handleGeometryChange = () => {
       setKeyboardHeight(vk.boundingRect?.height ?? 0);
     };
-    vk.addEventListener('geometrychange', handleGeometryChange);
+    vk.addEventListener("geometrychange", handleGeometryChange);
     return () => {
-      vk.removeEventListener('geometrychange', handleGeometryChange);
+      vk.removeEventListener("geometrychange", handleGeometryChange);
       // Restore default behaviour on unmount
       vk.overlaysContent = false;
     };
@@ -495,7 +584,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         if (term && "getXterm" in term) {
           const textarea = term.getXterm()?.textarea as HTMLTextAreaElement | undefined;
           if (textarea) {
-            textarea.inputMode = 'none';
+            textarea.inputMode = "none";
           }
         }
         // Belt-and-suspenders: force-hide via VK API
@@ -505,8 +594,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
         for (const term of Object.values(terminalRefs.current)) {
           if (term && "getXterm" in term) {
             const textarea = term.getXterm()?.textarea as HTMLTextAreaElement | undefined;
-            if (textarea && textarea.inputMode === 'none') {
-              textarea.inputMode = '';
+            if (textarea && textarea.inputMode === "none") {
+              textarea.inputMode = "";
             }
           }
         }
@@ -523,14 +612,14 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const fetchHosts = useCallback(async () => {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     try {
-      const r = await fetch('/api/hosts', {
+      const r = await fetch("/api/hosts", {
         headers: {
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
-        }
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        },
       });
       if (r.status === 401) {
         localStorage.removeItem(BROWSER_STORAGE_KEY_TOKEN);
-        window.location.href = '/login';
+        window.location.href = "/login";
         return;
       }
       const data: HostData[] = await r.json();
@@ -553,11 +642,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
       return;
     }
     initted.current = true;
-    const autoload = noautoload !== 1 && startupParams.get(VAR_NOAUTOLOAD) !== '1';
+    const autoload = noautoload !== 1 && startupParams.get(VAR_NOAUTOLOAD) !== "1";
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     const hash = window.location.hash.substring(1);
     if (hash) {
-      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
     }
 
     const bc: BroadcastChannel = new BroadcastChannel(BROADCAST_CHANNEL_COZY_TABS);
@@ -566,7 +655,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const initAsync = async () => {
       bc.onmessage = (e) => {
         if (e.data === BROADCAST_CHANNEL_MESSAGE_PROBE_PINNED) {
-          const hasPinned = getStore().tabs.some(t => t.isPinned);
+          const hasPinned = getStore().tabs.some((t) => t.isPinned);
           if (hasPinned) {
             bc.postMessage(BROADCAST_CHANNEL_MESSAGE_PINNED_PRESENT);
           }
@@ -575,18 +664,18 @@ export default function Dashboard({ initialData }: DashboardProps) {
         }
       };
 
-      console.log('initAsync starting, hash:', hash);
+      console.log("initAsync starting, hash:", hash);
       let data = initialData;
       if (!data) {
         try {
-          const r = await fetch('/api/fulldata', {
+          const r = await fetch("/api/fulldata", {
             headers: {
-              [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
-            }
+              [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+            },
           });
           if (r.status === 401) {
             localStorage.removeItem(BROWSER_STORAGE_KEY_TOKEN);
-            window.location.href = '/login';
+            window.location.href = "/login";
             return;
           }
           if (!r.ok) {
@@ -598,12 +687,15 @@ export default function Dashboard({ initialData }: DashboardProps) {
           console.error(e);
           const tabId = genTabId(LOCAL_NAME);
           const paneId = genPaneId(LOCAL_NAME);
-          setTabs([{
-            id: tabId,
-            panes: [{ id: paneId, host: LOCAL_NAME }],
-            activePaneId: paneId,
-            title: LOCAL_NAME,
-          }]);
+          setTabs((tabs) => [
+            ...tabs,
+            {
+              id: tabId,
+              panes: [{ id: paneId, host: LOCAL_NAME }],
+              activePaneId: paneId,
+              title: LOCAL_NAME,
+            },
+          ]);
           setActiveTabId(tabId);
           setActivePaneId(paneId);
           return;
@@ -618,10 +710,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
         const pinnedTabsData = data.pinned || [];
         if (hash) {
           const hostsData = data.hosts || [];
-          if (hash.startsWith('#')) {
+          if (hash.startsWith("#")) {
             // Tag mode /##tag
             const tag = hash.substring(1);
-            const filtered = hostsData.filter(h => h.tags && h.tags.includes(tag));
+            const filtered = hostsData.filter((h) => h.tags && h.tags.includes(tag));
 
             const nameSorter = (a: HostData, b: HostData) => a.name.localeCompare(b.name);
             const hostNameSorter = (a: HostData, b: HostData) => {
@@ -631,41 +723,55 @@ export default function Dashboard({ initialData }: DashboardProps) {
               return a.hostname.localeCompare(b.hostname);
             };
 
-            const favs = filtered.filter(h => h.tags?.includes('fav')).sort(nameSorter);
-            const normals = filtered.filter(h => !h.tags?.includes('fav') && !h.is_auto).sort(nameSorter);
-            const autos = filtered.filter(h => !h.tags?.includes('fav') && h.is_auto).sort(hostNameSorter);
+            const favs = filtered.filter((h) => h.tags?.includes("fav")).sort(nameSorter);
+            const normals = filtered.filter((h) => !h.tags?.includes("fav") && !h.is_auto).sort(nameSorter);
+            const autos = filtered.filter((h) => !h.tags?.includes("fav") && h.is_auto).sort(hostNameSorter);
 
             const targets = [...favs, ...normals, ...autos].slice(0, 4);
             if (targets.length > 0) {
-              handleSelectTagAsSplit(tag, targets.map(h => h.name));
+              handleSelectTagAsSplit(
+                tag,
+                targets.map((h) => h.name),
+              );
             } else {
               const tabId = genTabId(LOCAL_NAME);
               const paneId = genPaneId(LOCAL_NAME);
-              setTabs([{
-                id: tabId,
-                panes: [{ id: paneId, host: LOCAL_NAME }],
-                activePaneId: paneId,
-                title: LOCAL_NAME,
-              }]);
+              setTabs((tabs) => [
+                ...tabs,
+                {
+                  id: tabId,
+                  panes: [{ id: paneId, host: LOCAL_NAME }],
+                  activePaneId: paneId,
+                  title: LOCAL_NAME,
+                },
+              ]);
               setActiveTabId(tabId);
               setActivePaneId(paneId);
             }
           } else {
             // Single host mode /#host
-            const host = hash !== LOCAL_NAME ? hostsData.find(h => hash.includes("@")
-              ? hash == `${h.user || "root"}@${h.hostname}`
-              : h.name === hash || h.hostname === hash) : { name: LOCAL_NAME };
+            const host =
+              hash !== LOCAL_NAME
+                ? hostsData.find((h) =>
+                    hash.includes("@")
+                      ? hash == `${h.user || "root"}@${h.hostname}`
+                      : h.name === hash || h.hostname === hash,
+                  )
+                : { name: LOCAL_NAME };
             if (host) {
               handleSelectHost(host.name);
             } else {
               const tabId = genTabId(LOCAL_NAME);
               const paneId = genPaneId(LOCAL_NAME);
-              setTabs([{
-                id: tabId,
-                panes: [{ id: paneId, host: LOCAL_NAME }],
-                activePaneId: paneId,
-                title: LOCAL_NAME,
-              }]);
+              setTabs((tabs) => [
+                ...tabs,
+                {
+                  id: tabId,
+                  panes: [{ id: paneId, host: LOCAL_NAME }],
+                  activePaneId: paneId,
+                  title: LOCAL_NAME,
+                },
+              ]);
               setActiveTabId(tabId);
               setActivePaneId(paneId);
               setTimeout(() => dialogs.alert(`SSH server "${hash}" not found in config.`), 100);
@@ -678,12 +784,16 @@ export default function Dashboard({ initialData }: DashboardProps) {
             const pinnedTabs = availablePins.map((p) => {
               const paneId = p.id;
               return {
-                id: p.id, panes: [{ id: paneId, host: p.host }], activePaneId: paneId,
-                title: p.title, isPinned: true, isLocked: p.isLocked
+                id: p.id,
+                panes: [{ id: paneId, host: p.host }],
+                activePaneId: paneId,
+                title: p.title,
+                isPinned: true,
+                isLocked: p.isLocked,
               };
             });
             if (pinnedTabs.length > 0) {
-              setTabs(prev => prev.length > 0 ? prev : pinnedTabs);
+              setTabs((prev) => (prev.length > 0 ? prev : pinnedTabs));
               if (!getStore().activeTabId) {
                 setActiveTabId(pinnedTabs[0].id);
               }
@@ -693,12 +803,18 @@ export default function Dashboard({ initialData }: DashboardProps) {
             } else {
               const tabId = genTabId(LOCAL_NAME);
               const paneId = genPaneId(LOCAL_NAME);
-              setTabs(prev => prev.length > 0 ? prev : [{
-                id: tabId,
-                panes: [{ id: paneId, host: LOCAL_NAME }],
-                activePaneId: paneId,
-                title: LOCAL_NAME,
-              }]);
+              setTabs((prev) =>
+                prev.length > 0
+                  ? prev
+                  : [
+                      {
+                        id: tabId,
+                        panes: [{ id: paneId, host: LOCAL_NAME }],
+                        activePaneId: paneId,
+                        title: LOCAL_NAME,
+                      },
+                    ],
+              );
               if (!getStore().activeTabId) {
                 setActiveTabId(tabId);
               }
@@ -709,12 +825,18 @@ export default function Dashboard({ initialData }: DashboardProps) {
           } else {
             const tabId = genTabId(LOCAL_NAME);
             const paneId = genPaneId(LOCAL_NAME);
-            setTabs(prev => prev.length > 0 ? prev : [{
-              id: tabId,
-              panes: [{ id: paneId, host: LOCAL_NAME }],
-              activePaneId: paneId,
-              title: LOCAL_NAME,
-            }]);
+            setTabs((prev) =>
+              prev.length > 0
+                ? prev
+                : [
+                    {
+                      id: tabId,
+                      panes: [{ id: paneId, host: LOCAL_NAME }],
+                      activePaneId: paneId,
+                      title: LOCAL_NAME,
+                    },
+                  ],
+            );
             if (!getStore().activeTabId) {
               setActiveTabId(tabId);
             }
@@ -736,7 +858,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, [initialData, handleSelectTagAsSplit, handleSelectHost, loadFullData, csNotify]);
 
   useEffect(() => {
-    const active = tabs.find(t => t.id === activeTabId);
+    const active = tabs.find((t) => t.id === activeTabId);
     if (!active || active.title === LOCAL_NAME) {
       document.title = APP_NAME + " " + sysHostname;
     } else {
@@ -746,36 +868,40 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   const handleLogout = useCallback(async () => {
     const syncState = localStorage.getItem(BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE);
-    if (syncState && syncState !== 'synced') {
-      if (!await dialogs.confirm("Scratchpad data is not fully synced to the server. Are you sure you want to log out and clear the local cache?")) {
+    if (syncState && syncState !== "synced") {
+      if (
+        !(await dialogs.confirm(
+          "Scratchpad data is not fully synced to the server. Are you sure you want to log out and clear the local cache?",
+        ))
+      ) {
         return;
       }
     }
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     if (token) {
-      await fetch('/api/sessions/close_all_normal', {
+      await fetch("/api/sessions/close_all_normal", {
         method: METHOD_POST,
         headers: {
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
-        }
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        },
       });
-      await fetch('/api/logout', {
+      await fetch("/api/logout", {
         headers: {
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
-        }
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        },
       });
     }
     localStorage.clear();
     sessionStorage.clear();
     if (window.caches) {
-      await caches.delete('api-data-cache');
-      await caches.delete('manifest-cache');
+      await caches.delete("api-data-cache");
+      await caches.delete("manifest-cache");
     }
-    window.location.href = '/login';
+    window.location.href = "/login";
   }, []);
 
   const handleOpenScratchpad = useCallback(() => {
-    const existing = getStore().tabs.find(t => t.type === 'scratchpad');
+    const existing = getStore().tabs.find((t) => t.type === "scratchpad");
     if (existing) {
       setActiveTabId(existing.id);
       setActivePaneId(existing.panes[0].id);
@@ -785,138 +911,146 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const tabId = `scratchpad-${Date.now()}`;
     const newTab: TabData = {
       id: tabId,
-      title: 'Scratchpad',
-      panes: [{ id: tabId, host: 'scratchpad' }],
+      title: "Scratchpad",
+      panes: [{ id: tabId, host: "scratchpad" }],
       activePaneId: tabId,
-      type: 'scratchpad'
+      type: "scratchpad",
     };
-    setTabs(prev => [...prev, newTab]);
-    setActiveTabId(newTab.id);
+    setTabs((prev) => [...prev, newTab]);
+    setActiveTabId(tabId);
     setActivePaneId(tabId);
     setTimeout(() => terminalRefs.current[tabId]?.focus(), 50);
   }, []);
 
   const handleUnpinTab = useCallback(async (id: string) => {
     setContextMenu(null);
-    const tab = getStore().tabs.find(t => t.id === id);
+    const tab = getStore().tabs.find((t) => t.id === id);
     if (!tab) {
       return;
     }
     const backendSessionId = tab.panes[0]?.sessionId || tab.panes[0]?.id || id;
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    await fetch('/api/tabs/unpin', {
+    await fetch("/api/tabs/unpin", {
       method: METHOD_POST,
       headers: {
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
         [HEADER_CONTENT_TYPE]: MIME_JSON,
       },
-      body: JSON.stringify({ id: backendSessionId } satisfies TabsUnpinRequest)
+      body: JSON.stringify({ id: backendSessionId } satisfies TabsUnpinRequest),
     });
   }, []);
 
-  const handleCloseTab = useCallback((e: React.MouseEvent | null, id: string) => {
-    e?.stopPropagation();
-    const { activeTabId, tabs } = getStore();
-    const targetTab = tabs.find(t => t.id === id);
-    if (targetTab?.isPinned && !targetTab?.isLocked) {
-      handleUnpinTab(id);
-    }
-    if (targetTab && !targetTab.isLocked) {
-      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-      targetTab.panes.forEach(p => {
-        if (p.state !== 'stolen') {
-          fetch('/api/sessions/close', {
-            method: METHOD_POST,
-            headers: {
-              [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-              [HEADER_CONTENT_TYPE]: MIME_JSON,
-            },
-            body: JSON.stringify({ id: p.sessionId || p.id } satisfies SessionsCloseRequest)
-          }).catch(e => console.error(e));
+  const handleCloseTab = useCallback(
+    (e: React.MouseEvent | null, id: string) => {
+      e?.stopPropagation();
+      const { activeTabId, tabs } = getStore();
+      const targetTab = tabs.find((t) => t.id === id);
+      if (targetTab?.isPinned && !targetTab?.isLocked) {
+        handleUnpinTab(id);
+      }
+      if (targetTab && !targetTab.isLocked) {
+        const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+        targetTab.panes.forEach((p) => {
+          if (p.state !== "stolen") {
+            fetch("/api/sessions/close", {
+              method: METHOD_POST,
+              headers: {
+                [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+                [HEADER_CONTENT_TYPE]: MIME_JSON,
+              },
+              body: JSON.stringify({ id: p.sessionId || p.id } satisfies SessionsCloseRequest),
+            }).catch((e) => console.error(e));
+          }
+        });
+      }
+
+      setTabs((prev) => {
+        const idx = prev.findIndex((t) => t.id === id);
+        const newTabs = prev.filter((t) => t.id !== id);
+        if (activeTabId === id && newTabs.length > 0) {
+          const nextIdx = idx > 0 ? idx - 1 : 0;
+          const nextTab = newTabs[nextIdx];
+          setActiveTabId(nextTab.id);
+          setActivePaneId(nextTab.activePaneId);
+        } else if (newTabs.length === 0) {
+          setActiveTabId("");
+          setActivePaneId("");
         }
+        return newTabs;
       });
-    }
+      setTimeout(() => terminalRefs.current[getStore().activePaneId]?.focus(), 50);
+    },
+    [handleUnpinTab],
+  );
 
-    setTabs(prev => {
-      const idx = prev.findIndex(t => t.id === id);
-      const newTabs = prev.filter(t => t.id !== id);
-      if (activeTabId === id && newTabs.length > 0) {
-        const nextIdx = idx > 0 ? idx - 1 : 0;
-        const nextTab = newTabs[nextIdx];
-        setActiveTabId(nextTab.id);
-        setActivePaneId(nextTab.activePaneId);
-      } else if (newTabs.length === 0) {
-        setActiveTabId('');
-        setActivePaneId('');
+  const handleCloseTabOrPane = useCallback(
+    (tabOrPaneId?: string) => {
+      const { activeTabId, activePaneId, tabs } = getStore();
+      tabOrPaneId = tabOrPaneId || activePaneId;
+      if (!tabOrPaneId) {
+        return;
       }
-      return newTabs;
-    });
-    setTimeout(() => terminalRefs.current[getStore().activePaneId]?.focus(), 50);
-  }, [handleUnpinTab]);
 
-  const handleCloseTabOrPane = useCallback((tabOrPaneId?: string) => {
-    const { activeTabId, activePaneId, tabs } = getStore();
-    tabOrPaneId = tabOrPaneId || activePaneId;
-    if (!tabOrPaneId) {
-      return;
-    }
-
-    // 1. Check if targetId is a Tab ID
-    const targetTab = tabs.find(t => t.id === tabOrPaneId);
-    if (targetTab) {
-      handleCloseTab(null, tabOrPaneId);
-      return;
-    }
-
-    // 2. Check if targetId is a Pane ID
-    let parentTab: TabData | undefined;
-    let targetPane: PaneData | undefined;
-    for (const t of tabs) {
-      const p = t.panes.find(pane => pane.id === tabOrPaneId);
-      if (p) {
-        parentTab = t;
-        targetPane = p;
-        break;
+      // 1. Check if targetId is a Tab ID
+      const targetTab = tabs.find((t) => t.id === tabOrPaneId);
+      if (targetTab) {
+        handleCloseTab(null, tabOrPaneId);
+        return;
       }
-    }
 
-    if (parentTab && targetPane) {
-      if (parentTab.panes.length > 1) {
-        // Multi-pane tab: close the pane
-        const paneIdx = parentTab.panes.findIndex(p => p.id === tabOrPaneId);
-        const newPanes = parentTab.panes.filter(p => p.id !== tabOrPaneId);
-        let nextPaneId = parentTab.activePaneId;
-        if (parentTab.activePaneId === tabOrPaneId) {
-          nextPaneId = newPanes[Math.max(0, paneIdx - 1)].id;
+      // 2. Check if targetId is a Pane ID
+      let parentTab: TabData | undefined;
+      let targetPane: PaneData | undefined;
+      for (const t of tabs) {
+        const p = t.panes.find((pane) => pane.id === tabOrPaneId);
+        if (p) {
+          parentTab = t;
+          targetPane = p;
+          break;
         }
-
-        if (!parentTab.isLocked && targetPane.state !== 'stolen') {
-          const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-          fetch('/api/sessions/close', {
-            method: METHOD_POST,
-            headers: {
-              [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-              [HEADER_CONTENT_TYPE]: MIME_JSON
-            },
-            body: JSON.stringify({ id: targetPane.sessionId || targetPane.id } satisfies SessionsCloseRequest)
-          }).catch(e => console.error(e));
-        }
-
-        setTabs(prev => prev.map(t => t.id === parentTab.id ? { ...t, panes: newPanes, activePaneId: nextPaneId } : t));
-
-        if (activeTabId === parentTab.id) {
-          setActivePaneId(nextPaneId);
-          setTimeout(() => terminalRefs.current[nextPaneId]?.focus(), 50);
-        }
-      } else {
-        handleCloseTab(null, parentTab.id);
       }
-    }
-  }, [handleCloseTab]);
+
+      if (parentTab && targetPane) {
+        if (parentTab.panes.length > 1) {
+          // Multi-pane tab: close the pane
+          const paneIdx = parentTab.panes.findIndex((p) => p.id === tabOrPaneId);
+          const newPanes = parentTab.panes.filter((p) => p.id !== tabOrPaneId);
+          let nextPaneId = parentTab.activePaneId;
+          if (parentTab.activePaneId === tabOrPaneId) {
+            nextPaneId = newPanes[Math.max(0, paneIdx - 1)].id;
+          }
+
+          if (!parentTab.isLocked && targetPane.state !== "stolen") {
+            const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+            fetch("/api/sessions/close", {
+              method: METHOD_POST,
+              headers: {
+                [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+                [HEADER_CONTENT_TYPE]: MIME_JSON,
+              },
+              body: JSON.stringify({ id: targetPane.sessionId || targetPane.id } satisfies SessionsCloseRequest),
+            }).catch((e) => console.error(e));
+          }
+
+          setTabs((prev) =>
+            prev.map((t) => (t.id === parentTab.id ? { ...t, panes: newPanes, activePaneId: nextPaneId } : t)),
+          );
+
+          if (activeTabId === parentTab.id) {
+            setActivePaneId(nextPaneId);
+            setTimeout(() => terminalRefs.current[nextPaneId]?.focus(), 50);
+          }
+        } else {
+          handleCloseTab(null, parentTab.id);
+        }
+      }
+    },
+    [handleCloseTab],
+  );
 
   const handlePinTab = useCallback(async (id: string) => {
     setContextMenu(null);
-    const tab = getStore().tabs.find(t => t.id === id);
+    const tab = getStore().tabs.find((t) => t.id === id);
     if (!tab) {
       return;
     }
@@ -932,20 +1066,20 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     // Pinning only supports single-pane tabs for now (backend requirement)
     const host = pane.host || LOCAL_NAME;
-    await fetch('/api/tabs/pin', {
+    await fetch("/api/tabs/pin", {
       method: METHOD_POST,
       headers: {
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
         [HEADER_CONTENT_TYPE]: MIME_JSON,
       },
-      body: JSON.stringify({ id: backendSessionId, host, title: tab.title } satisfies TabsPinRequest)
+      body: JSON.stringify({ id: backendSessionId, host, title: tab.title } satisfies TabsPinRequest),
     });
-    setTabs(prev => prev.map(t => t.id === id ? { ...t, isPinned: true } : t));
+    setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, isPinned: true } : t)));
   }, []);
 
   const handleLockTab = useCallback(async (id: string) => {
     setContextMenu(null);
-    const tab = getStore().tabs.find(t => t.id === id);
+    const tab = getStore().tabs.find((t) => t.id === id);
     if (!tab) {
       return;
     }
@@ -960,20 +1094,20 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const backendSessionId = pane.sessionId || pane.id;
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     const host = pane.host || LOCAL_NAME;
-    await fetch('/api/tabs/lock', {
+    await fetch("/api/tabs/lock", {
       method: METHOD_POST,
       headers: {
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
         [HEADER_CONTENT_TYPE]: MIME_JSON,
       },
-      body: JSON.stringify({ id: backendSessionId, host, title: tab.title } satisfies TabsLockRequest)
+      body: JSON.stringify({ id: backendSessionId, host, title: tab.title } satisfies TabsLockRequest),
     });
-    setTabs(prev => prev.map(t => t.id === id ? { ...t, isLocked: true } : t));
+    setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, isLocked: true } : t)));
   }, []);
 
   const handleUnlockTab = useCallback(async (id: string) => {
     setContextMenu(null);
-    const tab = getStore().tabs.find(t => t.id === id);
+    const tab = getStore().tabs.find((t) => t.id === id);
     if (!tab) {
       return;
     }
@@ -988,15 +1122,15 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const paneId = pane.sessionId || pane.id;
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     const host = pane.host || LOCAL_NAME;
-    await fetch('/api/tabs/pin', {
+    await fetch("/api/tabs/pin", {
       method: METHOD_POST,
       headers: {
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
         [HEADER_CONTENT_TYPE]: MIME_JSON,
       },
-      body: JSON.stringify({ id: paneId, host, title: tab.title } satisfies TabsPinRequest)
+      body: JSON.stringify({ id: paneId, host, title: tab.title } satisfies TabsPinRequest),
     });
-    setTabs(prev => prev.map(t => t.id === id ? { ...t, isLocked: false } : t));
+    setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, isLocked: false } : t)));
     if (getStore().activeTabId === id) {
       setActiveTabId(paneId);
     }
@@ -1008,7 +1142,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     }
     const targetId = contextMenu.targetTabId;
     setContextMenu(null);
-    const targetTab = getStore().tabs.find(t => t.id === targetId);
+    const targetTab = getStore().tabs.find((t) => t.id === targetId);
     if (!targetTab) {
       return;
     }
@@ -1021,7 +1155,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       if (targetTab.isPinned) {
         const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
         const backendSessionId = targetTab.panes[0]?.sessionId || targetTab.panes[0]?.id || targetId;
-        await fetch('/api/tabs/rename', {
+        await fetch("/api/tabs/rename", {
           method: METHOD_POST,
           headers: {
             [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
@@ -1030,7 +1164,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
           body: JSON.stringify({ id: backendSessionId, title: newTitle } satisfies TabsRenameRequest),
         });
       }
-      setTabs(prev => prev.map(t => t.id === targetId ? { ...t, title: newTitle } : t));
+      setTabs((prev) => prev.map((t) => (t.id === targetId ? { ...t, title: newTitle } : t)));
     }
   }, [contextMenu]);
 
@@ -1040,7 +1174,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
     let tab: TabData | undefined;
     outer: for (const t of getStore().tabs) {
       if (t.id === id) {
-        if (t.panes.length === 0) { // impossible case
+        if (t.panes.length === 0) {
+          // impossible case
           return;
         }
         tab = t;
@@ -1061,19 +1196,23 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const newPaneId = genPaneId(pane.host);
     const newTabId = genTabId(pane.host);
     const backendSessionId = pane.sessionId || pane.id;
-    setTabs(prev => {
+    setTabs((prev) => {
       const newPane = { id: newPaneId, host: pane.host, cloneFrom: backendSessionId, state: pane.state };
       if (cloneInSameTab) {
-        return prev.map(t => t.id === tab.id && t.panes.length < 4
-          ? { ...t, panes: [...t.panes, newPane], activePaneId: newPaneId } : t);
+        return prev.map((t) =>
+          t.id === tab.id && t.panes.length < 4 ? { ...t, panes: [...t.panes, newPane], activePaneId: newPaneId } : t,
+        );
       }
-      return [...prev, {
-        id: newTabId,
-        title: nextName(tab.title),
-        panes: [newPane],
-        activePaneId: newPaneId,
-        showFiles: false,
-      }]
+      return [
+        ...prev,
+        {
+          id: newTabId,
+          title: nextName(tab.title),
+          panes: [newPane],
+          activePaneId: newPaneId,
+          showFiles: false,
+        },
+      ];
     });
     if (!cloneInSameTab) {
       setActiveTabId(newTabId);
@@ -1083,11 +1222,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   const handleReconnectTab = useCallback((id: string) => {
     setContextMenu(null);
-    const targetTab = getStore().tabs.find(t => t.id === id);
+    const targetTab = getStore().tabs.find((t) => t.id === id);
     if (!targetTab) {
       return;
     }
-    targetTab.panes.forEach(p => {
+    targetTab.panes.forEach((p) => {
       const term = terminalRefs.current[p.id];
       if (term && "getXterm" in term) {
         term.reconnect();
@@ -1101,7 +1240,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     }
     const targetId = contextMenu.targetTabId;
     setContextMenu(null);
-    setTabs(prev => prev.map(t => t.id === targetId ? { ...t, showFiles: !t.showFiles } : t));
+    setTabs((prev) => prev.map((t) => (t.id === targetId ? { ...t, showFiles: !t.showFiles } : t)));
   }, [contextMenu]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, id: string) => {
@@ -1118,8 +1257,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
     }
     const targetId = contextMenu.targetTabId;
     setContextMenu(null);
-    const tab = getStore().tabs.find(t => t.id === targetId);
-    setTabs(prev => prev.filter(t => t.id === targetId));
+    const tab = getStore().tabs.find((t) => t.id === targetId);
+    setTabs((prev) => prev.filter((t) => t.id === targetId));
     setActiveTabId(targetId);
     if (tab) {
       setActivePaneId(tab.activePaneId);
@@ -1132,8 +1271,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
     }
     const targetId = contextMenu.targetTabId;
     setContextMenu(null);
-    setTabs(prev => {
-      const idx = prev.findIndex(t => t.id === targetId);
+    setTabs((prev) => {
+      const idx = prev.findIndex((t) => t.id === targetId);
       const newTabs = prev.slice(0, idx + 1);
       const targetTab = newTabs[idx];
       if (getStore().activeTabId !== targetId) {
@@ -1162,29 +1301,37 @@ export default function Dashboard({ initialData }: DashboardProps) {
       getApplets: () => appletRefs.current,
       handleCloseTabOrPane,
     });
-  }, [csNotify, handleAttach, handleRefresh, handleSelectHost, handleSelectTagAsSplit, isMobile,
-    setLocalVars, handleCloseTabOrPane]);
+  }, [
+    csNotify,
+    handleAttach,
+    handleRefresh,
+    handleSelectHost,
+    handleSelectTagAsSplit,
+    isMobile,
+    setLocalVars,
+    handleCloseTabOrPane,
+  ]);
 
-  const handleButtonClick = useCallback(async (btn: Pick<ButtonData, 'id' | 'name' | 'type' | 'payload'>) => {
-    window.navigator.vibrate?.(VIBRATE_PATTERN);
-    switch (btn.type) {
-      case 'send_string':
-        await sendParsedString(btn.payload);
-        terminalRefs.current[getStore().activePaneId]?.focus();
-        break;
+  const handleButtonClick = useCallback(
+    async (btn: Pick<ButtonData, "id" | "name" | "type" | "payload">) => {
+      window.navigator.vibrate?.(VIBRATE_PATTERN);
+      switch (btn.type) {
+        case "send_string":
+          await sendParsedString(btn.payload);
+          terminalRefs.current[getStore().activePaneId]?.focus();
+          break;
 
-      case 'open_terminal':
-        handleSelectHost(btn.payload || LOCAL_NAME);
-        break;
+        case "open_terminal":
+          handleSelectHost(btn.payload || LOCAL_NAME);
+          break;
 
-      case 'terminal_function': {
-        const term = terminalRefs.current[getStore().activePaneId];
-        if (!term || !("getXterm" in term)) {
-          return;
-        }
-        switch (btn.payload) {
-          case 'COPY':
-            {
+        case "terminal_function": {
+          const term = terminalRefs.current[getStore().activePaneId];
+          if (!term || !("getXterm" in term)) {
+            return;
+          }
+          switch (btn.payload) {
+            case "COPY": {
               term.selectAll();
               const textCopy = term.getSelection().trim();
               if (textCopy) {
@@ -1195,191 +1342,210 @@ export default function Dashboard({ initialData }: DashboardProps) {
               break;
             }
 
-          case 'COPY_VISIBLE': {
-            const xterm = term.getXterm();
-            if (!xterm) {
-              return;
-            }
-            const buffer = xterm.buffer.active;
-            const start = buffer.viewportY;
-            const end = start + xterm.rows;
-            let text = "";
-            for (let i = start; i < end; i++) {
-              const line = buffer.getLine(i);
-              if (line) {
-                text += line.translateToString().trim() + "\n";
+            case "COPY_VISIBLE": {
+              const xterm = term.getXterm();
+              if (!xterm) {
+                return;
               }
+              const buffer = xterm.buffer.active;
+              const start = buffer.viewportY;
+              const end = start + xterm.rows;
+              let text = "";
+              for (let i = start; i < end; i++) {
+                const line = buffer.getLine(i);
+                if (line) {
+                  text += line.translateToString().trim() + "\n";
+                }
+              }
+              text = text.trim();
+              if (text) {
+                navigator.clipboard.writeText(text);
+              }
+              term.focus();
+              break;
             }
-            text = text.trim();
-            if (text) {
-              navigator.clipboard.writeText(text);
+
+            case "COPY_SELECTION": {
+              const text = term.getSelection();
+              if (text) {
+                navigator.clipboard.writeText(text);
+              }
+              term.focus();
+              break;
             }
-            term.focus();
-            break;
-          }
 
-          case 'COPY_SELECTION': {
-            const text = term.getSelection();
-            if (text) {
-              navigator.clipboard.writeText(text);
+            case "COPY_LAST_COMMAND_OUTPUT": {
+              const text = term.getLastCommandOutput();
+              if (text) {
+                navigator.clipboard.writeText(text);
+              }
+              term.focus();
+              break;
             }
-            term.focus();
-            break;
-          }
 
-          case 'COPY_LAST_COMMAND_OUTPUT': {
-            const text = term.getLastCommandOutput();
-            if (text) {
-              navigator.clipboard.writeText(text);
+            case "PASTE": {
+              const text = await navigator.clipboard.readText();
+              if (text) {
+                term.sendData(text);
+              }
+              term.focus();
+              break;
             }
-            term.focus();
-            break;
-          }
 
-          case 'PASTE': {
-            const text = await navigator.clipboard.readText();
-            if (text) {
-              term.sendData(text);
+            case "INPUT":
+              setInputValue("");
+              setSendScope(0);
+              setInputDialogOpen(true);
+              break;
+
+            case "CLEAR":
+              term.clear();
+              term.focus();
+              break;
+
+            case "RESET":
+              term.reset();
+              term.focus();
+              break;
+
+            case "RECONNECT":
+              term.reconnect();
+              term.focus();
+              break;
+
+            case "CLOSE":
+              handleCloseTabOrPane();
+              break;
+
+            case "CLOSE_TAB": {
+              handleCloseTabOrPane(getStore().activeTabId);
+              break;
             }
-            term.focus();
-            break;
+
+            case "SCROLL_TO_TOP":
+              term.scrollToTop();
+              term.focus();
+              break;
+
+            case "SCROLL_TO_BOTTOM":
+              term.scrollToBottom();
+              term.focus();
+              break;
+
+            case "SCROLL_UP": {
+              const scrollLines = getIntVar(
+                getStore().vars,
+                getStore().localVars,
+                VAR_CS_SCROLL_LINES,
+                DEFAULT_SCROLL_LINES,
+              );
+              term.scrollLines(-scrollLines);
+              term.focus();
+              break;
+            }
+
+            case "SCROLL_DOWN": {
+              const scrollLines = getIntVar(
+                getStore().vars,
+                getStore().localVars,
+                VAR_CS_SCROLL_LINES,
+                DEFAULT_SCROLL_LINES,
+              );
+              term.scrollLines(scrollLines);
+              term.focus();
+              break;
+            }
+
+            case "SCROLL_PAGE_UP":
+              term.scrollPages(-1);
+              term.focus();
+              break;
+
+            case "SCROLL_PAGE_DOWN":
+              term.scrollPages(1);
+              term.focus();
+              break;
+
+            case "CLONE_SESSION":
+              handleCloneSession(getStore().activePaneId);
+              break;
+
+            case "CLONE_SESSION_IN_SAME_TAB":
+              handleCloneSession(getStore().activePaneId, true);
+              break;
+
+            case "SEARCH":
+              setSearchOpen(true);
+              setTimeout(() => searchInputRef.current?.focus(), 100);
+              break;
+
+            default:
+              break;
           }
-
-          case 'INPUT':
-            setInputValue('');
-            setSendScope(0);
-            setInputDialogOpen(true);
-            break;
-
-          case 'CLEAR':
-            term.clear();
-            term.focus();
-            break;
-
-          case 'RESET':
-            term.reset();
-            term.focus();
-            break;
-
-          case 'RECONNECT':
-            term.reconnect();
-            term.focus();
-            break;
-
-          case 'CLOSE':
-            handleCloseTabOrPane();
-            break;
-
-          case 'CLOSE_TAB': {
-            handleCloseTabOrPane(getStore().activeTabId);
-            break;
-          }
-
-          case 'SCROLL_TO_TOP':
-            term.scrollToTop();
-            term.focus();
-            break;
-
-          case 'SCROLL_TO_BOTTOM':
-            term.scrollToBottom();
-            term.focus();
-            break;
-
-          case 'SCROLL_UP': {
-            const scrollLines = getIntVar(getStore().vars, getStore().localVars,
-              VAR_CS_SCROLL_LINES, DEFAULT_SCROLL_LINES);
-            term.scrollLines(-scrollLines);
-            term.focus();
-            break;
-          }
-
-          case 'SCROLL_DOWN': {
-            const scrollLines = getIntVar(getStore().vars, getStore().localVars,
-              VAR_CS_SCROLL_LINES, DEFAULT_SCROLL_LINES);
-            term.scrollLines(scrollLines);
-            term.focus();
-            break;
-          }
-
-          case 'SCROLL_PAGE_UP':
-            term.scrollPages(-1);
-            term.focus();
-            break;
-
-          case 'SCROLL_PAGE_DOWN':
-            term.scrollPages(1);
-            term.focus();
-            break;
-
-          case 'CLONE_SESSION':
-            handleCloneSession(getStore().activePaneId);
-            break;
-
-          case 'CLONE_SESSION_IN_SAME_TAB':
-            handleCloneSession(getStore().activePaneId, true);
-            break;
-
-          case 'SEARCH':
-            setSearchOpen(true);
-            setTimeout(() => searchInputRef.current?.focus(), 100);
-            break;
-
-          default:
-            break;
+          break;
         }
-        break;
+
+        case "misc":
+          switch (btn.payload) {
+            case "TABS_SCROLL_LEFT":
+              (document.querySelector("#tab-bar .MuiTabScrollButton-root:first-of-type") as HTMLElement)?.click();
+              break;
+            case "TABS_SCROLL_RIGHT":
+              (document.querySelector("#tab-bar .MuiTabScrollButton-root:last-of-type") as HTMLElement)?.click();
+              break;
+            case "BUTTONS_SCROLL_LEFT":
+              (document.querySelector("#button-bar .MuiTabScrollButton-root:first-of-type") as HTMLElement)?.click();
+              break;
+            case "BUTTONS_SCROLL_RIGHT":
+              (document.querySelector("#button-bar .MuiTabScrollButton-root:last-of-type") as HTMLElement)?.click();
+              break;
+            case "NEXT_BUTTON_GROUP": {
+              const idx = groups.indexOf(activeGroup);
+              let nextIdx = (idx + 1) % groups.length;
+              while (nextIdx !== idx && groups[nextIdx].startsWith("_")) {
+                nextIdx = (nextIdx + 1) % groups.length;
+              }
+              setActiveGroup(groups[nextIdx]);
+              break;
+            }
+            case "PREV_BUTTON_GROUP": {
+              const idx = groups.indexOf(activeGroup);
+              let prevIdx = (idx - 1 + groups.length) % groups.length;
+              while (prevIdx !== idx && groups[prevIdx].startsWith("_")) {
+                prevIdx = (prevIdx - 1 + groups.length) % groups.length;
+              }
+              setActiveGroup(groups[prevIdx]);
+              break;
+            }
+            case "OPEN_SCRATCHPAD":
+              handleOpenScratchpad();
+              break;
+            default:
+              break;
+          }
+          terminalRefs.current[getStore().activePaneId]?.focus();
+          break;
+
+        case "run_script":
+          await runScript(btn, csNotify, () => terminalRefs.current);
+          break;
+
+        default:
+          break;
       }
-
-      case 'misc':
-        switch (btn.payload) {
-          case 'TABS_SCROLL_LEFT':
-            (document.querySelector('#tab-bar .MuiTabScrollButton-root:first-of-type') as HTMLElement)?.click();
-            break;
-          case 'TABS_SCROLL_RIGHT':
-            (document.querySelector('#tab-bar .MuiTabScrollButton-root:last-of-type') as HTMLElement)?.click();
-            break;
-          case 'BUTTONS_SCROLL_LEFT':
-            (document.querySelector('#button-bar .MuiTabScrollButton-root:first-of-type') as HTMLElement)?.click();
-            break;
-          case 'BUTTONS_SCROLL_RIGHT':
-            (document.querySelector('#button-bar .MuiTabScrollButton-root:last-of-type') as HTMLElement)?.click();
-            break;
-          case 'NEXT_BUTTON_GROUP': {
-            const idx = groups.indexOf(activeGroup);
-            let nextIdx = (idx + 1) % groups.length;
-            while (nextIdx !== idx && groups[nextIdx].startsWith("_")) {
-              nextIdx = (nextIdx + 1) % groups.length;
-            }
-            setActiveGroup(groups[nextIdx]);
-            break;
-          }
-          case 'PREV_BUTTON_GROUP': {
-            const idx = groups.indexOf(activeGroup);
-            let prevIdx = (idx - 1 + groups.length) % groups.length;
-            while (prevIdx !== idx && groups[prevIdx].startsWith("_")) {
-              prevIdx = (prevIdx - 1 + groups.length) % groups.length;
-            }
-            setActiveGroup(groups[prevIdx]);
-            break;
-          }
-          case 'OPEN_SCRATCHPAD':
-            handleOpenScratchpad();
-            break;
-          default:
-            break;
-        }
-        terminalRefs.current[getStore().activePaneId]?.focus();
-        break;
-
-      case 'run_script':
-        await runScript(btn, csNotify, () => terminalRefs.current);
-        break;
-
-      default:
-        break;
-    }
-  }, [sendParsedString, handleSelectHost, csNotify, handleCloseTabOrPane, handleCloneSession, handleOpenScratchpad,
-    groups, activeGroup, setActiveGroup]);
+    },
+    [
+      sendParsedString,
+      handleSelectHost,
+      csNotify,
+      handleCloseTabOrPane,
+      handleCloneSession,
+      handleOpenScratchpad,
+      groups,
+      activeGroup,
+      setActiveGroup,
+    ],
+  );
 
   // ── Keyboard shortcuts (reads fresh state from store — tiny stable dep array) ──
   useKeyboardManager({
@@ -1398,7 +1564,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const handleSaveButton = useCallback(async () => {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     const method = editingButton ? METHOD_PUT : METHOD_POST;
-    const url = editingButton ? `/api/buttons/${editingButton.id}` : '/api/buttons';
+    const url = editingButton ? `/api/buttons/${editingButton.id}` : "/api/buttons";
     if (editingButton) {
       delete moduleCache[editingButton.id];
     }
@@ -1412,13 +1578,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
     });
     setInitialBtnFormData(null);
     setButtonDialogOpen(false);
-    fetch('/api/buttons', {
+    fetch("/api/buttons", {
       headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
-      }
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      },
     })
-      .then(r => r.json() as Promise<ButtonData[]>)
-      .then(data => {
+      .then((r) => r.json() as Promise<ButtonData[]>)
+      .then((data) => {
         setButtons(data || []);
         setButtonsLoaded(true);
         setActiveGroup(buttonFormData.group || DEFAULT_BUTTON_GROUP);
@@ -1430,7 +1596,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       window.__CS_AUTORUN_DONE__ = 0;
       (async () => {
         if (noautorun !== 1 && startupParams.get(VAR_NOAUTORUN) !== "1") {
-          const scriptsToRun = getStore().buttons.filter(b => b.type === 'run_script' && b.autorun === 1);
+          const scriptsToRun = getStore().buttons.filter((b) => b.type === "run_script" && b.autorun === 1);
           for (const btn of scriptsToRun) {
             try {
               await handleButtonClick(btn);
@@ -1447,20 +1613,20 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   const handleDeleteButton = useCallback(async (id: string, name: string) => {
     setBtnMenuAnchor(null);
-    if (!await dialogs.confirm(`Delete button "${name}"?`)) {
+    if (!(await dialogs.confirm(`Delete button "${name}"?`))) {
       return;
     }
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     await fetch(`/api/buttons/${id}`, {
       method: METHOD_DELETE,
       headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
-      }
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      },
     });
-    const res = await fetch('/api/buttons', {
+    const res = await fetch("/api/buttons", {
       headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
-      }
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      },
     });
     const data: ButtonData[] = await res.json();
     setButtons(data || []);
@@ -1470,32 +1636,35 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const handleMoveButton = useCallback(async (id: string, direction: number) => {
     setBtnMenuAnchor(null);
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    await fetch('/api/buttons/move', {
+    await fetch("/api/buttons/move", {
       method: METHOD_POST,
       headers: {
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
         [HEADER_CONTENT_TYPE]: MIME_JSON,
       },
-      body: JSON.stringify({ id, direction } satisfies ButtonsMoveRequest)
+      body: JSON.stringify({ id, direction } satisfies ButtonsMoveRequest),
     });
-    const res = await fetch('/api/buttons', {
+    const res = await fetch("/api/buttons", {
       headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token
-      }
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      },
     });
     const data: ButtonData[] = await res.json();
     setButtons(data || []);
     setButtonsLoaded(true);
   }, []);
 
-  const handleCloseBtnDialog = useCallback((_e: unknown, reason: string) => {
-    const isDirty = initialBtnFormData && JSON.stringify(buttonFormData) !== JSON.stringify(initialBtnFormData);
-    if (isDirty && (reason === 'backdropClick' || reason === 'escapeKeyDown')) {
-      return;
-    }
-    setButtonDialogOpen(false);
-    setTimeout(() => window.csFocus(), 0);
-  }, [buttonFormData, initialBtnFormData]);
+  const handleCloseBtnDialog = useCallback(
+    (_e: unknown, reason: string) => {
+      const isDirty = initialBtnFormData && JSON.stringify(buttonFormData) !== JSON.stringify(initialBtnFormData);
+      if (isDirty && (reason === "backdropClick" || reason === "escapeKeyDown")) {
+        return;
+      }
+      setButtonDialogOpen(false);
+      setTimeout(() => window.csFocus(), 0);
+    },
+    [buttonFormData, initialBtnFormData],
+  );
 
   const [lastKeyboardHeight, setLastKeyboardHeight] = useState(0);
 
@@ -1520,50 +1689,64 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, [extraKeysOpen]);
 
   const activeKbHeight = keyboardHeight > 60 ? keyboardHeight : lastKeyboardHeight;
-  const panelHeight = activeKbHeight > 60 ? (activeKbHeight + 40) : Math.floor(window.innerHeight * 0.38);
+  const panelHeight = activeKbHeight > 60 ? activeKbHeight + 40 : Math.floor(window.innerHeight * 0.38);
 
   const barHeight = extraKeysOpen ? 0 : 40;
 
   // 3. CRITICAL FIX: Only calculate the spacer if the panel is open or closing.
   // Otherwise, it must be exactly 0 (like on initial page load).
-  const spacerHeight = Math.floor((extraKeysOpen || isClosingPanel)
-    ? Math.max(0, panelHeight - keyboardHeight - barHeight)
-    : 0);
+  const spacerHeight = Math.floor(
+    extraKeysOpen || isClosingPanel ? Math.max(0, panelHeight - keyboardHeight - barHeight) : 0,
+  );
 
-  const onTerminalFocus = useCallback(() => {
-  }, []);
+  const onTerminalFocus = useCallback(() => {}, []);
   const onTerminalBlur = useCallback(() => {
     setExtraKeysOpen(false);
   }, []);
 
   return (
     <ThemeProvider theme={muiTheme}>
-      <Box id="main-ui" sx={{ display: 'flex', height: viewportHeight, overflow: 'hidden' }}>
+      <Box id="main-ui" sx={{ display: "flex", height: viewportHeight, overflow: "hidden" }}>
         <CssBaseline />
         <Sidebar
           mobileOpen={mobileOpen}
           onClose={() => setMobileOpen(false)}
-          onSelect={(host) => { handleSelectHost(host); setMobileOpen(false); }}
-          onSelectTagAsSplit={(tag, hosts) => { handleSelectTagAsSplit(tag, hosts); setMobileOpen(false); }}
+          onSelect={(host) => {
+            handleSelectHost(host);
+            setMobileOpen(false);
+          }}
+          onSelectTagAsSplit={(tag, hosts) => {
+            handleSelectTagAsSplit(tag, hosts);
+            setMobileOpen(false);
+          }}
           onLogout={handleLogout}
-          activeTabs={tabs.flatMap(t => t.panes.filter((p) => p.state !== 'stolen').map((p) => p.sessionId || p.id))}
+          activeTabs={tabs.flatMap((t) => t.panes.filter((p) => p.state !== "stolen").map((p) => p.sessionId || p.id))}
           sysHostname={sysHostname}
           appVersion={appVersion}
-          onAttach={(id, host, title, isLocked) => { handleAttach(id, host, title, isLocked); setMobileOpen(false); }}
-          onRefresh={() => { handleRefresh(); setMobileOpen(false); }}
+          onAttach={(id, host, title, isLocked) => {
+            handleAttach(id, host, title, isLocked);
+            setMobileOpen(false);
+          }}
+          onRefresh={() => {
+            handleRefresh();
+            setMobileOpen(false);
+          }}
           hosts={hosts}
           fetchHosts={fetchHosts}
-          onOpenScratchpad={() => { handleOpenScratchpad(); setMobileOpen(false); }}
+          onOpenScratchpad={() => {
+            handleOpenScratchpad();
+            setMobileOpen(false);
+          }}
         />
         <Box
           id="ui-fix-spacer"
           component="main"
           sx={{
             flexGrow: 1,
-            display: 'flex',
-            flexDirection: 'column',
+            display: "flex",
+            flexDirection: "column",
             minWidth: 0,
-            position: 'relative',
+            position: "relative",
           }}
         >
           <TabBar
@@ -1631,119 +1814,173 @@ export default function Dashboard({ initialData }: DashboardProps) {
               flexShrink: 0,
               order: 9999,
               height: `${spacerHeight}px`, // Controlled strictly by React math
-              width: '100%',
+              width: "100%",
             }}
           />
         </Box>
-        {applets.filter(a => a.position === 'sidebar').length > 0 && (
-          isMobile ? (
+        {applets.filter((a) => a.position === "sidebar").length > 0 &&
+          (isMobile ? (
             <Drawer
               anchor="right"
               open={mobileAppletsOpen}
               onClose={() => setMobileAppletsOpen(false)}
-              sx={{ '& .MuiDrawer-paper': { width: 320, boxSizing: 'border-box' } }}
+              sx={{ "& .MuiDrawer-paper": { width: 320, boxSizing: "border-box" } }}
             >
-              <Box sx={{
-                px: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                borderBottom: 1, borderColor: 'divider'
-              }}>
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Applets</Typography>
+              <Box
+                sx={{
+                  px: 1,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  borderBottom: 1,
+                  borderColor: "divider",
+                }}
+              >
+                <Typography variant="h6" sx={{ fontWeight: "bold" }}>
+                  Applets
+                </Typography>
                 <IconButton onClick={() => setMobileAppletsOpen(false)}>
                   <CloseIcon />
                 </IconButton>
               </Box>
-              <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
-                {applets.filter(a => a.position === 'sidebar').map((applet, idx) => (
+              <Box sx={{ flexGrow: 1, display: "flex", flexDirection: "column", overflow: "auto" }}>
+                {applets
+                  .filter((a) => a.position === "sidebar")
+                  .map((applet, idx) => (
+                    <AppletWrapper
+                      key={applet.name}
+                      applet={applet}
+                      index={idx}
+                      onClose={() => setApplets((prev) => prev.filter((a) => a.name !== applet.name))}
+                      onSwitchPosition={(pos) =>
+                        setApplets((prev) => prev.map((a) => (a.name === applet.name ? { ...a, position: pos } : a)))
+                      }
+                    />
+                  ))}
+              </Box>
+            </Drawer>
+          ) : (
+            <Box
+              sx={{
+                width: 320,
+                flexShrink: 0,
+                borderLeft: 1,
+                borderColor: "divider",
+                display: "flex",
+                flexDirection: "column",
+                bgcolor: "background.paper",
+                overflow: "hidden",
+                height: "100%",
+              }}
+            >
+              {applets
+                .filter((a) => a.position === "sidebar")
+                .map((applet, idx) => (
                   <AppletWrapper
                     key={applet.name}
                     applet={applet}
                     index={idx}
-                    onClose={() => setApplets(prev => prev.filter(a => a.name !== applet.name))}
-                    onSwitchPosition={(pos) => setApplets(prev => prev.map(a => a.name === applet.name
-                      ? { ...a, position: pos } : a))}
+                    onClose={() => setApplets((prev) => prev.filter((a) => a.name !== applet.name))}
+                    onSwitchPosition={(pos) =>
+                      setApplets((prev) => prev.map((a) => (a.name === applet.name ? { ...a, position: pos } : a)))
+                    }
                   />
                 ))}
-              </Box>
-            </Drawer>
-          ) : (
-            <Box sx={{
-              width: 320, flexShrink: 0, borderLeft: 1, borderColor: 'divider', display: 'flex',
-              flexDirection: 'column', bgcolor: 'background.paper', overflow: 'hidden', height: '100%'
-            }}>
-              {applets.filter(a => a.position === 'sidebar').map((applet, idx) => (
-                <AppletWrapper
-                  key={applet.name}
-                  applet={applet}
-                  index={idx}
-                  onClose={() => setApplets(prev => prev.filter(a => a.name !== applet.name))}
-                  onSwitchPosition={(pos) => setApplets(prev => prev.map(a => a.name === applet.name
-                    ? { ...a, position: pos } : a))}
-                />
-              ))}
             </Box>
-          )
-        )}
+          ))}
       </Box>
 
-      {applets.filter(a => a.position === 'widget').map((applet, idx) => (
-        <AppletWrapper
-          key={applet.name}
-          applet={applet}
-          index={idx}
-          onClose={() => setApplets(prev => prev.filter(a => a.name !== applet.name))}
-          onSwitchPosition={(pos) => setApplets(prev => prev.map(a => a.name === applet.name
-            ? { ...a, position: pos } : a))}
-          onFocus={() => setApplets(prev => prev.map(a => a.name === applet.name
-            ? { ...a, zIndex: maxZIndexRef.current++ } : a))}
-        />
-      ))}
-
-      {applets.filter(a => a.position === 'dialog').map((applet) => (
-        <Dialog
-          key={applet.name}
-          open
-          onClose={() => setApplets(prev => prev.filter(a => a.name !== applet.name))}
-          fullWidth
-          maxWidth={false}
-          slotProps={{
-            paper: {
-              sx: {
-                width: applet.width ?? 600, maxWidth: '95vw',
-                height: applet.height ?? undefined
-              }
+      {applets
+        .filter((a) => a.position === "widget")
+        .map((applet, idx) => (
+          <AppletWrapper
+            key={applet.name}
+            applet={applet}
+            index={idx}
+            onClose={() => setApplets((prev) => prev.filter((a) => a.name !== applet.name))}
+            onSwitchPosition={(pos) =>
+              setApplets((prev) => prev.map((a) => (a.name === applet.name ? { ...a, position: pos } : a)))
             }
-          }}
-        >
-          <DialogTitle sx={{
-            display: 'flex', alignItems: 'center',
-            p: 1, pl: 2, borderBottom: 1, borderColor: 'divider'
-          }}>
-            <Typography variant="subtitle1" sx={{ flexGrow: 1, fontWeight: 'bold' }}>{applet.name}</Typography>
-            <IconButton size="small" title="Move to sidebar"
-              onClick={() => setApplets(prev => prev.map(a => a.name === applet.name
-                ? { ...a, position: 'sidebar' } : a))} sx={{ mr: 0.5 }}>
-              <ViewSidebarIcon fontSize="small" />
-            </IconButton>
-            <IconButton size="small" title="Move to widget"
-              onClick={() => setApplets(prev => prev.map(a => a.name === applet.name
-                ? { ...a, position: 'widget', zIndex: maxZIndexRef.current++ } : a))} sx={{ mr: 0.5 }}>
-              <OpenInNewIcon fontSize="small" />
-            </IconButton>
-            <IconButton size="small" onClick={() => setApplets(prev => prev.filter(a => a.name !== applet.name))}>
-              <CloseIcon fontSize="small" />
-            </IconButton>
-          </DialogTitle>
-          <DialogContent sx={{ p: 0, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
-            <AppletWrapper
-              applet={applet}
-              index={0}
-              onClose={() => setApplets(prev => prev.filter(a => a.name !== applet.name))}
-              onSwitchPosition={(pos) => setApplets(prev => prev.map(a => a.name === applet.name
-                ? { ...a, position: pos } : a))}
-            />
-          </DialogContent>
-        </Dialog>
-      ))}
+            onFocus={() =>
+              setApplets((prev) =>
+                prev.map((a) => (a.name === applet.name ? { ...a, zIndex: maxZIndexRef.current++ } : a)),
+              )
+            }
+          />
+        ))}
+
+      {applets
+        .filter((a) => a.position === "dialog")
+        .map((applet) => (
+          <Dialog
+            key={applet.name}
+            open
+            onClose={() => setApplets((prev) => prev.filter((a) => a.name !== applet.name))}
+            fullWidth
+            maxWidth={false}
+            slotProps={{
+              paper: {
+                sx: {
+                  width: applet.width ?? 600,
+                  maxWidth: "95vw",
+                  height: applet.height ?? undefined,
+                },
+              },
+            }}
+          >
+            <DialogTitle
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                p: 1,
+                pl: 2,
+                borderBottom: 1,
+                borderColor: "divider",
+              }}
+            >
+              <Typography variant="subtitle1" sx={{ flexGrow: 1, fontWeight: "bold" }}>
+                {applet.name}
+              </Typography>
+              <IconButton
+                size="small"
+                title="Move to sidebar"
+                onClick={() =>
+                  setApplets((prev) => prev.map((a) => (a.name === applet.name ? { ...a, position: "sidebar" } : a)))
+                }
+                sx={{ mr: 0.5 }}
+              >
+                <ViewSidebarIcon fontSize="small" />
+              </IconButton>
+              <IconButton
+                size="small"
+                title="Move to widget"
+                onClick={() =>
+                  setApplets((prev) =>
+                    prev.map((a) =>
+                      a.name === applet.name ? { ...a, position: "widget", zIndex: maxZIndexRef.current++ } : a,
+                    ),
+                  )
+                }
+                sx={{ mr: 0.5 }}
+              >
+                <OpenInNewIcon fontSize="small" />
+              </IconButton>
+              <IconButton size="small" onClick={() => setApplets((prev) => prev.filter((a) => a.name !== applet.name))}>
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            </DialogTitle>
+            <DialogContent sx={{ p: 0, display: "flex", flexDirection: "column", overflow: "auto" }}>
+              <AppletWrapper
+                applet={applet}
+                index={0}
+                onClose={() => setApplets((prev) => prev.filter((a) => a.name !== applet.name))}
+                onSwitchPosition={(pos) =>
+                  setApplets((prev) => prev.map((a) => (a.name === applet.name ? { ...a, position: pos } : a)))
+                }
+              />
+            </DialogContent>
+          </Dialog>
+        ))}
 
       <DialogManager
         contextMenu={contextMenu}

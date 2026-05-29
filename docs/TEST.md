@@ -9,6 +9,7 @@ To run these tests you need a Linux test server.
 - Ubuntu 24.04 amd64 (tested to work, other distros may work too).
 - Go 1.25+, Node.js v24, Docker installed.
 - Install Playwright system dependencies:
+
   ```bash
   # Install through go
   go run github.com/playwright-community/playwright-go/cmd/playwright@latest install-deps
@@ -17,7 +18,6 @@ To run these tests you need a Linux test server.
   npx playwright install-deps
   ```
 
-  
 ## Run Tests
 
 To run tests on Test Server workspace dir:

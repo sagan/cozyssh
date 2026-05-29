@@ -1,26 +1,22 @@
 // async version of alert, confirm, prompt using MUI dialog
-import { type ReactNode, useState, useRef, useEffect } from 'react';
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
-  TextField,
-  Button
-} from '@mui/material';
+import { type ReactNode, useState, useRef, useEffect } from "react";
+import { Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, TextField, Button } from "@mui/material";
 
 export interface DialogApi {
   alert: (message?: string, detail?: string) => Promise<void>;
   confirm: (message?: string, detail?: string) => Promise<boolean>;
-  prompt: (message?: string, defaultValue?: string, options?: {
-    placeholder?: string;
-    validate?: (value: string) => string | undefined;
-  }) => Promise<string | null>;
+  prompt: (
+    message?: string,
+    defaultValue?: string,
+    options?: {
+      placeholder?: string;
+      validate?: (value: string) => string | undefined;
+    },
+  ) => Promise<string | null>;
 }
 
 interface DialogConfig {
-  type: 'alert' | 'confirm' | 'prompt';
+  type: "alert" | "confirm" | "prompt";
   message?: string;
   detail?: string;
   placeholder?: string;
@@ -30,29 +26,29 @@ interface DialogConfig {
 
 // 1. Internal registry to bridge the static export to the React provider instance
 const registry = {
-  current: null as DialogApi | null
+  current: null as DialogApi | null,
 };
 
-// 2. Exported global singleton object. 
+// 2. Exported global singleton object.
 // Because it's a module-level constant, it never goes into dependency arrays.
 // eslint-disable-next-line react-refresh/only-export-components
 export const dialogs: DialogApi = {
   alert: (message, detail) => registry.current?.alert(message, detail) ?? Promise.resolve(),
   confirm: (message, detail) => registry.current?.confirm(message, detail) ?? Promise.resolve(false),
-  prompt: (message, defaultValue, options) => registry.current?.prompt(message, defaultValue, options) ??
-    Promise.resolve(null),
+  prompt: (message, defaultValue, options) =>
+    registry.current?.prompt(message, defaultValue, options) ?? Promise.resolve(null),
 };
 
 export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
   const [open, setOpen] = useState(false);
-  const [inputValue, setInputValue] = useState('');
-  const [error, setError] = useState('');
+  const [inputValue, setInputValue] = useState("");
+  const [error, setError] = useState("");
 
   const [config, setConfig] = useState<DialogConfig>({
-    type: 'alert',
-    message: '',
-    detail: '',
-    placeholder: '',
+    type: "alert",
+    message: "",
+    detail: "",
+    placeholder: "",
     validate: null,
   });
 
@@ -60,8 +56,8 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
 
   const triggerDialog = (config: DialogConfig) => {
     setConfig(config);
-    setInputValue(config.defaultValue || '');
-    setError('');
+    setInputValue(config.defaultValue || "");
+    setError("");
     setOpen(true);
     return new Promise<unknown>((resolve) => {
       resolveRef.current = resolve;
@@ -71,9 +67,10 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
   // 3. Bind the runtime trigger functions to the registry
   useEffect(() => {
     registry.current = {
-      alert: ((message, detail) => triggerDialog({ type: 'alert', message, detail })) as DialogApi["alert"],
-      confirm: ((message, detail) => triggerDialog({ type: 'confirm', message, detail })) as DialogApi["confirm"],
-      prompt: ((message, defaultValue) => triggerDialog({ type: 'prompt', message, defaultValue })) as DialogApi["prompt"],
+      alert: ((message, detail) => triggerDialog({ type: "alert", message, detail })) as DialogApi["alert"],
+      confirm: ((message, detail) => triggerDialog({ type: "confirm", message, detail })) as DialogApi["confirm"],
+      prompt: ((message, defaultValue) =>
+        triggerDialog({ type: "prompt", message, defaultValue })) as DialogApi["prompt"],
     };
   }, []);
 
@@ -84,11 +81,11 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
 
     if (!confirmed) {
       setOpen(false);
-      resolveRef.current(config.type === 'prompt' ? null : false);
+      resolveRef.current(config.type === "prompt" ? null : false);
       return;
     }
 
-    if (config.type === 'prompt' && config.validate) {
+    if (config.type === "prompt" && config.validate) {
       const validationError = config.validate(inputValue);
       if (validationError) {
         setError(validationError);
@@ -97,7 +94,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
     }
 
     setOpen(false);
-    resolveRef.current(config.type === 'prompt' ? inputValue : true);
+    resolveRef.current(config.type === "prompt" ? inputValue : true);
   };
 
   return (
@@ -114,11 +111,9 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
         <DialogTitle sx={{ pb: 1 }}>{config.message}</DialogTitle>
         <DialogContent>
           {config.detail && (
-            <DialogContentText sx={{ mb: config.type === 'prompt' ? 2 : 0 }}>
-              {config.detail}
-            </DialogContentText>
+            <DialogContentText sx={{ mb: config.type === "prompt" ? 2 : 0 }}>{config.detail}</DialogContentText>
           )}
-          {config.type === 'prompt' && (
+          {config.type === "prompt" && (
             <TextField
               autoFocus
               margin="dense"
@@ -131,11 +126,11 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
               onChange={(e) => {
                 setInputValue(e.target.value);
                 if (error) {
-                  setError('');
+                  setError("");
                 }
               }}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
+                if (e.key === "Enter") {
                   handleClose(true);
                 }
               }}
@@ -143,16 +138,16 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
           )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          {config.type !== 'alert' && (
+          {config.type !== "alert" && (
             <Button onClick={() => handleClose(false)} color="inherit">
               Cancel
             </Button>
           )}
           <Button
             onClick={() => handleClose(true)}
-            variant={config.type === 'alert' ? 'text' : 'contained'}
+            variant={config.type === "alert" ? "text" : "contained"}
             disableElevation
-            autoFocus={config.type !== 'prompt'}
+            autoFocus={config.type !== "prompt"}
           >
             OK
           </Button>

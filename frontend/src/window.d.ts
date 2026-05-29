@@ -17,7 +17,7 @@ interface VirtualKeyboard extends EventTarget {
   addEventListener(
     type: "geometrychange",
     listener: (this: VirtualKeyboard, ev: Event) => unknown,
-    options?: boolean | AddEventListenerOptions
+    options?: boolean | AddEventListenerOptions,
   ): void;
 }
 
@@ -65,7 +65,7 @@ declare global {
     csOpenApplet(
       name: string,
       node: Node | React.ComponentType,
-      options?: { position?: AppletPosition; width?: number; height?: number }
+      options?: { position?: AppletPosition; width?: number; height?: number },
     ): void;
     csCloseApplet: (name: string) => void;
     csGetApplet: ((name: string) => AppletData | undefined) | (() => AppletData[]);

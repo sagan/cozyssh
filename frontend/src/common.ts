@@ -178,8 +178,8 @@ export const CS_EVENT_TERMINAL_DISCONNECTED = "cs:terminal-disconnected";
 export const CS_EVENT_TERMINAL_DATA = "cs:terminal-data";
 
 export const remoteCommandOptions = [
-  "tmux attach || tmux new", // Linux / pwsh, tmux or psmux ( https://github.com/psmux/psmux  )
-  "tmux attach -or (tmux new)", // Windows PowerShell 5.1+
+  "tmux attach -t cozy_%i || tmux new -s cozy_%i", // Linux / pwsh, tmux or psmux ( https://github.com/psmux/psmux  )
+  "tmux attach -t cozy_%i -or (tmux new -s cozy_%i)", // Windows PowerShell 5.1+
 ] as const;
 
 export const defaultTheme = createTheme({
@@ -214,7 +214,7 @@ export function getVar(
   vars: Record<string, string>,
   localVars: Record<string, string>,
   name: string,
-  defaultValue = ""
+  defaultValue = "",
 ): string {
   if (localVars["local_" + name]) {
     return localVars["local_" + name]!;
@@ -238,7 +238,7 @@ export function getIntVar(
   vars: Record<string, string>,
   localVars: Record<string, string>,
   name: string,
-  defaultValue = 0
+  defaultValue = 0,
 ): number {
   const value = getVar(vars, localVars, name);
   if (value === "") {

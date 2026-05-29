@@ -20,7 +20,7 @@ import {
   VAR_CS_SCROLL_LINES,
 } from "./constants";
 import { type NewTabDialogViewMode, getIntVar, getKeyCombination } from "./common";
-import { type TerminalRefMap, getStore, setActivePaneId, setActiveTabId } from "./store";
+import { type TerminalRefMap, getStore, setActivePaneId, setActiveTabId, setTabs } from "./store";
 
 export interface KeyboardManagerOptions {
   handleCloneSession: (id: string, cloneInSameTab?: boolean) => void;
@@ -73,7 +73,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
       const groups = [
         DEFAULT_BUTTON_GROUP,
         ...Array.from(
-          new Set(buttons.map((b) => b.group || DEFAULT_BUTTON_GROUP).filter((g) => g !== DEFAULT_BUTTON_GROUP))
+          new Set(buttons.map((b) => b.group || DEFAULT_BUTTON_GROUP).filter((g) => g !== DEFAULT_BUTTON_GROUP)),
         ),
       ].sort();
 
@@ -154,34 +154,32 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         case "alt+h":
         case "alt+shift+h": {
           e.preventDefault();
-          const activeTab = tabs.find((t) => t.id === activeTabId);
-          if (!activeTab) {
+          const idx = tabs.findIndex((t) => t.id === activeTabId);
+          if (idx < 0) {
             return;
           }
+          const activeTab = tabs[idx];
           if (activeTab.panes.length <= 1 || keycomb === "alt+shift+h") {
             // single pane tab or shift pressed, switch to prev tab
-            const idx = tabs.findIndex((t) => t.id === activeTabId);
-            if (idx >= 0) {
-              const prevIdx = (idx - 1 + tabs.length) % tabs.length;
-              const targetTab = tabs[prevIdx];
-              const targetPaneId = targetTab.activePaneId;
-              setActiveTabId(targetTab.id);
-              setActivePaneId(targetPaneId);
-              (document.activeElement as HTMLElement)?.blur?.();
-              terminalRefs[targetPaneId]?.focus();
-              setTimeout(() => terminalRefs[targetPaneId]?.focus(), 100);
-            }
+            const prevIdx = (idx - 1 + tabs.length) % tabs.length;
+            const targetTab = tabs[prevIdx];
+            const targetPaneId = targetTab.activePaneId;
+            setActiveTabId(targetTab.id);
+            setActivePaneId(targetPaneId);
+            setTabs((tabs) => tabs.map((t) => (t.id === targetTab.id ? { ...t, activePaneId: targetPaneId } : t)));
+            (document.activeElement as HTMLElement)?.blur?.();
+            terminalRefs[targetPaneId]?.focus();
+            setTimeout(() => terminalRefs[targetPaneId]?.focus(), 100);
           } else {
             // multiple-panes tab, switch to prev pane of this tab
-            const idx = activeTab.panes.findIndex((p) => p.id === activePaneId);
-            if (idx >= 0) {
-              const nextIdx = (idx - 1 + activeTab.panes.length) % activeTab.panes.length;
-              const target = activeTab.panes[nextIdx];
-              setActivePaneId(target.id);
-              (document.activeElement as HTMLElement)?.blur?.();
-              terminalRefs[target.id]?.focus();
-              setTimeout(() => terminalRefs[target.id]?.focus(), 100);
-            }
+            const paneIdx = activeTab.panes.findIndex((p) => p.id === activePaneId);
+            const prevPaneIdx = (paneIdx - 1 + activeTab.panes.length) % activeTab.panes.length;
+            const targetPaneId = activeTab.panes[prevPaneIdx].id;
+            setActivePaneId(targetPaneId);
+            setTabs((tabs) => tabs.map((t) => (t.id === activeTab.id ? { ...t, activePaneId: targetPaneId } : t)));
+            (document.activeElement as HTMLElement)?.blur?.();
+            terminalRefs[targetPaneId]?.focus();
+            setTimeout(() => terminalRefs[targetPaneId]?.focus(), 100);
           }
           return;
         }
@@ -189,34 +187,32 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         case "alt+l":
         case "alt+shift+l": {
           e.preventDefault();
-          const activeTab = tabs.find((t) => t.id === activeTabId);
-          if (!activeTab) {
+          const idx = tabs.findIndex((t) => t.id === activeTabId);
+          if (idx < 0) {
             return;
           }
+          const activeTab = tabs[idx];
           if (activeTab.panes.length <= 1 || keycomb === "alt+shift+l") {
             // single pane tab or shift pressed, switch to next tab
-            const idx = tabs.findIndex((t) => t.id === activeTabId);
-            if (idx >= 0) {
-              const prevIdx = (idx + 1) % tabs.length;
-              const targetTab = tabs[prevIdx];
-              const targetPaneId = targetTab.activePaneId;
-              setActiveTabId(targetTab.id);
-              setActivePaneId(targetPaneId);
-              (document.activeElement as HTMLElement)?.blur?.();
-              terminalRefs[targetPaneId]?.focus();
-              setTimeout(() => terminalRefs[targetPaneId]?.focus(), 100);
-            }
+            const nextIdx = (idx + 1) % tabs.length;
+            const targetTab = tabs[nextIdx];
+            const targetPaneId = targetTab.activePaneId;
+            setActiveTabId(targetTab.id);
+            setActivePaneId(targetPaneId);
+            setTabs((tabs) => tabs.map((t) => (t.id === targetTab.id ? { ...t, activePaneId: targetPaneId } : t)));
+            (document.activeElement as HTMLElement)?.blur?.();
+            terminalRefs[targetPaneId]?.focus();
+            setTimeout(() => terminalRefs[targetPaneId]?.focus(), 100);
           } else {
             // multiple-panes tab, switch to next pane of this tab
-            const idx = activeTab.panes.findIndex((p) => p.id === activePaneId);
-            if (idx >= 0) {
-              const nextIdx = (idx + 1) % activeTab.panes.length;
-              const target = activeTab.panes[nextIdx];
-              setActivePaneId(target.id);
-              (document.activeElement as HTMLElement)?.blur?.();
-              terminalRefs[target.id]?.focus();
-              setTimeout(() => terminalRefs[target.id]?.focus(), 100);
-            }
+            const paneIdx = activeTab.panes.findIndex((p) => p.id === activePaneId);
+            const nextPaneIdx = (paneIdx + 1) % activeTab.panes.length;
+            const targetPaneId = activeTab.panes[nextPaneIdx].id;
+            setActivePaneId(targetPaneId);
+            setTabs((tabs) => tabs.map((t) => (t.id === activeTab.id ? { ...t, activePaneId: targetPaneId } : t)));
+            (document.activeElement as HTMLElement)?.blur?.();
+            terminalRefs[targetPaneId]?.focus();
+            setTimeout(() => terminalRefs[targetPaneId]?.focus(), 100);
           }
           return;
         }
@@ -233,10 +229,22 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
 
         case "alt+g": {
           e.preventDefault();
-          const currentTab = tabs.find((t) => t.id === activeTabId);
-          if (currentTab && currentTab.panes.length > 0) {
-            const pid = currentTab.panes[0].id;
+          const activeTab = tabs.find((t) => t.id === activeTabId);
+          if (activeTab?.activePaneId) {
+            const pid = activeTab.activePaneId;
             setActivePaneId(pid);
+            setTimeout(() => terminalRefs[pid]?.focus(), 100);
+          }
+          return;
+        }
+
+        case "alt+shift+g": {
+          e.preventDefault();
+          const activeTab = tabs.find((t) => t.id === activeTabId);
+          if (activeTab && activeTab.panes.length > 1) {
+            const pid = activeTab.panes[0].id;
+            setActivePaneId(pid);
+            setTabs((tabs) => tabs.map((t) => (t.id === activeTabId ? { ...t, activePaneId: pid } : t)));
             setTimeout(() => terminalRefs[pid]?.focus(), 100);
           }
           return;
