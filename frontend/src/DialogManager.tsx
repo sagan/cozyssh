@@ -290,8 +290,14 @@ export default function DialogManager({
             }
           }
 
-          if (buttonId && buttons.find((b) => b.id === buttonId)) {
-            if (!(await dialogs.confirm(`Button with ID "${buttonId}" already exists. Overwrite it?`))) {
+          if (buttonId) {
+            const btn = buttons.find((b) => b.id === buttonId);
+            if (
+              btn &&
+              !(await dialogs.confirm(
+                `Button "${btn.name}" (id: "${buttonId}") already exists in group "${btn.group}". Overwrite it?`,
+              ))
+            ) {
               return;
             }
           }

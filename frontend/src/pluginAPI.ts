@@ -383,7 +383,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     for (let i = start; i <= end; i++) {
       const line = buffer.getLine(i);
       if (line) {
-        lines.push(line.translateToString().trimEnd());
+        lines.push(line.translateToString(true));
       }
     }
     return lines.join("\n");

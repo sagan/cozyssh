@@ -398,7 +398,7 @@ func Run(ctx context.Context, args []string) error {
 				if btn.Id == "" {
 					btn.Id = config.RandString(12, false)
 				}
-				cfg.AddButton(&btn)
+				cfg.UpsertButton(&btn)
 				w.WriteHeader(http.StatusOK)
 			default:
 				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -416,7 +416,7 @@ func Run(ctx context.Context, args []string) error {
 					return
 				}
 				btn.Id = id
-				cfg.UpdateButton(&btn)
+				cfg.UpsertButton(&btn)
 				w.WriteHeader(http.StatusOK)
 			case http.MethodDelete:
 				cfg.RemoveButton(id)
@@ -452,18 +452,11 @@ func Run(ctx context.Context, args []string) error {
 				http.Error(w, "Bad Request", http.StatusBadRequest)
 				return
 			}
-			for k, v := range updates {
-				if v == nil {
-					delete(cfg.Vars, k)
-				} else {
-					cfg.Vars[k] = *v
-				}
-			}
-			if err := cfg.Save(); err != nil {
+			if err := cfg.UpdateVars(updates); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			w.WriteHeader(http.StatusOK)
+			w.WriteHeader(http.StatusNoContent)
 		}))))
 
 	mux.Handle("/api/fetch", securityMiddleware(auth.Middleware(http.HandlerFunc(

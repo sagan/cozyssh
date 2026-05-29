@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/yaml.v3"
@@ -25,6 +26,7 @@ type Config struct {
 	ConfigDir             string               `yaml:"-"` // internal use
 	Vars                  map[string]string    `yaml:"vars" json:"vars"`
 	InsecureIgnoreHostKey bool                 `yaml:"insecure_ignore_host_key"`
+	mu                    sync.Mutex
 }
 
 func LoadConfig(customDir string) (*Config, error) {
@@ -58,7 +60,7 @@ func LoadConfig(customDir string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
-	cfg.SortButtons()
+	cfg.sortButtons()
 
 	if cfg.Addr == "" {
 		cfg.Addr = "127.0.0.1:8022"
@@ -153,15 +155,18 @@ func (c *Config) VerifyPassword(password string) bool {
 }
 
 func (c *Config) ChangeAppPassword(newPassword string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
 	c.AppPasswordHash = string(hash)
-	return c.Save()
+	return c.save()
 }
 
-func (c *Config) Save() error {
+func (c *Config) save() error {
 	f, err := os.OpenFile(c.ConfigPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
@@ -174,19 +179,37 @@ func (c *Config) Save() error {
 }
 
 func (c *Config) ResetAppPassword() (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	password := RandString(22, false)
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return "", err
 	}
 	c.AppPasswordHash = string(hash)
-	if err := c.Save(); err != nil {
+	if err := c.save(); err != nil {
 		return "", err
 	}
 	return password, nil
 }
 
-func (c *Config) AddButton(btn *models.ButtonData) error {
+func (c *Config) UpsertButton(btn *models.ButtonData) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if btn.Id == "" {
+		return fmt.Errorf("button id is required")
+	}
+
+	for i, b := range c.Buttons {
+		if b.Id == btn.Id {
+			c.Buttons[i] = btn
+			c.sortButtons()
+			return c.save()
+		}
+	}
+
 	if btn.Order == 0 {
 		maxOrder := 0
 		for _, b := range c.Buttons {
@@ -201,33 +224,28 @@ func (c *Config) AddButton(btn *models.ButtonData) error {
 		}
 	}
 	c.Buttons = append(c.Buttons, btn)
-	c.SortButtons()
-	return c.Save()
-}
-
-func (c *Config) UpdateButton(btn *models.ButtonData) error {
-	for i, b := range c.Buttons {
-		if b.Id == btn.Id {
-			c.Buttons[i] = btn
-			c.SortButtons()
-			return c.Save()
-		}
-	}
-	return nil
+	c.sortButtons()
+	return c.save()
 }
 
 func (c *Config) RemoveButton(id string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	for i, b := range c.Buttons {
 		if b.Id == id {
 			c.Buttons = append(c.Buttons[:i], c.Buttons[i+1:]...)
-			return c.Save()
+			return c.save()
 		}
 	}
 	return nil
 }
 
 func (c *Config) MoveButton(id string, direction int) error {
-	c.SortButtons() // Ensure we starts from sorted
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.sortButtons() // Ensure we starts from sorted
 	idx := -1
 	for i, b := range c.Buttons {
 		if b.Id == id {
@@ -326,13 +344,13 @@ func (c *Config) MoveButton(id string, direction int) error {
 	if hasDuplicates {
 		c.ResequenceButtons()
 	} else {
-		c.SortButtons()
+		c.sortButtons()
 	}
 
-	return c.Save()
+	return c.save()
 }
 
-func (c *Config) SortButtons() {
+func (c *Config) sortButtons() {
 	sort.Slice(c.Buttons, func(i, j int) bool {
 		if c.Buttons[i].Order != c.Buttons[j].Order {
 			return c.Buttons[i].Order < c.Buttons[j].Order
@@ -348,6 +366,21 @@ func (c *Config) ResequenceButtons() {
 }
 
 func (c *Config) SortAndResequenceButtons() {
-	c.SortButtons()
+	c.sortButtons()
 	c.ResequenceButtons()
+}
+
+func (c *Config) UpdateVars(updates map[string]*string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for k, v := range updates {
+		if v == nil {
+			delete(c.Vars, k)
+		} else {
+			c.Vars[k] = *v
+		}
+	}
+
+	return c.save()
 }

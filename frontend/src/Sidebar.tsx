@@ -67,6 +67,7 @@ export default function Sidebar({
   onRefresh,
   hosts,
   fetchHosts,
+  filterRef,
 }: {
   sysHostname: string;
   appVersion: string;
@@ -81,6 +82,7 @@ export default function Sidebar({
   onRefresh?: () => void;
   hosts: HostData[];
   fetchHosts: () => void;
+  filterRef?: React.RefObject<HTMLInputElement | null>;
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -140,7 +142,8 @@ export default function Sidebar({
   const [tagsExpanded, setTagsExpanded] = useState(false);
   const [showTagsToggle, setShowTagsToggle] = useState(false);
   const tagsContainerRef = useRef<HTMLDivElement>(null);
-  const filterRef = useRef<HTMLInputElement>(null);
+  const localFilterRef = useRef<HTMLInputElement>(null);
+  const resolvedFilterRef = filterRef || localFilterRef;
   const [selectedIndex, setSelectedIndex] = useState(-1);
 
   // Host CRUD State
@@ -472,17 +475,6 @@ export default function Sidebar({
     }
   }, [filterStr, flatFilteredHosts]);
 
-  useEffect(() => {
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if (e.altKey && (e.key === "i" || e.key === "I")) {
-        e.preventDefault();
-        filterRef.current?.focus();
-      }
-    };
-    window.addEventListener("keydown", handleGlobalKeyDown);
-    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, []);
-
   const handleFilterKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === "ArrowDown" || (e.altKey && e.key === "j")) {
@@ -497,11 +489,11 @@ export default function Sidebar({
         if (selectedIndex >= 0 && selectedIndex < flatFilteredHosts.length) {
           onSelect(flatFilteredHosts[selectedIndex].name);
           setFilterStr("");
-          filterRef.current?.blur();
+          resolvedFilterRef.current?.blur();
         }
       }
     },
-    [flatFilteredHosts, onSelect, selectedIndex],
+    [flatFilteredHosts, onSelect, selectedIndex, resolvedFilterRef],
   );
 
   const uniqueTags = useMemo(() => {
@@ -589,7 +581,7 @@ export default function Sidebar({
       <Box sx={{ px: 2, pb: 1, display: "flex", flexDirection: "column", gap: 1 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <TextField
-            inputRef={filterRef}
+            inputRef={resolvedFilterRef}
             size="small"
             type="search"
             placeholder="Filter hosts or #tag..."
@@ -641,7 +633,7 @@ export default function Sidebar({
                       } else {
                         setFilterStr(`#${tag} `);
                       }
-                      filterRef.current?.focus();
+                      resolvedFilterRef.current?.focus();
                     }}
                     onContextMenu={(e) => handleTagContextMenu(e, tag)}
                     sx={{
@@ -1143,7 +1135,7 @@ export default function Sidebar({
                   fullWidth
                   label="RemoteCommand (Optional)"
                   size="small"
-                  placeholder="e.g. tmux attach -t cozy_%i || tmux new -s cozy_%i"
+                  placeholder="Use %i for session id"
                 />
               )}
             />

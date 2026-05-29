@@ -31,6 +31,7 @@ declare global {
     __CS_VERSION__: string;
     __CS_USE_STORE__: UseStore;
     __CS_PASSTHROUGH_SHORTCUTS__: Set<string>;
+    __CS_DISABLE_SHORTCUTS__: Set<string>;
     csFocus: (paneId?: string) => void;
     csNotify: (msg: string, severity: Severity = "info") => void;
     csOpen: (target: HostData | string | (HostData | string)[], options?: { name?: string }) => void;

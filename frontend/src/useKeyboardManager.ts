@@ -42,7 +42,12 @@ export interface KeyboardManagerOptions {
   setSearchOpen: (open: boolean) => void;
   /** Getter for the live terminal ref map */
   getTerminalRefs: () => TerminalRefMap;
+  /** Ref to the sidebar filter input */
+  sidebarFilterRef?: React.RefObject<HTMLInputElement | null>;
 }
+
+const disableShortcuts = new Set<string>();
+window.__CS_DISABLE_SHORTCUTS__ = disableShortcuts;
 
 export function useKeyboardManager(options: KeyboardManagerOptions): void {
   const {
@@ -56,6 +61,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
     searchInputRef,
     setSearchOpen,
     getTerminalRefs,
+    sidebarFilterRef,
   } = options;
 
   useEffect(() => {
@@ -111,6 +117,10 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         return;
       }
 
+      if (disableShortcuts.has(keycomb)) {
+        return;
+      }
+
       // ── Named shortcuts ───────────────────────────────────────────────────
       switch (keycomb) {
         case "alt+c":
@@ -149,6 +159,13 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         case "alt+s":
           e.preventDefault();
           handleOpenScratchpad();
+          return;
+
+        case "alt+i":
+          if (!document.querySelector("body > div.MuiDialog-root")) {
+            e.preventDefault();
+            sidebarFilterRef?.current?.focus();
+          }
           return;
 
         case "alt+h":
@@ -370,5 +387,6 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
     setSearchOpen,
     getTerminalRefs,
     handleCloneSession,
+    sidebarFilterRef,
   ]);
 }

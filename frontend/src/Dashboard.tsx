@@ -186,6 +186,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const sidebarFilterRef = useRef<HTMLInputElement>(null);
 
   // localVars uses useLocalStorage for persistence; synced into store for pluginAPI
   const [localVars, setLocalVars] = useLocalStorage<Record<string, string>>(BROWSER_STORAGE_KEY_LOCAL_VARS, {});
@@ -1332,12 +1333,22 @@ export default function Dashboard({ initialData }: DashboardProps) {
           }
           switch (btn.payload) {
             case "COPY": {
-              term.selectAll();
-              const textCopy = term.getSelection().trim();
-              if (textCopy) {
-                navigator.clipboard.writeText(textCopy);
+              const xterm = term.getXterm();
+              if (!xterm) {
+                return;
               }
-              term.clearSelection();
+              const buffer = xterm.buffer.active;
+              let text = "";
+              for (let i = 0; i < xterm.rows; i++) {
+                const line = buffer.getLine(i);
+                if (line) {
+                  text += line.translateToString(true) + "\n";
+                }
+              }
+              text = text.trim();
+              if (text) {
+                navigator.clipboard.writeText(text);
+              }
               term.focus();
               break;
             }
@@ -1354,7 +1365,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               for (let i = start; i < end; i++) {
                 const line = buffer.getLine(i);
                 if (line) {
-                  text += line.translateToString().trim() + "\n";
+                  text += line.translateToString(true) + "\n";
                 }
               }
               text = text.trim();
@@ -1559,6 +1570,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     searchInputRef,
     setSearchOpen,
     getTerminalRefs: () => terminalRefs.current,
+    sidebarFilterRef,
   });
 
   const handleSaveButton = useCallback(async () => {
@@ -1737,6 +1749,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             handleOpenScratchpad();
             setMobileOpen(false);
           }}
+          filterRef={sidebarFilterRef}
         />
         <Box
           id="ui-fix-spacer"

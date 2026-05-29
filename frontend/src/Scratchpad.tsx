@@ -408,6 +408,8 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
               <Tab
                 key={p.id}
                 value={p.id}
+                data-page-id={p.id}
+                data-page-title={p.title}
                 label={
                   <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                     {p.locked && <LockIcon sx={{ fontSize: 14 }} color="action" />}

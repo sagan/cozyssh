@@ -20,7 +20,7 @@ func TestButtonSorting(t *testing.T) {
 		},
 	}
 
-	cfg.SortButtons()
+	cfg.sortButtons()
 
 	expectedIDs := []string{"3", "2", "1"}
 	for i, b := range cfg.Buttons {
@@ -119,13 +119,13 @@ func TestAddButtonDefaultOrder(t *testing.T) {
 		},
 	}
 
-	cfg.AddButton(&models.ButtonData{Id: "2", Name: "B"})
+	cfg.UpsertButton(&models.ButtonData{Id: "2", Name: "B"})
 	if cfg.Buttons[1].Order != 20 {
 		t.Errorf("Expected new button to have order 20, got %d", cfg.Buttons[1].Order)
 	}
 
 	cfg.Buttons = []*models.ButtonData{}
-	cfg.AddButton(&models.ButtonData{Id: "3", Name: "C"})
+	cfg.UpsertButton(&models.ButtonData{Id: "3", Name: "C"})
 	if cfg.Buttons[0].Order != 10 {
 		t.Errorf("Expected first button to have order 10, got %d", cfg.Buttons[0].Order)
 	}
