@@ -118,14 +118,14 @@ const virtualModulesImportRegex = (() => {
   const moduleNames = Object.keys(virtualModules).map(escapeRegExp).join("|");
   return new RegExp(
     `((?:from|import)\\s+['"])(${moduleNames})(['"])|(import\\s*\\(\\s*['"])(${moduleNames})(['"]\\))`,
-    "g",
+    "g"
   );
 })();
 
 export async function runScript(
   btn: Pick<ButtonData, "id" | "name" | "type" | "payload">,
   notify: (msg: string, severity?: Severity) => void,
-  getTerminalRefs: () => TerminalRefMap,
+  getTerminalRefs: () => TerminalRefMap
 ) {
   let moduleObj: Record<string, unknown>;
   let cached = false;
@@ -185,7 +185,7 @@ export async function runScript(
   } else if (cached) {
     notify(
       `Script ${btn.name} is already imported & cached, and has no run function. Reload the page to clear the cache`,
-      "info",
+      "info"
     );
     return;
   }
@@ -507,7 +507,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
       const existing = prev.find((a) => a.name === name);
       if (existing) {
         return prev.map((a) =>
-          a.name === name ? { ...a, node, width: options.width ?? a.width, height: options.height ?? a.height } : a,
+          a.name === name ? { ...a, node, width: options.width ?? a.width, height: options.height ?? a.height } : a
         );
       }
       return [
@@ -708,7 +708,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
       "csDeleteHost",
     ] as const;
     for (const k of keys) {
-      delete (window as Partial<Window>)[k];
+      delete (window as Partial<typeof globalThis>)[k];
     }
   };
 }
