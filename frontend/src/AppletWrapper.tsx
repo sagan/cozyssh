@@ -133,6 +133,9 @@ export default function AppletWrapper({ applet, onClose, onSwitchPosition, onFoc
   if (applet.position === "sidebar") {
     return (
       <Box
+        className="applet"
+        data-name={applet.name}
+        data-position={applet.position}
         sx={{
           borderBottom: "2px solid #5d00ff",
           bgcolor: "background.paper",
@@ -213,7 +216,12 @@ export default function AppletWrapper({ applet, onClose, onSwitchPosition, onFoc
   if (applet.position === "dialog") {
     const isReactNode = !(applet.node instanceof Node);
     return (
-      <Box sx={{ flexGrow: 1, overflow: "auto", p: 1, position: "relative", minHeight: 150 }}>
+      <Box
+        className="applet"
+        data-name={applet.name}
+        data-position={applet.position}
+        sx={{ flexGrow: 1, overflow: "auto", p: 1, position: "relative", minHeight: 150 }}
+      >
         {isReactNode ? (
           React.isValidElement(applet.node) ? (
             applet.node
@@ -231,6 +239,9 @@ export default function AppletWrapper({ applet, onClose, onSwitchPosition, onFoc
 
   return (
     <Box
+      className="applet"
+      data-name={applet.name}
+      data-position={applet.position}
       ref={wrapperRef}
       onMouseDown={onFocus}
       sx={{
