@@ -45,7 +45,7 @@ import {
   generatePassword,
   removePassFromHost,
 } from "./common";
-import { setActivePaneId, setActiveTabId, useStore, type TabData } from "./store";
+import { type TabData, getStore, setActivePaneId, setActiveTabId, useStore } from "./store";
 import NewTabDialog from "./NewTabDialog";
 import type { ScratchpadHandle } from "./Scratchpad";
 import type { TerminalHandle } from "./Terminal";
@@ -212,7 +212,7 @@ export default function DialogManager({
       }
 
       try {
-        const response = await window.csFetch(url);
+        const response = await csFetch(url);
         if (!response.ok) {
           setImportTip({
             msg: `Failed to fetch ${url} : Server responded with status ${response.status}.`,
@@ -297,7 +297,7 @@ export default function DialogManager({
             if (
               btn &&
               !(await dialogs.confirm(
-                `Button "${btn.name}" (id: "${buttonId}") already exists in group "${btn.group}". Overwrite it?`,
+                `Button "${btn.name}" (id: "${buttonId}") already exists in group "${btn.group}". Overwrite it?`
               ))
             ) {
               return;
@@ -339,7 +339,7 @@ export default function DialogManager({
         });
       }
     },
-    [buttonFormData.group, buttonFormData.order, buttons, setButtonFormData],
+    [buttonFormData.group, buttonFormData.order, buttons, setButtonFormData]
   );
 
   const handleAddFromUrl = useCallback(async () => {
@@ -373,15 +373,43 @@ export default function DialogManager({
                 {tab.type !== "scratchpad" && (
                   <>
                     {tab.isPinned ? (
-                      <MenuItem onClick={() => handleUnpinTab(memoTabId)}>Unpin tab</MenuItem>
+                      <MenuItem
+                        onClick={() => {
+                          handleUnpinTab(memoTabId);
+                          setTimeout(() => terminalRefs.current[getStore().activePaneId]?.focus(), 50);
+                        }}
+                      >
+                        Unpin tab
+                      </MenuItem>
                     ) : tab.panes.length === 1 ? (
-                      <MenuItem onClick={() => handlePinTab(memoTabId)}>Pin tab</MenuItem>
+                      <MenuItem
+                        onClick={() => {
+                          handlePinTab(memoTabId);
+                          setTimeout(() => terminalRefs.current[getStore().activePaneId]?.focus(), 50);
+                        }}
+                      >
+                        Pin tab
+                      </MenuItem>
                     ) : null}
                     {tab.isPinned &&
                       (tab.isLocked ? (
-                        <MenuItem onClick={() => handleUnlockTab(memoTabId)}>Unlock tab</MenuItem>
+                        <MenuItem
+                          onClick={() => {
+                            handleUnlockTab(memoTabId);
+                            setTimeout(() => terminalRefs.current[getStore().activePaneId]?.focus(), 50);
+                          }}
+                        >
+                          Unlock tab
+                        </MenuItem>
                       ) : (
-                        <MenuItem onClick={() => handleLockTab(memoTabId)}>Lock tab</MenuItem>
+                        <MenuItem
+                          onClick={() => {
+                            handleLockTab(memoTabId);
+                            setTimeout(() => terminalRefs.current[getStore().activePaneId]?.focus(), 50);
+                          }}
+                        >
+                          Lock tab
+                        </MenuItem>
                       ))}
                   </>
                 )}
@@ -395,7 +423,16 @@ export default function DialogManager({
                 )}
                 {tab.type !== "scratchpad" && (
                   <>
-                    <MenuItem onClick={() => handleReconnectTab(memoTabId)}>Reconnect</MenuItem>
+                    <MenuItem
+                      onClick={() => {
+                        handleReconnectTab(memoTabId);
+                        setTimeout(() => {
+                          terminalRefs.current[getStore().activePaneId]?.focus();
+                        }, 50);
+                      }}
+                    >
+                      Reconnect
+                    </MenuItem>
                     <MenuItem onClick={handleRename}>Rename tab</MenuItem>
                   </>
                 )}
@@ -567,10 +604,10 @@ export default function DialogManager({
                     e.target.value === "terminal_function"
                       ? "COPY"
                       : e.target.value === "misc"
-                        ? "NEXT_BUTTON_GROUP"
-                        : e.target.value === "open_terminal"
-                          ? LOCAL_NAME
-                          : "",
+                      ? "NEXT_BUTTON_GROUP"
+                      : e.target.value === "open_terminal"
+                      ? LOCAL_NAME
+                      : "",
                 })
               }
               slotProps={{ select: { native: true } }}
@@ -821,7 +858,9 @@ export default function DialogManager({
         open={newTabDialogOpen}
         onClose={() => {
           setNewTabDialogOpen(false);
-          setTimeout(() => window.csFocus(), 0);
+          setTimeout(() => {
+            terminalRefs.current[getStore().activePaneId]?.focus();
+          }, 0);
         }}
         hosts={hosts}
         recents={recents}
@@ -855,10 +894,10 @@ export default function DialogManager({
               const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
               let user = "root";
               let hostname = host;
-              if (host.includes("@")) {
-                const parts = host.split("@");
-                user = parts[0];
-                hostname = parts[1];
+              const i = host.lastIndexOf("@");
+              if (i !== -1) {
+                user = host.slice(0, i);
+                hostname = host.slice(i + 1);
               }
               try {
                 await fetch("/api/hosts", {

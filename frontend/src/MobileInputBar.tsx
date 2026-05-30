@@ -174,7 +174,7 @@ const BTN_SX = (wide?: boolean) =>
     fontFamily: "monospace",
     flexShrink: 0,
     textTransform: "none",
-  }) as const;
+  } as const);
 
 const PANEL_BTN_SX = (wide?: boolean) =>
   ({
@@ -187,7 +187,7 @@ const PANEL_BTN_SX = (wide?: boolean) =>
     textTransform: "none",
     bgcolor: "background.paper",
     "&:active": { bgcolor: "action.selected" },
-  }) as const;
+  } as const);
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function MobileInputBar({

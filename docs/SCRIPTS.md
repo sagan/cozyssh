@@ -1,62 +1,61 @@
-# CozySSH Custom Scripting API
+## CozySSH Scripting API
 
-CozySSH allows you to extend its functionality by writing custom scripts (JavaScript or TypeScript). Scripts are executed in the browser environment and have access to powerful `cs*` prefix functions and `cs:*` custom events to interact with the terminal, the backend, and the application state. It's also possible to import some CozySSH frontend bundled ES modules (like `react`) in your custom script.
+CozySSH allows you to extend its functionality by writing custom scripts (JavaScript or TypeScript). Scripts are executed in the browser environment and have access to powerful `cs*` prefix functions and `cs:*` custom events to interact with the terminal, the backend, and the application state. It's also possible to import some CozySSH frontend bundled ES modules (like `react`) in your script.
 
-- [CozySSH Custom Scripting API](#cozyssh-custom-scripting-api)
-  - [General Usage](#general-usage)
-  - [Available modules](#available-modules)
-  - [Available global variables](#available-global-variables)
-  - [Available global functions](#available-global-functions)
-    - [`csOpenApplet(name: string, node: Node | React.ComponentType, options?: { position?: 'widget' | 'sidebar' | 'dialog', width?: number, height?: number }): void`](#csopenappletname-string-node-node--reactcomponenttype-options--position-widget--sidebar--dialog-width-number-height-number--void)
-    - [`csCloseApplet(name: string): void`](#cscloseappletname-string-void)
-    - [`csGetApplet(name: string): AppletData | undefined`, `csGetApplet(): AppletData[]`](#csgetappletname-string-appletdata--undefined-csgetapplet-appletdata)
-    - [`csGetVar(name: string): string | undefined`, `csGetVar(): Record<string, string>`](#csgetvarname-string-string--undefined-csgetvar-recordstring-string)
-    - [`csSetVar(name: string, value: string | undefined): Promise<void>`, `csSetVar(vars: Record<string, string | undefined>): Promise<void>`](#cssetvarname-string-value-string--undefined-promisevoid-cssetvarvars-recordstring-string--undefined-promisevoid)
-    - [`csGetTerminal(paneId?: string): Terminal | undefined`](#csgetterminalpaneid-string-terminal--undefined)
-    - [`csGetTerminalHandle(paneId?: string): TerminalHandle | undefined`](#csgetterminalhandlepaneid-string-terminalhandle--undefined)
-    - [`csGetShellIntegration(paneId?: string): ShellIntegration | undefined`](#csgetshellintegrationpaneid-string-shellintegration--undefined)
-    - [`csSendData(data: string, paneId?: string): void`](#cssenddatadata-string-paneid-string-void)
-    - [`csGetTerminalContents(lines = 100, paneId?: string) : string`](#csgetterminalcontentslines--100-paneid-string--string)
-    - [`csFocus(paneId?: string): void`](#csfocuspaneid-string-void)
-    - [`csNotify(msg: string, severity: 'success' | 'info' | 'warning' | 'error' = 'info'): void`](#csnotifymsg-string-severity-success--info--warning--error--info-void)
-    - [`csGetAll(): AllObject`](#csgetall-allobject)
-    - [`csOpen(target: HostData | string | (HostData | string)[], options?: { name?: string }): void`](#csopentarget-hostdata--string--hostdata--string-options--name-string--void)
-    - [`csClose(tabOrPaneId?: string): void`](#csclosetaborpaneid-string-void)
-    - [`csFetch(url: string, options?: RequestInit): Promise<Response>`](#csfetchurl-string-options-requestinit-promiseresponse)
-    - [`csExec(cmdline: string): Promise<{ error: unknown, stdout: string, stderr: string }>`](#csexeccmdline-string-promise-error-unknown-stdout-string-stderr-string-)
-    - [`csRefresh(): Promise<void>`](#csrefresh-promisevoid)
-    - [`csSetTheme(options: unknown, ...args: unknown[]): void`](#cssetthemeoptions-unknown-args-unknown-void)
-    - [`csUpdateButton(btn: ButtonData | ButtonData[]): Promise<void>`](#csupdatebuttonbtn-buttondata--buttondata-promisevoid)
-    - [`csDeleteButton(id: string): Promise<void>`](#csdeletebuttonid-string-promisevoid)
-    - [`csUpdateHost(host: Host): Promise<void>`](#csupdatehosthost-host-promisevoid)
-    - [`csDeleteHost(name: string): Promise<void>`](#csdeletehostname-string-promisevoid)
-    - [csAlert, csConfirm, csPrompt](#csalert-csconfirm-csprompt)
-  - [Client-side Events](#client-side-events)
-    - [`cs:terminal-new`](#csterminal-new)
-    - [`cs:terminal-change`](#csterminal-change)
-    - [`cs:terminal-connected`](#csterminal-connected)
-    - [`cs:terminal-disconnected`](#csterminal-disconnected)
-    - [`cs:terminal-resize`](#csterminal-resize)
-    - [`cs:terminal-data`](#csterminal-data)
-    - [`cs:shell-integration`](#csshell-integration)
-  - [Example Snippets](#example-snippets)
-    - [Display current terminal info](#display-current-terminal-info)
-    - [Open a local shell](#open-a-local-shell)
-    - [Run command on backend and notify result](#run-command-on-backend-and-notify-result)
-    - [Open all servers with a specific tag in split-screen](#open-all-servers-with-a-specific-tag-in-split-screen)
-    - [CORS-free API Fetch](#cors-free-api-fetch)
-    - [Persistent Variables (Shared State)](#persistent-variables-shared-state)
-    - [Custom UI Applet](#custom-ui-applet)
-    - [More Examples](#more-examples)
+- [CozySSH Scripting API](#cozyssh-scripting-api)
+- [General Usage](#general-usage)
+- [CozySSH Plugins](#cozyssh-plugins)
+- [Available modules](#available-modules)
+- [Available global variables](#available-global-variables)
+- [Available global functions](#available-global-functions)
+  - [`csOpenApplet(name: string, node: Node | React.ComponentType, options?: { position?: 'widget' | 'sidebar' | 'dialog', width?: number, height?: number }): void`](#csopenappletname-string-node-node--reactcomponenttype-options--position-widget--sidebar--dialog-width-number-height-number--void)
+  - [`csCloseApplet(name: string): void`](#cscloseappletname-string-void)
+  - [`csGetApplet(name: string): AppletData | undefined`, `csGetApplet(): AppletData[]`](#csgetappletname-string-appletdata--undefined-csgetapplet-appletdata)
+  - [`csGetVar(name: string): string | undefined`, `csGetVar(): Record<string, string>`](#csgetvarname-string-string--undefined-csgetvar-recordstring-string)
+  - [`csSetVar(name: string, value: string | undefined): Promise<void>`, `csSetVar(vars: Record<string, string | undefined>): Promise<void>`](#cssetvarname-string-value-string--undefined-promisevoid-cssetvarvars-recordstring-string--undefined-promisevoid)
+  - [`csGetTerminal(paneId?: string): Terminal | undefined`](#csgetterminalpaneid-string-terminal--undefined)
+  - [`csGetTerminalHandle(paneId?: string): TerminalHandle | undefined`](#csgetterminalhandlepaneid-string-terminalhandle--undefined)
+  - [`csGetShellIntegration(paneId?: string): ShellIntegration | undefined`](#csgetshellintegrationpaneid-string-shellintegration--undefined)
+  - [`csSendData(data: string, paneId?: string): void`](#cssenddatadata-string-paneid-string-void)
+  - [`csGetTerminalContents(lines = 100, paneId?: string) : string`](#csgetterminalcontentslines--100-paneid-string--string)
+  - [`csFocus(paneId?: string): void`](#csfocuspaneid-string-void)
+  - [`csNotify(msg: string, severity: 'success' | 'info' | 'warning' | 'error' = 'info'): void`](#csnotifymsg-string-severity-success--info--warning--error--info-void)
+  - [`csGetAll(): AllObject`](#csgetall-allobject)
+  - [`csOpen(target: HostData | string | (HostData | string)[], options?: { name?: string }): void`](#csopentarget-hostdata--string--hostdata--string-options--name-string--void)
+  - [`csClose(tabOrPaneId?: string): void`](#csclosetaborpaneid-string-void)
+  - [`csFetch(url: string, options?: RequestInit): Promise<Response>`](#csfetchurl-string-options-requestinit-promiseresponse)
+  - [`csExec(cmdline: string): Promise<{ error: unknown, stdout: string, stderr: string }>`](#csexeccmdline-string-promise-error-unknown-stdout-string-stderr-string-)
+  - [`csRefresh(): Promise<void>`](#csrefresh-promisevoid)
+  - [`csSetTheme(options: unknown, ...args: unknown[]): void`](#cssetthemeoptions-unknown-args-unknown-void)
+  - [`csUpdateButton(btn: ButtonData | ButtonData[]): Promise<void>`](#csupdatebuttonbtn-buttondata--buttondata-promisevoid)
+  - [`csDeleteButton(id: string): Promise<void>`](#csdeletebuttonid-string-promisevoid)
+  - [`csUpdateHost(host: Host): Promise<void>`](#csupdatehosthost-host-promisevoid)
+  - [`csDeleteHost(name: string): Promise<void>`](#csdeletehostname-string-promisevoid)
+  - [csAlert, csConfirm, csPrompt](#csalert-csconfirm-csprompt)
+- [Client-side Events](#client-side-events)
+  - [`cs:terminal-new`](#csterminal-new)
+  - [`cs:terminal-change`](#csterminal-change)
+  - [`cs:terminal-connected`](#csterminal-connected)
+  - [`cs:terminal-disconnected`](#csterminal-disconnected)
+  - [`cs:terminal-resize`](#csterminal-resize)
+  - [`cs:terminal-data`](#csterminal-data)
+  - [`cs:shell-integration`](#csshell-integration)
+- [Example Scripts](#example-scripts)
+  - [Display current terminal info](#display-current-terminal-info)
+  - [Open a local shell](#open-a-local-shell)
+  - [Run command on backend and notify result](#run-command-on-backend-and-notify-result)
+  - [CORS-free API Fetch](#cors-free-api-fetch)
+  - [Custom UI Applet](#custom-ui-applet)
+  - [More Examples](#more-examples)
 
 ## General Usage
 
 - **Button Type**: Create or Edit a button and select the type **Run Script**.
 - **Payload**: Enter your script in the payload field.
 - **TypeScript Support**: The editor supports TypeScript syntax highlighting, and scripts are automatically transpiled on-the-fly using [Sucrase](https://github.com/alangpierce/sucrase).
+- **Fully Typed**: The scripting API is fully typed. We provide a auto-generated [TypeScript definition](../frontend/csapi.d.ts) file that can be used in script development to provide full-fledged Code Intelligence. See [CozySSH Plugins][] repository for how to write scripts/plugins.
 - **Auto-run**: You can enable **Auto-run on startup** for a script button. These scripts will execute automatically after the application finishes loading all data (hosts, buttons, variables). This is the recommended way to register global event listeners or initialize custom UI applets.
-- **Execution**: Scripts are executed as ES modules via dynamic `import()`.
-- **Top-level `await`**: Fully supported. You can use `await` directly at the top level of your scripts without wrapping them in an `async` function or IIFE.
+- **Execution**: Scripts are executed as ES modules via dynamic `import()`. You can use all ES module features such as top-lebel `await`.
 - **Awaiting Completion**: The script engine automatically waits for all top-level `await` promises to resolve before finishing execution.
 - **Auto-focus**: By default, scripts will re-focus the terminal after execution.
 - **Module Default Export**: Optionally, the script may provide a default export object with the following optional fields to control the behavior of the scripting engine:
@@ -64,7 +63,9 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
   - `cache`: `boolean` - If provided and `true`, the script will be cached when it's first imported. You may want to also provide a `run` function in this case otherwise clicking the script's button will have no effect after the first time it's imported. The cache is cleared when the browser page is reloaded.
   - `noFocus`: `boolean` - If provided and `true`, the script will not focus the terminal after execution.
 
-The scripting API is completed typed. We provide a auto-generated [TypeScript definition](../frontend/csapi.d.ts) file. See [cozyssh-plugins](https://github.com/sagan/cozyssh-plugins) repository for how to write scripts/plugins.
+## CozySSH Plugins
+
+CozySSH maintains a scripts/plugins [repository][CozySSH Plugins] and provides several official plugins. All plugins in the repository can be installed directly from CozySSH frontend. See [CozySSH Plugins][] for details.
 
 ## Available modules
 
@@ -239,7 +240,7 @@ Returns an object containing all the data from the CozySSH application. Sample o
 
 Opens a new tab or split-screen tab.
 
-- `target`: The host object, connection string or array of up to 4 host objects or connection strings for split-screen. The connection string is either fixed `local` string (for local shell) or in `[username[:password]@]hostname[:port]` format. E.g. `user@host`. Note we don't recommend putting password in connection string. CozySSH does not log or store password anywhere but custom scripts are stored on server in plain text files. So be careful with any secrets in custom scripts.
+- `target`: The host object, connection string or array of up to 4 host objects or connection strings for split-screen. The connection string is either fixed `local` string (for local shell) or in `[username[:password]@]hostname[:port]` format. E.g. `user@host`. Note we don't recommend putting password in connection string. CozySSH does not log or store password anywhere but scripts are stored on server in plain text files. So be careful with any secrets in scripts.
 - `options.name`: Optional title for the new tab.
 
 ### `csClose(tabOrPaneId?: string): void`
@@ -301,7 +302,7 @@ Adds or updates button(s) based on the provided data (depending on if `btn.id` i
 
 Sample usage:
 
-```typescript
+```ts
 await csUpdateButton({
   name: "Say Hello",
   type: "send_string",
@@ -317,7 +318,7 @@ Deletes a button from the configuration with the matching `id`.
 
 Sample usage:
 
-```typescript
+```ts
 await csDeleteButton("btn-12345");
 csNotify("Button deleted");
 ```
@@ -358,8 +359,6 @@ csNotify("Host deleted");
 
 The async (non-blocking) version of DOM `alert, confirm, prompt` functions using MUI Dialog.
 
----
-
 ## Client-side Events
 
 CozySSH dispatches various `cs:*` DOM [CustomEvent](https://developer.mozilla.org/en-US/docs/Web/API/CustomEvent) events to the `window` object. You can listen for these events in your scripts (especially those with **Auto-run** enabled) to react to application state changes. Event details is put in `CustomEvent.detail`.
@@ -391,7 +390,7 @@ Fired when a new terminal is created. At this time, the terminal is not yet conn
       (async () => {
         await new Promise((resolve) => setTimeout(resolve, 1000));
         throw new Error("Cancelled by user");
-      })(),
+      })()
     );
   });
   export default {
@@ -441,13 +440,11 @@ Fired when any property of the shell integration state (CWD, command status, his
 - `detail.cwd`, `detail.user`, `detail.hostname`, `detail.isExecuting`, `detail.recentCommands`.
 - `detail.terminal`, `detail.sessionId`, `detail.host`, `detail.is_active_terminal`.
 
----
-
-## Example Snippets
+## Example Scripts
 
 ### Display current terminal info
 
-```typescript
+```ts
 const term = csGetTerminal();
 if (!term) {
   csNotify("No active terminal");
@@ -458,54 +455,25 @@ if (!term) {
 
 ### Open a local shell
 
-```typescript
+```ts
 csOpen("local", { name: "LOCAL" });
 ```
 
 ### Run command on backend and notify result
 
-```typescript
+```ts
 const result = await csExec("whoami");
 if (!result.error) {
   csNotify(`Running as: ${result.stdout.trim()}`);
 }
 ```
 
-### Open all servers with a specific tag in split-screen
-
-```typescript
-const { hosts } = csGetAll();
-const productionHosts = hosts.filter((h) => h.tags?.includes("prod"));
-if (productionHosts.length > 0) {
-  csOpen(productionHosts.slice(0, 4), { name: "PROD CLUSTER" });
-}
-```
-
 ### CORS-free API Fetch
 
-```typescript
+```ts
 const response = await csFetch("https://api.github.com/repos/sagan/cozyssh");
 const data = await response.json();
 csNotify(`CozySSH Stars: ${data.stargazers_count}`);
-```
-
-### Persistent Variables (Shared State)
-
-Variables set with `csSetVar` are stored on the server and are available to ALL scripts. This is useful for storing API keys, preferences, or sharing data between different widgets.
-
-```typescript
-// Set a persistent variable
-await csSetVar("MY_THEME", "dark");
-
-// Later, or in another script
-const theme = csGetVar("MY_THEME");
-csNotify("Current theme: " + theme);
-
-// Bulk updates
-await csSetVar({
-  KEY_A: "value1",
-  KEY_B: "value2",
-});
 ```
 
 ### Custom UI Applet
@@ -596,4 +564,6 @@ export default {
 
 ### More Examples
 
-You can find more examples in [CozySSH Plugins](https://github.com/sagan/cozyssh-plugins).
+You can find more examples in [CozySSH Plugins][].
+
+[CozySSH Plugins]: https://github.com/sagan/cozyssh-plugins

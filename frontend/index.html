@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -6,6 +6,8 @@
     <link rel="manifest" href="/manifest.json" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CozySSH</title>
+    <style id="cozy_css"></style>
+    <style id="cozy_local_css"></style>
     <script>
       (function () {
         const startupParams = new URLSearchParams(location.search);
@@ -18,22 +20,20 @@
           if (!data) {
             continue;
           }
+          const prefix = key === "cozy_localvars" ? "local_" : "";
           try {
             const vars = JSON.parse(data);
-            if (vars?.class) {
+            let variable = vars?.[prefix + "class"];
+            if (variable) {
               let className = document.documentElement.getAttribute("class") || "";
-              if (className != "") {
+              if (className !== "") {
                 className += " ";
               }
-              className += vars.class;
+              className += variable;
               document.documentElement.setAttribute("class", className);
             }
-            if (vars?.css) {
-              const styleSheet = document.createElement("style");
-              styleSheet.id = key + "_css";
-              styleSheet.textContent = vars.css;
-              document.head.appendChild(styleSheet);
-            }
+            variable = vars?.[prefix + "css"] || "";
+            document.getElementById("cozy_" + prefix + "css").textContent = variable;
           } catch {}
         }
       })();

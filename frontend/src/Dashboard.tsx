@@ -422,29 +422,26 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const handleCloseInputDialog = useCallback(() => {
     setInputDialogOpen(false);
     setTimeout(() => {
-      terminalRefs.current[activePaneId]?.focus();
+      terminalRefs.current[getStore().activePaneId]?.focus();
     }, 50);
-  }, [activePaneId]);
+  }, []);
 
   const handleCloseSearch = useCallback(() => {
     setSearchOpen(false);
-    const term = terminalRefs.current[activePaneId];
+    const term = terminalRefs.current[getStore().activePaneId];
     if (term && "getXterm" in term) {
       term.clearSearchDecorations();
       setTimeout(() => term.focus(), 50);
     }
-  }, [activePaneId]);
+  }, []);
 
-  const handleSendKey = useCallback(
-    (key: string) => {
-      const term = terminalRefs.current[activePaneId];
-      if (term && "getXterm" in term) {
-        term.sendData(key);
-        setTimeout(() => term.focus(), 0);
-      }
-    },
-    [activePaneId]
-  );
+  const handleSendKey = useCallback((key: string) => {
+    const term = terminalRefs.current[getStore().activePaneId];
+    if (term && "getXterm" in term) {
+      term.sendData(key);
+      setTimeout(() => term.focus(), 0);
+    }
+  }, []);
 
   const sendParsedString = useCallback(async (input: string) => {
     const scope = sendScopeRef.current;
@@ -758,7 +755,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               hash !== LOCAL_NAME
                 ? hostsData.find((h) =>
                     hash.includes("@")
-                      ? hash == `${h.user || "root"}@${h.hostname}`
+                      ? hash === `${h.user || "root"}@${h.hostname}`
                       : h.name === hash || h.hostname === hash
                   )
                 : { name: LOCAL_NAME };
@@ -1135,9 +1132,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
       body: JSON.stringify({ id: paneId, host, title: tab.title } satisfies TabsPinRequest),
     });
     setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, isLocked: false } : t)));
-    if (getStore().activeTabId === id) {
-      setActiveTabId(paneId);
-    }
   }, []);
 
   const handleRename = useCallback(async () => {
@@ -1170,6 +1164,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
       }
       setTabs((prev) => prev.map((t) => (t.id === targetId ? { ...t, title: newTitle } : t)));
     }
+    setTimeout(() => {
+      terminalRefs.current[getStore().activePaneId]?.focus();
+    }, 50);
   }, [contextMenu]);
 
   const handleCloneSession = useCallback((id: string, cloneInSameTab?: boolean) => {
@@ -1267,6 +1264,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
     if (tab) {
       setActivePaneId(tab.activePaneId);
     }
+    setTimeout(() => {
+      terminalRefs.current[getStore().activePaneId]?.focus();
+    }, 50);
   }, [contextMenu]);
 
   const handleCloseRight = useCallback(() => {
@@ -1285,6 +1285,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
       }
       return newTabs;
     });
+    setTimeout(() => {
+      terminalRefs.current[getStore().activePaneId]?.focus();
+    }, 50);
   }, [contextMenu]);
 
   useEffect(() => {
@@ -1607,8 +1610,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, [buttonFormData, editingButton, setActiveGroup]);
 
   useEffect(() => {
-    if (window.__CS_AUTORUN_DONE__ === undefined && buttonsLoaded) {
-      window.__CS_AUTORUN_DONE__ = 0;
+    if (__CS_AUTORUN_DONE__ === undefined && buttonsLoaded) {
+      __CS_AUTORUN_DONE__ = 0;
       (async () => {
         if (noautorun !== 1 && startupParams.get(VAR_NOAUTORUN) !== "1") {
           const scriptsToRun = getStore().buttons.filter((b) => b.type === "run_script" && b.autorun === 1);
@@ -1620,7 +1623,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             }
           }
         }
-        window.__CS_AUTORUN_DONE__ = 1;
+        __CS_AUTORUN_DONE__ = 1;
       })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1676,7 +1679,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         return;
       }
       setButtonDialogOpen(false);
-      setTimeout(() => window.csFocus(), 0);
+      setTimeout(() => csFocus(), 0);
     },
     [buttonFormData, initialBtnFormData]
   );

@@ -52,7 +52,7 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess?: (data: Full
         dialogs.alert("Login failed. Check the terminal output for the initial App Password.");
       }
     },
-    [onLoginSuccess, password],
+    [onLoginSuccess, password]
   );
 
   const handleClearCache = useCallback(async () => {

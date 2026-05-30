@@ -6,7 +6,7 @@ import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowRightIcon from "@mui/icons-material/KeyboardArrowRight";
 
-import type { AppletPosition } from "./pluginAPI";
+export type AppletPosition = "widget" | "sidebar" | "dialog";
 
 interface AppletWrapperProps {
   applet: AppletData;

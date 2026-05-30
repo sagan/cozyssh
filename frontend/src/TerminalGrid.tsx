@@ -241,8 +241,8 @@ export default function TerminalGrid({
                                     ...t,
                                     panes: t.panes.map((p) => (p.id === pane.id ? { ...p, state } : p)),
                                   }
-                                : t,
-                            ),
+                                : t
+                            )
                           );
                         }}
                         onShellIntegrationChange={(info) => {
@@ -252,8 +252,8 @@ export default function TerminalGrid({
                         onTabStateChange={(state) => {
                           setTabs((prev) =>
                             prev.map((t) =>
-                              t.id === tab.id ? { ...t, isPinned: state.isPinned, isLocked: state.isLocked } : t,
-                            ),
+                              t.id === tab.id ? { ...t, isPinned: state.isPinned, isLocked: state.isLocked } : t
+                            )
                           );
                         }}
                         onStolen={() => {
@@ -266,8 +266,8 @@ export default function TerminalGrid({
                                     isLocked: false,
                                     panes: t.panes.map((p) => (p.id === pane.id ? { ...p, state: "stolen" } : p)),
                                   }
-                                : t,
-                            ),
+                                : t
+                            )
                           );
                         }}
                         onManualReconnect={(wasStolen) => {
@@ -282,11 +282,11 @@ export default function TerminalGrid({
                                       panes: t.panes.map((p) =>
                                         p.id === pane.id
                                           ? { ...p, id: newPaneId, sessionId: newPaneId, state: "connecting" }
-                                          : p,
+                                          : p
                                       ),
                                     }
-                                  : t,
-                              ),
+                                  : t
+                              )
                             );
                             setActivePaneId(newPaneId);
                           }

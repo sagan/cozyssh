@@ -151,7 +151,7 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
   - **Stateless Authentication**: HMAC-SHA256 token-based authentication with a simple App Password.
   - **Non-Local Restriction**: Automatically blocks access from non-local, non-HTTPS environments to prevent credential sniffing.
   - **Password Management**: Reset your application password anytime via the CLI using the `-do-reset-password` flag.
-- **Custom Scripting (JS/TS)**: Fully programmable / extendable via a built-in powerful & TypeScript-capable scripting engine. See [Scripts Documentation](docs/SCRIPTS.md).
+- **Custom Scripting**: Fully programmable / extendable via a built-in powerful & TypeScript-capable scripting engine. See [Scripts Documentation](docs/SCRIPTS.md). It also has a [Plugins Repository](https://github.com/sagan/cozyssh-plugins) which includes many official scripts/plugins that can be installed directly from CozySSH frontend.
 - **Self-Hosted**: Distributed as a single Go binary that embeds the entire React frontend.
 
 ## Getting Started

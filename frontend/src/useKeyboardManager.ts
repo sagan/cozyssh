@@ -46,8 +46,7 @@ export interface KeyboardManagerOptions {
   sidebarFilterRef?: React.RefObject<HTMLInputElement | null>;
 }
 
-const disableShortcuts = new Set<string>();
-window.__CS_DISABLE_SHORTCUTS__ = disableShortcuts;
+export const disableShortcuts = new Set<string>();
 
 export function useKeyboardManager(options: KeyboardManagerOptions): void {
   const {

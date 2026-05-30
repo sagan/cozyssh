@@ -273,7 +273,7 @@ export default function Sidebar({
     if (targets.length > 0) {
       onSelectTagAsSplit(
         tag,
-        targets.map((h) => h.name),
+        targets.map((h) => h.name)
       );
     }
   }, [hosts, onSelectTagAsSplit, tagContextMenu]);
@@ -435,9 +435,9 @@ export default function Sidebar({
         return;
       }
       setDialogOpen(false);
-      setTimeout(() => window.csFocus(), 0);
+      setTimeout(() => csFocus(), 0);
     },
-    [formData, initialHostFormData],
+    [formData, initialHostFormData]
   );
 
   const filteredHosts = useMemo(() => {
@@ -493,7 +493,7 @@ export default function Sidebar({
         }
       }
     },
-    [flatFilteredHosts, onSelect, selectedIndex, resolvedFilterRef],
+    [flatFilteredHosts, onSelect, selectedIndex, resolvedFilterRef]
   );
 
   const uniqueTags = useMemo(() => {
@@ -859,7 +859,7 @@ export default function Sidebar({
         open={settingsOpen}
         onClose={() => {
           setSettingsOpen(false);
-          setTimeout(() => window.csFocus(), 0);
+          setTimeout(() => csFocus(), 0);
         }}
         fullWidth
         maxWidth="sm"

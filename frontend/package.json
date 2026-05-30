@@ -1,8 +1,9 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "0.2.9",
+  "version": "0.2.10",
   "type": "module",
+  "license": "BSD-3-Clause",
   "scripts": {
     "gen-csapi": "dts-bundle-generator --project ./tsconfig.app.json ./src/window.d.ts --inline-declare-global --external-types=react --external-inlines=@xterm/xterm --external-inlines=@xterm/addon-search --external-inlines=zustand --external-inlines=csstype -o ./csapi.d.ts",
     "dev": "vite",

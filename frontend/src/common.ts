@@ -452,7 +452,7 @@ export function nextName(name: string): string {
 }
 
 export function hostTitle(name: string): string {
-  const i = name.indexOf("@");
+  const i = name.lastIndexOf("@");
   if (i !== -1) {
     name = name.slice(i + 1);
   }
@@ -463,7 +463,7 @@ export function hostTitle(name: string): string {
  * "user:pass@host" => "user@host"
  */
 export function removePassFromHost(host: string): string {
-  const i = host.indexOf("@");
+  const i = host.lastIndexOf("@");
   if (i === -1) {
     return host;
   }

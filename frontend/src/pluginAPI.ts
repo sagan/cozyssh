@@ -40,6 +40,7 @@ import {
 } from "./constants";
 import { generatePassword, type Severity } from "./common";
 import {
+  type TerminalRefMap,
   getStore,
   setActivePaneId,
   setActiveTabId,
@@ -47,10 +48,12 @@ import {
   setHosts,
   setTabs,
   setVars,
-  type TerminalRefMap,
+  useStore,
 } from "./store";
 import { dialogs } from "./Dialogs";
-import type { AppletData } from "./AppletWrapper";
+import type { AppletData, AppletPosition } from "./AppletWrapper";
+import { terminalKeyShortcuts } from "./Terminal";
+import { disableShortcuts } from "./useKeyboardManager";
 
 /**
  * The module type of custom script
@@ -65,14 +68,16 @@ export interface CsScriptModule {
  */
 export const moduleCache: Record<string, CsScriptModule> = {};
 
+window.__CS_AUTORUN_DONE__ = undefined;
 window.__CS_MODULECACHE__ = moduleCache;
 window.__CS_VERSION__ = PACKAGE_JSON_VERSION;
+window.__CS_USE_STORE__ = useStore;
+window.__CS_PASSTHROUGH_SHORTCUTS__ = terminalKeyShortcuts;
+window.__CS_DISABLE_SHORTCUTS__ = disableShortcuts;
 
 window.csAlert = dialogs.alert;
 window.csConfirm = dialogs.confirm;
 window.csPrompt = dialogs.prompt;
-
-export type AppletPosition = "widget" | "sidebar" | "dialog";
 
 export interface CsExecResult {
   error: unknown;
@@ -125,14 +130,14 @@ const virtualModulesImportRegex = (() => {
   const moduleNames = Object.keys(virtualModules).map(escapeRegExp).join("|");
   return new RegExp(
     `((?:from|import)\\s+['"])(${moduleNames})(['"])|(import\\s*\\(\\s*['"])(${moduleNames})(['"]\\))`,
-    "g",
+    "g"
   );
 })();
 
 export async function runScript(
   btn: Pick<ButtonData, "id" | "name" | "type" | "payload">,
   notify: (msg: string, severity?: Severity) => void,
-  getTerminalRefs: () => TerminalRefMap,
+  getTerminalRefs: () => TerminalRefMap
 ) {
   let moduleObj: CsScriptModule;
   let cached = false;
@@ -192,7 +197,7 @@ export async function runScript(
   } else if (cached) {
     notify(
       `Script ${btn.name} is already imported & cached, and has no run function. Reload the page to clear the cache`,
-      "info",
+      "info"
     );
     return;
   }
@@ -505,7 +510,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
   window.csOpenApplet = (
     name,
     node,
-    options: { position?: AppletPosition; width?: number | string; height?: number | string } = {},
+    options: { position?: AppletPosition; width?: number | string; height?: number | string } = {}
   ) => {
     let parsedPos: AppletPosition;
     if (options.position === "dialog") {
@@ -522,7 +527,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
       const existing = prev.find((a) => a.name === name);
       if (existing) {
         return prev.map((a) =>
-          a.name === name ? { ...a, node, width: options.width ?? a.width, height: options.height ?? a.height } : a,
+          a.name === name ? { ...a, node, width: options.width ?? a.width, height: options.height ?? a.height } : a
         );
       }
       return [

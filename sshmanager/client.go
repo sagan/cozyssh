@@ -411,31 +411,28 @@ func getSSHClient(name string, term TerminalUI, identity string,
 	var password string
 
 	// Handle user:pass@host:port or user@host:port format
-	if strings.Contains(name, "@") {
-		parts := strings.SplitN(name, "@", 2)
-		userPart := parts[0]
-		hostPart := parts[1]
+	// password may contain special chars, host may contains ":" (ipv6), so we must be careful
+	if i := strings.LastIndex(name, "@"); i != -1 {
+		userPart := name[:i]
+		hostPart := name[i+1:]
 
-		if strings.Contains(userPart, ":") {
-			up := strings.SplitN(userPart, ":", 2)
-			user = up[0]
-			password = up[1]
+		if before, after, found := strings.Cut(userPart, ":"); found {
+			user = before
+			password = after
 		} else {
 			user = userPart
 		}
 
-		if strings.Contains(hostPart, ":") {
-			hp := strings.SplitN(hostPart, ":", 2)
-			host = hp[0]
-			port = hp[1]
+		if i := strings.LastIndex(hostPart, ":"); i != -1 {
+			host = hostPart[:i]
+			port = hostPart[i+1:]
 		} else {
 			host = hostPart
 		}
-	} else if strings.Contains(name, ":") {
+	} else if i := strings.LastIndex(name, ":"); i != -1 {
 		// handle host:port format
-		hp := strings.SplitN(name, ":", 2)
-		host = hp[0]
-		port = hp[1]
+		host = name[:i]
+		port = name[i+1:]
 	}
 
 	if cfg != nil {

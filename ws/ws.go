@@ -142,8 +142,8 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 
 	if sessionID == "" {
 		// Fallback to hostname if no unique ID provided
-		if _, hostname, found := strings.Cut(host, "@"); found {
-			sessionID = hostname
+		if i := strings.LastIndex(host, "@"); i != -1 {
+			sessionID = host[i+1:]
 		} else {
 			sessionID = host
 		}

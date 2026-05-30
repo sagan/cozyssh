@@ -205,7 +205,7 @@ declare global {
   function csOpenApplet(
     name: string,
     node: Node | React.ComponentType,
-    options?: { position?: AppletPosition; width?: number | string; height?: number | string },
+    options?: { position?: AppletPosition; width?: number | string; height?: number | string }
   ): void;
   /**
    * Close a custom UI applet.
@@ -253,7 +253,7 @@ declare global {
     options?: {
       placeholder?: string;
       validate?: (value: string) => string | undefined;
-    },
+    }
   ): Promise<string | null>;
   interface WindowEventMap {
     [CS_EVENT_TERMINAL_NEW]: CustomEvent<CSEventDetailTerminalNew>;

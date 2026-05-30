@@ -7,7 +7,7 @@ interface VirtualKeyboard extends EventTarget {
   addEventListener(
     type: "geometrychange",
     listener: (this: VirtualKeyboard, ev: Event) => unknown,
-    options?: boolean | AddEventListenerOptions,
+    options?: boolean | AddEventListenerOptions
   ): void;
 }
 

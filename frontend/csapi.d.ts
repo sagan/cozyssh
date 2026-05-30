@@ -22279,6 +22279,7 @@ export interface Store {
 }
 declare const useStore: UseBoundStore<StoreApi<Store>>;
 export type UseStore = typeof useStore;
+export type AppletPosition = "widget" | "sidebar" | "dialog";
 export interface AppletData {
 	name: string;
 	node: Node | React.ComponentType;
@@ -22293,7 +22294,6 @@ export interface AppletData {
 export interface CsScriptModule {
 	default?: CsScript;
 }
-export type AppletPosition = "widget" | "sidebar" | "dialog";
 export interface CsExecResult {
 	error: unknown;
 	stdout: string;

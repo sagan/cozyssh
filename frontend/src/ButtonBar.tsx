@@ -109,7 +109,7 @@ export default function ButtonBar({
             data-button-id={btn.id}
             title={`${btn.type} (${btn.order || 0})${btn.autorun ? " (autorun)" : ""}${
               btn.shortcut ? " (" + btn.shortcut.toUpperCase() + ")" : ""
-            }${btn.type != "run_script" ? ": " + btn.payload : ""}`}
+            }${btn.type !== "run_script" ? ": " + btn.payload : ""}`}
             component="div"
             onClick={() => handleButtonClick(btn)}
             onContextMenu={(e) => {

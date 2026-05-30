@@ -3,16 +3,9 @@ import { type ReactNode, useState, useRef, useEffect } from "react";
 import { Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, TextField, Button } from "@mui/material";
 
 export interface DialogApi {
-  alert: (message?: string, detail?: string) => Promise<void>;
-  confirm: (message?: string, detail?: string) => Promise<boolean>;
-  prompt: (
-    message?: string,
-    defaultValue?: string,
-    options?: {
-      placeholder?: string;
-      validate?: (value: string) => string | undefined;
-    },
-  ) => Promise<string | null>;
+  alert: typeof csAlert;
+  confirm: typeof csConfirm;
+  prompt: typeof csPrompt;
 }
 
 interface DialogConfig {

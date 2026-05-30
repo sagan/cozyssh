@@ -157,8 +157,8 @@ export default function TabBar({
                                   bgcolor: isConnected
                                     ? "success.main"
                                     : state.startsWith("connecting")
-                                      ? "warning.main"
-                                      : "error.main",
+                                    ? "warning.main"
+                                    : "error.main",
                                 }}
                                 title={state}
                               />

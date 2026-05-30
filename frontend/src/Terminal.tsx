@@ -97,7 +97,7 @@ const RECENT_COMMANDS_NUM = 10;
 /**
  * These shortcuts should be handled by the terminal / shell itself.
  */
-const terminalKeyShortcuts = new Set([
+export const terminalKeyShortcuts = new Set([
   // TTY / Kernel Signals
   "ctrl+c", // SIGINT (Kill process)
   "ctrl+d", // EOF (End of input / Exit)
@@ -133,8 +133,6 @@ const terminalKeyShortcuts = new Set([
   "ctrl+n", // Fetch next command (Down)
   "alt+.", // Insert last argument of previous command
 ]);
-
-window.__CS_PASSTHROUGH_SHORTCUTS__ = terminalKeyShortcuts;
 
 const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
   (
@@ -849,7 +847,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
         try {
           await Promise.all(promises);
         } catch (error) {
-          window.csNotify(`Error in terminal setup: ${error}`, "error");
+          csNotify(`Error in terminal setup: ${error}`, "error");
           return;
         }
 
