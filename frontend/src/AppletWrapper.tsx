@@ -20,8 +20,8 @@ export interface AppletData {
   name: string;
   node: Node | React.ComponentType;
   position: AppletPosition;
-  width?: number;
-  height?: number;
+  width?: number | string;
+  height?: number | string;
   zIndex?: number;
 }
 
@@ -35,8 +35,8 @@ export default function AppletWrapper({ applet, onClose, onSwitchPosition, onFoc
     height: applet.height || 250,
   }));
   const [position, setPosition] = useState(() => ({
-    x: Math.max(0, window.innerWidth - (applet.width || 320) - 20),
-    y: Math.max(0, window.innerHeight - (applet.height || 250) - 20),
+    x: Math.max(0, window.innerWidth - ((applet.width as number) || 320) - 20),
+    y: Math.max(0, window.innerHeight - ((applet.height as number) || 250) - 20),
   }));
   const dragStartRef = useRef({ x: 0, y: 0, pos: { x: 0, y: 0 } });
 
@@ -86,7 +86,7 @@ export default function AppletWrapper({ applet, onClose, onSwitchPosition, onFoc
         const h = target.offsetHeight;
         if (w > 0 && h > 0) {
           setSize((prev) => {
-            if (Math.abs(prev.width - w) < 1 && Math.abs(prev.height - h) < 1) {
+            if (Math.abs((prev.width as number) - w) < 1 && Math.abs((prev.height as number) - h) < 1) {
               return prev;
             }
             return { width: w, height: h };

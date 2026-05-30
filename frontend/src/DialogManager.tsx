@@ -104,7 +104,8 @@ export interface DialogManagerProps {
   handleButtonClick: (btn: Pick<ButtonData, "id" | "name" | "type" | "payload">) => Promise<void>;
 }
 
-const PluginManagerUrl = "https://raw.githubusercontent.com/sagan/cozyssh-plugins/refs/heads/master/PluginManager.tsx";
+const PluginManagerUrl =
+  "https://raw.githubusercontent.com/sagan/cozyssh-plugins/refs/heads/master/CsPluginManager.tsx";
 
 /**
  * button type, label
@@ -296,7 +297,7 @@ export default function DialogManager({
             if (
               btn &&
               !(await dialogs.confirm(
-                `Button "${btn.name}" (id: "${buttonId}") already exists in group "${btn.group}". Overwrite it?`
+                `Button "${btn.name}" (id: "${buttonId}") already exists in group "${btn.group}". Overwrite it?`,
               ))
             ) {
               return;
@@ -338,7 +339,7 @@ export default function DialogManager({
         });
       }
     },
-    [buttonFormData.group, buttonFormData.order, buttons, setButtonFormData]
+    [buttonFormData.group, buttonFormData.order, buttons, setButtonFormData],
   );
 
   const handleAddFromUrl = useCallback(async () => {
@@ -566,10 +567,10 @@ export default function DialogManager({
                     e.target.value === "terminal_function"
                       ? "COPY"
                       : e.target.value === "misc"
-                      ? "NEXT_BUTTON_GROUP"
-                      : e.target.value === "open_terminal"
-                      ? LOCAL_NAME
-                      : "",
+                        ? "NEXT_BUTTON_GROUP"
+                        : e.target.value === "open_terminal"
+                          ? LOCAL_NAME
+                          : "",
                 })
               }
               slotProps={{ select: { native: true } }}

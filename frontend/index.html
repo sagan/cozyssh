@@ -8,6 +8,10 @@
     <title>CozySSH</title>
     <script>
       (function () {
+        const startupParams = new URLSearchParams(location.search);
+        if (startupParams.get("nocss") === "1") {
+          return;
+        }
         const keys = ["cozy_vars", "cozy_localvars"];
         for (const key of keys) {
           const data = localStorage.getItem(key);

@@ -266,7 +266,7 @@ func Run(ctx context.Context, args []string) error {
 				s.Title = req.Title
 				s.BroadcastTabState()
 			}
-			w.WriteHeader(http.StatusOK)
+			w.WriteHeader(http.StatusNoContent)
 		}))))
 
 	mux.Handle("/api/tabs/lock", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -285,7 +285,7 @@ func Run(ctx context.Context, args []string) error {
 			s.Title = req.Title
 			s.BroadcastTabState()
 		}
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(http.StatusNoContent)
 	}))))
 
 	mux.Handle("/api/tabs/unpin", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -304,7 +304,7 @@ func Run(ctx context.Context, args []string) error {
 			s.BroadcastTabState()
 			session.GlobalManager.ClearInactive(req.Id)
 		}
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(http.StatusNoContent)
 	}))))
 
 	mux.Handle("/api/scratchpad/reload", securityMiddleware(auth.Middleware(http.HandlerFunc(
@@ -338,7 +338,7 @@ func Run(ctx context.Context, args []string) error {
 			if s := session.GlobalManager.Get(req.Id); s != nil {
 				s.Steal()
 			}
-			w.WriteHeader(http.StatusOK)
+			w.WriteHeader(http.StatusNoContent)
 		}))))
 
 	mux.Handle("/api/sessions/close", securityMiddleware(auth.Middleware(http.HandlerFunc(
@@ -353,7 +353,7 @@ func Run(ctx context.Context, args []string) error {
 				return
 			}
 			session.GlobalManager.CloseIfNotLocked(req.Id)
-			w.WriteHeader(http.StatusOK)
+			w.WriteHeader(http.StatusNoContent)
 		}))))
 
 	mux.Handle("/api/sessions/close_all_normal", securityMiddleware(auth.Middleware(http.HandlerFunc(
@@ -363,7 +363,7 @@ func Run(ctx context.Context, args []string) error {
 				return
 			}
 			session.GlobalManager.CloseAllNormal()
-			w.WriteHeader(http.StatusOK)
+			w.WriteHeader(http.StatusNoContent)
 		}))))
 
 	mux.Handle("/api/tabs/rename", securityMiddleware(auth.Middleware(http.HandlerFunc(
@@ -380,7 +380,7 @@ func Run(ctx context.Context, args []string) error {
 			if s := session.GlobalManager.Get(req.Id); s != nil {
 				s.Title = req.Title
 			}
-			w.WriteHeader(http.StatusOK)
+			w.WriteHeader(http.StatusNoContent)
 		}))))
 
 	mux.Handle("/api/buttons", securityMiddleware(auth.Middleware(http.HandlerFunc(
@@ -389,17 +389,22 @@ func Run(ctx context.Context, args []string) error {
 			case http.MethodGet:
 				w.Header().Set(headers.ContentType, constants.MIME_JSON)
 				json.NewEncoder(w).Encode(cfg.Buttons)
-			case http.MethodPost:
+			case http.MethodPost, http.MethodPut:
+				data, _ := io.ReadAll(r.Body)
+				var btns []*models.ButtonData
+				if err := json.Unmarshal(data, &btns); err == nil {
+					cfg.UpsertButtons(btns)
+					w.WriteHeader(http.StatusNoContent)
+					return
+				}
 				var btn models.ButtonData
-				if err := json.NewDecoder(r.Body).Decode(&btn); err != nil {
+				if err := json.Unmarshal(data, &btn); err != nil {
+					log.Printf("error: %v", err)
 					http.Error(w, "Bad Request", http.StatusBadRequest)
 					return
 				}
-				if btn.Id == "" {
-					btn.Id = config.RandString(12, false)
-				}
 				cfg.UpsertButton(&btn)
-				w.WriteHeader(http.StatusOK)
+				w.WriteHeader(http.StatusNoContent)
 			default:
 				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			}
@@ -409,7 +414,7 @@ func Run(ctx context.Context, args []string) error {
 		func(w http.ResponseWriter, r *http.Request) {
 			id := strings.TrimPrefix(r.URL.Path, "/api/buttons/")
 			switch r.Method {
-			case http.MethodPut:
+			case http.MethodPost, http.MethodPut:
 				var btn models.ButtonData
 				if err := json.NewDecoder(r.Body).Decode(&btn); err != nil {
 					http.Error(w, "Bad Request", http.StatusBadRequest)
@@ -417,10 +422,10 @@ func Run(ctx context.Context, args []string) error {
 				}
 				btn.Id = id
 				cfg.UpsertButton(&btn)
-				w.WriteHeader(http.StatusOK)
+				w.WriteHeader(http.StatusNoContent)
 			case http.MethodDelete:
 				cfg.RemoveButton(id)
-				w.WriteHeader(http.StatusOK)
+				w.WriteHeader(http.StatusNoContent)
 			default:
 				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			}
@@ -438,7 +443,7 @@ func Run(ctx context.Context, args []string) error {
 				return
 			}
 			cfg.MoveButton(req.Id, req.Direction)
-			w.WriteHeader(http.StatusOK)
+			w.WriteHeader(http.StatusNoContent)
 		}))))
 
 	mux.Handle("/api/vars", securityMiddleware(auth.Middleware(http.HandlerFunc(

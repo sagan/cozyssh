@@ -21,7 +21,6 @@ import type { HostData, ButtonData, ExecRequest, ExecResult } from "./api";
 import { version as PACKAGE_JSON_VERSION } from "../package.json";
 import {
   BROWSER_STORAGE_KEY_TOKEN,
-  DEFAULT_BUTTON_GROUP,
   HEADER_AUTHORIZATION,
   HEADER_AUTHORIZATION_BEARER_PREFIX,
   HEADER_CONTENT_TYPE,
@@ -54,9 +53,17 @@ import { dialogs } from "./Dialogs";
 import type { AppletData } from "./AppletWrapper";
 
 /**
+ * The module type of custom script
+ */
+export interface CsScriptModule {
+  default?: CsScript;
+  // [key: string]: unknown;
+}
+
+/**
  * id => moduleObj
  */
-export const moduleCache: Record<string, Record<string, unknown>> = {};
+export const moduleCache: Record<string, CsScriptModule> = {};
 
 window.__CS_MODULECACHE__ = moduleCache;
 window.__CS_VERSION__ = PACKAGE_JSON_VERSION;
@@ -118,16 +125,16 @@ const virtualModulesImportRegex = (() => {
   const moduleNames = Object.keys(virtualModules).map(escapeRegExp).join("|");
   return new RegExp(
     `((?:from|import)\\s+['"])(${moduleNames})(['"])|(import\\s*\\(\\s*['"])(${moduleNames})(['"]\\))`,
-    "g"
+    "g",
   );
 })();
 
 export async function runScript(
   btn: Pick<ButtonData, "id" | "name" | "type" | "payload">,
   notify: (msg: string, severity?: Severity) => void,
-  getTerminalRefs: () => TerminalRefMap
+  getTerminalRefs: () => TerminalRefMap,
 ) {
-  let moduleObj: Record<string, unknown>;
+  let moduleObj: CsScriptModule;
   let cached = false;
 
   if (!btn.id || !moduleCache[btn.id]) {
@@ -167,7 +174,7 @@ export async function runScript(
       // Always clean up the URL to prevent memory leaks
       URL.revokeObjectURL(url);
     }
-    if (btn.id && moduleObj.cache) {
+    if (btn.id && moduleObj.default?.cache) {
       moduleCache[btn.id] = moduleObj;
     }
   } else {
@@ -175,9 +182,9 @@ export async function runScript(
     cached = true;
   }
 
-  if (typeof moduleObj.run === "function") {
+  if (moduleObj.default?.run) {
     try {
-      await moduleObj.run();
+      await moduleObj.default.run();
     } catch (e) {
       console.error(`Script ${btn.name} run() Error:`, e);
       notify(`Script ${btn.name} run() Error: ${e}`, "error");
@@ -185,12 +192,12 @@ export async function runScript(
   } else if (cached) {
     notify(
       `Script ${btn.name} is already imported & cached, and has no run function. Reload the page to clear the cache`,
-      "info"
+      "info",
     );
     return;
   }
 
-  if (!moduleObj.noFocus) {
+  if (!moduleObj.default?.noFocus) {
     const refs = getTerminalRefs();
     const activePaneId = getStore().activePaneId;
     refs[activePaneId]?.focus();
@@ -355,6 +362,10 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     };
   };
 
+  window.csRunScript = async (script: ButtonData) => {
+    await runScript(script, cb.notify, cb.getTerminalRefs);
+  };
+
   window.csSendData = (data: string, paneId?: string) => {
     const { activePaneId } = getStore();
     const refs = cb.getTerminalRefs();
@@ -415,7 +426,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     }
   };
 
-  window.csNotify = (msg: string, severity) => cb.notify(msg, severity);
+  window.csNotify = cb.notify;
 
   window.csFetch = async (url: string, options = {}) => {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
@@ -491,7 +502,11 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
 
   // ── Applet API ────────────────────────────────────────────────────────────
 
-  window.csOpenApplet = (name, node, options: { position?: AppletPosition; width?: number; height?: number } = {}) => {
+  window.csOpenApplet = (
+    name,
+    node,
+    options: { position?: AppletPosition; width?: number | string; height?: number | string } = {},
+  ) => {
     let parsedPos: AppletPosition;
     if (options.position === "dialog") {
       parsedPos = "dialog";
@@ -507,7 +522,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
       const existing = prev.find((a) => a.name === name);
       if (existing) {
         return prev.map((a) =>
-          a.name === name ? { ...a, node, width: options.width ?? a.width, height: options.height ?? a.height } : a
+          a.name === name ? { ...a, node, width: options.width ?? a.width, height: options.height ?? a.height } : a,
         );
       }
       return [
@@ -535,33 +550,17 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
 
   // ── Button / Host CRUD API ────────────────────────────────────────────────
 
-  window.csUpdateButton = async (btn: ButtonData): Promise<string> => {
-    const { buttons } = getStore();
-    const targetId = btn.id || generatePassword(12);
-    const exists = btn.id ? buttons.some((b) => b.id === btn.id) : false;
-
+  window.csUpdateButton = async (btn: ButtonData | ButtonData[]): Promise<void> => {
+    const btns = Array.isArray(btn) ? btn : [btn];
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    const method = exists ? METHOD_PUT : METHOD_POST;
-    const url = exists ? `/api/buttons/${targetId}` : "/api/buttons";
 
-    const body: ButtonData = {
-      id: targetId,
-      name: btn.name || "",
-      type: btn.type || "send_string",
-      payload: btn.payload || "",
-      group: btn.group || DEFAULT_BUTTON_GROUP,
-      autorun: btn.autorun ?? 0,
-      order: btn.order ?? 0,
-      shortcut: btn.shortcut || "",
-    };
-
-    const res = await fetch(url, {
-      method,
+    const res = await fetch("/api/buttons", {
+      method: METHOD_POST,
       headers: {
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
         [HEADER_CONTENT_TYPE]: MIME_JSON,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(btns),
     });
 
     if (!res.ok) {
@@ -578,8 +577,6 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
       const data: ButtonData[] = await refreshRes.json();
       setButtons(data || []);
     }
-
-    return targetId;
   };
 
   window.csDeleteButton = async (id: string): Promise<void> => {
@@ -688,6 +685,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
       "csGetTerminalHandle",
       "csGetShellIntegration",
       "csGetAll",
+      "csRunScript",
       "csSendData",
       "csGetTerminalContents",
       "csFocus",

@@ -26,7 +26,7 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
     - [`csExec(cmdline: string): Promise<{ error: unknown, stdout: string, stderr: string }>`](#csexeccmdline-string-promise-error-unknown-stdout-string-stderr-string-)
     - [`csRefresh(): Promise<void>`](#csrefresh-promisevoid)
     - [`csSetTheme(options: unknown, ...args: unknown[]): void`](#cssetthemeoptions-unknown-args-unknown-void)
-    - [`csUpdateButton(btn: ButtonData): Promise<string>`](#csupdatebuttonbtn-buttondata-promisestring)
+    - [`csUpdateButton(btn: ButtonData | ButtonData[]): Promise<void>`](#csupdatebuttonbtn-buttondata--buttondata-promisevoid)
     - [`csDeleteButton(id: string): Promise<void>`](#csdeletebuttonid-string-promisevoid)
     - [`csUpdateHost(host: Host): Promise<void>`](#csupdatehosthost-host-promisevoid)
     - [`csDeleteHost(name: string): Promise<void>`](#csdeletehostname-string-promisevoid)
@@ -61,10 +61,12 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
 - **Top-level `await`**: Fully supported. You can use `await` directly at the top level of your scripts without wrapping them in an `async` function or IIFE.
 - **Awaiting Completion**: The script engine automatically waits for all top-level `await` promises to resolve before finishing execution.
 - **Auto-focus**: By default, scripts will re-focus the terminal after execution.
-- **Module Exports**: Optionally, the script may export some fields to control the behavior of the scripting engine:
-  - `export function run() {}` : the entrypoint of the script. if exported, the `run` function will be executed after the script is imported. It will always be executed each time the button is clicked, even if the script is cached (see `cache` below).
-  - `export const cache = true;` : if exported and `true`, the script will be cached when it's first imported. You may want to also export `run` in this case otherwise clicking the button will have no effect after the first time it's imported. The cache is cleared when the browser page is reloaded.
-  - `export const noFocus = true;` : if exported and `true`, the script will not focus the terminal after execution.
+- **Module Default Export**: Optionally, the script may provide a default export object with the following optional fields to control the behavior of the scripting engine:
+  - `run`: `() => void | Promise<void>` - The entrypoint of the script. If provided, it will be executed after the script is imported. It will always be executed each time the button is clicked, even if the script is cached (see `cache` below).
+  - `cache`: `boolean` - If provided and `true`, the script will be cached when it's first imported. You may want to also provide a `run` function in this case otherwise clicking the script's button will have no effect after the first time it's imported. The cache is cleared when the browser page is reloaded.
+  - `noFocus`: `boolean` - If provided and `true`, the script will not focus the terminal after execution.
+
+The scripting API is completed typed. We provide a auto-generated [TypeScript definition](../frontend/csapi.d.ts) file. See [cozyssh-plugins](https://github.com/sagan/cozyssh-plugins) repository for how to write scripts/plugins.
 
 ## Available modules
 
@@ -87,7 +89,7 @@ You can also import any external module, for example from a CDN url.
 CozySSH sets some global variables in the browser's window object.
 
 - `window.__CS_AUTORUN_DONE__` : `undefined | 0 | 1` - `1` - If all autorun scripts have been executed, unset (undefined) or 0 otherwise. It can be used to determine if the script is executed via auto-run or via clicking the button.
-- `window.__CS_MODULECACHE__` : `Record<string, Record<string, any>>` - The module cache of imported scripts. The key is the button internal id.
+- `window.__CS_MODULECACHE__` : `Record<string, CsScriptModule>` - The module cache of imported scripts. The key is the button internal id.
 - `window.__CS_VERSION__` : `string` - The current frontend version of CozySSH. E.g. `0.1.26`.
 - `window.__CS_PASSTHROUGH_SHORTCUTS__` : `Set<string>` - The list of key combinations that should be passed through to the terminal if terminal has focus. Each element is a key combination string such as `ctrl+shift+m` (all lowercase, modifiers in `ctrl,alt,shift,meta` order). Some key combinations (like `ctrl+c`, `ctrl+d`, etc.) are pre-added to this set by default.
 - `window.__CS_DISABLE_SHORTCUTS__` : `Set<string>` - The list of keyboard shortcuts that should be disabled. The element is in the same format as `__CS_PASSTHROUGH_SHORTCUTS__` element.
@@ -239,7 +241,7 @@ Returns an object containing all the data from the CozySSH application. Sample o
 
 Opens a new tab or split-screen tab.
 
-- `target`: The host object, connection string or array of up to 4 host objects or connection strings for split-screen. The connection string is either fixed `local` string (for local shell) or in `[username[:password]@]hostname[:port]` format. E.g., `user@host`. Note we don't recommend putting password in connection string. CozySSH does not log or store password anywhere but custom scripts are stored on server in plain text files. So be careful with any secrets in custom scripts.
+- `target`: The host object, connection string or array of up to 4 host objects or connection strings for split-screen. The connection string is either fixed `local` string (for local shell) or in `[username[:password]@]hostname[:port]` format. E.g. `user@host`. Note we don't recommend putting password in connection string. CozySSH does not log or store password anywhere but custom scripts are stored on server in plain text files. So be careful with any secrets in custom scripts.
 - `options.name`: Optional title for the new tab.
 
 ### `csClose(tabOrPaneId?: string): void`
@@ -256,7 +258,7 @@ Performs an HTTP request via the CozySSH backend proxy to bypass browser CORS re
 
 ### `csExec(cmdline: string): Promise<{ error: unknown, stdout: string, stderr: string }>`
 
-Executes a shell command on the CozySSH backend server.
+Execute a shell command on the CozySSH backend.
 
 - **Linux/macOS**: Uses `bash -l -c`.
 - **Windows**: Uses `pwsh -l -c` (if `pwsh` is present) or `powershell -Command`.
@@ -295,20 +297,20 @@ The default theme:
 }
 ```
 
-### `csUpdateButton(btn: ButtonData): Promise<string>`
+### `csUpdateButton(btn: ButtonData | ButtonData[]): Promise<void>`
 
-Adds or updates a button in the configuration (depending on if `btn.id` is set), and returns the added / edited button's ID. If `btn.id` is not provided, CozySSH will automatically generate a unique 12-character ID for you.
+Adds or updates button(s) based on the provided data (depending on if `btn.id` is set). If `btn.id` is not provided, CozySSH will automatically generate a unique 12-character ID for each button.
 
 Sample usage:
 
 ```typescript
-const btnId = await csUpdateButton({
+await csUpdateButton({
   name: "Say Hello",
   type: "send_string",
   payload: "echo 'Hello World!'\n",
   group: "Default",
 });
-csNotify(`Button created with ID: ${btnId}`);
+csNotify("Button created");
 ```
 
 ### `csDeleteButton(id: string): Promise<void>`
@@ -394,7 +396,9 @@ Fired when a new terminal is created. At this time, the terminal is not yet conn
       })(),
     );
   });
-  export const cache = true;
+  export default {
+    cache: true,
+  };
   ```
 
 ### `cs:terminal-change`
@@ -580,15 +584,16 @@ const TerminalSizeApplet = () => {
 
 const name = "Terminal Size";
 
-export function run() {
-  if (csGetApplet(name)) {
-    csCloseApplet(name);
-  } else {
-    csOpenApplet(name, TerminalSizeApplet, { position: "widget" });
-  }
-}
-
-export const cache = true;
+export default {
+  cache: true,
+  run() {
+    if (csGetApplet(name)) {
+      csCloseApplet(name);
+    } else {
+      csOpenApplet(name, TerminalSizeApplet, { position: "widget" });
+    }
+  },
+};
 ```
 
 ### Variable Manager
@@ -780,15 +785,16 @@ const SettingsApplet = () => {
 
 const name = "Variable Manager";
 
-export function run() {
-  if (csGetApplet(name)) {
-    csCloseApplet(name);
-  } else {
-    csOpenApplet(name, SettingsApplet, { position: "sidebar" });
-  }
-}
-
-export const cache = true;
+export default {
+  cache: true,
+  run() {
+    if (csGetApplet(name)) {
+      csCloseApplet(name);
+    } else {
+      csOpenApplet(name, SettingsApplet, { position: "sidebar" });
+    }
+  },
+};
 ```
 
 ### AI Assistant
@@ -1137,15 +1143,16 @@ const AIAssistant = () => {
   );
 };
 
-export function run() {
-  if (csGetApplet(AI_ASSISTANT_NAME)) {
-    csCloseApplet(AI_ASSISTANT_NAME);
-  } else {
-    csOpenApplet(AI_ASSISTANT_NAME, AIAssistant, { position: "sidebar" });
-  }
-}
-
-export const cache = true;
+export default {
+  cache: true,
+  run() {
+    if (csGetApplet(AI_ASSISTANT_NAME)) {
+      csCloseApplet(AI_ASSISTANT_NAME);
+    } else {
+      csOpenApplet(AI_ASSISTANT_NAME, AIAssistant, { position: "sidebar" });
+    }
+  },
+};
 ```
 
 ### Cmd History Sidebar Applet
@@ -1317,13 +1324,14 @@ const CmdHistoryApplet = () => {
 
 const APPLET_ID = "CmdHistory";
 
-export function run() {
-  if (csGetApplet(APPLET_ID)) {
-    csCloseApplet(APPLET_ID);
-  } else {
-    csOpenApplet(APPLET_ID, CmdHistoryApplet, { position: "sidebar" });
-  }
-}
-
-export const cache = true;
+export default {
+  cache: true,
+  run() {
+    if (csGetApplet(APPLET_ID)) {
+      csCloseApplet(APPLET_ID);
+    } else {
+      csOpenApplet(APPLET_ID, CmdHistoryApplet, { position: "sidebar" });
+    }
+  },
+};
 ```

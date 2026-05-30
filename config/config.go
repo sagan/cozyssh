@@ -1,6 +1,7 @@
 package config
 
 import (
+	"cozyssh/constants"
 	"cozyssh/models"
 	"crypto/rand"
 	"fmt"
@@ -194,12 +195,70 @@ func (c *Config) ResetAppPassword() (string, error) {
 	return password, nil
 }
 
+// Merge (insert or update) all btns into existing data.
+// If a button with the same ID already exists, it will be updated.
+// If a button with a new ID is provided, it will be added.
+// If the button has empty Id field, assign a new one (update the slice element with new ID).
+// Buttons not present in the input slice will remain in the config.
+func (c *Config) UpsertButtons(btns []*models.ButtonData) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	maxOrder := 0
+	for _, b := range c.Buttons {
+		if b.Order > maxOrder {
+			maxOrder = b.Order
+		}
+	}
+
+	for _, btn := range btns {
+		if btn.Id == "" {
+			btn.Id = RandString(12, false)
+		}
+		if btn.Group == "" {
+			btn.Group = constants.DEFAULT_BUTTON_GROUP
+		}
+		if btn.Type == "" {
+			btn.Type = constants.DEFAULT_BUTTON_TYPE
+		}
+
+		found := false
+		for i, b := range c.Buttons {
+			if b.Id == btn.Id {
+				c.Buttons[i] = btn
+				found = true
+				if btn.Order > maxOrder {
+					maxOrder = btn.Order
+				}
+				break
+			}
+		}
+
+		if !found {
+			if btn.Order == 0 {
+				maxOrder += 10
+				btn.Order = maxOrder
+			}
+			c.Buttons = append(c.Buttons, btn)
+		}
+	}
+
+	c.sortButtons()
+	return c.save()
+}
+
 func (c *Config) UpsertButton(btn *models.ButtonData) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if btn.Id == "" {
-		return fmt.Errorf("button id is required")
+		btn.Id = RandString(12, false)
+	}
+	if btn.Group == "" {
+		btn.Group = constants.DEFAULT_BUTTON_GROUP
+	}
+	if btn.Type == "" {
+		btn.Type = constants.DEFAULT_BUTTON_TYPE
 	}
 
 	for i, b := range c.Buttons {
