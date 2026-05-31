@@ -16,6 +16,7 @@ import {
   VAR_CS_NOWEBGL,
   VAR_CS_NOWEBLINKS,
   WS_PROTOCOL_DUMMY,
+  WS_PROTOCOL_IDENTITY_PREFIX,
   WS_PROTOCOL_QUERY_PREFIX,
 } from "./constants";
 import {
@@ -36,6 +37,7 @@ import {
   getIntVar,
   getKeyCombination,
   base64urlEncode,
+  terminalKeyShortcuts,
 } from "./common";
 
 export interface TerminalHandle {
@@ -71,6 +73,7 @@ export interface TerminalHandle {
 
 interface TerminalProps {
   host: string;
+  options?: Record<string, string>;
   sessionId: string;
   isActive: boolean;
   isCtrlActive?: boolean;
@@ -94,50 +97,11 @@ interface TerminalProps {
 
 const RECENT_COMMANDS_NUM = 10;
 
-/**
- * These shortcuts should be handled by the terminal / shell itself.
- */
-export const terminalKeyShortcuts = new Set([
-  // TTY / Kernel Signals
-  "ctrl+c", // SIGINT (Kill process)
-  "ctrl+d", // EOF (End of input / Exit)
-  "ctrl+q", // XON (Resume screen output)
-  "ctrl+s", // XOFF (Freeze screen output)
-  "ctrl+z", // SIGTSTP (Suspend process)
-  "ctrl+\\", // SIGQUIT (Quit and core dump)
-
-  // Shell / Readline Shortcuts (Emacs Mode) - Navigation
-  "ctrl+a", // Move cursor to beginning of line
-  "ctrl+e", // Move cursor to end of line
-  "ctrl+b", // Move backward one character
-  "ctrl+f", // Move forward one character
-  "alt+b", // Move backward one word
-  "alt+f", // Move forward one word
-  "ctrl+x", // Prefix for chorded commands (e.g., ctrl+x, ctrl+x)
-
-  // Shell / Readline Shortcuts (Emacs Mode) - Editing
-  "ctrl+u", // Cut from cursor to beginning of line
-  "ctrl+k", // Cut from cursor to end of line
-  "ctrl+w", // Cut word before cursor
-  "alt+d", // Cut word after cursor
-  "ctrl+y", // Paste (yank) previously cut text
-  "ctrl+t", // Swap last two characters
-  "alt+t", // Swap current word with previous word
-  "ctrl+h", // Backspace
-  "ctrl+l", // Clear screen and redraw current line
-
-  // Shell / Readline Shortcuts (Emacs Mode) - History & Search
-  "ctrl+r", // Reverse history search
-  "ctrl+g", // Cancel reverse search / current action
-  "ctrl+p", // Fetch previous command (Up)
-  "ctrl+n", // Fetch next command (Down)
-  "alt+.", // Insert last argument of previous command
-]);
-
 const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
   (
     {
       host,
+      options,
       sessionId,
       isActive,
       isCtrlActive,
@@ -351,7 +315,6 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       term.loadAddon(searchAddon);
       searchAddonRef.current = searchAddon;
 
-      console.log("Opening xterm for", host, "on", terminalRef.current);
       term.open(terminalRef.current!);
       xtermRef.current = term;
 
@@ -825,6 +788,12 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
         params.set("cols", String(cols));
         params.set("rows", String(rows));
 
+        if (options) {
+          for (const [key, value] of Object.entries(options)) {
+            params.set(key, value);
+          }
+        }
+
         if (forceReconnectRef.current) {
           params.set("reconnect", "1");
           forceReconnectRef.current = false;
@@ -862,6 +831,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
           websocket_protocols.push(token);
         }
         websocket_protocols.push(WS_PROTOCOL_QUERY_PREFIX + base64urlEncode(params.toString()));
+        if (options?.["identity"]) {
+          websocket_protocols.push(WS_PROTOCOL_IDENTITY_PREFIX + base64urlEncode(options["identity"].toString()));
+        }
 
         isDead = false;
         deathType = null;

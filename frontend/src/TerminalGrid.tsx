@@ -219,6 +219,7 @@ export default function TerminalGrid({
                     ) : (
                       <TerminalComponent
                         key={pane.id}
+                        options={pane.options}
                         ref={(el) => {
                           if (el) terminalRefs.current[pane.id] = el;
                           else delete terminalRefs.current[pane.id];

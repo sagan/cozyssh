@@ -38,7 +38,7 @@ import {
   LOCAL_NAME,
   LOCAL_VAR_PREFIX,
 } from "./constants";
-import { generatePassword, type Severity } from "./common";
+import { type Severity, generatePassword, terminalKeyShortcuts } from "./common";
 import {
   type TerminalRefMap,
   getStore,
@@ -52,7 +52,6 @@ import {
 } from "./store";
 import { dialogs } from "./Dialogs";
 import type { AppletData, AppletPosition } from "./AppletWrapper";
-import { terminalKeyShortcuts } from "./Terminal";
 import { disableShortcuts } from "./useKeyboardManager";
 
 /**
@@ -217,9 +216,9 @@ export interface PluginAPICallbacks {
   /** Apply a new MUI theme */
   setTheme: (options: unknown, ...args: unknown[]) => void;
   /** Open a new terminal tab */
-  handleSelectHost: (host: string, customTitle?: string) => Promise<void>;
+  handleSelectHost: (host: string, customTitle?: string, options?: Record<string, string>) => Promise<void>;
   /** Open a split-pane tab from a tag */
-  handleSelectTagAsSplit: (tag: string, hosts: string[]) => void;
+  handleSelectTagAsSplit: (tag: string, hosts: string[], hostOptions?: (Record<string, string> | undefined)[]) => void;
   /** Attach to an existing backend session */
   handleAttach: (id: string, host: string, title: string, isLocked?: boolean) => Promise<void>;
   /** Refresh all data from the server */
@@ -472,24 +471,39 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
   // ── Navigation API ────────────────────────────────────────────────────────
 
   window.csOpen = (target, options: { name?: string } = {}) => {
-    console.log("csOpen called:", target, options);
     const { hosts } = getStore();
     const targets = Array.isArray(target) ? target.slice(0, 4) : [target];
-    const hostNames = targets.map((t) => {
-      if (typeof t === "string") {
-        if (t === LOCAL_NAME) {
-          return LOCAL_NAME;
+    const hostNames: string[] = [];
+    const hostOptions: (Record<string, string> | undefined)[] = [];
+    for (let target of targets) {
+      if (typeof target === "object") {
+        hostNames.push(target.name);
+        hostOptions.push(undefined);
+      } else if (typeof target === "string") {
+        let option: Record<string, string> | undefined = undefined;
+        const i = target.lastIndexOf("?");
+        if (i !== -1) {
+          option = Object.fromEntries(new URLSearchParams(target.slice(i)));
+          target = target.slice(0, i);
         }
-        const known = hosts.find((h) => h.name === t || h.hostname === t);
-        return known ? known.name : t;
+        hostOptions.push(option);
+        if (target === LOCAL_NAME) {
+          hostNames.push(LOCAL_NAME);
+        } else {
+          const known = hosts.find((h) => h.name === target || h.hostname === target);
+          if (known) {
+            hostNames.push(known.name);
+          } else {
+            hostNames.push(target);
+          }
+        }
       }
-      return t.name;
-    });
+    }
     const title = options.name || hostNames[0];
     if (hostNames.length > 1) {
-      cb.handleSelectTagAsSplit(title, hostNames);
+      cb.handleSelectTagAsSplit(title, hostNames, hostOptions);
     } else {
-      cb.handleSelectHost(hostNames[0], options.name);
+      cb.handleSelectHost(hostNames[0], options.name, hostOptions[0]);
     }
   };
 

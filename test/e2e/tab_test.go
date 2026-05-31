@@ -94,8 +94,8 @@ func TestPinTab(t *testing.T) {
 		Title: "PIN_TEST",
 	})
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("pin: expected 200, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("pin: expected 204, got %d", resp.StatusCode)
 	}
 
 	// Verify backend reports the session as pinned.
@@ -141,8 +141,8 @@ func TestPinTab(t *testing.T) {
 	// 4. Unpin via the API.
 	resp = apiPost(t, url, token, "/api/tabs/unpin", &models.TabsUnpinRequest{Id: sessionId})
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("unpin: expected 200, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("unpin: expected 204, got %d", resp.StatusCode)
 	}
 
 	// 5. Reload again — no pinned tabs should auto-open.
@@ -187,8 +187,8 @@ func TestLockTab(t *testing.T) {
 		Title: "LOCK_TEST",
 	})
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("lock: expected 200, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("lock: expected 204, got %d", resp.StatusCode)
 	}
 
 	// Verify backend sees it as locked.
@@ -233,8 +233,8 @@ func TestLockTab(t *testing.T) {
 		Title: "LOCK_TEST",
 	})
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("downgrade to pin: expected 200, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("downgrade to pin: expected 204, got %d", resp.StatusCode)
 	}
 
 	// Now close should succeed.

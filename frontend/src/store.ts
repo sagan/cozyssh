@@ -23,6 +23,8 @@ export interface PaneData {
   host: string;
   state?: string;
   cloneFrom?: string;
+  // optional session scope params
+  options?: Record<string, string>;
 }
 
 export interface TabData {

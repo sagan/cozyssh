@@ -269,13 +269,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, [applets]);
 
   const handleSelectHost = useCallback(
-    async (host: string, customTitle?: string) => {
+    async (host: string, customTitle?: string, options?: Record<string, string>) => {
       const tabId = genTabId(host);
       const paneId = genPaneId(host);
       const newTab: TabData = {
         id: tabId,
         title: customTitle || hostTitle(host),
-        panes: [{ id: paneId, host }],
+        panes: [{ id: paneId, host, options }],
         activePaneId: paneId,
       };
       setTabs((prev) => [...prev, newTab]);
@@ -317,22 +317,29 @@ export default function Dashboard({ initialData }: DashboardProps) {
     [setRecents]
   );
 
-  const handleSelectTagAsSplit = useCallback((tag: string, hosts: string[]) => {
-    const tabId = genTabId(tag);
-    const panes = hosts.map((host) => ({
-      id: genPaneId(host),
-      host,
-    }));
-    const newTab: TabData = {
-      id: tabId,
-      title: tag,
-      panes: panes,
-      activePaneId: panes[0].id,
-    };
-    setTabs((prev) => [...prev, newTab]);
-    setActiveTabId(newTab.id);
-    setActivePaneId(panes[0].id);
-  }, []);
+  const handleSelectTagAsSplit = useCallback(
+    (tag: string, hosts: string[], hostOptions?: (Record<string, string> | undefined)[]) => {
+      const tabId = genTabId(tag);
+      const panes: PaneData[] = hosts.map(
+        (host, i) =>
+          ({
+            id: genPaneId(host),
+            host,
+            options: hostOptions?.[i],
+          } satisfies PaneData)
+      );
+      const newTab: TabData = {
+        id: tabId,
+        title: tag,
+        panes: panes,
+        activePaneId: panes[0].id,
+      };
+      setTabs((prev) => [...prev, newTab]);
+      setActiveTabId(newTab.id);
+      setActivePaneId(panes[0].id);
+    },
+    []
+  );
 
   const handleAttach = useCallback(async (id: string, host: string, title: string, isLocked: boolean = false) => {
     const existing = getStore().tabs.find((t) =>

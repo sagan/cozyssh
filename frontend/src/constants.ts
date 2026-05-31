@@ -52,6 +52,7 @@ export const EVENT_LOCAL_STORAGE_SYNC = "local-storage-sync";
 export const VIBRATE_PATTERN = 100;
 export const COZYSSH_TOKEN_PREFIX = "cozytoken.";
 export const WS_PROTOCOL_QUERY_PREFIX = "query.";
+export const WS_PROTOCOL_IDENTITY_PREFIX = "identity.";
 export const WS_PROTOCOL_DUMMY = "dummy";
 
 export const TERMINAL_FUNCTIONS = [
