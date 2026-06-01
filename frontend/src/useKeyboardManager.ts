@@ -51,7 +51,7 @@ export interface KeyboardManagerOptions {
   /** Getter for the live terminal ref map */
   getTerminalRefs: () => TerminalRefMap;
   /** Ref to the sidebar filter input */
-  sidebarFilterRef?: React.RefObject<HTMLInputElement | null>;
+  sidebarFilterRef: React.RefObject<HTMLInputElement | null>;
 }
 
 export const disableShortcuts = new Set<string>();
@@ -171,7 +171,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         case "alt+i":
           if (!document.querySelector("body > div.MuiDialog-root")) {
             e.preventDefault();
-            sidebarFilterRef?.current?.focus();
+            sidebarFilterRef.current?.focus();
           }
           return;
 
