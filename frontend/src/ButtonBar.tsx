@@ -4,25 +4,28 @@ import AddIcon from "@mui/icons-material/Add";
 
 import type { ButtonData } from "./api";
 
-const buttonStyleBorder: Record<string, string> = {
+const buttonStyleBorder: Record<ButtonData["type"], string> = {
   run_script: "1px dashed",
   send_string: "1px solid",
   open_terminal: "1px groove",
-  "": "1px dotted", // fallback
+  terminal_function: "1px dotted",
+  misc: "1px dotted",
 };
 
-const buttonStyleBorderColor: Record<string, string> = {
+const buttonStyleBorderColor: Record<ButtonData["type"], string> = {
   run_script: "warning.main",
   send_string: "success.main",
   open_terminal: "secondary.main",
-  "": "primary.main",
+  terminal_function: "primary.main",
+  misc: "primary.main",
 };
 
-const buttonStyleBgColorHover: Record<string, string> = {
+const buttonStyleBgColorHover: Record<ButtonData["type"], string> = {
   run_script: "warning.light",
   send_string: "success.light",
   open_terminal: "secondary.light",
-  "": "primary.light",
+  terminal_function: "primary.light",
+  misc: "primary.light",
 };
 
 export interface ButtonBarProps {
@@ -124,14 +127,14 @@ export default function ButtonBar({
               textTransform: "none",
               fontSize: "0.8rem",
               borderRadius: 1.5,
-              border: buttonStyleBorder[btn.type] || buttonStyleBorder[""],
-              borderColor: buttonStyleBorderColor[btn.type] || buttonStyleBorderColor[""],
+              border: buttonStyleBorder[btn.type],
+              borderColor: buttonStyleBorderColor[btn.type],
               bgcolor: "background.paper",
               color: "text.primary",
               margin: "6px 4px",
               cursor: "pointer",
               "&:hover": {
-                bgcolor: buttonStyleBgColorHover[btn.type] || buttonStyleBgColorHover[""],
+                bgcolor: buttonStyleBgColorHover[btn.type],
                 color: "white",
               },
             }}

@@ -76,9 +76,9 @@ declare global {
   var __CS_DISABLE_SHORTCUTS__: Set<string>;
   /**
    * Focus the terminal with the given pane id.
-   * @param paneId defaults to active terminal pane id.
+   * @param tabOrPaneId defaults to active terminal pane id.
    */
-  function csFocus(paneId?: string): void;
+  function csFocus(tabOrPaneId?: string): void;
   /**
    * Display a notification.
    * @param severity defaults to "info".
@@ -92,9 +92,24 @@ declare global {
    * Note we don't recommend putting password in connection string.
    * CozySSH does not log or store password anywhere but custom scripts are stored on server in plain text files.
    * So be careful with any secrets in custom scripts.
-   * @param options.name Optional title for the new tab.
+   * It's possible to append a optional query string in connection string, e.g `user@host?remoteCommand=bash`,
+   * to set some optional session scope parameters. Available parameters:
+   *   - `remoteCommand`: command to run on remote host
+   *   - `cols`: initial columns of the terminal
+   *   - `rows`: initial rows of the terminal
+   *   - `noPublicKey`: if `1`, public key authentication will be disabled
+   *   - `identity`: Manually set the identity (ssh private key) file path (on backend)
+   *                 or contents that will be used for authentication in this session.
+   * @param options.title Optional title for the new tab.
+   * @param options.target Optional target tab id. The target tab must currently contains less than 4 panes.
+   *                       Special values:
+   *                       - `_blank` : open in new tab (default)
+   *                       - `_self` : open in active tab
    */
-  function csOpen(target: HostData | string | (HostData | string)[], options?: { name?: string }): void;
+  function csOpen(
+    target: HostData | string | (HostData | string)[],
+    options?: { title?: string; target?: string },
+  ): void;
   /**
    * Close a tab or pane.
    * @param tabOrPaneId defaults to active pane id. If it's a tab id, it will close the tab.
@@ -205,7 +220,7 @@ declare global {
   function csOpenApplet(
     name: string,
     node: Node | React.ComponentType,
-    options?: { position?: AppletPosition; width?: number | string; height?: number | string }
+    options?: { position?: AppletPosition; width?: number | string; height?: number | string },
   ): void;
   /**
    * Close a custom UI applet.
@@ -253,7 +268,7 @@ declare global {
     options?: {
       placeholder?: string;
       validate?: (value: string) => string | undefined;
-    }
+    },
   ): Promise<string | null>;
   interface WindowEventMap {
     [CS_EVENT_TERMINAL_NEW]: CustomEvent<CSEventDetailTerminalNew>;

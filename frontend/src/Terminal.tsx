@@ -122,7 +122,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       onTerminalBlur,
       onTerminalFocus,
     },
-    ref
+    ref,
   ) => {
     const terminalRef = useRef<HTMLDivElement>(null);
     const xtermRef = useRef<Terminal | null>(null);
@@ -156,7 +156,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
             is_active_terminal: isActiveRef.current,
             shellIntegration: shellIntegrationRef.current,
           } satisfies CSEventDetailShellIntegration,
-        })
+        }),
       );
       if (updates.cwd) {
         onCwdChange?.(updates.cwd);
@@ -715,7 +715,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
               host,
               is_active_terminal: isActive,
             } satisfies CSEventDetailTerminalResize,
-          })
+          }),
         );
       });
 
@@ -788,7 +788,10 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
         params.set("cols", String(cols));
         params.set("rows", String(rows));
 
+        let identity: string | undefined;
         if (options) {
+          identity = options.identity;
+          delete options.identity;
           for (const [key, value] of Object.entries(options)) {
             params.set(key, value);
           }
@@ -811,7 +814,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
               promises,
               is_active_terminal: isActive,
             } satisfies CSEventDetailTerminalNew,
-          })
+          }),
         );
         try {
           await Promise.all(promises);
@@ -831,8 +834,8 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
           websocket_protocols.push(token);
         }
         websocket_protocols.push(WS_PROTOCOL_QUERY_PREFIX + base64urlEncode(params.toString()));
-        if (options?.["identity"]) {
-          websocket_protocols.push(WS_PROTOCOL_IDENTITY_PREFIX + base64urlEncode(options["identity"].toString()));
+        if (identity) {
+          websocket_protocols.push(WS_PROTOCOL_IDENTITY_PREFIX + base64urlEncode(identity.toString()));
         }
 
         isDead = false;
@@ -857,7 +860,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
                 host,
                 is_active_terminal: isActive,
               } satisfies CSEventDetailTerminalConnected,
-            })
+            }),
           );
         };
 
@@ -881,7 +884,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
                   ws.close();
                   if (msg.state === "stolen") {
                     term.write(
-                      "\r\n\x1b[31;1m*** Session stolen (attached by another client) *** (Press Enter to reconnect)\x1b[0m\r\n"
+                      "\r\n\x1b[31;1m*** Session stolen (attached by another client) *** (Press Enter to reconnect)\x1b[0m\r\n",
                     );
                     onStolen?.();
                   } else {
@@ -897,7 +900,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
                         is_active_terminal: isActive,
                         reason: deathType,
                       } satisfies CSEventDetailTerminalDisconnected,
-                    })
+                    }),
                   );
                   return;
                 }
@@ -918,7 +921,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
                     host,
                     is_active_terminal: isActive,
                   } satisfies CSEventDetailTerminalData,
-                })
+                }),
               );
             }
             term.write(ev.data);
@@ -941,7 +944,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
                       host,
                       is_active_terminal: isActive,
                     } satisfies CSEventDetailTerminalData,
-                  })
+                  }),
                 );
               }
               term.write(buffer);
@@ -963,7 +966,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
                 is_active_terminal: isActive,
                 reason: "normal",
               } satisfies CSEventDetailTerminalDisconnected,
-            })
+            }),
           );
           reconnectTimer = setTimeout(connectWS, 2000);
         };
@@ -1085,7 +1088,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
             text.lastIndexOf("$ "),
             text.lastIndexOf("# "),
             text.lastIndexOf("% "),
-            text.lastIndexOf("> ")
+            text.lastIndexOf("> "),
           );
           return lastPrompt !== -1 ? text.substring(lastPrompt + 2) : text;
         }
@@ -1200,7 +1203,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
     return (
       <Box className="terminal-pane" ref={terminalRef} sx={{ width: "100%", height: "100%", overflow: "hidden" }} />
     );
-  }
+  },
 );
 
 export default TerminalComponent;

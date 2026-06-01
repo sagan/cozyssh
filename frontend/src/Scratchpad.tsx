@@ -235,7 +235,7 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
       lastSyncDataRef.current = payload;
       setDirtyPageIds(new Set());
     },
-    [onSyncStateChange]
+    [onSyncStateChange],
   );
 
   useEffect(() => {
@@ -261,7 +261,7 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
       }
       setDirtyPageIds((prev) => new Set(prev).add(activePageId));
     },
-    [activePageId, onSyncStateChange]
+    [activePageId, onSyncStateChange],
   );
 
   const handleAddPage = useCallback(() => {

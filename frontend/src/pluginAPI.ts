@@ -129,14 +129,14 @@ const virtualModulesImportRegex = (() => {
   const moduleNames = Object.keys(virtualModules).map(escapeRegExp).join("|");
   return new RegExp(
     `((?:from|import)\\s+['"])(${moduleNames})(['"])|(import\\s*\\(\\s*['"])(${moduleNames})(['"]\\))`,
-    "g"
+    "g",
   );
 })();
 
 export async function runScript(
   btn: Pick<ButtonData, "id" | "name" | "type" | "payload">,
   notify: (msg: string, severity?: Severity) => void,
-  getTerminalRefs: () => TerminalRefMap
+  getTerminalRefs: () => TerminalRefMap,
 ) {
   let moduleObj: CsScriptModule;
   let cached = false;
@@ -196,7 +196,7 @@ export async function runScript(
   } else if (cached) {
     notify(
       `Script ${btn.name} is already imported & cached, and has no run function. Reload the page to clear the cache`,
-      "info"
+      "info",
     );
     return;
   }
@@ -216,7 +216,10 @@ export interface PluginAPICallbacks {
   /** Apply a new MUI theme */
   setTheme: (options: unknown, ...args: unknown[]) => void;
   /** Open a new terminal tab */
-  handleSelectHost: (host: string, customTitle?: string, options?: Record<string, string>) => Promise<void>;
+  handleSelectHost: (
+    host: string,
+    options?: { title?: string; target?: string; options?: Record<string, string> },
+  ) => Promise<void>;
   /** Open a split-pane tab from a tag */
   handleSelectTagAsSplit: (tag: string, hosts: string[], hostOptions?: (Record<string, string> | undefined)[]) => void;
   /** Attach to an existing backend session */
@@ -404,30 +407,30 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     return lines.join("\n");
   };
 
-  window.csFocus = (paneId?: string) => {
+  window.csFocus = (tabOrPaneId?: string) => {
     // any dialog is open (so the terminal can't get focus)
     if (document.querySelector("body > div.MuiDialog-root")) {
       return;
     }
     const { activePaneId, tabs } = getStore();
     const refs = cb.getTerminalRefs();
-    if (paneId && paneId !== activePaneId) {
-      const allPanes = tabs.flatMap((t) => t.panes.map((p) => ({ tabId: t.id, paneId: p.id })));
-      if (allPanes.length === 0) {
-        return;
+    if (tabOrPaneId) {
+      const tab = tabs.find((t) => t.id === tabOrPaneId);
+      if (tab) {
+        setActiveTabId(tab.id);
+        setActivePaneId(tab.activePaneId);
+      } else if (tabOrPaneId !== activePaneId) {
+        const allPanes = tabs.flatMap((t) => t.panes.map((p) => ({ tabId: t.id, paneId: p.id })));
+        const idx = allPanes.findIndex((p) => p.paneId === tabOrPaneId);
+        if (idx >= 0) {
+          const target = allPanes[idx];
+          setActiveTabId(target.tabId);
+          setActivePaneId(target.paneId);
+          setTabs((tabs) => tabs.map((t) => (t.id === target.tabId ? { ...t, activePaneId: target.paneId } : t)));
+        }
       }
-      const idx = allPanes.findIndex((p) => p.paneId === paneId);
-      if (idx < 0) {
-        return;
-      }
-      const target = allPanes[idx];
-      setActiveTabId(target.tabId);
-      setActivePaneId(target.paneId);
-      setTabs((tabs) => tabs.map((t) => (t.id === target.tabId ? { ...t, activePaneId: target.paneId } : t)));
-      setTimeout(() => refs[target.paneId]?.focus(), 10);
-    } else if (activePaneId) {
-      setTimeout(() => refs[activePaneId]?.focus(), 0);
     }
+    setTimeout(() => refs[getStore().activePaneId]?.focus(), 50);
   };
 
   window.csNotify = cb.notify;
@@ -470,40 +473,45 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
 
   // ── Navigation API ────────────────────────────────────────────────────────
 
-  window.csOpen = (target, options: { name?: string } = {}) => {
+  window.csOpen = (host, { title, target }: { title?: string; target?: string } = {}) => {
     const { hosts } = getStore();
-    const targets = Array.isArray(target) ? target.slice(0, 4) : [target];
+    const targetHosts = Array.isArray(host) ? host.slice(0, 4) : [host];
     const hostNames: string[] = [];
     const hostOptions: (Record<string, string> | undefined)[] = [];
-    for (let target of targets) {
-      if (typeof target === "object") {
-        hostNames.push(target.name);
+    for (let targetHost of targetHosts) {
+      if (typeof targetHost === "object") {
+        hostNames.push(targetHost.name);
         hostOptions.push(undefined);
-      } else if (typeof target === "string") {
+      } else if (typeof targetHost === "string") {
         let option: Record<string, string> | undefined = undefined;
-        const i = target.lastIndexOf("?");
+        const i = targetHost.lastIndexOf("?");
         if (i !== -1) {
-          option = Object.fromEntries(new URLSearchParams(target.slice(i)));
-          target = target.slice(0, i);
+          option = Object.fromEntries(new URLSearchParams(targetHost.slice(i)));
+          targetHost = targetHost.slice(0, i);
         }
         hostOptions.push(option);
-        if (target === LOCAL_NAME) {
+        if (targetHost === LOCAL_NAME) {
           hostNames.push(LOCAL_NAME);
         } else {
-          const known = hosts.find((h) => h.name === target || h.hostname === target);
+          const known = hosts.find((h) => h.name === targetHost || h.hostname === targetHost);
           if (known) {
             hostNames.push(known.name);
           } else {
-            hostNames.push(target);
+            hostNames.push(targetHost);
           }
         }
       }
     }
-    const title = options.name || hostNames[0];
+    title = title || hostNames[0];
+    if (target === "_self") {
+      target = getStore().activeTabId;
+    } else if (target === "_blank") {
+      target = undefined;
+    }
     if (hostNames.length > 1) {
       cb.handleSelectTagAsSplit(title, hostNames, hostOptions);
     } else {
-      cb.handleSelectHost(hostNames[0], options.name, hostOptions[0]);
+      cb.handleSelectHost(hostNames[0], { title, target, options: hostOptions[0] });
     }
   };
 
@@ -524,7 +532,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
   window.csOpenApplet = (
     name,
     node,
-    options: { position?: AppletPosition; width?: number | string; height?: number | string } = {}
+    options: { position?: AppletPosition; width?: number | string; height?: number | string } = {},
   ) => {
     let parsedPos: AppletPosition;
     if (options.position === "dialog") {
@@ -541,7 +549,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
       const existing = prev.find((a) => a.name === name);
       if (existing) {
         return prev.map((a) =>
-          a.name === name ? { ...a, node, width: options.width ?? a.width, height: options.height ?? a.height } : a
+          a.name === name ? { ...a, node, width: options.width ?? a.width, height: options.height ?? a.height } : a,
         );
       }
       return [

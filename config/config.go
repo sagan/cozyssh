@@ -79,6 +79,13 @@ func LoadConfig(customDir string) (*Config, error) {
 	return &cfg, nil
 }
 
+func (c *Config) ApplyConfig() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	os.Setenv("COZYSSH_HOME", c.ConfigDir)
+	os.Setenv("COZYSSH_SSHDIR", c.SSHDir)
+}
+
 // Return a cryptographically secure random string of format /[a-zA-Z0-9]{length}/ .
 // If digigOnly is true, return  /[0-9]{length}/
 func RandString(length int, digitOnly bool) string {

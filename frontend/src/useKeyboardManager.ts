@@ -78,7 +78,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
       const groups = [
         DEFAULT_BUTTON_GROUP,
         ...Array.from(
-          new Set(buttons.map((b) => b.group || DEFAULT_BUTTON_GROUP).filter((g) => g !== DEFAULT_BUTTON_GROUP))
+          new Set(buttons.map((b) => b.group || DEFAULT_BUTTON_GROUP).filter((g) => g !== DEFAULT_BUTTON_GROUP)),
         ),
       ].sort();
 

@@ -205,7 +205,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     window.dispatchEvent(
       new CustomEvent(CS_EVENT_TERMINAL_CHANGE, {
         detail: { activePaneId } satisfies CSEventDetailTerminalChange,
-      })
+      }),
     );
   }, [activePaneId]);
 
@@ -251,7 +251,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const groups = [
       DEFAULT_BUTTON_GROUP,
       ...Array.from(
-        new Set(buttons.map((b) => b.group || DEFAULT_BUTTON_GROUP).filter((g) => g !== DEFAULT_BUTTON_GROUP))
+        new Set(buttons.map((b) => b.group || DEFAULT_BUTTON_GROUP).filter((g) => g !== DEFAULT_BUTTON_GROUP)),
       ),
     ].sort();
     const filteredButtons = buttons.filter((b) => (b.group || DEFAULT_BUTTON_GROUP) === activeGroup);
@@ -269,18 +269,31 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, [applets]);
 
   const handleSelectHost = useCallback(
-    async (host: string, customTitle?: string, options?: Record<string, string>) => {
-      const tabId = genTabId(host);
+    async (
+      host: string,
+      { title, target, options }: { title?: string; target?: string; options?: Record<string, string> } = {},
+    ) => {
       const paneId = genPaneId(host);
-      const newTab: TabData = {
-        id: tabId,
-        title: customTitle || hostTitle(host),
-        panes: [{ id: paneId, host, options }],
-        activePaneId: paneId,
-      };
-      setTabs((prev) => [...prev, newTab]);
-      setActiveTabId(tabId);
-      setActivePaneId(paneId);
+      const targetTab = target ? getStore().tabs.find((t) => t.id === target) : undefined;
+      if (targetTab && targetTab.panes.length < 4) {
+        const newPane: PaneData = { id: paneId, host, options };
+        setTabs((prev) =>
+          prev.map((t) => (t.id === target ? { ...t, panes: [...t.panes, newPane], activePaneId: paneId } : t)),
+        );
+        setActiveTabId(targetTab.id);
+        setActivePaneId(paneId);
+      } else {
+        const tabId = genTabId(host);
+        const newTab: TabData = {
+          id: tabId,
+          title: title || hostTitle(host),
+          panes: [{ id: paneId, host, options }],
+          activePaneId: paneId,
+        };
+        setTabs((prev) => [...prev, newTab]);
+        setActiveTabId(tabId);
+        setActivePaneId(paneId);
+      }
 
       host = removePassFromHost(host);
 
@@ -314,7 +327,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         }
       }
     },
-    [setRecents]
+    [setRecents],
   );
 
   const handleSelectTagAsSplit = useCallback(
@@ -326,7 +339,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             id: genPaneId(host),
             host,
             options: hostOptions?.[i],
-          } satisfies PaneData)
+          }) satisfies PaneData,
       );
       const newTab: TabData = {
         id: tabId,
@@ -338,17 +351,17 @@ export default function Dashboard({ initialData }: DashboardProps) {
       setActiveTabId(newTab.id);
       setActivePaneId(panes[0].id);
     },
-    []
+    [],
   );
 
   const handleAttach = useCallback(async (id: string, host: string, title: string, isLocked: boolean = false) => {
     const existing = getStore().tabs.find((t) =>
-      t.panes.some((p) => (p.sessionId || p.id) === id && p.state !== "stolen")
+      t.panes.some((p) => (p.sessionId || p.id) === id && p.state !== "stolen"),
     );
     if (existing) {
       setActiveTabId(existing.id);
       setActivePaneId(
-        existing.panes.find((p) => (p.sessionId || p.id) === id && p.state !== "stolen")?.id || existing.activePaneId
+        existing.panes.find((p) => (p.sessionId || p.id) === id && p.state !== "stolen")?.id || existing.activePaneId,
       );
       return;
     }
@@ -401,7 +414,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         setRecents(data.recents);
       }
     },
-    [setRecents]
+    [setRecents],
   );
 
   const handleRefresh = useCallback(async () => {
@@ -493,7 +506,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       const touch = e.touches[0];
       swipeStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
     },
-    [gestureMode, isMobile, isTouch]
+    [gestureMode, isMobile, isTouch],
   );
 
   const handleTouchEnd = useCallback(
@@ -526,7 +539,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         }
       }
     },
-    [gestureMode, isMobile, isTouch]
+    [gestureMode, isMobile, isTouch],
   );
 
   const tabId = useRef(sessionStorage.getItem(BROWSER_STORAGE_KEY_TAB_ID) || genTabId(""));
@@ -739,7 +752,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             if (targets.length > 0) {
               handleSelectTagAsSplit(
                 tag,
-                targets.map((h) => h.name)
+                targets.map((h) => h.name),
               );
             } else {
               const tabId = genTabId(LOCAL_NAME);
@@ -763,7 +776,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                 ? hostsData.find((h) =>
                     hash.includes("@")
                       ? hash === `${h.user || "root"}@${h.hostname}`
-                      : h.name === hash || h.hostname === hash
+                      : h.name === hash || h.hostname === hash,
                   )
                 : { name: LOCAL_NAME };
             if (host) {
@@ -821,7 +834,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                         activePaneId: paneId,
                         title: LOCAL_NAME,
                       },
-                    ]
+                    ],
               );
               if (!getStore().activeTabId) {
                 setActiveTabId(tabId);
@@ -843,7 +856,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                       activePaneId: paneId,
                       title: LOCAL_NAME,
                     },
-                  ]
+                  ],
             );
             if (!getStore().activeTabId) {
               setActiveTabId(tabId);
@@ -879,7 +892,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     if (syncState && syncState !== "synced") {
       if (
         !(await dialogs.confirm(
-          "Scratchpad data is not fully synced to the server. Are you sure you want to log out and clear the local cache?"
+          "Scratchpad data is not fully synced to the server. Are you sure you want to log out and clear the local cache?",
         ))
       ) {
         return;
@@ -988,7 +1001,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       });
       setTimeout(() => terminalRefs.current[getStore().activePaneId]?.focus(), 50);
     },
-    [handleUnpinTab]
+    [handleUnpinTab],
   );
 
   const handleCloseTabOrPane = useCallback(
@@ -1041,7 +1054,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
           }
 
           setTabs((prev) =>
-            prev.map((t) => (t.id === parentTab.id ? { ...t, panes: newPanes, activePaneId: nextPaneId } : t))
+            prev.map((t) => (t.id === parentTab.id ? { ...t, panes: newPanes, activePaneId: nextPaneId } : t)),
           );
 
           if (activeTabId === parentTab.id) {
@@ -1053,7 +1066,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         }
       }
     },
-    [handleCloseTab]
+    [handleCloseTab],
   );
 
   const handlePinTab = useCallback(async (id: string) => {
@@ -1208,7 +1221,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       const newPane = { id: newPaneId, host: pane.host, cloneFrom: backendSessionId, state: pane.state };
       if (cloneInSameTab) {
         return prev.map((t) =>
-          t.id === tab.id && t.panes.length < 4 ? { ...t, panes: [...t.panes, newPane], activePaneId: newPaneId } : t
+          t.id === tab.id && t.panes.length < 4 ? { ...t, panes: [...t.panes, newPane], activePaneId: newPaneId } : t,
         );
       }
       return [
@@ -1461,7 +1474,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                 getStore().vars,
                 getStore().localVars,
                 VAR_CS_SCROLL_LINES,
-                DEFAULT_SCROLL_LINES
+                DEFAULT_SCROLL_LINES,
               );
               term.scrollLines(-scrollLines);
               term.focus();
@@ -1473,7 +1486,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                 getStore().vars,
                 getStore().localVars,
                 VAR_CS_SCROLL_LINES,
-                DEFAULT_SCROLL_LINES
+                DEFAULT_SCROLL_LINES,
               );
               term.scrollLines(scrollLines);
               term.focus();
@@ -1568,7 +1581,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       groups,
       activeGroup,
       setActiveGroup,
-    ]
+    ],
   );
 
   // ── Keyboard shortcuts (reads fresh state from store — tiny stable dep array) ──
@@ -1688,7 +1701,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       setButtonDialogOpen(false);
       setTimeout(() => csFocus(), 0);
     },
-    [buttonFormData, initialBtnFormData]
+    [buttonFormData, initialBtnFormData],
   );
 
   const [lastKeyboardHeight, setLastKeyboardHeight] = useState(0);
@@ -1721,7 +1734,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   // 3. CRITICAL FIX: Only calculate the spacer if the panel is open or closing.
   // Otherwise, it must be exactly 0 (like on initial page load).
   const spacerHeight = Math.floor(
-    extraKeysOpen || isClosingPanel ? Math.max(0, panelHeight - keyboardHeight - barHeight) : 0
+    extraKeysOpen || isClosingPanel ? Math.max(0, panelHeight - keyboardHeight - barHeight) : 0,
   );
 
   const onTerminalFocus = useCallback(() => {}, []);
@@ -1929,7 +1942,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             }
             onFocus={() =>
               setApplets((prev) =>
-                prev.map((a) => (a.name === applet.name ? { ...a, zIndex: maxZIndexRef.current++ } : a))
+                prev.map((a) => (a.name === applet.name ? { ...a, zIndex: maxZIndexRef.current++ } : a)),
               )
             }
           />
@@ -1983,8 +1996,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
                 onClick={() =>
                   setApplets((prev) =>
                     prev.map((a) =>
-                      a.name === applet.name ? { ...a, position: "widget", zIndex: maxZIndexRef.current++ } : a
-                    )
+                      a.name === applet.name ? { ...a, position: "widget", zIndex: maxZIndexRef.current++ } : a,
+                    ),
                   )
                 }
                 sx={{ mr: 0.5 }}

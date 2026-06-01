@@ -232,7 +232,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
           headers: {
             [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
           },
-        }
+        },
       );
 
       if (res.ok) {
@@ -281,7 +281,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
             [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
           },
           body: formData,
-        }
+        },
       );
 
       if (res.ok) {
@@ -313,12 +313,12 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
           headers: {
             [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
           },
-        }
+        },
       );
       if (res.ok) {
         const data: FsToken = await res.json();
         const dlUrl = `/api/fs/download?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(
-          targetPath
+          targetPath,
         )}&expires=${data.expires}&sig=${data.sig}`;
         const a = document.createElement("a");
         a.href = dlUrl;
@@ -348,12 +348,12 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
           headers: {
             [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
           },
-        }
+        },
       );
       if (res.ok) {
         const data: FsToken = await res.json();
         const dlUrl = `/api/fs/download?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(
-          targetPath
+          targetPath,
         )}&expires=${data.expires}&sig=${data.sig}`;
         const dlRes = await fetch(dlUrl, {
           headers: {
@@ -413,7 +413,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
             [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
           },
           body: formData,
-        }
+        },
       );
 
       if (res.ok) {
@@ -454,7 +454,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
             [HEADER_CONTENT_TYPE]: MIME_JSON,
           },
           body: JSON.stringify({ newPath } satisfies FileRenameRequest),
-        }
+        },
       );
       if (res.ok) {
         fetchFiles(currentPath);
@@ -510,7 +510,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
             [HEADER_CONTENT_TYPE]: MIME_JSON,
           },
           body: JSON.stringify({ name } satisfies FileMkdirRequest),
-        }
+        },
       );
       if (res.ok) {
         fetchFiles(currentPath);
@@ -543,7 +543,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
             [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
           },
           body: formData,
-        }
+        },
       );
 
       if (res.ok) {

@@ -8,12 +8,14 @@ import (
 	"maps"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 
 	"github.com/gorilla/websocket"
 
 	"cozyssh/auth"
+	"cozyssh/common"
 	"cozyssh/config"
 	"cozyssh/constants"
 	"cozyssh/localpty"
@@ -116,7 +118,14 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			} else if strings.HasPrefix(p, constants.WS_PROTOCOL_IDENTITY_PREFIX) {
 				if data, err := base64.RawURLEncoding.DecodeString(
 					p[len(constants.WS_PROTOCOL_IDENTITY_PREFIX):]); err == nil && len(data) > 0 {
-					identity = string(data)
+					identity = strings.TrimSpace(string(data))
+					if !strings.Contains(identity, "\n") && !strings.HasPrefix(identity, "-----") {
+						if content, err := os.ReadFile(common.ExpandPath(identity)); err == nil {
+							identity = string(content)
+						} else {
+							identity = ""
+						}
+					}
 				}
 			}
 		}

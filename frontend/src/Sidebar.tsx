@@ -273,7 +273,7 @@ export default function Sidebar({
     if (targets.length > 0) {
       onSelectTagAsSplit(
         tag,
-        targets.map((h) => h.name)
+        targets.map((h) => h.name),
       );
     }
   }, [hosts, onSelectTagAsSplit, tagContextMenu]);
@@ -437,7 +437,7 @@ export default function Sidebar({
       setDialogOpen(false);
       setTimeout(() => csFocus(), 0);
     },
-    [formData, initialHostFormData]
+    [formData, initialHostFormData],
   );
 
   const filteredHosts = useMemo(() => {
@@ -493,7 +493,7 @@ export default function Sidebar({
         }
       }
     },
-    [flatFilteredHosts, onSelect, selectedIndex, resolvedFilterRef]
+    [flatFilteredHosts, onSelect, selectedIndex, resolvedFilterRef],
   );
 
   const uniqueTags = useMemo(() => {

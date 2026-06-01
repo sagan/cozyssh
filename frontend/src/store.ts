@@ -103,7 +103,7 @@ export const setLocalVars = (localVars: Record<string, string>) => useStore.setS
 export const setShellIntegrations = (
   update:
     | Record<string, ShellIntegration>
-    | ((data: Record<string, ShellIntegration>) => Record<string, ShellIntegration>)
+    | ((data: Record<string, ShellIntegration>) => Record<string, ShellIntegration>),
 ) =>
   useStore.setState((state) => ({
     shellIntegrations: typeof update === "function" ? update(state.shellIntegrations) : update,

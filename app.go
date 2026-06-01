@@ -73,6 +73,7 @@ func Run(ctx context.Context, args []string) error {
 	if *listenAddr != "" {
 		cfg.Addr = *listenAddr
 	}
+	cfg.ApplyConfig()
 	log.Printf("CozySSH %s; Config file: %s", version, cfg.ConfigPath)
 
 	auth.Init(cfg)

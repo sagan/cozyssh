@@ -148,7 +148,7 @@ export default function NewTabDialog({
     return tabs.filter(
       (t) =>
         t.title.toLowerCase().includes(f) ||
-        (t.type === "terminal" && t.panes.some((p) => p.host.toLowerCase().includes(f)))
+        (t.type === "terminal" && t.panes.some((p) => p.host.toLowerCase().includes(f))),
     );
   }, [tabs, filter, viewMode]);
 
@@ -160,7 +160,7 @@ export default function NewTabDialog({
     return localPinned.filter(
       (p) =>
         !tabs.some((t) => t.panes.some((pane) => (pane.sessionId || pane.id) === p.id && pane.state !== "stolen")) &&
-        (p.title?.toLowerCase().includes(f) || p.host?.toLowerCase().includes(f))
+        (p.title?.toLowerCase().includes(f) || p.host?.toLowerCase().includes(f)),
     );
   }, [localPinned, tabs, filter, viewMode]);
 
@@ -173,11 +173,11 @@ export default function NewTabDialog({
     const matchedUser = buttons.filter(
       (b) =>
         b.name.toLowerCase().includes(f) ||
-        (b.type !== "run_script" && b.payload && b.payload.toLowerCase().includes(f))
+        (b.type !== "run_script" && b.payload && b.payload.toLowerCase().includes(f)),
     );
 
     const matchedBuiltin = BUILTIN_BUTTONS.filter(
-      (b) => b.name.toLowerCase().includes(f) || b.payload.toLowerCase().includes(f)
+      (b) => b.name.toLowerCase().includes(f) || b.payload.toLowerCase().includes(f),
     );
 
     return { matchedUser, matchedBuiltin };
@@ -188,7 +188,7 @@ export default function NewTabDialog({
       return [];
     }
     return allFilteredButtons.matchedUser.filter(
-      (b) => (b.group || DEFAULT_BUTTON_GROUP) === (activeGroup || DEFAULT_BUTTON_GROUP)
+      (b) => (b.group || DEFAULT_BUTTON_GROUP) === (activeGroup || DEFAULT_BUTTON_GROUP),
     );
   }, [allFilteredButtons, activeGroup, viewMode]);
 
@@ -197,7 +197,7 @@ export default function NewTabDialog({
       return [];
     }
     return allFilteredButtons.matchedUser.filter(
-      (b) => (b.group || DEFAULT_BUTTON_GROUP) !== (activeGroup || DEFAULT_BUTTON_GROUP)
+      (b) => (b.group || DEFAULT_BUTTON_GROUP) !== (activeGroup || DEFAULT_BUTTON_GROUP),
     );
   }, [allFilteredButtons, activeGroup, viewMode]);
 
@@ -421,7 +421,7 @@ export default function NewTabDialog({
         onClose();
       }
     },
-    [onAttachPinned, onClose, onExecuteButton, onSelect, onSelectTab]
+    [onAttachPinned, onClose, onExecuteButton, onSelect, onSelectTab],
   );
 
   const handleKeyDown = useCallback(
@@ -451,7 +451,7 @@ export default function NewTabDialog({
         onClose();
       }
     },
-    [cycleViewMode, filter, handleSelect, items, onClose, selectedIndex]
+    [cycleViewMode, filter, handleSelect, items, onClose, selectedIndex],
   );
 
   useEffect(() => {
@@ -474,7 +474,7 @@ export default function NewTabDialog({
       const touch = e.touches[0];
       swipeStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
     },
-    [isMobile, isTouch]
+    [isMobile, isTouch],
   );
 
   const handleTouchEnd = useCallback(
@@ -497,7 +497,7 @@ export default function NewTabDialog({
         }
       }
     },
-    [cycleViewMode, isMobile, isTouch]
+    [cycleViewMode, isMobile, isTouch],
   );
 
   const getItemIcon = (item: (typeof items)[number], index: number, selectedIndex: number) => {
@@ -565,8 +565,8 @@ export default function NewTabDialog({
             viewMode === "servers"
               ? "Search for a server or type an address..."
               : viewMode === "tabs"
-              ? "Search opened tabs..."
-              : "Search buttons..."
+                ? "Search opened tabs..."
+                : "Search buttons..."
           }
           value={filter}
           onChange={(e) => {

@@ -390,7 +390,7 @@ Fired when a new terminal is created. At this time, the terminal is not yet conn
       (async () => {
         await new Promise((resolve) => setTimeout(resolve, 1000));
         throw new Error("Cancelled by user");
-      })()
+      })(),
     );
   });
   export default {

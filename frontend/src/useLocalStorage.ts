@@ -56,7 +56,7 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
         console.warn(`Error setting localStorage key “${key}”:`, error);
       }
     },
-    [key, isStringType]
+    [key, isStringType],
   );
 
   useEffect(() => {
