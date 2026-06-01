@@ -178,6 +178,8 @@ export const CS_EVENT_TERMINAL_CHANGE = "cs:terminal-change";
 export const CS_EVENT_SHELL_INTEGRATION = "cs:shell-integration";
 
 export const remoteCommandOptions = [
+  "tmux attach || tmux new",
+  "tmux attach -or (tmux new)",
   "tmux attach -t cozy_%i || tmux new -s cozy_%i", // Linux / pwsh, tmux or psmux ( https://github.com/psmux/psmux  )
   "tmux attach -t cozy_%i -or (tmux new -s cozy_%i)", // Windows PowerShell 5.1+
 ] as const;

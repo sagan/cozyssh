@@ -501,7 +501,14 @@ export default function DialogManager({
               setBtnMenuAnchor(null);
             }
           }}
-          sx={{ display: lastMenuBtn?.type === "send_string" || lastMenuBtn?.type === "run_script" ? "flex" : "none" }}
+          sx={{
+            display:
+              lastMenuBtn?.type === "send_string" ||
+              lastMenuBtn?.type === "run_script" ||
+              lastMenuBtn?.type === "open_terminal"
+                ? "flex"
+                : "none",
+          }}
         >
           Copy Contents
         </MenuItem>
@@ -641,9 +648,11 @@ export default function DialogManager({
               }}
               sx={{ flexGrow: 1 }}
             />
-            {buttonFormData.type === "run_script" && (
+            {(buttonFormData.type === "run_script" || buttonFormData.type === "open_terminal") && (
               <FormControlLabel
-                title="Automatically run this script when the page loads"
+                title={`Automatically ${
+                  buttonFormData.type === "run_script" ? "run this script" : "open this terminal"
+                } when the page loads`}
                 sx={{ flexShrink: 0, mr: 0, ml: 0, whiteSpace: "nowrap" }}
                 control={
                   <Checkbox
@@ -701,26 +710,47 @@ export default function DialogManager({
               ))}
             </TextField>
           ) : buttonFormData.type === "open_terminal" ? (
-            <Autocomplete
-              freeSolo
-              options={[LOCAL_NAME, ...hosts.map((h) => h.name)]}
-              value={buttonFormData.payload}
-              onChange={(_event, newValue) => {
-                setButtonFormData({ ...buttonFormData, payload: newValue || "" });
+            <Box
+              sx={{
+                px: 1.5,
+                py: 0.5,
+                bgcolor: "action.hover",
+                borderBottom: "1px solid",
+                borderColor: "divider",
               }}
-              onInputChange={(_event, newInputValue) => {
-                setButtonFormData({ ...buttonFormData, payload: newInputValue || "" });
-              }}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  fullWidth
-                  label="Server / Address"
-                  size="small"
-                  placeholder="e.g. local, production-db, root@192.168.1.1"
-                />
-              )}
-            />
+            >
+              <Autocomplete
+                freeSolo
+                options={[LOCAL_NAME, ...hosts.map((h) => h.name)]}
+                value={buttonFormData.payload}
+                onChange={(_event, newValue) => {
+                  setButtonFormData({ ...buttonFormData, payload: newValue || "" });
+                }}
+                onInputChange={(_event, newInputValue) => {
+                  setButtonFormData({ ...buttonFormData, payload: newInputValue || "" });
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    fullWidth
+                    label="Server / Address"
+                    size="small"
+                    placeholder="e.g. local, production-db, root@192.168.1.1"
+                  />
+                )}
+              />
+              <Typography variant="body2" color="text.secondary">
+                Server name or <b>[username[:password]@]hostname[:port]</b>. Use <b>{LOCAL_NAME}</b> for local shell.
+                <br /> You can append <b>?id=abc&title=Local</b> syntax query string to set session-scope parameters.
+                <br /> Available parameters (all optional):
+                <br />- <b>id</b> : The terminal pane id. If the same id pane already exists, switch to it instead of
+                opening a new one
+                <br />- <b>title</b> : The opened tab title
+                <br />- <b>remoteCommand</b> : Remote shell command to execute on connected
+                <br />
+                E.g. <b>local?id=local-abc&title=Local&remoteCommand=tmux attach || tmux new</b>
+              </Typography>
+            </Box>
           ) : (
             <Box
               sx={{

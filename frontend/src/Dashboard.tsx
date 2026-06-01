@@ -272,12 +272,42 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const handleSelectHost = useCallback(
     async (
       host: string,
-      { title, target, options }: { title?: string; target?: string; options?: Record<string, string> } = {},
+      {
+        title,
+        target,
+        options,
+        noUpdateRecent,
+      }: { title?: string; target?: string; options?: Record<string, string>; noUpdateRecent?: boolean } = {},
     ) => {
-      const paneId = genPaneId(host);
+      const i = host.lastIndexOf("?");
+      if (i !== -1) {
+        options = { ...Object.fromEntries(new URLSearchParams(host.slice(i))), ...options };
+        host = host.slice(0, i);
+      }
+      if (options?.title) {
+        title = options.title;
+        delete options.title;
+      }
+      if (options?.id) {
+        for (const tab of getStore().tabs) {
+          for (const pane of tab.panes) {
+            if (pane.id === options.id) {
+              setActiveTabId(tab.id);
+              setActivePaneId(pane.id);
+              if (tab.activePaneId !== pane.id) {
+                setTabs((prev) => prev.map((t) => (t.id === tab.id ? { ...t, activePaneId: pane.id } : t)));
+              }
+              triggerFocus();
+              return;
+            }
+          }
+        }
+      }
+      const paneId = options?.id || genPaneId(host);
+      const sessionId = options?.id || undefined;
       const targetTab = target ? getStore().tabs.find((t) => t.id === target) : undefined;
       if (targetTab && targetTab.panes.length < 4) {
-        const newPane: PaneData = { id: paneId, host, options };
+        const newPane: PaneData = { id: paneId, sessionId, host, options };
         setTabs((prev) =>
           prev.map((t) => (t.id === target ? { ...t, panes: [...t.panes, newPane], activePaneId: paneId } : t)),
         );
@@ -299,7 +329,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       host = removePassFromHost(host);
 
       // Record recent
-      if (host !== LOCAL_NAME) {
+      if (!noUpdateRecent && host !== LOCAL_NAME) {
         const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
         try {
           fetch("/api/recents", {
@@ -1163,7 +1193,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     if (!targetTab) {
       return;
     }
-    let newTitle = await dialogs.prompt("Enter new tab name:", targetTab.title);
+    let newTitle = await dialogs.prompt("Enter new tab title:", targetTab.title);
     if (!newTitle) {
       return;
     }
@@ -1627,6 +1657,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
       __CS_AUTORUN_DONE__ = 0;
       (async () => {
         if (noautorun !== 1 && startupParams.get(VAR_NOAUTORUN) !== "1") {
+          const terminalButtons = getStore().buttons.filter((b) => b.type === "open_terminal" && b.autorun === 1);
+          for (const terminalBtn of terminalButtons) {
+            await handleSelectHost(terminalBtn.payload, { noUpdateRecent: true });
+          }
           const scriptsToRun = getStore().buttons.filter((b) => b.type === "run_script" && b.autorun === 1);
           for (const btn of scriptsToRun) {
             try {

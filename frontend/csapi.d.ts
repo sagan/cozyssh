@@ -22268,6 +22268,8 @@ export interface TabData {
 }
 export type TerminalRefMap = Record<string, TerminalHandle | ScratchpadHandle | null>;
 export interface Store {
+	focusTrigger: number;
+	focusSearchInputTrigger: number;
 	tabs: TabData[];
 	activeTabId: string;
 	activePaneId: string;
@@ -22362,7 +22364,7 @@ declare global {
 	function csNotify(msg: string, severity?: Severity): void;
 	/**
 	 * Open a host or a set of hosts.
-	 * @param target The host object, connection string or array of up to 4 host objects or connection strings
+	 * @param hosts The host object, connection string or array of up to 4 host objects or connection strings
 	 * for split-screen. The connection string is either fixed `local` string (for local shell) or in
 	 * `[username[:password]@]hostname[:port]` format. E.g. `user@host`.
 	 * Note we don't recommend putting password in connection string.
@@ -22370,10 +22372,13 @@ declare global {
 	 * So be careful with any secrets in custom scripts.
 	 * It's possible to append a optional query string in connection string, e.g `user@host?remoteCommand=bash`,
 	 * to set some optional session scope parameters. Available parameters:
-	 *   - `remoteCommand`: command to run on remote host
-	 *   - `cols`: initial columns of the terminal
-	 *   - `rows`: initial rows of the terminal
-	 *   - `noPublicKey`: if `1`, public key authentication will be disabled
+	 *   - `id`: Manually set the pane id of the opened terminal. If it's set and the same id pane already exists,
+	 *           it will switch to the target terminal instead of opening a new one.
+	 *           It isn't used if you provide multiple hosts.
+	 *   - `remoteCommand`: Command to run on remote host.
+	 *   - `cols`: Initial columns of the terminal.
+	 *   - `rows`: Initial rows of the terminal.
+	 *   - `noPublicKey`: If `1`, public key authentication will be disabled
 	 *   - `identity`: Manually set the identity (ssh private key) file path (on backend)
 	 *                 or contents that will be used for authentication in this session.
 	 * @param options.title Optional title for the new tab.
@@ -22382,7 +22387,7 @@ declare global {
 	 *                       - `_blank` : open in new tab (default)
 	 *                       - `_self` : open in active tab
 	 */
-	function csOpen(target: HostData | string | (HostData | string)[], options?: {
+	function csOpen(hosts: HostData | string | (HostData | string)[], options?: {
 		title?: string;
 		target?: string;
 	}): void;
