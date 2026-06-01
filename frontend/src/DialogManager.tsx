@@ -45,10 +45,8 @@ import {
   generatePassword,
   removePassFromHost,
 } from "./common";
-import { type TabData, getStore, setActivePaneId, setActiveTabId, useStore } from "./store";
+import { type TabData, setActivePaneId, setActiveTabId, triggerFocus, useStore } from "./store";
 import NewTabDialog from "./NewTabDialog";
-import type { ScratchpadHandle } from "./Scratchpad";
-import type { TerminalHandle } from "./Terminal";
 import { dialogs } from "./Dialogs";
 
 export interface DialogManagerProps {
@@ -98,7 +96,6 @@ export interface DialogManagerProps {
   handleAttach: (id: string, host: string, title: string, isLocked: boolean) => void;
   handleRefresh: () => void;
   handleSelectHost: (h: string) => void;
-  terminalRefs: React.RefObject<{ [key: string]: TerminalHandle | ScratchpadHandle | null }>;
   toasts: Toast[];
   setToasts: React.Dispatch<React.SetStateAction<Toast[]>>;
   handleButtonClick: (btn: Pick<ButtonData, "id" | "name" | "type" | "payload">) => Promise<void>;
@@ -161,7 +158,6 @@ export default function DialogManager({
   handleAttach,
   handleRefresh,
   handleSelectHost,
-  terminalRefs,
   toasts,
   setToasts,
   setEditingButton,
@@ -376,7 +372,7 @@ export default function DialogManager({
                       <MenuItem
                         onClick={() => {
                           handleUnpinTab(memoTabId);
-                          setTimeout(() => terminalRefs.current[getStore().activePaneId]?.focus(), 50);
+                          triggerFocus();
                         }}
                       >
                         Unpin tab
@@ -385,7 +381,7 @@ export default function DialogManager({
                       <MenuItem
                         onClick={() => {
                           handlePinTab(memoTabId);
-                          setTimeout(() => terminalRefs.current[getStore().activePaneId]?.focus(), 50);
+                          triggerFocus();
                         }}
                       >
                         Pin tab
@@ -396,7 +392,7 @@ export default function DialogManager({
                         <MenuItem
                           onClick={() => {
                             handleUnlockTab(memoTabId);
-                            setTimeout(() => terminalRefs.current[getStore().activePaneId]?.focus(), 50);
+                            triggerFocus();
                           }}
                         >
                           Unlock tab
@@ -405,7 +401,7 @@ export default function DialogManager({
                         <MenuItem
                           onClick={() => {
                             handleLockTab(memoTabId);
-                            setTimeout(() => terminalRefs.current[getStore().activePaneId]?.focus(), 50);
+                            triggerFocus();
                           }}
                         >
                           Lock tab
@@ -426,9 +422,7 @@ export default function DialogManager({
                     <MenuItem
                       onClick={() => {
                         handleReconnectTab(memoTabId);
-                        setTimeout(() => {
-                          terminalRefs.current[getStore().activePaneId]?.focus();
-                        }, 50);
+                        triggerFocus();
                       }}
                     >
                       Reconnect
@@ -527,6 +521,7 @@ export default function DialogManager({
 
       <Dialog
         id="edit-button-dialog"
+        disableRestoreFocus
         data-button-id={editingButton?.id || ""}
         open={buttonDialogOpen}
         onClose={handleCloseBtnDialog}
@@ -783,7 +778,7 @@ export default function DialogManager({
         </DialogActions>
       </Dialog>
 
-      <Dialog open={inputDialogOpen} onClose={handleCloseInputDialog} fullWidth maxWidth="sm">
+      <Dialog open={inputDialogOpen} onClose={handleCloseInputDialog} disableRestoreFocus fullWidth maxWidth="sm">
         <DialogTitle>Terminal Input</DialogTitle>
         <DialogContent sx={{ pt: 1 }}>
           <TextField
@@ -855,12 +850,11 @@ export default function DialogManager({
       </Dialog>
 
       <NewTabDialog
+        key={newTabDialogOpen ? "open" : "closed"}
         open={newTabDialogOpen}
         onClose={() => {
           setNewTabDialogOpen(false);
-          setTimeout(() => {
-            terminalRefs.current[getStore().activePaneId]?.focus();
-          }, 0);
+          triggerFocus();
         }}
         hosts={hosts}
         recents={recents}
@@ -877,7 +871,7 @@ export default function DialogManager({
           const t = tabs.find((x) => x.id === tabId);
           if (t) {
             setActivePaneId(t.activePaneId);
-            setTimeout(() => terminalRefs.current[t.activePaneId]?.focus(), 50);
+            triggerFocus();
           }
         }}
         onAttachPinned={(id, host, title, isLocked) => {

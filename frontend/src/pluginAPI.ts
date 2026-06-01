@@ -48,6 +48,7 @@ import {
   setHosts,
   setTabs,
   setVars,
+  triggerFocus,
   useStore,
 } from "./store";
 import { dialogs } from "./Dialogs";
@@ -136,7 +137,6 @@ const virtualModulesImportRegex = (() => {
 export async function runScript(
   btn: Pick<ButtonData, "id" | "name" | "type" | "payload">,
   notify: (msg: string, severity?: Severity) => void,
-  getTerminalRefs: () => TerminalRefMap,
 ) {
   let moduleObj: CsScriptModule;
   let cached = false;
@@ -202,9 +202,7 @@ export async function runScript(
   }
 
   if (!moduleObj.default?.noFocus) {
-    const refs = getTerminalRefs();
-    const activePaneId = getStore().activePaneId;
-    refs[activePaneId]?.focus();
+    triggerFocus();
   }
 }
 
@@ -370,7 +368,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
   };
 
   window.csRunScript = async (script: ButtonData) => {
-    await runScript(script, cb.notify, cb.getTerminalRefs);
+    await runScript(script, cb.notify);
   };
 
   window.csSendData = (data: string, paneId?: string) => {
@@ -413,7 +411,6 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
       return;
     }
     const { activePaneId, tabs } = getStore();
-    const refs = cb.getTerminalRefs();
     if (tabOrPaneId) {
       const tab = tabs.find((t) => t.id === tabOrPaneId);
       if (tab) {
@@ -430,7 +427,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
         }
       }
     }
-    setTimeout(() => refs[getStore().activePaneId]?.focus(), 50);
+    triggerFocus();
   };
 
   window.csNotify = cb.notify;

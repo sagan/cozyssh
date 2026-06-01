@@ -50,6 +50,7 @@ import {
 } from "./constants";
 import { type HostForm, type ServiceWorkerStatus, filterHosts, remoteCommandOptions, searchString } from "./common";
 import { dialogs } from "./Dialogs";
+import { triggerFocus } from "./store";
 
 const drawerWidth = 260;
 
@@ -435,7 +436,7 @@ export default function Sidebar({
         return;
       }
       setDialogOpen(false);
-      setTimeout(() => csFocus(), 0);
+      triggerFocus();
     },
     [formData, initialHostFormData],
   );
@@ -857,9 +858,10 @@ export default function Sidebar({
       <Dialog
         id="dashboard-dialog"
         open={settingsOpen}
+        disableRestoreFocus
         onClose={() => {
           setSettingsOpen(false);
-          setTimeout(() => csFocus(), 0);
+          triggerFocus();
         }}
         fullWidth
         maxWidth="sm"
@@ -1058,6 +1060,7 @@ export default function Sidebar({
         id="edit-host-dialog"
         data-host-name={editingName}
         open={dialogOpen}
+        disableRestoreFocus
         onClose={handleCloseHostDialog}
         maxWidth="sm"
         fullWidth

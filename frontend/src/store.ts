@@ -41,6 +41,8 @@ export interface TabData {
 export type TerminalRefMap = Record<string, TerminalHandle | ScratchpadHandle | null>;
 
 interface Store {
+  focusTrigger: number;
+  focusSearchInputTrigger: number;
   tabs: TabData[];
   activeTabId: string;
   activePaneId: string;
@@ -69,6 +71,8 @@ function loadVarsFromStorate(key: string): Record<string, string> {
 }
 
 export const useStore = create<Store>(() => ({
+  focusTrigger: 0,
+  focusSearchInputTrigger: 0,
   tabs: [],
   activeTabId: "",
   activePaneId: "",
@@ -78,6 +82,16 @@ export const useStore = create<Store>(() => ({
   localVars: loadVarsFromStorate(BROWSER_STORAGE_KEY_LOCAL_VARS),
   shellIntegrations: {},
 }));
+
+export const triggerFocus = () =>
+  useStore.setState((state) => ({
+    focusTrigger: state.focusTrigger + 1,
+  }));
+
+export const triggerFocusSearchInput = () =>
+  useStore.setState((state) => ({
+    focusSearchInputTrigger: state.focusSearchInputTrigger + 1,
+  }));
 
 export const setTabs = (update: TabData[] | ((data: TabData[]) => TabData[])) =>
   useStore.setState((state) => ({

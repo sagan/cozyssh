@@ -89,6 +89,7 @@ import {
   setButtons,
   setVars,
   setLocalVars as storeSetLocalVars,
+  triggerFocus,
 } from "./store";
 import { useLocalStorage } from "./useLocalStorage";
 import { setupPluginAPI, runScript, moduleCache } from "./pluginAPI";
@@ -441,9 +442,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   const handleCloseInputDialog = useCallback(() => {
     setInputDialogOpen(false);
-    setTimeout(() => {
-      terminalRefs.current[getStore().activePaneId]?.focus();
-    }, 50);
+    triggerFocus();
   }, []);
 
   const handleCloseSearch = useCallback(() => {
@@ -451,7 +450,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const term = terminalRefs.current[getStore().activePaneId];
     if (term && "getXterm" in term) {
       term.clearSearchDecorations();
-      setTimeout(() => term.focus(), 50);
+      term.focus();
     }
   }, []);
 
@@ -459,7 +458,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const term = terminalRefs.current[getStore().activePaneId];
     if (term && "getXterm" in term) {
       term.sendData(key);
-      setTimeout(() => term.focus(), 0);
+      term.focus();
     }
   }, []);
 
@@ -529,13 +528,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
           window.navigator.vibrate?.(VIBRATE_PATTERN);
           setActiveTabId(newTab.id);
           setActivePaneId(newTab.activePaneId);
-          setTimeout(() => terminalRefs.current[newTab.activePaneId]?.focus(), 50);
+          triggerFocus();
         } else if (diffX < 0 && currentIndex < tabs.length - 1) {
           const newTab = tabs[currentIndex + 1];
           window.navigator.vibrate?.(VIBRATE_PATTERN);
           setActiveTabId(newTab.id);
           setActivePaneId(newTab.activePaneId);
-          setTimeout(() => terminalRefs.current[newTab.activePaneId]?.focus(), 50);
+          triggerFocus();
         }
       }
     },
@@ -926,7 +925,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     if (existing) {
       setActiveTabId(existing.id);
       setActivePaneId(existing.panes[0].id);
-      setTimeout(() => terminalRefs.current[existing.panes[0].id]?.focus(), 50);
+      triggerFocus();
       return;
     }
     const tabId = `scratchpad-${Date.now()}`;
@@ -940,7 +939,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setTabs((prev) => [...prev, newTab]);
     setActiveTabId(tabId);
     setActivePaneId(tabId);
-    setTimeout(() => terminalRefs.current[tabId]?.focus(), 50);
+    triggerFocus();
   }, []);
 
   const handleUnpinTab = useCallback(async (id: string) => {
@@ -999,7 +998,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         }
         return newTabs;
       });
-      setTimeout(() => terminalRefs.current[getStore().activePaneId]?.focus(), 50);
+      triggerFocus();
     },
     [handleUnpinTab],
   );
@@ -1059,7 +1058,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
           if (activeTabId === parentTab.id) {
             setActivePaneId(nextPaneId);
-            setTimeout(() => terminalRefs.current[nextPaneId]?.focus(), 50);
+            triggerFocus();
           }
         } else {
           handleCloseTab(null, parentTab.id);
@@ -1184,9 +1183,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       }
       setTabs((prev) => prev.map((t) => (t.id === targetId ? { ...t, title: newTitle } : t)));
     }
-    setTimeout(() => {
-      terminalRefs.current[getStore().activePaneId]?.focus();
-    }, 50);
+    triggerFocus();
   }, [contextMenu]);
 
   const handleCloneSession = useCallback((id: string, cloneInSameTab?: boolean) => {
@@ -1284,9 +1281,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     if (tab) {
       setActivePaneId(tab.activePaneId);
     }
-    setTimeout(() => {
-      terminalRefs.current[getStore().activePaneId]?.focus();
-    }, 50);
+    triggerFocus();
   }, [contextMenu]);
 
   const handleCloseRight = useCallback(() => {
@@ -1305,9 +1300,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       }
       return newTabs;
     });
-    setTimeout(() => {
-      terminalRefs.current[getStore().activePaneId]?.focus();
-    }, 50);
+    triggerFocus();
   }, [contextMenu]);
 
   useEffect(() => {
@@ -1345,7 +1338,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       switch (btn.type) {
         case "send_string":
           await sendParsedString(btn.payload);
-          terminalRefs.current[getStore().activePaneId]?.focus();
+          triggerFocus();
           break;
 
         case "open_terminal":
@@ -1560,11 +1553,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
             default:
               break;
           }
-          terminalRefs.current[getStore().activePaneId]?.focus();
+          triggerFocus();
           break;
 
         case "run_script":
-          await runScript(btn, csNotify, () => terminalRefs.current);
+          await runScript(btn, csNotify);
           break;
 
         default:
@@ -1699,7 +1692,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         return;
       }
       setButtonDialogOpen(false);
-      setTimeout(() => csFocus(), 0);
+      triggerFocus();
     },
     [buttonFormData, initialBtnFormData],
   );
@@ -1796,7 +1789,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
             searchOpen={searchOpen}
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
-            searchInputRef={searchInputRef}
             terminalRefs={terminalRefs}
             unreadTabIds={unreadTabIds}
             isMobile={isMobile}
@@ -2069,7 +2061,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
         handleAttach={handleAttach}
         handleRefresh={handleRefresh}
         handleSelectHost={handleSelectHost}
-        terminalRefs={terminalRefs}
         toasts={toasts}
         setToasts={setToasts}
       />

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -11,6 +11,9 @@
     <script>
       (function () {
         const startupParams = new URLSearchParams(location.search);
+        if (startupParams.get("_scan") === "1") {
+          document.write('<script crossorigin="anonymous" src="//unpkg.com/react-scan/dist/auto.global.js"><\/script>');
+        }
         if (startupParams.get("nocss") === "1") {
           return;
         }

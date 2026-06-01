@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Box, Tabs, Tab, IconButton, TextField } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import AddIcon from "@mui/icons-material/Add";
@@ -15,7 +15,7 @@ import CloudDoneIcon from "@mui/icons-material/CloudDone";
 import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
 
 import type { NewTabDialogViewMode, ScratchpadSyncState } from "./common";
-import { type TerminalRefMap, setActivePaneId, setActiveTabId, useStore } from "./store";
+import { type TerminalRefMap, setActivePaneId, setActiveTabId, triggerFocus, useStore } from "./store";
 import type { AppletData } from "./AppletWrapper";
 
 export interface TabBarProps {
@@ -26,7 +26,6 @@ export interface TabBarProps {
   searchOpen: boolean;
   searchQuery: string;
   setSearchQuery: React.Dispatch<React.SetStateAction<string>>;
-  searchInputRef: React.RefObject<HTMLInputElement | null>;
   terminalRefs: React.MutableRefObject<TerminalRefMap>;
   unreadTabIds: Set<string>;
   isMobile: boolean;
@@ -47,7 +46,6 @@ export default function TabBar({
   searchOpen,
   searchQuery,
   setSearchQuery,
-  searchInputRef,
   terminalRefs,
   unreadTabIds,
   isMobile,
@@ -59,7 +57,14 @@ export default function TabBar({
   setNewTabDialogInitialViewMode,
   setNewTabDialogOpen,
 }: TabBarProps) {
-  const { tabs, activeTabId, activePaneId } = useStore();
+  const { focusSearchInputTrigger, tabs, activeTabId, activePaneId } = useStore();
+  const searchInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (focusSearchInputTrigger > 0 && searchOpen) {
+      searchInputRef.current?.focus();
+    }
+  }, [searchOpen, focusSearchInputTrigger]);
 
   return (
     <>
@@ -96,7 +101,7 @@ export default function TabBar({
                 }
                 setActiveTabId(val);
                 setActivePaneId(t.activePaneId);
-                setTimeout(() => terminalRefs.current[t.activePaneId]?.focus(), 50);
+                triggerFocus();
               }}
               variant="scrollable"
               scrollButtons={true}

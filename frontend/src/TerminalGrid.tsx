@@ -9,6 +9,7 @@ import { type NewTabDialogViewMode, type ScratchpadSyncState, genPaneId } from "
 import {
   type PaneData,
   type TerminalRefMap,
+  getStore,
   setActivePaneId,
   setActiveTabId,
   setShellIntegrations,
@@ -79,7 +80,7 @@ export default function TerminalGrid({
   keyboardHeight,
   getActiveTerminal,
 }: TerminalGridProps) {
-  const { tabs, activeTabId, activePaneId, shellIntegrations, vars, localVars } = useStore();
+  const { focusTrigger, tabs, activeTabId, activePaneId, shellIntegrations, vars, localVars } = useStore();
 
   // ── Gesture-mode: non-passive native touch listeners ─────────────────────
   // React synthetic touch events are passive (cannot preventDefault), so we
@@ -156,6 +157,13 @@ export default function TerminalGrid({
       el.removeEventListener("touchend", onTouchEnd, { capture: true });
     };
   }, []); // refs keep values fresh; no re-run needed
+
+  // Note it must not depend on any state other then focusTrigger to avoid re-rendering.
+  useEffect(() => {
+    if (focusTrigger > 0) {
+      terminalRefs.current[getStore().activePaneId]?.focus();
+    }
+  }, [focusTrigger, terminalRefs]);
 
   return (
     <>

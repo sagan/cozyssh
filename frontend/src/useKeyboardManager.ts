@@ -20,7 +20,15 @@ import {
   VAR_CS_SCROLL_LINES,
 } from "./constants";
 import { type NewTabDialogViewMode, getIntVar, getKeyCombination } from "./common";
-import { type TerminalRefMap, getStore, setActivePaneId, setActiveTabId, setTabs } from "./store";
+import {
+  type TerminalRefMap,
+  getStore,
+  setActivePaneId,
+  setActiveTabId,
+  setTabs,
+  triggerFocus,
+  triggerFocusSearchInput,
+} from "./store";
 
 export interface KeyboardManagerOptions {
   handleCloneSession: (id: string, cloneInSameTab?: boolean) => void;
@@ -184,8 +192,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
             setActivePaneId(targetPaneId);
             setTabs((tabs) => tabs.map((t) => (t.id === targetTab.id ? { ...t, activePaneId: targetPaneId } : t)));
             (document.activeElement as HTMLElement)?.blur?.();
-            terminalRefs[targetPaneId]?.focus();
-            setTimeout(() => terminalRefs[targetPaneId]?.focus(), 100);
+            triggerFocus();
           } else {
             // multiple-panes tab, switch to prev pane of this tab
             const paneIdx = activeTab.panes.findIndex((p) => p.id === activePaneId);
@@ -194,8 +201,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
             setActivePaneId(targetPaneId);
             setTabs((tabs) => tabs.map((t) => (t.id === activeTab.id ? { ...t, activePaneId: targetPaneId } : t)));
             (document.activeElement as HTMLElement)?.blur?.();
-            terminalRefs[targetPaneId]?.focus();
-            setTimeout(() => terminalRefs[targetPaneId]?.focus(), 100);
+            triggerFocus();
           }
           return;
         }
@@ -217,8 +223,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
             setActivePaneId(targetPaneId);
             setTabs((tabs) => tabs.map((t) => (t.id === targetTab.id ? { ...t, activePaneId: targetPaneId } : t)));
             (document.activeElement as HTMLElement)?.blur?.();
-            terminalRefs[targetPaneId]?.focus();
-            setTimeout(() => terminalRefs[targetPaneId]?.focus(), 100);
+            triggerFocus();
           } else {
             // multiple-panes tab, switch to next pane of this tab
             const paneIdx = activeTab.panes.findIndex((p) => p.id === activePaneId);
@@ -227,8 +232,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
             setActivePaneId(targetPaneId);
             setTabs((tabs) => tabs.map((t) => (t.id === activeTab.id ? { ...t, activePaneId: targetPaneId } : t)));
             (document.activeElement as HTMLElement)?.blur?.();
-            terminalRefs[targetPaneId]?.focus();
-            setTimeout(() => terminalRefs[targetPaneId]?.focus(), 100);
+            triggerFocus();
           }
           return;
         }
@@ -249,7 +253,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           if (activeTab?.activePaneId) {
             const pid = activeTab.activePaneId;
             setActivePaneId(pid);
-            setTimeout(() => terminalRefs[pid]?.focus(), 100);
+            triggerFocus();
           }
           return;
         }
@@ -261,7 +265,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
             const pid = activeTab.panes[0].id;
             setActivePaneId(pid);
             setTabs((tabs) => tabs.map((t) => (t.id === activeTabId ? { ...t, activePaneId: pid } : t)));
-            setTimeout(() => terminalRefs[pid]?.focus(), 100);
+            triggerFocus();
           }
           return;
         }
@@ -315,7 +319,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           ) {
             e.preventDefault();
             setSearchOpen(true);
-            setTimeout(() => searchInputRef.current?.focus(), 100);
+            triggerFocusSearchInput();
           }
           return;
 
@@ -351,8 +355,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           setActiveTabId(target.id);
           setActivePaneId(target.activePaneId);
           (document.activeElement as HTMLElement)?.blur?.();
-          terminalRefs[target.activePaneId]?.focus();
-          setTimeout(() => terminalRefs[target.activePaneId]?.focus(), 100);
+          triggerFocus();
         }
         return;
       }

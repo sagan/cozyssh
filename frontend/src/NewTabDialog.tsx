@@ -75,12 +75,16 @@ export default function NewTabDialog({
 }: NewTabDialogProps) {
   const [filter, setFilter] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [viewMode, setViewMode] = useState<ViewMode>("servers");
+  const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
   const inputRef = useRef<HTMLInputElement>(null);
   const selectedItemRef = useRef<HTMLDivElement>(null);
   const swipeStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
   const [localPinned, setLocalPinned] = useState<SessionPinned[]>([]);
+
+  useEffect(() => {
+    setViewMode(initialViewMode);
+  }, [initialViewMode]);
 
   useEffect(() => {
     if (open) {
@@ -374,16 +378,6 @@ export default function NewTabDialog({
   ]);
 
   useEffect(() => {
-    if (open) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setFilter("");
-      setSelectedIndex(0);
-      setViewMode(initialViewMode);
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
-  }, [open, initialViewMode]);
-
-  useEffect(() => {
     if (selectedItemRef.current) {
       selectedItemRef.current.scrollIntoView({
         block: "nearest",
@@ -539,6 +533,7 @@ export default function NewTabDialog({
       data-view={viewMode}
       open={open}
       onClose={onClose}
+      disableRestoreFocus
       fullWidth
       maxWidth="sm"
       sx={{
@@ -559,6 +554,7 @@ export default function NewTabDialog({
     >
       <DialogTitle sx={{ p: 1.5, pb: 1 }}>
         <TextField
+          autoFocus
           fullWidth
           variant="outlined"
           placeholder={
