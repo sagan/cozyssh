@@ -33,10 +33,7 @@ import type {
 } from "./api";
 import {
   APP_NAME,
-  BROADCAST_CHANNEL_COZY_TABS,
-  BROADCAST_CHANNEL_MESSAGE_PINNED_PRESENT,
   DEFAULT_SCROLL_LINES,
-  BROADCAST_CHANNEL_MESSAGE_PROBE_PINNED,
   BROWSER_STORAGE_KEY_ACTIVE_GROUP,
   BROWSER_STORAGE_KEY_LOCAL_VARS,
   BROWSER_STORAGE_KEY_RECENTS,
@@ -284,9 +281,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
         options = { ...Object.fromEntries(new URLSearchParams(host.slice(i))), ...options };
         host = host.slice(0, i);
       }
-      if (options?.title) {
-        title = options.title;
-        delete options.title;
+      if (options) {
+        const { title: _title, target: _target, ...otherOptions } = options;
+        title = title || _title;
+        target = target || _target;
+        options = otherOptions;
       }
       if (options?.id) {
         for (const tab of getStore().tabs) {
@@ -305,8 +304,20 @@ export default function Dashboard({ initialData }: DashboardProps) {
       }
       const paneId = options?.id || genPaneId(host);
       const sessionId = options?.id || undefined;
-      const targetTab = target ? getStore().tabs.find((t) => t.id === target) : undefined;
-      if (targetTab && targetTab.panes.length < 4) {
+      let targetTab: TabData | undefined;
+      if (target === "_blank") {
+        target = "";
+      } else if (target === "_self") {
+        target = getStore().activeTabId;
+      }
+      if (target) {
+        targetTab = getStore().tabs.find((t) => t.id === target);
+        if (targetTab && targetTab.panes.length >= 4) {
+          target = "";
+          targetTab = undefined;
+        }
+      }
+      if (targetTab) {
         const newPane: PaneData = { id: paneId, sessionId, host, options };
         setTabs((prev) =>
           prev.map((t) => (t.id === target ? { ...t, panes: [...t.panes, newPane], activePaneId: paneId } : t)),
@@ -314,7 +325,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         setActiveTabId(targetTab.id);
         setActivePaneId(paneId);
       } else {
-        const tabId = genTabId(host);
+        const tabId = target || genTabId(host);
         const newTab: TabData = {
           id: tabId,
           title: title || hostTitle(host),
@@ -681,39 +692,18 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   // these variables are only used in initial phrase, so don't add them to dependency array
   const [startupParams] = useSearchParams();
-  const noautoload = getIntVar(vars, localVars, VAR_CS_NOAUTOLOAD);
-  const noautorun = getIntVar(vars, localVars, VAR_CS_NOAUTORUN);
 
   useWakeLock(tabs.length > 0 && getIntVar(vars, localVars, VAR_CS_NOWAKELOCK) !== 1);
 
-  const initted = useRef(false);
   useEffect(() => {
-    if (initted.current) {
-      return;
-    }
-    initted.current = true;
-    const autoload = noautoload !== 1 && startupParams.get(VAR_NOAUTOLOAD) !== "1";
+    const autorun = getIntVar(vars, localVars, VAR_CS_NOAUTORUN) !== 1 && startupParams.get(VAR_NOAUTORUN) !== "1";
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     const hash = window.location.hash.substring(1);
     if (hash) {
       window.history.replaceState(null, "", window.location.pathname + window.location.search);
     }
 
-    const bc: BroadcastChannel = new BroadcastChannel(BROADCAST_CHANNEL_COZY_TABS);
-    let pinnedElsewhere = false;
-
     const initAsync = async () => {
-      bc.onmessage = (e) => {
-        if (e.data === BROADCAST_CHANNEL_MESSAGE_PROBE_PINNED) {
-          const hasPinned = getStore().tabs.some((t) => t.isPinned);
-          if (hasPinned) {
-            bc.postMessage(BROADCAST_CHANNEL_MESSAGE_PINNED_PRESENT);
-          }
-        } else if (e.data === BROADCAST_CHANNEL_MESSAGE_PINNED_PRESENT) {
-          pinnedElsewhere = true;
-        }
-      };
-
       console.log("initAsync starting, hash:", hash);
       let data = initialData;
       if (!data) {
@@ -754,123 +744,127 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
       loadFullData(data);
 
-      bc.postMessage(BROADCAST_CHANNEL_MESSAGE_PROBE_PINNED);
-
-      setTimeout(() => {
-        const pinnedTabsData = data.pinned || [];
-        if (hash) {
-          const hostsData = data.hosts || [];
-          if (hash.startsWith("#")) {
-            // Tag mode /##tag
-            const tag = hash.substring(1);
-            const filtered = hostsData.filter((h) => h.tags && h.tags.includes(tag));
-
-            const nameSorter = (a: HostData, b: HostData) => a.name.localeCompare(b.name);
-            const hostNameSorter = (a: HostData, b: HostData) => {
-              if (a.hostname === b.hostname) {
-                return a.name.localeCompare(b.name);
-              }
-              return a.hostname.localeCompare(b.hostname);
-            };
-
-            const favs = filtered.filter((h) => h.tags?.includes("fav")).sort(nameSorter);
-            const normals = filtered.filter((h) => !h.tags?.includes("fav") && !h.is_auto).sort(nameSorter);
-            const autos = filtered.filter((h) => !h.tags?.includes("fav") && h.is_auto).sort(hostNameSorter);
-
-            const targets = [...favs, ...normals, ...autos].slice(0, 4);
-            if (targets.length > 0) {
-              handleSelectTagAsSplit(
-                tag,
-                targets.map((h) => h.name),
-              );
-            } else {
-              const tabId = genTabId(LOCAL_NAME);
-              const paneId = genPaneId(LOCAL_NAME);
-              setTabs((tabs) => [
-                ...tabs,
-                {
-                  id: tabId,
-                  panes: [{ id: paneId, host: LOCAL_NAME }],
-                  activePaneId: paneId,
-                  title: LOCAL_NAME,
-                },
-              ]);
-              setActiveTabId(tabId);
-              setActivePaneId(paneId);
-            }
-          } else {
-            // Single host mode /#host
-            const host =
-              hash !== LOCAL_NAME
-                ? hostsData.find((h) =>
-                    hash.includes("@")
-                      ? hash === `${h.user || "root"}@${h.hostname}`
-                      : h.name === hash || h.hostname === hash,
-                  )
-                : { name: LOCAL_NAME };
-            if (host) {
-              handleSelectHost(host.name);
-            } else {
-              const tabId = genTabId(LOCAL_NAME);
-              const paneId = genPaneId(LOCAL_NAME);
-              setTabs((tabs) => [
-                ...tabs,
-                {
-                  id: tabId,
-                  panes: [{ id: paneId, host: LOCAL_NAME }],
-                  activePaneId: paneId,
-                  title: LOCAL_NAME,
-                },
-              ]);
-              setActiveTabId(tabId);
-              setActivePaneId(paneId);
-              setTimeout(() => dialogs.alert(`SSH server "${hash}" not found in config.`), 100);
+      __CS_AUTORUN_DONE__ = 0;
+      if (autorun) {
+        const buttons = getStore().buttons;
+        if (!hash) {
+          for (const button of buttons) {
+            if (button.type === "open_terminal" && button.autorun === 1) {
+              await handleSelectHost(button.payload, { noUpdateRecent: true });
             }
           }
-        } else if (autoload) {
-          if (!pinnedElsewhere) {
-            // Only auto-open tabs that are not currently in use by any client
-            const availablePins = pinnedTabsData.filter((p) => !p.listenerCount || p.listenerCount === 0);
-            const pinnedTabs = availablePins.map((p) => {
-              const paneId = p.id;
-              return {
-                id: p.id,
-                panes: [{ id: paneId, host: p.host }],
+        }
+        for (const btn of buttons) {
+          if (btn.type === "run_script" && btn.autorun === 1) {
+            try {
+              await handleButtonClick(btn);
+            } catch (e) {
+              console.error(`Autorun script ${btn.name} error:`, e);
+            }
+          }
+        }
+      }
+      __CS_AUTORUN_DONE__ = 1;
+
+      const pinnedTabsData = data.pinned || [];
+      const pinnedElsewhere = pinnedTabsData.some((p) => p.listenerCount > 0);
+
+      const autoload =
+        getIntVar(vars, localVars, VAR_CS_NOAUTOLOAD) !== 1 &&
+        startupParams.get(VAR_NOAUTOLOAD) !== "1" &&
+        getStore().tabs.length === 0;
+
+      if (hash) {
+        const hostsData = data.hosts || [];
+        if (hash.startsWith("#")) {
+          // Tag mode /##tag
+          const tag = hash.substring(1);
+          const filtered = hostsData.filter((h) => h.tags && h.tags.includes(tag));
+
+          const nameSorter = (a: HostData, b: HostData) => a.name.localeCompare(b.name);
+          const hostNameSorter = (a: HostData, b: HostData) => {
+            if (a.hostname === b.hostname) {
+              return a.name.localeCompare(b.name);
+            }
+            return a.hostname.localeCompare(b.hostname);
+          };
+
+          const favs = filtered.filter((h) => h.tags?.includes("fav")).sort(nameSorter);
+          const normals = filtered.filter((h) => !h.tags?.includes("fav") && !h.is_auto).sort(nameSorter);
+          const autos = filtered.filter((h) => !h.tags?.includes("fav") && h.is_auto).sort(hostNameSorter);
+
+          const targets = [...favs, ...normals, ...autos].slice(0, 4);
+          if (targets.length > 0) {
+            handleSelectTagAsSplit(
+              tag,
+              targets.map((h) => h.name),
+            );
+          } else {
+            const tabId = genTabId(LOCAL_NAME);
+            const paneId = genPaneId(LOCAL_NAME);
+            setTabs((tabs) => [
+              ...tabs,
+              {
+                id: tabId,
+                panes: [{ id: paneId, host: LOCAL_NAME }],
                 activePaneId: paneId,
-                title: p.title,
-                isPinned: true,
-                isLocked: p.isLocked,
-              };
-            });
-            if (pinnedTabs.length > 0) {
-              setTabs((prev) => (prev.length > 0 ? prev : pinnedTabs));
-              if (!getStore().activeTabId) {
-                setActiveTabId(pinnedTabs[0].id);
-              }
-              if (!getStore().activePaneId) {
-                setActivePaneId(pinnedTabs[0].activePaneId);
-              }
-            } else {
-              const tabId = genTabId(LOCAL_NAME);
-              const paneId = genPaneId(LOCAL_NAME);
-              setTabs((prev) =>
-                prev.length > 0
-                  ? prev
-                  : [
-                      {
-                        id: tabId,
-                        panes: [{ id: paneId, host: LOCAL_NAME }],
-                        activePaneId: paneId,
-                        title: LOCAL_NAME,
-                      },
-                    ],
-              );
-              if (!getStore().activeTabId) {
-                setActiveTabId(tabId);
-              }
-              if (!getStore().activePaneId) {
-                setActivePaneId(paneId);
-              }
+                title: LOCAL_NAME,
+              },
+            ]);
+            setActiveTabId(tabId);
+            setActivePaneId(paneId);
+          }
+        } else {
+          // Single host mode /#host
+          const host =
+            hash !== LOCAL_NAME
+              ? hostsData.find((h) =>
+                  hash.includes("@")
+                    ? hash === `${h.user || "root"}@${h.hostname}`
+                    : h.name === hash || h.hostname === hash,
+                )
+              : { name: LOCAL_NAME };
+          if (host) {
+            handleSelectHost(host.name);
+          } else {
+            const tabId = genTabId(LOCAL_NAME);
+            const paneId = genPaneId(LOCAL_NAME);
+            setTabs((tabs) => [
+              ...tabs,
+              {
+                id: tabId,
+                panes: [{ id: paneId, host: LOCAL_NAME }],
+                activePaneId: paneId,
+                title: LOCAL_NAME,
+              },
+            ]);
+            setActiveTabId(tabId);
+            setActivePaneId(paneId);
+            setTimeout(() => dialogs.alert(`SSH server "${hash}" not found in config.`), 100);
+          }
+        }
+      } else if (autoload) {
+        if (!pinnedElsewhere) {
+          // Only auto-open tabs that are not currently in use by any client
+          const availablePins = pinnedTabsData.filter((p) => !p.listenerCount || p.listenerCount === 0);
+          const pinnedTabs = availablePins.map((p) => {
+            const paneId = p.id;
+            return {
+              id: p.id,
+              panes: [{ id: paneId, host: p.host }],
+              activePaneId: paneId,
+              title: p.title,
+              isPinned: true,
+              isLocked: p.isLocked,
+            };
+          });
+          if (pinnedTabs.length > 0) {
+            setTabs((prev) => (prev.length > 0 ? prev : pinnedTabs));
+            if (!getStore().activeTabId) {
+              setActiveTabId(pinnedTabs[0].id);
+            }
+            if (!getStore().activePaneId) {
+              setActivePaneId(pinnedTabs[0].activePaneId);
             }
           } else {
             const tabId = genTabId(LOCAL_NAME);
@@ -894,18 +888,35 @@ export default function Dashboard({ initialData }: DashboardProps) {
               setActivePaneId(paneId);
             }
           }
+        } else {
+          const tabId = genTabId(LOCAL_NAME);
+          const paneId = genPaneId(LOCAL_NAME);
+          setTabs((prev) =>
+            prev.length > 0
+              ? prev
+              : [
+                  {
+                    id: tabId,
+                    panes: [{ id: paneId, host: LOCAL_NAME }],
+                    activePaneId: paneId,
+                    title: LOCAL_NAME,
+                  },
+                ],
+          );
+          if (!getStore().activeTabId) {
+            setActiveTabId(tabId);
+          }
+          if (!getStore().activePaneId) {
+            setActivePaneId(paneId);
+          }
         }
-      }, 350);
+      }
     };
 
     initAsync();
-
-    return () => {
-      bc.close();
-    };
     // Run ONLY once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialData, handleSelectTagAsSplit, handleSelectHost, loadFullData, csNotify]);
+  }, []);
 
   useEffect(() => {
     const active = tabs.find((t) => t.id === activeTabId);
@@ -1651,30 +1662,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
         setActiveGroup(buttonFormData.group || DEFAULT_BUTTON_GROUP);
       });
   }, [buttonFormData, editingButton, setActiveGroup]);
-
-  useEffect(() => {
-    if (__CS_AUTORUN_DONE__ === undefined && buttonsLoaded) {
-      __CS_AUTORUN_DONE__ = 0;
-      (async () => {
-        if (noautorun !== 1 && startupParams.get(VAR_NOAUTORUN) !== "1") {
-          const terminalButtons = getStore().buttons.filter((b) => b.type === "open_terminal" && b.autorun === 1);
-          for (const terminalBtn of terminalButtons) {
-            await handleSelectHost(terminalBtn.payload, { noUpdateRecent: true });
-          }
-          const scriptsToRun = getStore().buttons.filter((b) => b.type === "run_script" && b.autorun === 1);
-          for (const btn of scriptsToRun) {
-            try {
-              await handleButtonClick(btn);
-            } catch (e) {
-              console.error(`Autorun script ${btn.name} error:`, e);
-            }
-          }
-        }
-        __CS_AUTORUN_DONE__ = 1;
-      })();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buttonsLoaded, handleButtonClick]);
 
   const handleDeleteButton = useCallback(async (id: string, name: string) => {
     setBtnMenuAnchor(null);

@@ -7,6 +7,7 @@ import { VitePWA } from "vite-plugin-pwa";
 export default defineConfig({
   build: {
     emptyOutDir: true,
+    sourcemap: true,
   },
   plugins: [
     react(),
@@ -20,6 +21,11 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
         navigateFallback: "index.html",
+        // Only apply navigateFallback to page navigation requests, not API/WS endpoints
+        navigateFallbackAllowlist: [/^\/(?!api\/|ws\/|manifest\.json)/],
+        // Ignore all query parameters when matching precached entries.
+        // Without this, /?noautoload=1 fails to match the cached "/" entry → ERR_FAILED.
+        ignoreURLParametersMatching: [/.*/],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB
         runtimeCaching: [
           {

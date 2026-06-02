@@ -82,7 +82,7 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
     - **Custom Shortcut** : Set custom keyboard shortcut (e.g. `ctrl+shift+m`) for any button.
   - **Mobile-Friendly**: All features can be accessed seamlessly from mobile browser.
     - **Responsive sidebar and layout**.
-    - **Mobile Input Toolbar**: Quick access to Esc, Tab, Arrow keys, and a stateful **Ctrl toggle** for mobile touch keyboards.
+    - **Mobile Input Toolbar**: Quick access to `Ctrl`, `Alt`, `Esc`, `Tab`, `Arrow keys` on mobile device. Click `...` to access more special chars from on-screen keyboard area.
     - **Keyboard-Aware Viewport**: Automatically resizes to fit your visible mobile screen perfectly even when the on-screen keyboard is active.
     - **Gesture Support** : Swipe left / right to switch tab in mobile browser.
   - **Accident-Proof Forms**: All "Add / Edit" dialogs prevent accidental closure via backdrop click if any data has been modified.

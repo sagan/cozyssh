@@ -21,7 +21,7 @@ import (
 // shell prompt to appear, confirming the terminal is fully connected.
 func openTabAndWaitForShell(t *testing.T, page playwright.Page, name string) {
 	t.Helper()
-	_, err := page.Evaluate(fmt.Sprintf("() => csOpen('local', { name: %q })", name))
+	_, err := page.Evaluate(fmt.Sprintf("() => csOpen('local', { title: %q })", name))
 	if err != nil {
 		t.Fatalf("csOpen: %v", err)
 	}

@@ -41,9 +41,7 @@ export const VAR_CS_NOWEBGL = "cs_nowebgl";
 export const VAR_NOAUTOLOAD = "noautoload";
 export const VAR_NOAUTORUN = "noautorun";
 
-export const BROADCAST_CHANNEL_COZY_TABS = "cozy_tabs";
-export const BROADCAST_CHANNEL_MESSAGE_PROBE_PINNED = "probe_pinned";
-export const BROADCAST_CHANNEL_MESSAGE_PINNED_PRESENT = "pinned_present";
+
 
 export const DEFAULT_BUTTON_GROUP = "Default";
 

@@ -320,6 +320,10 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 		}
+		// The session's listener channel was closed (session ended or was removed).
+		// Close the WebSocket so the frontend's ws.onclose handler fires, allowing
+		// it to show a reconnect tip or auto-reconnect as appropriate.
+		conn.Close()
 	}()
 
 	for {

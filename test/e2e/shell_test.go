@@ -17,13 +17,15 @@ func TestLocalShell(t *testing.T) {
 	login(t, page, url, "123456")
 
 	// 1. Open local shell using scripting API
-	_, err := page.Evaluate("() => csOpen('local', { name: 'LOCAL_TEST' })")
+	connStr := "local"
+	id := "local"
+	_, err := page.Evaluate(fmt.Sprintf("() => csOpen('%s?id=%s', { title: 'LOCAL_TEST' })", connStr, id))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// 2. Wait for terminal to be active and ready
-	_, err = page.WaitForSelector("div[data-pane-id] .xterm-screen")
+	_, err = page.WaitForSelector(fmt.Sprintf(`div[data-pane-id="%s"] .xterm-screen`, id))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,9 +56,10 @@ func TestSSHShell(t *testing.T) {
 
 	// 2. Open SSH session using scripting API
 	// Format: user:pass@host:port
+	id := "ssh"
 	connStr := fmt.Sprintf("%s:%s@%s:%s", user, pass, host, port)
 	fmt.Printf("Calling csOpen for %s\n", connStr)
-	_, err := page.Evaluate(fmt.Sprintf("() => csOpen('%s', { name: 'SSH_TEST' })", connStr))
+	_, err := page.Evaluate(fmt.Sprintf("() => csOpen('%s?id=%s', { title: 'SSH_TEST' })", connStr, id))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,10 +71,11 @@ func TestSSHShell(t *testing.T) {
 	// WaitForSelector with state:"visible" would latch onto the hidden local tab's
 	// xterm-screen and wait forever. Using "attached" lets us proceed as soon as any
 	// xterm-screen is present, and we rely on waitForTerminalText for real readiness.
-	_, err = page.WaitForSelector("div[data-pane-id] .xterm-screen", playwright.PageWaitForSelectorOptions{
-		Timeout: playwright.Float(30000),
-		State:   playwright.WaitForSelectorStateAttached,
-	})
+	_, err = page.WaitForSelector(fmt.Sprintf(`div[data-pane-id="%s"] .xterm-screen`, id),
+		playwright.PageWaitForSelectorOptions{
+			Timeout: playwright.Float(30000),
+			State:   playwright.WaitForSelectorStateAttached,
+		})
 	if err != nil {
 		path := "test_failure.png"
 		page.Screenshot(playwright.PageScreenshotOptions{Path: playwright.String(path)})

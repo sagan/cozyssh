@@ -31,7 +31,6 @@ import {
   HEADER_X_COZYSSH_FETCH_PREFIX,
   HEADER_X_COZYSSH_URL,
   METHOD_DELETE,
-  METHOD_GET,
   METHOD_POST,
   METHOD_PUT,
   MIME_JSON,
@@ -434,8 +433,9 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
 
   window.csFetch = async (url: string, options = {}) => {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    const proxyUrl = `/api/fetch?_t=${Date.now()}-${generatePassword(12)}`;
-    const rawHeaders = new Headers(options.headers);
+    const { key: t, ...fetchOptions } = options;
+    const proxyUrl = `/api/fetch?_t=${t || `${Date.now()}-${generatePassword(12)}`}`;
+    const rawHeaders = new Headers(fetchOptions.headers);
     const headers: Record<string, string> = {};
     const restricted = [HEADER_AUTHORIZATION, HEADER_REFERER, HEADER_ORIGIN, HEADER_USER_AGENT, HEADER_COOKIE];
     headers[HEADER_AUTHORIZATION] = HEADER_AUTHORIZATION_BEARER_PREFIX + token;
@@ -447,7 +447,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
         headers[key] = rawHeaders.get(key)!;
       }
     }
-    return fetch(proxyUrl, { method: options.method || METHOD_GET, headers, body: options.body, cache: "no-cache" });
+    return fetch(proxyUrl, { ...fetchOptions, headers });
   };
 
   window.csExec = async (cmdline: string) => {

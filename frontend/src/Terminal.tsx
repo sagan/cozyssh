@@ -280,9 +280,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       replaceCmdLine: (newText: string) => {
         const ws = wsRef.current;
         if (ws && ws.readyState === WebSocket.OPEN) {
-          // \x05 = Ctrl+E  — move cursor to end of line (no-op if already there)
-          // \x15 = Ctrl+U  — kill from cursor to start of line (readline unix-line-discard)
-          // newText        — the replacement command text to type
+          // \x05 = Ctrl+E  - move cursor to end of line (no-op if already there)
+          // \x15 = Ctrl+U  - kill from cursor to start of line (readline unix-line-discard)
+          // newText        - the replacement command text to type
           ws.send(new TextEncoder().encode("\x05\x15" + newText));
         }
       },
@@ -551,12 +551,12 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       });
 
       // -------------------------------------------------------------------------
-      // OSC 133 — Shell prompt / command lifecycle (FTCS / VS Code shell integration)
+      // OSC 133 - Shell prompt / command lifecycle (FTCS / VS Code shell integration)
       //
-      //   OSC 133 ; A ST  — Prompt mark: the shell is drawing a new prompt
-      //   OSC 133 ; B ST  — Command start: user pressed Enter, command text begins
-      //   OSC 133 ; C ST  — Output start: command has started producing output
-      //   OSC 133 ; D [; <exitCode>] ST  — Command finished, optional exit code
+      //   OSC 133 ; A ST - Prompt mark: the shell is drawing a new prompt
+      //   OSC 133 ; B ST - Command start: user pressed Enter, command text begins
+      //   OSC 133 ; C ST - Output start: command has started producing output
+      //   OSC 133 ; D [; <exitCode>] ST - Command finished, optional exit code
       // -------------------------------------------------------------------------
       term.parser.registerOscHandler(133, (data) => {
         try {
@@ -564,10 +564,10 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
           const subCmd = parts[0];
 
           if (subCmd === "A") {
-            // Prompt is starting — shell is idle, new prompt being drawn
+            // Prompt is starting - shell is idle, new prompt being drawn
             updateShellIntegration({ promptPhase: "prompt", isExecuting: false });
           } else if (subCmd === "B") {
-            // Command input starting — user is typing / about to hit Enter.
+            // Command input starting - user is typing / about to hit Enter.
             // The cursor is now positioned at the very start of user input,
             // i.e. immediately after the prompt. Capture this position so we
             // can read the live cmdline from the buffer on each keypress.
@@ -578,7 +578,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
             };
             updateShellIntegration({ promptPhase: "input" });
           } else if (subCmd === "C") {
-            // Output starting — command is now running and producing output
+            // Output starting - command is now running and producing output
             // Place the start marker here so getLastCommandOutput() captures from this point
             markersRef.current.start?.dispose();
             markersRef.current.end?.dispose();
@@ -586,7 +586,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
             promptEndRef.current = null;
             updateShellIntegration({ promptPhase: "output", isExecuting: true, currentCmdLine: undefined });
           } else if (subCmd === "D") {
-            // Command finished — optional exit code in parts[1]
+            // Command finished - optional exit code in parts[1]
             const exitCodeStr = parts[1];
             const exitStatus = exitCodeStr !== undefined && exitCodeStr !== "" ? parseInt(exitCodeStr, 10) : undefined;
 
@@ -622,12 +622,12 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       });
 
       // -------------------------------------------------------------------------
-      // OSC 52 — System clipboard access
+      // OSC 52 - System clipboard access
       //
       //   OSC 52 ; <clipboardTarget> ; <base64data> ST
       //
       // <clipboardTarget> is typically 'c' (clipboard) or 'p' (primary / X11).
-      // We only act on write requests ('c' or 'p') — read requests are ignored
+      // We only act on write requests ('c' or 'p') - read requests are ignored
       // for security reasons (the remote shell could silently exfiltrate clipboard).
       // -------------------------------------------------------------------------
       term.parser.registerOscHandler(52, (data) => {
@@ -636,11 +636,11 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
           if (firstSemi === -1) return true;
 
           // Everything after the first ';' is the base64 payload.
-          // We intentionally ignore the clipboard-target field — we always
+          // We intentionally ignore the clipboard-target field - we always
           // write to the OS clipboard (navigator.clipboard).
           const b64 = data.substring(firstSemi + 1);
 
-          // '?' means the remote is requesting a clipboard read — deny silently.
+          // '?' means the remote is requesting a clipboard read - deny silently
           if (b64 === "?") return true;
 
           // Decode the base64 payload and write to the OS clipboard
@@ -655,7 +655,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       });
 
       // -------------------------------------------------------------------------
-      // OSC 1337 — iTerm2 extensions (proprietary)
+      // OSC 1337 - iTerm2 extensions (proprietary)
       //
       // We support the CurrentDir= sub-command for CWD reporting (some shells
       // emit this instead of / in addition to OSC 7).
@@ -676,29 +676,29 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       });
 
       // -------------------------------------------------------------------------
-      // OSC 0 / OSC 1 / OSC 2 — Window icon and title
+      // OSC 0 / OSC 1 / OSC 2 - Window icon and title
       //
-      //   OSC 0 ; <string> ST  — Set both icon title AND window title
-      //   OSC 1 ; <string> ST  — Set icon (minimised-window) title only
-      //   OSC 2 ; <string> ST  — Set window title only
+      //   OSC 0 ; <string> ST - Set both icon title AND window title
+      //   OSC 1 ; <string> ST - Set icon (minimised-window) title only
+      //   OSC 2 ; <string> ST - Set window title only
       //
       // xterm.js fires onTitleChange() for OSC 0 and OSC 2 by default.
       // We register explicit OSC 1 handler so we can also capture the icon title,
       // and we hook onTitleChange for OSC 0/2 to keep everything in sync.
       // -------------------------------------------------------------------------
-      // OSC 1 — icon title
+      // OSC 1 - icon title
       term.parser.registerOscHandler(1, (data) => {
         updateShellIntegration({ iconTitle: data });
         return true;
       });
 
-      // OSC 2 — window title (also covers OSC 0 via onTitleChange below)
+      // OSC 2 - window title (also covers OSC 0 via onTitleChange below)
       term.parser.registerOscHandler(2, (data) => {
         updateShellIntegration({ windowTitle: data });
         return true;
       });
 
-      // OSC 0 — both icon + window title simultaneously
+      // OSC 0 - both icon + window title simultaneously
       term.parser.registerOscHandler(0, (data) => {
         updateShellIntegration({ windowTitle: data, iconTitle: data });
         return true;
@@ -761,6 +761,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
 
       let isDisposed = false;
       let isDead = false;
+      let sessionExited = false; // true when the session ended normally (user typed exit / process ended)
       let expectingHistory = false;
       let isRestoringHistory = false;
       let deathType: "fatal" | "stolen" | null = null;
@@ -877,6 +878,12 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
                 return;
               }
               if (msg.type === "state") {
+                if (msg.state === "exited") {
+                  // Normal session termination (user typed exit, or remoteCommand ended).
+                  // Mark as exited so ws.onclose won't auto-reconnect.
+                  sessionExited = true;
+                  return;
+                }
                 if (msg.state === "stolen" || msg.state.includes("(fatal)")) {
                   isDisposed = true;
                   isDead = true;
@@ -956,6 +963,30 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
           if (isDisposed) {
             return;
           }
+          if (sessionExited) {
+            // Session ended normally - show a tip and wait for the user to press Enter.
+            // Reset the flag so a future reconnect starts fresh.
+            sessionExited = false;
+            isDisposed = true;
+            isDead = true;
+            deathType = null;
+            term.write(
+              "\r\n\x1b[2m--- Session ended. Press \x1b[0m\x1b[1mEnter\x1b[0m\x1b[2m to reconnect. ---\x1b[0m\r\n",
+            );
+            onStateChange?.("exited");
+            window.dispatchEvent(
+              new CustomEvent(CS_EVENT_TERMINAL_DISCONNECTED, {
+                detail: {
+                  terminal: term,
+                  sessionId,
+                  host,
+                  is_active_terminal: isActive,
+                  reason: "normal",
+                } satisfies CSEventDetailTerminalDisconnected,
+              }),
+            );
+            return;
+          }
           onStateChange?.("disconnected to ssh server");
           window.dispatchEvent(
             new CustomEvent(CS_EVENT_TERMINAL_DISCONNECTED, {
@@ -984,6 +1015,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
             onManualReconnect?.(true);
             return;
           }
+          // Handles both fatal errors and normal session exit (exited state)
           isDead = false;
           deathType = null;
           isDisposed = false;
@@ -1044,8 +1076,8 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       // OSC 133;B) after each server write (echo).  Falls back to a heuristic
       // prompt-strip when 133;B hasn't fired (e.g. shells that only emit 133;A/D).
       //
-      // This fires on onWriteParsed — i.e. after server-echoed data has been
-      // rendered into the xterm buffer — so the buffer reflects what the user sees.
+      // This fires on onWriteParsed - i.e. after server-echoed data has been
+      // rendered into the xterm buffer - so the buffer reflects what the user sees.
       // -------------------------------------------------------------------------
       const readCurrentCmdLine = (): string => {
         const phase = shellIntegrationRef.current.promptPhase;
@@ -1058,7 +1090,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
           // --- Primary path: use the exact cursor anchor from OSC 133;B or OSC 3008 ---
           // col > 0 guard: if col is 0, the OSC fired before the prompt was drawn
           // (cursor was at the start of the line), so we can't safely use it as
-          // the input start — fall through to the heuristic instead.
+          // the input start - fall through to the heuristic instead.
           const { col: startCol, absLine: startAbsLine } = promptEnd;
           const cursorAbsLine = buffer.cursorY + buffer.baseY;
 

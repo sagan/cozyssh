@@ -22444,8 +22444,14 @@ declare global {
 	};
 	/**
 	 * Performs an HTTP request via the CozySSH backend proxy to bypass browser CORS restrictions.
+	 * @param init the fetch `RequestInit` object, with an additional optional `key` property.
+	 * @param init.key Optional key to uniquify the request. If not provided, it will be generated to a random value.
+	 * The key will be appended to the request url sent to backend. It's intended to be used to control
+	 * the browser cache behavior, since the backend just ignores it.
 	 */
-	function csFetch(url: string, init?: RequestInit): Promise<Response>;
+	function csFetch(url: string, init?: RequestInit & {
+		key?: string;
+	}): Promise<Response>;
 	/**
 	 * Get the value of a variable.
 	 */

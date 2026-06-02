@@ -5,12 +5,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 
 	"github.com/aymanbagabas/go-pty"
 )
 
 type LocalSession struct {
-	Pty pty.Pty
+	Pty    pty.Pty
+	closed atomic.Bool
 }
 
 var (
@@ -82,9 +84,15 @@ func Start(initialCmd string) (*LocalSession, error) {
 		return nil, err
 	}
 
-	return &LocalSession{
+	ls := &LocalSession{
 		Pty: p,
-	}, nil
+	}
+	go func() {
+		cmd.Wait()
+		ls.Close()
+	}()
+
+	return ls, nil
 }
 
 func (s *LocalSession) Resize(rows, cols uint16) error {
@@ -92,5 +100,8 @@ func (s *LocalSession) Resize(rows, cols uint16) error {
 }
 
 func (s *LocalSession) Close() error {
-	return s.Pty.Close()
+	if ok := s.closed.CompareAndSwap(false, true); ok {
+		return s.Pty.Close()
+	}
+	return nil
 }

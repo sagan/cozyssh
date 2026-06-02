@@ -741,12 +741,14 @@ export default function DialogManager({
               />
               <Typography variant="body2" color="text.secondary">
                 Server name or <b>[username[:password]@]hostname[:port]</b>. Use <b>{LOCAL_NAME}</b> for local shell.
-                <br /> You can append <b>?id=abc&title=Local</b> syntax query string to set session-scope parameters.
-                <br /> Available parameters (all optional):
-                <br />- <b>id</b> : The terminal pane id. If the same id pane already exists, switch to it instead of
-                opening a new one
+                <br />
+                Append <b>?id=abc&title=Local</b> style query string to set optional session-scope parameters:
+                <br />- <b>id</b> : The terminal pane id. If the same id pane exists, switch to it instead of opening a
+                new one
                 <br />- <b>title</b> : The opened tab title
                 <br />- <b>remoteCommand</b> : Remote shell command to execute on connected
+                <br />- <b>target</b> : The tab id. If the same id tab exists, the new terminal will be opened in the
+                target tab
                 <br />
                 E.g. <b>local?id=local-abc&title=Local&remoteCommand=tmux attach || tmux new</b>
               </Typography>
@@ -947,6 +949,7 @@ export default function DialogManager({
         }}
       />
       <Box
+        id="toasts-container"
         sx={{
           position: "fixed",
           top: 20,
@@ -962,6 +965,8 @@ export default function DialogManager({
           <Alert
             key={t.id}
             severity={t.severity}
+            data-severity={t.severity}
+            data-msg={t.msg}
             variant="filled"
             onClose={() => setToasts((prev) => prev.filter((x) => x.id !== t.id))}
             sx={{

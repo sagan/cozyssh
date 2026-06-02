@@ -2,6 +2,7 @@ package session
 
 import (
 	"cozyssh/models"
+	"errors"
 	"io"
 	"strings"
 	"sync"
@@ -103,11 +104,16 @@ func (s *Session) run() {
 			s.mu.Unlock()
 		}
 		if err != nil {
-			if s.RetryFunc != nil {
-				// Broadcast state change to listeners (hack: push a special text/binary indicator if needed,
-				// but let's notify the front-end via ws.go that ssh disconnected)
+			// io.EOF means the process exited cleanly (user typed "exit",
+			// or a remoteCommand finished). Don't retry — just notify the
+			// frontend so it can show a "reconnect" prompt instead of
+			// auto-reconnecting.
+			normalExit := errors.Is(err, io.EOF)
+
+			if !normalExit && s.RetryFunc != nil {
+				// Network / unexpected error: attempt reconnection.
 				reconnected := false
-				for i := 0; i < 30; i++ { // Retry up to 30 times (1 min) or indefinitely? Requirements say "always re-try"
+				for range 30 { // Retry up to 30 times (~1 min)
 					time.Sleep(3 * time.Second)
 					nr, nw, rErr := s.RetryFunc()
 					if rErr != nil {
@@ -128,14 +134,18 @@ func (s *Session) run() {
 				}
 			}
 
+			// Broadcast "exited" for clean exits so the frontend shows a
+			// reconnect prompt rather than auto-reconnecting.
+			if normalExit {
+				s.Broadcast(append([]byte(models.WS_MSG_PREFIX_STATE), models.WsMsgStateExited...))
+			}
+
 			s.mu.Lock()
 			for _, l := range s.listeners {
 				close(l)
 			}
 			s.listeners = nil
 			s.mu.Unlock()
-			// If session is pinned, we might want it to auto-restart?
-			// For now, if the process dies, the session is dead.
 			GlobalManager.Remove(s.ID)
 			break
 		}

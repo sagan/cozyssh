@@ -13,6 +13,10 @@ var (
 		Type:  WsTerminalMessageTypeState,
 		State: "disconnected to ssh server",
 	})
+	WsMsgStateExited, _ = json.Marshal(&WsTerminalMessage{
+		Type:  WsTerminalMessageTypeState,
+		State: "exited",
+	})
 	WsMsgStateDisconnectedFatal, _ = json.Marshal(&WsTerminalMessage{
 		Type:  WsTerminalMessageTypeState,
 		State: "disconnected (fatal)",
