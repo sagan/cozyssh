@@ -80,6 +80,7 @@ export interface DialogManagerProps {
   handleCloseBtnDialog: (e: unknown, reason: string) => void;
   handleSaveButton: () => void;
   hosts: HostData[];
+  groups: string[];
   inputDialogOpen: boolean;
   handleCloseInputDialog: () => void;
   inputValue: string;
@@ -142,6 +143,7 @@ export default function DialogManager({
   handleCloseBtnDialog,
   handleSaveButton,
   hosts,
+  groups,
   inputDialogOpen,
   handleCloseInputDialog,
   inputValue,
@@ -529,7 +531,7 @@ export default function DialogManager({
       <Dialog
         id="edit-button-dialog"
         disableRestoreFocus
-        data-button-id={editingButton?.id || ""}
+        data-id={editingButton?.id || ""}
         open={buttonDialogOpen}
         onClose={handleCloseBtnDialog}
         fullWidth
@@ -583,13 +585,17 @@ export default function DialogManager({
               value={buttonFormData.name}
               onChange={(e) => setButtonFormData({ ...buttonFormData, name: e.target.value })}
             />
-            <TextField
-              fullWidth
-              label="Button Group"
+            <Autocomplete
               size="small"
+              freeSolo
+              fullWidth
+              options={groups}
               value={buttonFormData.group}
-              onChange={(e) => setButtonFormData({ ...buttonFormData, group: e.target.value })}
-              placeholder={DEFAULT_BUTTON_GROUP}
+              onChange={(_e, newValue) => setButtonFormData({ ...buttonFormData, group: newValue || "" })}
+              onInputChange={(_e, newValue) => setButtonFormData({ ...buttonFormData, group: newValue || "" })}
+              renderInput={(params) => (
+                <TextField {...params} label="Button Group" placeholder={DEFAULT_BUTTON_GROUP} />
+              )}
             />
           </Box>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -739,7 +745,7 @@ export default function DialogManager({
                   />
                 )}
               />
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" sx={{ wordBreak: "break-all" }}>
                 Server name or <b>[username[:password]@]hostname[:port]</b>. Use <b>{LOCAL_NAME}</b> for local shell.
                 <br />
                 Append <b>?id=abc&title=Local</b> style query string to set optional session-scope parameters:
@@ -949,7 +955,7 @@ export default function DialogManager({
         }}
       />
       <Box
-        id="toasts-container"
+        id="toasts"
         sx={{
           position: "fixed",
           top: 20,
@@ -967,6 +973,7 @@ export default function DialogManager({
             severity={t.severity}
             data-severity={t.severity}
             data-msg={t.msg}
+            className="toast"
             variant="filled"
             onClose={() => setToasts((prev) => prev.filter((x) => x.id !== t.id))}
             sx={{

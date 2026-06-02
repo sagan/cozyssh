@@ -396,6 +396,7 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
       >
         <Box sx={{ flexGrow: 1, minWidth: 0, overflow: "hidden" }}>
           <Tabs
+            id="scratchpad-tabs"
             value={activePageId}
             onChange={(_, val) => setActivePageId(val)}
             variant="scrollable"
@@ -407,8 +408,9 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
               <Tab
                 key={p.id}
                 value={p.id}
-                data-page-id={p.id}
-                data-page-title={p.title}
+                data-id={p.id}
+                data-title={p.title}
+                className="scratchpad-tab"
                 label={
                   <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                     {p.locked && <LockIcon sx={{ fontSize: 14 }} color="action" />}
@@ -429,7 +431,7 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
       </Box>
 
       {/* Editor */}
-      <Box sx={{ flexGrow: 1, overflow: "hidden" }}>
+      <Box id="scratchpad-editor" data-id={cPage.id} data-title={cPage.title} sx={{ flexGrow: 1, overflow: "hidden" }}>
         {cPage && (
           <CodeMirror
             ref={cmRef}

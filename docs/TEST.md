@@ -1,4 +1,8 @@
-# Test System
+- [Test System](#test-system)
+- [Test Server Requirement](#test-server-requirement)
+- [Run Tests](#run-tests)
+
+## Test System
 
 CozySSH includes integrated (e2e) Go test files. E2E tests use Docker to spawn real "ssh servers" and use [Playwright](https://playwright.dev/) to control real browser instances (Chromium) for UI testing.
 

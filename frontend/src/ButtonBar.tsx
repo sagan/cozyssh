@@ -93,6 +93,7 @@ export default function ButtonBar({
       <Tabs
         key={`tabs-${activeGroup}-${filteredButtons.length}`}
         value={false}
+        id="buttons"
         variant="scrollable"
         scrollButtons="auto"
         allowScrollButtonsMobile
@@ -108,8 +109,9 @@ export default function ButtonBar({
           <Tab
             key={btn.id}
             label={btn.name}
-            data-button-name={btn.name}
-            data-button-id={btn.id}
+            className="button"
+            data-name={btn.name}
+            data-id={btn.id}
             title={`${btn.type} (${btn.order || 0})${btn.autorun ? " (autorun)" : ""}${
               btn.shortcut ? " (" + btn.shortcut.toUpperCase() + ")" : ""
             }${btn.type !== "run_script" ? ": " + btn.payload : ""}`}

@@ -74,6 +74,7 @@ window.__CS_USE_STORE__ = useStore;
 window.__CS_PASSTHROUGH_SHORTCUTS__ = terminalKeyShortcuts;
 window.__CS_DISABLE_SHORTCUTS__ = disableShortcuts;
 
+// window.csSetSidebarFilter = undefined; // Assigned in Sidebar useEffect
 window.csAlert = dialogs.alert;
 window.csConfirm = dialogs.confirm;
 window.csPrompt = dialogs.prompt;

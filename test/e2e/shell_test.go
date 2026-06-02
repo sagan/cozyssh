@@ -25,7 +25,7 @@ func TestLocalShell(t *testing.T) {
 	}
 
 	// 2. Wait for terminal to be active and ready
-	_, err = page.WaitForSelector(fmt.Sprintf(`div[data-pane-id="%s"] .xterm-screen`, id))
+	_, err = page.WaitForSelector(selectorXterm(id))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,11 +71,10 @@ func TestSSHShell(t *testing.T) {
 	// WaitForSelector with state:"visible" would latch onto the hidden local tab's
 	// xterm-screen and wait forever. Using "attached" lets us proceed as soon as any
 	// xterm-screen is present, and we rely on waitForTerminalText for real readiness.
-	_, err = page.WaitForSelector(fmt.Sprintf(`div[data-pane-id="%s"] .xterm-screen`, id),
-		playwright.PageWaitForSelectorOptions{
-			Timeout: playwright.Float(30000),
-			State:   playwright.WaitForSelectorStateAttached,
-		})
+	_, err = page.WaitForSelector(selectorXterm(id), playwright.PageWaitForSelectorOptions{
+		Timeout: playwright.Float(30000),
+		State:   playwright.WaitForSelectorStateAttached,
+	})
 	if err != nil {
 		path := "test_failure.png"
 		page.Screenshot(playwright.PageScreenshotOptions{Path: playwright.String(path)})

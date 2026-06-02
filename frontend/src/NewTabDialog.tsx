@@ -671,6 +671,7 @@ export default function NewTabDialog({
                 title={item.tooltip}
                 data-type={item.type}
                 data-value={item.value}
+                className="new-tab-dialog-item"
                 sx={{
                   py: 0.5,
                   "&.Mui-selected": {

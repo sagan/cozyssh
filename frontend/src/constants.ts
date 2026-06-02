@@ -41,8 +41,6 @@ export const VAR_CS_NOWEBGL = "cs_nowebgl";
 export const VAR_NOAUTOLOAD = "noautoload";
 export const VAR_NOAUTORUN = "noautorun";
 
-
-
 export const DEFAULT_BUTTON_GROUP = "Default";
 
 export const EVENT_LOCAL_STORAGE_SYNC = "local-storage-sync";
@@ -57,6 +55,8 @@ export const TERMINAL_FUNCTIONS = [
   { value: "COPY", label: "COPY (Buffer)" },
   { value: "COPY_VISIBLE", label: "COPY (Visible)" },
   { value: "COPY_SELECTION", label: "COPY (Selection)" },
+  { value: "COPY_CWD", label: "COPY (CWD)" },
+  { value: "COPY_CURRENT_CMDLINE", label: "COPY (Current Cmdline)" },
   { value: "COPY_LAST_COMMAND_OUTPUT", label: "COPY (Last Cmd Output)" },
   { value: "PASTE", label: "PASTE (Clipboard)" },
   { value: "INPUT", label: "INPUT (Prompt)" },

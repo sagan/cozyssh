@@ -95,7 +95,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
       {children}
       <Dialog
         id="async-modal-dialog"
-        data-modal-type={config.type}
+        data-type={config.type}
         open={open}
         onClose={() => handleClose(false)}
         fullWidth

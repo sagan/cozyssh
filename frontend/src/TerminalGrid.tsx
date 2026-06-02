@@ -176,9 +176,9 @@ export default function TerminalGrid({
       >
         {tabs.map((tab) => (
           <Box
-            className="terminal-tab-wrap"
+            className="terminal-wrap"
             key={tab.id}
-            data-tab-id={tab.id}
+            data-id={tab.id}
             sx={{
               position: "absolute",
               inset: 0,
@@ -187,7 +187,7 @@ export default function TerminalGrid({
             }}
           >
             <Box
-              className="terminal-tab"
+              className="terminal"
               sx={{
                 flexGrow: 1,
                 minHeight: 0,
@@ -200,7 +200,7 @@ export default function TerminalGrid({
                 const renderPaneInner = (pane: PaneData) => (
                   <Box
                     className="terminal-pane-wrap"
-                    data-pane-id={pane.id}
+                    data-id={pane.id}
                     sx={{
                       flex: 1,
                       height: "100%",

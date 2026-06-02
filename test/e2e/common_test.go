@@ -315,3 +315,12 @@ func pinnedSessions(t *testing.T, baseURL, token string) []*models.SessionPinned
 	json.Unmarshal(raw, &result)
 	return result
 }
+
+// Return selector of xterm screen with specified paneId. If paneId is empty, return selector of any xterm screen
+func selectorXterm(paneId string) string {
+	if paneId == "" {
+		return `.terminal-pane-wrap .xterm-screen`
+	} else {
+		return fmt.Sprintf(`.terminal-pane-wrap[data-id="%s"] .xterm-screen`, paneId)
+	}
+}

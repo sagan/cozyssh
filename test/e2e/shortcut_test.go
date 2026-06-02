@@ -27,7 +27,7 @@ func TestKeyboardShortcuts(t *testing.T) {
 	}
 
 	// Wait for default local shell
-	if _, err := page.WaitForSelector("div[data-pane-id] .xterm-screen", playwright.PageWaitForSelectorOptions{
+	if _, err := page.WaitForSelector(selectorXterm(""), playwright.PageWaitForSelectorOptions{
 		State:   playwright.WaitForSelectorStateAttached,
 		Timeout: playwright.Float(10000),
 	}); err != nil {
@@ -35,7 +35,7 @@ func TestKeyboardShortcuts(t *testing.T) {
 	}
 
 	// 1. Alt + O : Open new tab dialog
-	page.Locator("div[data-pane-id] .xterm-screen").First().Click()
+	page.Locator(selectorXterm("")).First().Click()
 	if err := page.Keyboard().Press("Alt+o"); err != nil {
 		t.Fatalf("failed to press Alt+o: %v", err)
 	}

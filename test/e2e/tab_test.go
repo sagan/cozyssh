@@ -26,7 +26,7 @@ func openTabAndWaitForShell(t *testing.T, page playwright.Page, name string) {
 		t.Fatalf("csOpen: %v", err)
 	}
 	// Wait until the terminal container is in the DOM.
-	_, err = page.WaitForSelector("div[data-pane-id] .xterm-screen", playwright.PageWaitForSelectorOptions{
+	_, err = page.WaitForSelector(selectorXterm(""), playwright.PageWaitForSelectorOptions{
 		State:   playwright.WaitForSelectorStateAttached,
 		Timeout: playwright.Float(10000),
 	})
@@ -123,7 +123,7 @@ func TestPinTab(t *testing.T) {
 		t.Fatalf("dashboard after reload: %v", err)
 	}
 	// Wait for the pinned tab's terminal to attach.
-	_, err := page.WaitForSelector("div[data-pane-id] .xterm-screen", playwright.PageWaitForSelectorOptions{
+	_, err := page.WaitForSelector(selectorXterm(""), playwright.PageWaitForSelectorOptions{
 		State:   playwright.WaitForSelectorStateAttached,
 		Timeout: playwright.Float(10000),
 	})
@@ -218,7 +218,7 @@ func TestLockTab(t *testing.T) {
 	if _, err := page.WaitForSelector("input[placeholder*=\"Filter hosts\"]"); err != nil {
 		t.Fatalf("dashboard after reload: %v", err)
 	}
-	_, err := page.WaitForSelector("div[data-pane-id] .xterm-screen", playwright.PageWaitForSelectorOptions{
+	_, err := page.WaitForSelector(selectorXterm(""), playwright.PageWaitForSelectorOptions{
 		State:   playwright.WaitForSelectorStateAttached,
 		Timeout: playwright.Float(10000),
 	})
@@ -385,7 +385,7 @@ func TestPinnedSessionSurvivesClientDisconnect(t *testing.T) {
 	login(t, pageB, url, "123456")
 
 	// Wait for the pinned terminal to attach (may open alongside a fresh local tab).
-	_, err = pageB.WaitForSelector("div[data-pane-id] .xterm-screen", playwright.PageWaitForSelectorOptions{
+	_, err = pageB.WaitForSelector(selectorXterm(""), playwright.PageWaitForSelectorOptions{
 		State:   playwright.WaitForSelectorStateAttached,
 		Timeout: playwright.Float(10000),
 	})
@@ -465,7 +465,7 @@ Host fav2
 		t.Fatal(err)
 	}
 	// Wait for the terminal container to be attached
-	if _, err := page.WaitForSelector("div[data-pane-id] .xterm-screen", playwright.PageWaitForSelectorOptions{
+	if _, err := page.WaitForSelector(selectorXterm(""), playwright.PageWaitForSelectorOptions{
 		State:   playwright.WaitForSelectorStateAttached,
 		Timeout: playwright.Float(10000),
 	}); err != nil {
@@ -537,7 +537,7 @@ Host fav2
 		t.Fatal(err)
 	}
 	// Wait for terminal
-	if _, err := page.WaitForSelector("div[data-pane-id] .xterm-screen", playwright.PageWaitForSelectorOptions{
+	if _, err := page.WaitForSelector(selectorXterm(""), playwright.PageWaitForSelectorOptions{
 		State:   playwright.WaitForSelectorStateAttached,
 		Timeout: playwright.Float(10000),
 	}); err != nil {

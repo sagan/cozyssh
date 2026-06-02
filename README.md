@@ -1,6 +1,6 @@
 ## CozySSH
 
-CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and terminal multiplexer. It allows you to manage multiple SSH sessions and local shells from a single, modern web interface. It's intuitive and easy, ready to use out of the box, while also having advanced features and being highly configurable & extensible.
+CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based SSH client and terminal multiplexer. It allows you to manage multiple SSH sessions and local shells from a single, modern web interface. It's intuitive and easy, ready to use out of the box, while also having advanced features and being highly configurable & extensible. It's core functions can be extened via [CozySSH Plugins][].
 
 ![CozySSH Screenshot 1](./docs/screenshot-1.png)
 
@@ -11,9 +11,11 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
   - [Installation](#installation)
   - [Usage](#usage)
   - [Configuration](#configuration)
+  - [Run as systemd service](#run-as-systemd-service)
 - [Development](#development)
   - [Prerequisites](#prerequisites)
   - [Build](#build)
+  - [Test](#test)
   - [Generate](#generate)
 - [License](#license)
 
@@ -90,7 +92,7 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
   - **SFTP & Local File Browser**: Browse, upload, download, filter or edit files directly from your terminal tabs.
   - **Split View**: Access the file browser via the terminal tab's context menu without losing your shell session.
   - **Text File Editor**: Edit text file of SFTP / local server directly in Browser.
-- **Shell Integration**: Built-in Shell Integration features like cwd detection. An button in File Browser to navigate to shell cwd (`$PWD`) directly. It works for newer Linux systems (Ubuntu 26.04+) out of the box using OSC 3008 sequence detection. For older Linux systems, you can add OSC 7 escape sequence to `~/.bashrc` to enable basic feature:
+- **Shell Integration**: Built-in Shell Integration features like cwd detection. An button in File Browser to navigate to shell cwd (`$PWD`) directly. It works best for newer Linux systems (Ubuntu 26.04+) out of the box using OSC 3008 sequence detection. For older Linux systems, you can add OSC 7 escape sequence to `~/.bashrc` to enable basic feature:
 
   ```sh
   # Standard OSC 7 (Recommended for most cases)
@@ -114,6 +116,7 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
   - `Alt + W` : Close active pane
   - `Alt + Shift + W` : Close active tab
   - `Alt + I` : Focus sidebar search filter, then use `↑ ↓` to select, `Enter` to open
+  - `Alt + Shift + I` : Focus sidebar search filter and clear current value
   - `Alt + G` : Focus active terminal session
   - `Alt + Shift + G` : Focus the first pane of the active tab
   - `Alt + V / Alt + Shift + V` : Switch to next / previous group in button bar
@@ -146,12 +149,12 @@ CozySSH is a lightweight, self-hosted & full-fledged web-based SSH client and te
   - **Output Buffering**: Pinned sessions maintain a circular output buffer (approx. 50KB), ensuring you see the most recent activity immediately upon reconnection.
   - **Usage-Aware Auto-Restore**: Pinned tabs automatically resume when you re-open CozySSH, but only in the primary window to prevent duplicate UI clutter.
   - **Lock Tab**: Pinned tabs can be further locked to prevent accidental closing.
-- **Scratchpad feature**: Open a "Scratchpad" text editor tab to write your notes or paste some configuration commands or other text. All data is auto-saving and cached in browser localStorage and automatically synced with and persisted in backend host.
+- **Scratchpad feature**: Open a "Scratchpad" text editor tab to write your notes or paste some configuration commands or other text. All data is auto-saving and cached in browser localStorage and automatically synced with and persisted in backend.
 - **Secure by Default**:
   - **Stateless Authentication**: HMAC-SHA256 token-based authentication with a simple App Password.
   - **Non-Local Restriction**: Automatically blocks access from non-local, non-HTTPS environments to prevent credential sniffing.
   - **Password Management**: Reset your application password anytime via the CLI using the `-do-reset-password` flag.
-- **Custom Scripting**: Fully programmable / extendable via a built-in powerful & TypeScript-capable scripting engine. See [Scripts Documentation](docs/SCRIPTS.md). It also has a [Plugins Repository](https://github.com/sagan/cozyssh-plugins) which includes many official scripts/plugins that can be installed directly from CozySSH frontend.
+- **Custom Scripting**: Fully programmable / extendable via a built-in powerful & TypeScript-capable scripting engine. See [Scripts Documentation](docs/SCRIPTS.md). It also has a [Plugins Repository][CozySSH Plugins] which includes many official scripts/plugins that can be installed directly from CozySSH frontend.
 - **Self-Hosted**: Distributed as a single Go binary that embeds the entire React frontend.
 
 ## Getting Started
@@ -212,6 +215,28 @@ CozySSH stores its settings in `~/.config/cozyssh/config.yaml`. You can customiz
 
 The default `~/.config/cozyssh` config dir path can be changed by `-config` command line flag.
 
+### Run as systemd service
+
+Example `cozyssh.service` file:
+
+```
+[Unit]
+Description=cozyssh
+
+[Service]
+Type=exec
+User=root
+WorkingDirectory=/root
+ExecStart=/usr/bin/cozyssh
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Put it to `/etc/systemd/system/cozyssh.service` and put `cozyssh` binary to `/usr/bin/cozyssh`,
+then run `systemctl enable --now cozyssh` to start the service.
+
 ## Development
 
 ### Prerequisites
@@ -232,13 +257,19 @@ npm --prefix frontend run build
 go build
 ```
 
+### Test
+
+See [docs/TEST.md](docs/TEST.md).
+
 ### Generate
 
 Some files are generated by scripts.
 
-- `frontend/csapi.d.ts` : The custom scripting API TypeScript definitions. CozySSH itself doesn't use this file. Generated by `npm --prefix frontend run gen-csapi`.
+- `frontend/csapi.d.ts` : The custom scripting API TypeScript definitions. It's used by [CozySSH Plugins][]. CozySSH itself doesn't use this file. Generated by `npm --prefix frontend run gen-csapi`.
 - `frontend/src/api.ts` : The Go backend API TypeScript definitions. The frontend uses this file. Generated by `go run github.com/tkrajina/typescriptify-golang-structs/tscriptify@latest -interface -package=cozyssh/models -target="frontend/src/api.ts" models/models.go`.
 
 ## License
 
 BSD 3-Clause License - See the [LICENSE](LICENSE) file for details.
+
+[CozySSH Plugins]: https://github.com/sagan/cozyssh-plugins

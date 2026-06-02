@@ -22553,6 +22553,10 @@ declare global {
 		placeholder?: string;
 		validate?: (value: string) => string | undefined;
 	}): Promise<string | null>;
+	/**
+	 * Set the sidebar filter value
+	 */
+	function csSetSidebarFilter(filter: string): void;
 	interface WindowEventMap {
 		[CS_EVENT_TERMINAL_NEW]: CustomEvent<CSEventDetailTerminalNew>;
 		[CS_EVENT_TERMINAL_CONNECTED]: CustomEvent<CSEventDetailTerminalConnected>;

@@ -27,7 +27,7 @@ func TestTerminalInputDialog(t *testing.T) {
 
 	// 1. Wait for the default local terminal tab to be ready.
 	// The app opens a local shell tab on startup; wait for the xterm canvas.
-	if _, err := page.WaitForSelector("div[data-pane-id] .xterm-screen", playwright.PageWaitForSelectorOptions{
+	if _, err := page.WaitForSelector(selectorXterm(""), playwright.PageWaitForSelectorOptions{
 		State:   playwright.WaitForSelectorStateAttached,
 		Timeout: playwright.Float(15000),
 	}); err != nil {

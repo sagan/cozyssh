@@ -173,6 +173,13 @@ export default function Sidebar({
     if (loading && hosts.length > 0) setLoading(false);
   }, [hosts, loading]);
 
+  useEffect(() => {
+    window.csSetSidebarFilter = setFilterStr;
+    return () => {
+      delete (window as Partial<typeof globalThis>).csSetSidebarFilter;
+    };
+  }, []);
+
   const handleSavePassword = useCallback(async () => {
     if (newPwd !== confirmPwd) {
       dialogs.alert("Passwords don't match");
@@ -492,7 +499,7 @@ export default function Sidebar({
         }
       }
     },
-    [flatFilteredHosts, onSelect, selectedIndex, filterRef]
+    [flatFilteredHosts, onSelect, selectedIndex, filterRef],
   );
 
   const uniqueTags = useMemo(() => {
@@ -583,6 +590,7 @@ export default function Sidebar({
             inputRef={filterRef}
             size="small"
             type="search"
+            id="sidebar-filter"
             placeholder="Filter hosts or #tag..."
             title="<Alt + I>"
             value={filterStr}
@@ -603,6 +611,7 @@ export default function Sidebar({
         {uniqueTags.length > 0 && (
           <Box sx={{ position: "relative" }}>
             <Box
+              id="sidebar-tags"
               ref={tagsContainerRef}
               sx={{
                 display: "flex",
@@ -624,6 +633,7 @@ export default function Sidebar({
                     label={`#${tag}`}
                     data-tag={tag}
                     size="small"
+                    className="sidebar-tag"
                     color={isActive ? "primary" : "default"}
                     variant={isActive ? "filled" : "outlined"}
                     onClick={() => {
@@ -674,7 +684,7 @@ export default function Sidebar({
           </Box>
         ) : null}
         <List>
-          <ListItem disablePadding data-host={LOCAL_NAME}>
+          <ListItem className="sidebar-host" disablePadding data-name={LOCAL_NAME}>
             <ListItemButton onClick={() => onSelect(LOCAL_NAME)}>
               <ListItemIcon>
                 <ComputerIcon />
@@ -996,6 +1006,8 @@ export default function Sidebar({
                   <br />
                   <b>Alt + I</b> : Focus sidebar search filter, use ↑ ↓ to select, Enter to open
                   <br />
+                  <b>Alt + Shift + I</b> : Focus sidebar search filter and clear current value
+                  <br />
                   <b>Alt + G</b> : Focus active terminal session
                   <br />
                   <b>Alt + Shift + G</b> : Focus the first pane of the active tab
@@ -1056,7 +1068,7 @@ export default function Sidebar({
       {/* Host CRUD Dialog */}
       <Dialog
         id="edit-host-dialog"
-        data-host-name={editingName}
+        data-name={editingName}
         open={dialogOpen}
         disableRestoreFocus
         onClose={handleCloseHostDialog}
@@ -1198,7 +1210,8 @@ function HostListItem({
       ref={itemRef}
       disablePadding
       onContextMenu={(e) => onContextMenu(e, host)}
-      data-host={host.name}
+      data-name={host.name}
+      className="sidebar-host"
       sx={{
         bgcolor: isSelected ? "action.hover" : isFavourite ? "action.selected" : "transparent",
         "&:hover": {

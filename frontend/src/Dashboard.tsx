@@ -1445,6 +1445,24 @@ export default function Dashboard({ initialData }: DashboardProps) {
               break;
             }
 
+            case "COPY_CWD": {
+              const shellIntegration = getStore().shellIntegrations[getStore().activePaneId];
+              if (shellIntegration?.cwd) {
+                navigator.clipboard.writeText(shellIntegration.cwd);
+              }
+              term.focus();
+              break;
+            }
+
+            case "COPY_CURRENT_CMDLINE": {
+              const shellIntegration = getStore().shellIntegrations[getStore().activePaneId];
+              if (shellIntegration?.currentCmdLine) {
+                navigator.clipboard.writeText(shellIntegration.currentCmdLine);
+              }
+              term.focus();
+              break;
+            }
+
             case "COPY_LAST_COMMAND_OUTPUT": {
               const text = term.getLastCommandOutput();
               if (text) {
@@ -2060,6 +2078,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         handleCloseBtnDialog={handleCloseBtnDialog}
         handleSaveButton={handleSaveButton}
         hosts={hosts}
+        groups={groups}
         inputDialogOpen={inputDialogOpen}
         handleCloseInputDialog={handleCloseInputDialog}
         inputValue={inputValue}

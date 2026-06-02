@@ -93,6 +93,7 @@ export default function TabBar({
           </IconButton>
           <Box sx={{ flexGrow: 1, minWidth: 0, overflow: "hidden" }}>
             <Tabs
+              id="tabs"
               value={activeTabId}
               onChange={(_, val) => {
                 const t = tabs.find((x) => x.id === val);
@@ -111,7 +112,7 @@ export default function TabBar({
               {tabs.map((tab) => (
                 <Tab
                   className="tab"
-                  data-tab-id={tab.id}
+                  data-id={tab.id}
                   key={tab.id}
                   value={tab.id}
                   onContextMenu={(e) => handleContextMenu(e, tab.id)}

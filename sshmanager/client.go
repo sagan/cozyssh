@@ -464,10 +464,7 @@ func getSSHClient(name string, term TerminalUI, identity string,
 			identityFile = filepath.Join(getSSHDir(), "id_rsa")
 		}
 	} else {
-		if len(identityFile) > 2 && identityFile[:2] == "~/" {
-			home, _ := os.UserHomeDir()
-			identityFile = filepath.Join(home, identityFile[2:])
-		}
+		identityFile = common.ExpandPath(identityFile)
 	}
 
 	var authMethods []ssh.AuthMethod

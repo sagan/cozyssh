@@ -169,8 +169,12 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           return;
 
         case "alt+i":
+        case "alt+shift+i":
           if (!document.querySelector("body > div.MuiDialog-root")) {
             e.preventDefault();
+            if (keycomb === "alt+shift+i") {
+              csSetSidebarFilter("");
+            }
             sidebarFilterRef.current?.focus();
           }
           return;
