@@ -10,7 +10,14 @@ import { css } from "@codemirror/lang-css";
 import { json } from "@codemirror/lang-json";
 import { markdown } from "@codemirror/lang-markdown";
 import { cpp } from "@codemirror/lang-cpp";
+import { go } from "@codemirror/lang-go";
 import { yaml } from "@codemirror/lang-yaml";
+import { liquid } from "@codemirror/lang-liquid";
+import { php } from "@codemirror/lang-php";
+import { java } from "@codemirror/lang-java";
+import { rust } from "@codemirror/lang-rust";
+import { sql } from "@codemirror/lang-sql";
+import { xml } from "@codemirror/lang-xml";
 import { dialogs } from "./Dialogs";
 
 const getLanguageExtension = (fileName: string) => {
@@ -35,11 +42,24 @@ const getLanguageExtension = (fileName: string) => {
     case "c":
     case "h":
     case "hpp":
-    case "go": // fallback cpp for basic C-like syntax
       return [cpp()];
+    case "go":
+      return [go()];
     case "yaml":
     case "yml":
       return [yaml()];
+    case "liquid":
+      return [liquid()];
+    case "php":
+      return [php()];
+    case "java":
+      return [java()];
+    case "rs":
+      return [rust()];
+    case "sql":
+      return [sql()];
+    case "xml":
+      return [xml()];
     default:
       return [];
   }

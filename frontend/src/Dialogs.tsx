@@ -6,7 +6,7 @@ export interface DialogApi {
   alert: typeof csAlert;
   confirm: typeof csConfirm;
   prompt: typeof csPrompt;
-  promptPassword: (message: string, defaultValue?: string) => Promise<string | null>;
+  promptPassword: typeof csPromptPassword;
 }
 
 interface DialogConfig {
@@ -30,7 +30,8 @@ const registry = {
 export const dialogs: DialogApi = {
   alert: (message, detail) => registry.current?.alert(message, detail) ?? Promise.resolve(),
   confirm: (message, detail) => registry.current?.confirm(message, detail) ?? Promise.resolve(false),
-  prompt: (message, defaultValue) => registry.current?.prompt(message, defaultValue) ?? Promise.resolve(null),
+  prompt: (message, defaultValue, options) =>
+    registry.current?.prompt(message, defaultValue, options) ?? Promise.resolve(null),
   promptPassword: (message, defaultValue) =>
     registry.current?.promptPassword(message, defaultValue) ?? Promise.resolve(null),
 };
@@ -66,8 +67,8 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
     registry.current = {
       alert: ((message, detail) => triggerDialog({ type: "alert", message, detail })) as DialogApi["alert"],
       confirm: ((message, detail) => triggerDialog({ type: "confirm", message, detail })) as DialogApi["confirm"],
-      prompt: ((message, defaultValue) =>
-        triggerDialog({ type: "prompt", message, defaultValue })) as DialogApi["prompt"],
+      prompt: ((message, defaultValue, options) =>
+        triggerDialog({ type: "prompt", message, defaultValue, ...options })) as DialogApi["prompt"],
       promptPassword: ((message, defaultValue) =>
         triggerDialog({ type: "prompt", inputType: "password", message, defaultValue })) as DialogApi["promptPassword"],
     };

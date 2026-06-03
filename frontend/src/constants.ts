@@ -37,6 +37,10 @@ export const VAR_CS_NOMODTEXTAREA = "cs_nomodtextarea";
 export const VAR_CS_NOIMAGE = "cs_noimage";
 export const VAR_CS_NOWEBLINKS = "cs_noweblinks";
 export const VAR_CS_NOWEBGL = "cs_nowebgl";
+/**
+ * Flag to disable terminal ctrl+l (let browser handle it) and remap ctrl+shift+l to ctrl+l in terminal.
+ */
+export const VAR_CS_REMAP_CTRL_SHIFT_L = "cs_remap_ctrl_shift_l";
 
 export const VAR_NOAUTOLOAD = "noautoload";
 export const VAR_NOAUTORUN = "noautorun";

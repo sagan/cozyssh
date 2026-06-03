@@ -78,6 +78,7 @@ window.__CS_DISABLE_SHORTCUTS__ = disableShortcuts;
 window.csAlert = dialogs.alert;
 window.csConfirm = dialogs.confirm;
 window.csPrompt = dialogs.prompt;
+window.csPromptPassword = dialogs.promptPassword;
 
 export interface CsExecResult {
   error: unknown;

@@ -278,6 +278,10 @@ declare global {
     },
   ): Promise<string | null>;
   /**
+   * Similar to csPrompt but diplay input box as password type
+   */
+  function csPromptPassword(message?: string, defaultValue?: string): Promise<string | null>;
+  /**
    * Set the sidebar filter value
    */
   function csSetSidebarFilter(filter: string): void;
