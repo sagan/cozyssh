@@ -36,6 +36,7 @@ import {
   MIME_JSON,
   LOCAL_NAME,
   LOCAL_VAR_PREFIX,
+  DEFAULT_TERMINAL_FONT_SIZE,
 } from "./constants";
 import { type Severity, generatePassword, terminalKeyShortcuts } from "./common";
 import {
@@ -67,6 +68,8 @@ export interface CsScriptModule {
  */
 export const moduleCache: Record<string, CsScriptModule> = {};
 
+window.__CS_REMAP_CTRL_L__ = undefined;
+window.__CS_TERMINAL_FONT_SIZE__ = DEFAULT_TERMINAL_FONT_SIZE;
 window.__CS_AUTORUN_DONE__ = undefined;
 window.__CS_MODULECACHE__ = moduleCache;
 window.__CS_VERSION__ = PACKAGE_JSON_VERSION;
@@ -211,7 +214,7 @@ export async function runScript(
 
 export interface PluginAPICallbacks {
   /** Show a toast notification */
-  notify: (msg: string, severity?: "success" | "info" | "warning" | "error") => void;
+  notify: (msg: string, severity?: "success" | "info" | "warning" | "error", key?: string) => void;
   /** Apply a new MUI theme */
   setTheme: (options: unknown, ...args: unknown[]) => void;
   /** Open a new terminal tab */

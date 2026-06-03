@@ -1205,6 +1205,10 @@ export default function Sidebar({
                   <br />
                   <b>Alt + Shift + J / Alt + Shift + K</b> : Scroll terminal down / up by a page
                   <br />
+                  <b>Alt + - / Alt + +</b> : Decrease / increase terminal font size
+                  <br />
+                  <b>Ctrl + Alt + 0</b> : Reset to default terminal font size (15px)
+                  <br />
                   <b>Ctrl + Shift + F</b> : Open terminal search box
                   <br />
                   <b>Ctrl + Shift + R</b> : Reconnect current terminal

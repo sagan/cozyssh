@@ -38,9 +38,10 @@ export const VAR_CS_NOIMAGE = "cs_noimage";
 export const VAR_CS_NOWEBLINKS = "cs_noweblinks";
 export const VAR_CS_NOWEBGL = "cs_nowebgl";
 /**
- * Flag to disable terminal ctrl+l (let browser handle it) and remap ctrl+shift+l to ctrl+l in terminal.
+ * Flag to disable terminal ctrl+l (let browser handle it) and remap ctrl+shift+l & ctrl+alt+l to ctrl+l in terminal.
  */
-export const VAR_CS_REMAP_CTRL_SHIFT_L = "cs_remap_ctrl_shift_l";
+export const VAR_CS_REMAP_CTRL_L = "cs_remap_ctrl_l";
+export const VAR_CS_TERMINAL_FONT_SIZE = "cs_terminal_font_size";
 
 export const VAR_NOAUTOLOAD = "noautoload";
 export const VAR_NOAUTORUN = "noautorun";
@@ -106,3 +107,10 @@ export const BUILTIN_BUTTONS = [
 ] as const;
 
 export const DEFAULT_SCROLL_LINES = 3;
+
+/**
+ * xterm.js default fontSize
+ */
+export const DEFAULT_TERMINAL_FONT_SIZE = 15;
+
+export const TOAST_KEY_TERMINAL_FONT_SIZE = "cs-terminal-font-size";

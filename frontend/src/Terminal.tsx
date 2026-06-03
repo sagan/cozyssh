@@ -297,6 +297,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       let webglAddon: WebglAddon | null = null;
 
       const term = new Terminal({
+        fontSize: __CS_TERMINAL_FONT_SIZE__,
         cursorBlink: true,
         theme: {
           background: "#ffffff",
@@ -745,6 +746,17 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
           return true;
         }
         const kcomb = getKeyCombination(e);
+
+        if (__CS_REMAP_CTRL_L__) {
+          if (kcomb === "ctrl+l") {
+            return false;
+          } else if (kcomb === "ctrl+shift+l" || kcomb === "ctrl+alt+l") {
+            // we support both ctrl+shift+l & ctrl+alt+l because some browser extension (aka. Bitwarden) uses former
+            term.clear();
+            return false;
+          }
+        }
+
         if (terminalKeyShortcuts.has(kcomb)) {
           return true;
         }

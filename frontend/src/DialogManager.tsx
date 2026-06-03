@@ -970,7 +970,7 @@ export default function DialogManager({
       >
         {toasts.map((t) => (
           <Alert
-            key={t.id}
+            key={t.key || t.id}
             severity={t.severity}
             data-severity={t.severity}
             data-msg={t.msg}

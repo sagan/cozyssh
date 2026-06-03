@@ -22131,6 +22131,10 @@ export type CSEventDetailShellIntegration = {
 	is_active_terminal: boolean;
 	shellIntegration: ShellIntegration;
 };
+export type CSEventDetailVars = {
+	vars: Record<string, string>;
+	localVars: Record<string, string>;
+};
 declare const CS_EVENT_TERMINAL_NEW = "cs:terminal-new";
 declare const CS_EVENT_TERMINAL_CONNECTED = "cs:terminal-connected";
 declare const CS_EVENT_TERMINAL_DISCONNECTED = "cs:terminal-disconnected";
@@ -22138,6 +22142,7 @@ declare const CS_EVENT_TERMINAL_DATA = "cs:terminal-data";
 declare const CS_EVENT_TERMINAL_RESIZE = "cs:terminal-resize";
 declare const CS_EVENT_TERMINAL_CHANGE = "cs:terminal-change";
 declare const CS_EVENT_SHELL_INTEGRATION = "cs:shell-integration";
+declare const CS_EVENT_VARS = "cs:vars";
 /**
  * Options for a search.
  */
@@ -22356,15 +22361,24 @@ declare global {
 	 */
 	var __CS_DISABLE_SHORTCUTS__: Set<string>;
 	/**
+	 * If 1, disable terminal ctrl+l (let browser handle it) and remap ctrl+shift+l & ctrl+alt+l to ctrl+l in terminal.
+	 */
+	var __CS_REMAP_CTRL_L__: undefined | number;
+	/**
+	 * Used as xterm.js terminal options.fontSize
+	 */
+	var __CS_TERMINAL_FONT_SIZE__: number;
+	/**
 	 * Focus the terminal with the given pane id.
 	 * @param tabOrPaneId defaults to active terminal pane id.
 	 */
 	function csFocus(tabOrPaneId?: string): void;
 	/**
-	 * Display a notification.
+	 * Display a toast notification.
 	 * @param severity defaults to "info".
+	 * @param key optional toast key, if provided, it will override the previous notification of same key
 	 */
-	function csNotify(msg: string, severity?: Severity): void;
+	function csNotify(msg: string, severity?: Severity, key?: string): void;
 	/**
 	 * Open a host or a set of hosts.
 	 * @param hosts The host object, connection string or array of up to 4 host objects or connection strings
@@ -22572,6 +22586,7 @@ declare global {
 		[CS_EVENT_TERMINAL_RESIZE]: CustomEvent<CSEventDetailTerminalResize>;
 		[CS_EVENT_TERMINAL_CHANGE]: CustomEvent<CSEventDetailActiveGroupChange>;
 		[CS_EVENT_SHELL_INTEGRATION]: CustomEvent<CSEventDetailShellIntegration>;
+		[CS_EVENT_VARS]: CustomEvent<CSEventDetailVars>;
 	}
 }
 

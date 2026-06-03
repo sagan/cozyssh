@@ -56,6 +56,9 @@ import {
   VAR_NOAUTORUN,
   VIBRATE_PATTERN,
   BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE,
+  VAR_CS_REMAP_CTRL_L,
+  VAR_CS_TERMINAL_FONT_SIZE,
+  DEFAULT_TERMINAL_FONT_SIZE,
 } from "./constants";
 import {
   type ContextMenu,
@@ -65,7 +68,9 @@ import {
   type ScratchpadSyncState,
   type Severity,
   type Toast,
+  type CSEventDetailVars,
   CS_EVENT_TERMINAL_CHANGE,
+  CS_EVENT_VARS,
   defaultTheme,
   genTabId,
   getIntVar,
@@ -207,11 +212,18 @@ export default function Dashboard({ initialData }: DashboardProps) {
     );
   }, [activePaneId]);
 
-  const csNotify = useCallback((msg: string, severity: Severity = "info") => {
+  const csNotify = useCallback((msg: string, severity: Severity = "info", key?: string) => {
+    let id: string | number;
     toastIdRef.current++;
-    const id = toastIdRef.current;
+    id = toastIdRef.current;
+    if (key) {
+      id = `${key}-${id}`;
+    }
     setToasts((prev) => {
-      const newToasts = [...prev, { id, msg, severity }];
+      const newToast = { id, key, msg, severity };
+      const newToasts = key
+        ? [...prev.filter((t) => typeof t.id === "number" || !t.id.startsWith(key + "-")), newToast]
+        : [...prev, newToast];
       return newToasts.slice(-3); // Keep last 3
     });
     setTimeout(() => {
@@ -233,6 +245,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   useEffect(() => {
     if (unreadTabIds.has(activeTabId)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setUnreadTabIds((prev) => {
         const next = new Set(prev);
         next.delete(activeTabId);
@@ -697,6 +710,469 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   useWakeLock(tabs.length > 0 && getIntVar(vars, localVars, VAR_CS_NOWAKELOCK) !== 1);
 
+  const handleCloneSession = useCallback((id: string, cloneInSameTab?: boolean) => {
+    setContextMenu(null);
+    let pane: PaneData | undefined;
+    let tab: TabData | undefined;
+    outer: for (const t of getStore().tabs) {
+      if (t.id === id) {
+        if (t.panes.length === 0) {
+          // impossible case
+          return;
+        }
+        tab = t;
+        pane = t.panes[0];
+        break;
+      }
+      for (const p of t.panes) {
+        if (p.id === id) {
+          pane = p;
+          tab = t;
+          break outer;
+        }
+      }
+    }
+    if (!tab || !pane || (cloneInSameTab && tab.panes.length >= 4)) {
+      return;
+    }
+    const newPaneId = genPaneId(pane.host);
+    const newTabId = genTabId(pane.host);
+    const backendSessionId = pane.sessionId || pane.id;
+    setTabs((prev) => {
+      const newPane = { id: newPaneId, host: pane.host, cloneFrom: backendSessionId, state: pane.state };
+      if (cloneInSameTab) {
+        return prev.map((t) =>
+          t.id === tab.id && t.panes.length < 4 ? { ...t, panes: [...t.panes, newPane], activePaneId: newPaneId } : t,
+        );
+      }
+      return [
+        ...prev,
+        {
+          id: newTabId,
+          title: nextName(tab.title),
+          panes: [newPane],
+          activePaneId: newPaneId,
+          showFiles: false,
+        },
+      ];
+    });
+    if (!cloneInSameTab) {
+      setActiveTabId(newTabId);
+    }
+    setActivePaneId(newPaneId);
+  }, []);
+
+  const handleUnpinTab = useCallback(async (id: string) => {
+    setContextMenu(null);
+    const tab = getStore().tabs.find((t) => t.id === id);
+    if (!tab) {
+      return;
+    }
+    const backendSessionId = tab.panes[0]?.sessionId || tab.panes[0]?.id || id;
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+    await fetch("/api/tabs/unpin", {
+      method: METHOD_POST,
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        [HEADER_CONTENT_TYPE]: MIME_JSON,
+      },
+      body: JSON.stringify({ id: backendSessionId } satisfies TabsUnpinRequest),
+    });
+  }, []);
+
+  const handleCloseTab = useCallback(
+    (e: React.MouseEvent | null, id: string) => {
+      e?.stopPropagation();
+      const { activeTabId, tabs } = getStore();
+      const targetTab = tabs.find((t) => t.id === id);
+      if (targetTab?.isPinned && !targetTab?.isLocked) {
+        handleUnpinTab(id);
+      }
+      if (targetTab && !targetTab.isLocked) {
+        const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+        targetTab.panes.forEach((p) => {
+          if (p.state !== "stolen") {
+            fetch("/api/sessions/close", {
+              method: METHOD_POST,
+              headers: {
+                [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+                [HEADER_CONTENT_TYPE]: MIME_JSON,
+              },
+              body: JSON.stringify({ id: p.sessionId || p.id } satisfies SessionsCloseRequest),
+            }).catch((e) => console.error(e));
+          }
+        });
+      }
+
+      setTabs((prev) => {
+        const idx = prev.findIndex((t) => t.id === id);
+        const newTabs = prev.filter((t) => t.id !== id);
+        if (activeTabId === id && newTabs.length > 0) {
+          const nextIdx = idx > 0 ? idx - 1 : 0;
+          const nextTab = newTabs[nextIdx];
+          setActiveTabId(nextTab.id);
+          setActivePaneId(nextTab.activePaneId);
+        } else if (newTabs.length === 0) {
+          setActiveTabId("");
+          setActivePaneId("");
+        }
+        return newTabs;
+      });
+      triggerFocus();
+    },
+    [handleUnpinTab],
+  );
+
+  const handleCloseTabOrPane = useCallback(
+    (tabOrPaneId?: string) => {
+      const { activeTabId, activePaneId, tabs } = getStore();
+      tabOrPaneId = tabOrPaneId || activePaneId;
+      if (!tabOrPaneId) {
+        return;
+      }
+
+      // 1. Check if targetId is a Tab ID
+      const targetTab = tabs.find((t) => t.id === tabOrPaneId);
+      if (targetTab) {
+        handleCloseTab(null, tabOrPaneId);
+        return;
+      }
+
+      // 2. Check if targetId is a Pane ID
+      let parentTab: TabData | undefined;
+      let targetPane: PaneData | undefined;
+      for (const t of tabs) {
+        const p = t.panes.find((pane) => pane.id === tabOrPaneId);
+        if (p) {
+          parentTab = t;
+          targetPane = p;
+          break;
+        }
+      }
+
+      if (parentTab && targetPane) {
+        if (parentTab.panes.length > 1) {
+          // Multi-pane tab: close the pane
+          const paneIdx = parentTab.panes.findIndex((p) => p.id === tabOrPaneId);
+          const newPanes = parentTab.panes.filter((p) => p.id !== tabOrPaneId);
+          let nextPaneId = parentTab.activePaneId;
+          if (parentTab.activePaneId === tabOrPaneId) {
+            nextPaneId = newPanes[Math.max(0, paneIdx - 1)].id;
+          }
+
+          if (!parentTab.isLocked && targetPane.state !== "stolen") {
+            const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+            fetch("/api/sessions/close", {
+              method: METHOD_POST,
+              headers: {
+                [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+                [HEADER_CONTENT_TYPE]: MIME_JSON,
+              },
+              body: JSON.stringify({ id: targetPane.sessionId || targetPane.id } satisfies SessionsCloseRequest),
+            }).catch((e) => console.error(e));
+          }
+
+          setTabs((prev) =>
+            prev.map((t) => (t.id === parentTab.id ? { ...t, panes: newPanes, activePaneId: nextPaneId } : t)),
+          );
+
+          if (activeTabId === parentTab.id) {
+            setActivePaneId(nextPaneId);
+            triggerFocus();
+          }
+        } else {
+          handleCloseTab(null, parentTab.id);
+        }
+      }
+    },
+    [handleCloseTab],
+  );
+
+  const handleOpenScratchpad = useCallback(() => {
+    const existing = getStore().tabs.find((t) => t.type === "scratchpad");
+    if (existing) {
+      setActiveTabId(existing.id);
+      setActivePaneId(existing.panes[0].id);
+      triggerFocus();
+      return;
+    }
+    const tabId = `scratchpad-${Date.now()}`;
+    const newTab: TabData = {
+      id: tabId,
+      title: "Scratchpad",
+      panes: [{ id: tabId, host: "scratchpad" }],
+      activePaneId: tabId,
+      type: "scratchpad",
+    };
+    setTabs((prev) => [...prev, newTab]);
+    setActiveTabId(tabId);
+    setActivePaneId(tabId);
+    triggerFocus();
+  }, []);
+
+  const handleButtonClick = useCallback(
+    async (btn: Pick<ButtonData, "id" | "name" | "type" | "payload">) => {
+      window.navigator.vibrate?.(VIBRATE_PATTERN);
+      switch (btn.type) {
+        case "send_string":
+          await sendParsedString(btn.payload);
+          triggerFocus();
+          break;
+
+        case "open_terminal":
+          handleSelectHost(btn.payload || LOCAL_NAME);
+          break;
+
+        case "terminal_function": {
+          const term = terminalRefs.current[getStore().activePaneId];
+          if (!term || !("getXterm" in term)) {
+            return;
+          }
+          switch (btn.payload) {
+            case "COPY": {
+              const xterm = term.getXterm();
+              if (!xterm) {
+                return;
+              }
+              const buffer = xterm.buffer.active;
+              let text = "";
+              for (let i = 0; i < xterm.rows; i++) {
+                const line = buffer.getLine(i);
+                if (line) {
+                  text += line.translateToString(true) + "\n";
+                }
+              }
+              text = text.trim();
+              if (text) {
+                navigator.clipboard.writeText(text);
+              }
+              term.focus();
+              break;
+            }
+
+            case "COPY_VISIBLE": {
+              const xterm = term.getXterm();
+              if (!xterm) {
+                return;
+              }
+              const buffer = xterm.buffer.active;
+              const start = buffer.viewportY;
+              const end = start + xterm.rows;
+              let text = "";
+              for (let i = start; i < end; i++) {
+                const line = buffer.getLine(i);
+                if (line) {
+                  text += line.translateToString(true) + "\n";
+                }
+              }
+              text = text.trim();
+              if (text) {
+                navigator.clipboard.writeText(text);
+              }
+              term.focus();
+              break;
+            }
+
+            case "COPY_SELECTION": {
+              const text = term.getSelection();
+              if (text) {
+                navigator.clipboard.writeText(text);
+              }
+              term.focus();
+              break;
+            }
+
+            case "COPY_CWD": {
+              const shellIntegration = getStore().shellIntegrations[getStore().activePaneId];
+              if (shellIntegration?.cwd) {
+                navigator.clipboard.writeText(shellIntegration.cwd);
+              }
+              term.focus();
+              break;
+            }
+
+            case "COPY_CURRENT_CMDLINE": {
+              const shellIntegration = getStore().shellIntegrations[getStore().activePaneId];
+              if (shellIntegration?.currentCmdLine) {
+                navigator.clipboard.writeText(shellIntegration.currentCmdLine);
+              }
+              term.focus();
+              break;
+            }
+
+            case "COPY_LAST_COMMAND_OUTPUT": {
+              const text = term.getLastCommandOutput();
+              if (text) {
+                navigator.clipboard.writeText(text);
+              }
+              term.focus();
+              break;
+            }
+
+            case "PASTE": {
+              const text = await navigator.clipboard.readText();
+              if (text) {
+                term.sendData(text);
+              }
+              term.focus();
+              break;
+            }
+
+            case "INPUT":
+              setInputValue("");
+              setSendScope(0);
+              setInputDialogOpen(true);
+              break;
+
+            case "CLEAR":
+              term.clear();
+              term.focus();
+              break;
+
+            case "RESET":
+              term.reset();
+              term.focus();
+              break;
+
+            case "RECONNECT":
+              term.reconnect();
+              term.focus();
+              break;
+
+            case "CLOSE":
+              handleCloseTabOrPane();
+              break;
+
+            case "CLOSE_TAB": {
+              handleCloseTabOrPane(getStore().activeTabId);
+              break;
+            }
+
+            case "SCROLL_TO_TOP":
+              term.scrollToTop();
+              term.focus();
+              break;
+
+            case "SCROLL_TO_BOTTOM":
+              term.scrollToBottom();
+              term.focus();
+              break;
+
+            case "SCROLL_UP": {
+              const scrollLines = getIntVar(
+                getStore().vars,
+                getStore().localVars,
+                VAR_CS_SCROLL_LINES,
+                DEFAULT_SCROLL_LINES,
+              );
+              term.scrollLines(-scrollLines);
+              term.focus();
+              break;
+            }
+
+            case "SCROLL_DOWN": {
+              const scrollLines = getIntVar(
+                getStore().vars,
+                getStore().localVars,
+                VAR_CS_SCROLL_LINES,
+                DEFAULT_SCROLL_LINES,
+              );
+              term.scrollLines(scrollLines);
+              term.focus();
+              break;
+            }
+
+            case "SCROLL_PAGE_UP":
+              term.scrollPages(-1);
+              term.focus();
+              break;
+
+            case "SCROLL_PAGE_DOWN":
+              term.scrollPages(1);
+              term.focus();
+              break;
+
+            case "CLONE_SESSION":
+              handleCloneSession(getStore().activePaneId);
+              break;
+
+            case "CLONE_SESSION_IN_SAME_TAB":
+              handleCloneSession(getStore().activePaneId, true);
+              break;
+
+            case "SEARCH":
+              setSearchOpen(true);
+              setTimeout(() => searchInputRef.current?.focus(), 100);
+              break;
+
+            default:
+              break;
+          }
+          break;
+        }
+
+        case "misc":
+          switch (btn.payload) {
+            case "TABS_SCROLL_LEFT":
+              (document.querySelector("#tab-bar .MuiTabScrollButton-root:first-of-type") as HTMLElement)?.click();
+              break;
+            case "TABS_SCROLL_RIGHT":
+              (document.querySelector("#tab-bar .MuiTabScrollButton-root:last-of-type") as HTMLElement)?.click();
+              break;
+            case "BUTTONS_SCROLL_LEFT":
+              (document.querySelector("#button-bar .MuiTabScrollButton-root:first-of-type") as HTMLElement)?.click();
+              break;
+            case "BUTTONS_SCROLL_RIGHT":
+              (document.querySelector("#button-bar .MuiTabScrollButton-root:last-of-type") as HTMLElement)?.click();
+              break;
+            case "NEXT_BUTTON_GROUP": {
+              const idx = groups.indexOf(activeGroup);
+              let nextIdx = (idx + 1) % groups.length;
+              while (nextIdx !== idx && groups[nextIdx].startsWith("_")) {
+                nextIdx = (nextIdx + 1) % groups.length;
+              }
+              setActiveGroup(groups[nextIdx]);
+              break;
+            }
+            case "PREV_BUTTON_GROUP": {
+              const idx = groups.indexOf(activeGroup);
+              let prevIdx = (idx - 1 + groups.length) % groups.length;
+              while (prevIdx !== idx && groups[prevIdx].startsWith("_")) {
+                prevIdx = (prevIdx - 1 + groups.length) % groups.length;
+              }
+              setActiveGroup(groups[prevIdx]);
+              break;
+            }
+            case "OPEN_SCRATCHPAD":
+              handleOpenScratchpad();
+              break;
+            default:
+              break;
+          }
+          triggerFocus();
+          break;
+
+        case "run_script":
+          await runScript(btn, csNotify);
+          break;
+
+        default:
+          break;
+      }
+    },
+    [
+      activeGroup,
+      csNotify,
+      groups,
+      handleCloneSession,
+      handleCloseTabOrPane,
+      handleOpenScratchpad,
+      handleSelectHost,
+      sendParsedString,
+      setActiveGroup,
+    ],
+  );
+
   useEffect(() => {
     const autorun = getIntVar(vars, localVars, VAR_CS_NOAUTORUN) !== 1 && startupParams.get(VAR_NOAUTORUN) !== "1";
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
@@ -963,154 +1439,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
     window.location.href = "/login";
   }, []);
 
-  const handleOpenScratchpad = useCallback(() => {
-    const existing = getStore().tabs.find((t) => t.type === "scratchpad");
-    if (existing) {
-      setActiveTabId(existing.id);
-      setActivePaneId(existing.panes[0].id);
-      triggerFocus();
-      return;
-    }
-    const tabId = `scratchpad-${Date.now()}`;
-    const newTab: TabData = {
-      id: tabId,
-      title: "Scratchpad",
-      panes: [{ id: tabId, host: "scratchpad" }],
-      activePaneId: tabId,
-      type: "scratchpad",
-    };
-    setTabs((prev) => [...prev, newTab]);
-    setActiveTabId(tabId);
-    setActivePaneId(tabId);
-    triggerFocus();
-  }, []);
-
-  const handleUnpinTab = useCallback(async (id: string) => {
-    setContextMenu(null);
-    const tab = getStore().tabs.find((t) => t.id === id);
-    if (!tab) {
-      return;
-    }
-    const backendSessionId = tab.panes[0]?.sessionId || tab.panes[0]?.id || id;
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    await fetch("/api/tabs/unpin", {
-      method: METHOD_POST,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        [HEADER_CONTENT_TYPE]: MIME_JSON,
-      },
-      body: JSON.stringify({ id: backendSessionId } satisfies TabsUnpinRequest),
-    });
-  }, []);
-
-  const handleCloseTab = useCallback(
-    (e: React.MouseEvent | null, id: string) => {
-      e?.stopPropagation();
-      const { activeTabId, tabs } = getStore();
-      const targetTab = tabs.find((t) => t.id === id);
-      if (targetTab?.isPinned && !targetTab?.isLocked) {
-        handleUnpinTab(id);
-      }
-      if (targetTab && !targetTab.isLocked) {
-        const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-        targetTab.panes.forEach((p) => {
-          if (p.state !== "stolen") {
-            fetch("/api/sessions/close", {
-              method: METHOD_POST,
-              headers: {
-                [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-                [HEADER_CONTENT_TYPE]: MIME_JSON,
-              },
-              body: JSON.stringify({ id: p.sessionId || p.id } satisfies SessionsCloseRequest),
-            }).catch((e) => console.error(e));
-          }
-        });
-      }
-
-      setTabs((prev) => {
-        const idx = prev.findIndex((t) => t.id === id);
-        const newTabs = prev.filter((t) => t.id !== id);
-        if (activeTabId === id && newTabs.length > 0) {
-          const nextIdx = idx > 0 ? idx - 1 : 0;
-          const nextTab = newTabs[nextIdx];
-          setActiveTabId(nextTab.id);
-          setActivePaneId(nextTab.activePaneId);
-        } else if (newTabs.length === 0) {
-          setActiveTabId("");
-          setActivePaneId("");
-        }
-        return newTabs;
-      });
-      triggerFocus();
-    },
-    [handleUnpinTab],
-  );
-
-  const handleCloseTabOrPane = useCallback(
-    (tabOrPaneId?: string) => {
-      const { activeTabId, activePaneId, tabs } = getStore();
-      tabOrPaneId = tabOrPaneId || activePaneId;
-      if (!tabOrPaneId) {
-        return;
-      }
-
-      // 1. Check if targetId is a Tab ID
-      const targetTab = tabs.find((t) => t.id === tabOrPaneId);
-      if (targetTab) {
-        handleCloseTab(null, tabOrPaneId);
-        return;
-      }
-
-      // 2. Check if targetId is a Pane ID
-      let parentTab: TabData | undefined;
-      let targetPane: PaneData | undefined;
-      for (const t of tabs) {
-        const p = t.panes.find((pane) => pane.id === tabOrPaneId);
-        if (p) {
-          parentTab = t;
-          targetPane = p;
-          break;
-        }
-      }
-
-      if (parentTab && targetPane) {
-        if (parentTab.panes.length > 1) {
-          // Multi-pane tab: close the pane
-          const paneIdx = parentTab.panes.findIndex((p) => p.id === tabOrPaneId);
-          const newPanes = parentTab.panes.filter((p) => p.id !== tabOrPaneId);
-          let nextPaneId = parentTab.activePaneId;
-          if (parentTab.activePaneId === tabOrPaneId) {
-            nextPaneId = newPanes[Math.max(0, paneIdx - 1)].id;
-          }
-
-          if (!parentTab.isLocked && targetPane.state !== "stolen") {
-            const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-            fetch("/api/sessions/close", {
-              method: METHOD_POST,
-              headers: {
-                [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-                [HEADER_CONTENT_TYPE]: MIME_JSON,
-              },
-              body: JSON.stringify({ id: targetPane.sessionId || targetPane.id } satisfies SessionsCloseRequest),
-            }).catch((e) => console.error(e));
-          }
-
-          setTabs((prev) =>
-            prev.map((t) => (t.id === parentTab.id ? { ...t, panes: newPanes, activePaneId: nextPaneId } : t)),
-          );
-
-          if (activeTabId === parentTab.id) {
-            setActivePaneId(nextPaneId);
-            triggerFocus();
-          }
-        } else {
-          handleCloseTab(null, parentTab.id);
-        }
-      }
-    },
-    [handleCloseTab],
-  );
-
   const handlePinTab = useCallback(async (id: string) => {
     setContextMenu(null);
     const tab = getStore().tabs.find((t) => t.id === id);
@@ -1229,58 +1557,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
     triggerFocus();
   }, [contextMenu]);
 
-  const handleCloneSession = useCallback((id: string, cloneInSameTab?: boolean) => {
-    setContextMenu(null);
-    let pane: PaneData | undefined;
-    let tab: TabData | undefined;
-    outer: for (const t of getStore().tabs) {
-      if (t.id === id) {
-        if (t.panes.length === 0) {
-          // impossible case
-          return;
-        }
-        tab = t;
-        pane = t.panes[0];
-        break;
-      }
-      for (const p of t.panes) {
-        if (p.id === id) {
-          pane = p;
-          tab = t;
-          break outer;
-        }
-      }
-    }
-    if (!tab || !pane || (cloneInSameTab && tab.panes.length >= 4)) {
-      return;
-    }
-    const newPaneId = genPaneId(pane.host);
-    const newTabId = genTabId(pane.host);
-    const backendSessionId = pane.sessionId || pane.id;
-    setTabs((prev) => {
-      const newPane = { id: newPaneId, host: pane.host, cloneFrom: backendSessionId, state: pane.state };
-      if (cloneInSameTab) {
-        return prev.map((t) =>
-          t.id === tab.id && t.panes.length < 4 ? { ...t, panes: [...t.panes, newPane], activePaneId: newPaneId } : t,
-        );
-      }
-      return [
-        ...prev,
-        {
-          id: newTabId,
-          title: nextName(tab.title),
-          panes: [newPane],
-          activePaneId: newPaneId,
-          showFiles: false,
-        },
-      ];
-    });
-    if (!cloneInSameTab) {
-      setActiveTabId(newTabId);
-    }
-    setActivePaneId(newPaneId);
-  }, []);
-
   const handleReconnectTab = useCallback((id: string) => {
     setContextMenu(null);
     const targetTab = getStore().tabs.find((t) => t.id === id);
@@ -1374,269 +1650,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setLocalVars,
     handleCloseTabOrPane,
   ]);
-
-  const handleButtonClick = useCallback(
-    async (btn: Pick<ButtonData, "id" | "name" | "type" | "payload">) => {
-      window.navigator.vibrate?.(VIBRATE_PATTERN);
-      switch (btn.type) {
-        case "send_string":
-          await sendParsedString(btn.payload);
-          triggerFocus();
-          break;
-
-        case "open_terminal":
-          handleSelectHost(btn.payload || LOCAL_NAME);
-          break;
-
-        case "terminal_function": {
-          const term = terminalRefs.current[getStore().activePaneId];
-          if (!term || !("getXterm" in term)) {
-            return;
-          }
-          switch (btn.payload) {
-            case "COPY": {
-              const xterm = term.getXterm();
-              if (!xterm) {
-                return;
-              }
-              const buffer = xterm.buffer.active;
-              let text = "";
-              for (let i = 0; i < xterm.rows; i++) {
-                const line = buffer.getLine(i);
-                if (line) {
-                  text += line.translateToString(true) + "\n";
-                }
-              }
-              text = text.trim();
-              if (text) {
-                navigator.clipboard.writeText(text);
-              }
-              term.focus();
-              break;
-            }
-
-            case "COPY_VISIBLE": {
-              const xterm = term.getXterm();
-              if (!xterm) {
-                return;
-              }
-              const buffer = xterm.buffer.active;
-              const start = buffer.viewportY;
-              const end = start + xterm.rows;
-              let text = "";
-              for (let i = start; i < end; i++) {
-                const line = buffer.getLine(i);
-                if (line) {
-                  text += line.translateToString(true) + "\n";
-                }
-              }
-              text = text.trim();
-              if (text) {
-                navigator.clipboard.writeText(text);
-              }
-              term.focus();
-              break;
-            }
-
-            case "COPY_SELECTION": {
-              const text = term.getSelection();
-              if (text) {
-                navigator.clipboard.writeText(text);
-              }
-              term.focus();
-              break;
-            }
-
-            case "COPY_CWD": {
-              const shellIntegration = getStore().shellIntegrations[getStore().activePaneId];
-              if (shellIntegration?.cwd) {
-                navigator.clipboard.writeText(shellIntegration.cwd);
-              }
-              term.focus();
-              break;
-            }
-
-            case "COPY_CURRENT_CMDLINE": {
-              const shellIntegration = getStore().shellIntegrations[getStore().activePaneId];
-              if (shellIntegration?.currentCmdLine) {
-                navigator.clipboard.writeText(shellIntegration.currentCmdLine);
-              }
-              term.focus();
-              break;
-            }
-
-            case "COPY_LAST_COMMAND_OUTPUT": {
-              const text = term.getLastCommandOutput();
-              if (text) {
-                navigator.clipboard.writeText(text);
-              }
-              term.focus();
-              break;
-            }
-
-            case "PASTE": {
-              const text = await navigator.clipboard.readText();
-              if (text) {
-                term.sendData(text);
-              }
-              term.focus();
-              break;
-            }
-
-            case "INPUT":
-              setInputValue("");
-              setSendScope(0);
-              setInputDialogOpen(true);
-              break;
-
-            case "CLEAR":
-              term.clear();
-              term.focus();
-              break;
-
-            case "RESET":
-              term.reset();
-              term.focus();
-              break;
-
-            case "RECONNECT":
-              term.reconnect();
-              term.focus();
-              break;
-
-            case "CLOSE":
-              handleCloseTabOrPane();
-              break;
-
-            case "CLOSE_TAB": {
-              handleCloseTabOrPane(getStore().activeTabId);
-              break;
-            }
-
-            case "SCROLL_TO_TOP":
-              term.scrollToTop();
-              term.focus();
-              break;
-
-            case "SCROLL_TO_BOTTOM":
-              term.scrollToBottom();
-              term.focus();
-              break;
-
-            case "SCROLL_UP": {
-              const scrollLines = getIntVar(
-                getStore().vars,
-                getStore().localVars,
-                VAR_CS_SCROLL_LINES,
-                DEFAULT_SCROLL_LINES,
-              );
-              term.scrollLines(-scrollLines);
-              term.focus();
-              break;
-            }
-
-            case "SCROLL_DOWN": {
-              const scrollLines = getIntVar(
-                getStore().vars,
-                getStore().localVars,
-                VAR_CS_SCROLL_LINES,
-                DEFAULT_SCROLL_LINES,
-              );
-              term.scrollLines(scrollLines);
-              term.focus();
-              break;
-            }
-
-            case "SCROLL_PAGE_UP":
-              term.scrollPages(-1);
-              term.focus();
-              break;
-
-            case "SCROLL_PAGE_DOWN":
-              term.scrollPages(1);
-              term.focus();
-              break;
-
-            case "CLONE_SESSION":
-              handleCloneSession(getStore().activePaneId);
-              break;
-
-            case "CLONE_SESSION_IN_SAME_TAB":
-              handleCloneSession(getStore().activePaneId, true);
-              break;
-
-            case "SEARCH":
-              setSearchOpen(true);
-              setTimeout(() => searchInputRef.current?.focus(), 100);
-              break;
-
-            default:
-              break;
-          }
-          break;
-        }
-
-        case "misc":
-          switch (btn.payload) {
-            case "TABS_SCROLL_LEFT":
-              (document.querySelector("#tab-bar .MuiTabScrollButton-root:first-of-type") as HTMLElement)?.click();
-              break;
-            case "TABS_SCROLL_RIGHT":
-              (document.querySelector("#tab-bar .MuiTabScrollButton-root:last-of-type") as HTMLElement)?.click();
-              break;
-            case "BUTTONS_SCROLL_LEFT":
-              (document.querySelector("#button-bar .MuiTabScrollButton-root:first-of-type") as HTMLElement)?.click();
-              break;
-            case "BUTTONS_SCROLL_RIGHT":
-              (document.querySelector("#button-bar .MuiTabScrollButton-root:last-of-type") as HTMLElement)?.click();
-              break;
-            case "NEXT_BUTTON_GROUP": {
-              const idx = groups.indexOf(activeGroup);
-              let nextIdx = (idx + 1) % groups.length;
-              while (nextIdx !== idx && groups[nextIdx].startsWith("_")) {
-                nextIdx = (nextIdx + 1) % groups.length;
-              }
-              setActiveGroup(groups[nextIdx]);
-              break;
-            }
-            case "PREV_BUTTON_GROUP": {
-              const idx = groups.indexOf(activeGroup);
-              let prevIdx = (idx - 1 + groups.length) % groups.length;
-              while (prevIdx !== idx && groups[prevIdx].startsWith("_")) {
-                prevIdx = (prevIdx - 1 + groups.length) % groups.length;
-              }
-              setActiveGroup(groups[prevIdx]);
-              break;
-            }
-            case "OPEN_SCRATCHPAD":
-              handleOpenScratchpad();
-              break;
-            default:
-              break;
-          }
-          triggerFocus();
-          break;
-
-        case "run_script":
-          await runScript(btn, csNotify);
-          break;
-
-        default:
-          break;
-      }
-    },
-    [
-      sendParsedString,
-      handleSelectHost,
-      csNotify,
-      handleCloseTabOrPane,
-      handleCloneSession,
-      handleOpenScratchpad,
-      groups,
-      activeGroup,
-      setActiveGroup,
-    ],
-  );
 
   // ── Keyboard shortcuts (reads fresh state from store — tiny stable dep array) ──
   useKeyboardManager({
@@ -1746,6 +1759,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   useEffect(() => {
     if (keyboardHeight > 60) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLastKeyboardHeight(keyboardHeight);
     }
   }, [keyboardHeight]);
@@ -1775,6 +1789,30 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const onTerminalBlur = useCallback(() => {
     setExtraKeysOpen(false);
   }, []);
+
+  useEffect(() => {
+    __CS_REMAP_CTRL_L__ = getIntVar(vars, localVars, VAR_CS_REMAP_CTRL_L);
+    const fontSize = Math.max(1, getIntVar(vars, localVars, VAR_CS_TERMINAL_FONT_SIZE, DEFAULT_TERMINAL_FONT_SIZE));
+    if (fontSize !== __CS_TERMINAL_FONT_SIZE__) {
+      for (const term of Object.values(terminalRefs.current)) {
+        if (term && "getXterm" in term) {
+          const xterm = term.getXterm();
+          if (xterm) {
+            xterm.options.fontSize = fontSize;
+          }
+        }
+      }
+      __CS_TERMINAL_FONT_SIZE__ = fontSize;
+    }
+    window.dispatchEvent(
+      new CustomEvent(CS_EVENT_VARS, {
+        detail: {
+          vars,
+          localVars,
+        } satisfies CSEventDetailVars,
+      }),
+    );
+  }, [vars, localVars]);
 
   return (
     <ThemeProvider theme={muiTheme}>

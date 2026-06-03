@@ -15,11 +15,21 @@ import {
   BROWSER_STORAGE_KEY_ACTIVE_GROUP,
   DEFAULT_BUTTON_GROUP,
   DEFAULT_SCROLL_LINES,
+  DEFAULT_TERMINAL_FONT_SIZE,
   EVENT_LOCAL_STORAGE_SYNC,
   LOCAL_NAME,
+  LOCAL_VAR_PREFIX,
+  TOAST_KEY_TERMINAL_FONT_SIZE,
   VAR_CS_SCROLL_LINES,
+  VAR_CS_TERMINAL_FONT_SIZE,
 } from "./constants";
-import { type NewTabDialogViewMode, getIntVar, getKeyCombination } from "./common";
+import {
+  type NewTabDialogViewMode,
+  getIntVar,
+  getKeyCombination,
+  nextTerminalFontSize,
+  prevTerminalFontSize,
+} from "./common";
 import {
   type TerminalRefMap,
   getStore,
@@ -130,6 +140,58 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
 
       // ── Named shortcuts ───────────────────────────────────────────────────
       switch (keycomb) {
+        case "ctrl+alt+0": {
+          const { vars, localVars } = getStore();
+          let varName: string;
+          if (!vars[VAR_CS_TERMINAL_FONT_SIZE] || localVars[LOCAL_VAR_PREFIX + VAR_CS_TERMINAL_FONT_SIZE]) {
+            varName = LOCAL_VAR_PREFIX + VAR_CS_TERMINAL_FONT_SIZE;
+          } else {
+            varName = VAR_CS_TERMINAL_FONT_SIZE;
+          }
+          if (DEFAULT_TERMINAL_FONT_SIZE !== __CS_TERMINAL_FONT_SIZE__) {
+            csSetVar(varName, DEFAULT_TERMINAL_FONT_SIZE.toString());
+            csNotify(`Terminal font size reset to ${DEFAULT_TERMINAL_FONT_SIZE}`, "info", TOAST_KEY_TERMINAL_FONT_SIZE);
+          }
+          return;
+        }
+        case "alt+-": {
+          const { vars, localVars } = getStore();
+          let varName: string;
+          if (!vars[VAR_CS_TERMINAL_FONT_SIZE] || localVars[LOCAL_VAR_PREFIX + VAR_CS_TERMINAL_FONT_SIZE]) {
+            varName = LOCAL_VAR_PREFIX + VAR_CS_TERMINAL_FONT_SIZE;
+          } else {
+            varName = VAR_CS_TERMINAL_FONT_SIZE;
+          }
+          const fontSize = prevTerminalFontSize(__CS_TERMINAL_FONT_SIZE__);
+          if (fontSize !== __CS_TERMINAL_FONT_SIZE__) {
+            csSetVar(varName, fontSize.toString());
+            csNotify(
+              `Terminal font size: ${fontSize.toFixed(1).padStart(4, "0")}`,
+              "info",
+              TOAST_KEY_TERMINAL_FONT_SIZE,
+            );
+          }
+          return;
+        }
+        case "alt+=": // in most keyboard layout the "+" key lowercase char is "="
+        case "alt++": {
+          let varName: string;
+          if (!vars[VAR_CS_TERMINAL_FONT_SIZE] || localVars[LOCAL_VAR_PREFIX + VAR_CS_TERMINAL_FONT_SIZE]) {
+            varName = LOCAL_VAR_PREFIX + VAR_CS_TERMINAL_FONT_SIZE;
+          } else {
+            varName = VAR_CS_TERMINAL_FONT_SIZE;
+          }
+          const fontSize = nextTerminalFontSize(__CS_TERMINAL_FONT_SIZE__);
+          if (fontSize !== __CS_TERMINAL_FONT_SIZE__) {
+            csSetVar(varName, fontSize.toString());
+            csNotify(
+              `Terminal font size: ${fontSize.toFixed(1).padStart(4, "0")}`,
+              "info",
+              TOAST_KEY_TERMINAL_FONT_SIZE,
+            );
+          }
+          return;
+        }
         case "alt+c":
           e.preventDefault();
           handleCloneSession(activePaneId);

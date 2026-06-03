@@ -9,6 +9,7 @@ import type {
   CS_EVENT_TERMINAL_DISCONNECTED,
   CS_EVENT_TERMINAL_NEW,
   CS_EVENT_TERMINAL_RESIZE,
+  CS_EVENT_VARS,
   CSEventDetailActiveGroupChange,
   CSEventDetailShellIntegration,
   CSEventDetailTerminalConnected,
@@ -16,6 +17,7 @@ import type {
   CSEventDetailTerminalDisconnected,
   CSEventDetailTerminalNew,
   CSEventDetailTerminalResize,
+  CSEventDetailVars,
   Severity,
 } from "./common";
 import type { AppletPosition, CsExecResult, CsScriptModule } from "./pluginAPI";
@@ -74,16 +76,26 @@ declare global {
    * The element is in the same format as `__CS_PASSTHROUGH_SHORTCUTS__` element.
    */
   var __CS_DISABLE_SHORTCUTS__: Set<string>;
+
+  /**
+   * If 1, disable terminal ctrl+l (let browser handle it) and remap ctrl+shift+l & ctrl+alt+l to ctrl+l in terminal.
+   */
+  var __CS_REMAP_CTRL_L__: undefined | number;
+  /**
+   * Used as xterm.js terminal options.fontSize
+   */
+  var __CS_TERMINAL_FONT_SIZE__: number;
   /**
    * Focus the terminal with the given pane id.
    * @param tabOrPaneId defaults to active terminal pane id.
    */
   function csFocus(tabOrPaneId?: string): void;
   /**
-   * Display a notification.
+   * Display a toast notification.
    * @param severity defaults to "info".
+   * @param key optional toast key, if provided, it will override the previous notification of same key
    */
-  function csNotify(msg: string, severity?: Severity): void;
+  function csNotify(msg: string, severity?: Severity, key?: string): void;
   /**
    * Open a host or a set of hosts.
    * @param hosts The host object, connection string or array of up to 4 host objects or connection strings
@@ -293,6 +305,7 @@ declare global {
     [CS_EVENT_TERMINAL_RESIZE]: CustomEvent<CSEventDetailTerminalResize>;
     [CS_EVENT_TERMINAL_CHANGE]: CustomEvent<CSEventDetailActiveGroupChange>;
     [CS_EVENT_SHELL_INTEGRATION]: CustomEvent<CSEventDetailShellIntegration>;
+    [CS_EVENT_VARS]: CustomEvent<CSEventDetailVars>;
   }
 }
 

@@ -34,7 +34,8 @@ export type ToastData = {
 };
 
 export type Toast = ToastData & {
-  id: number;
+  id: number | string;
+  key?: string;
 };
 
 export const recentSchema = z.object({
@@ -169,6 +170,11 @@ export type CSEventDetailShellIntegration = {
   shellIntegration: ShellIntegration;
 };
 
+export type CSEventDetailVars = {
+  vars: Record<string, string>;
+  localVars: Record<string, string>;
+};
+
 export const CS_EVENT_TERMINAL_NEW = "cs:terminal-new";
 export const CS_EVENT_TERMINAL_CONNECTED = "cs:terminal-connected";
 export const CS_EVENT_TERMINAL_DISCONNECTED = "cs:terminal-disconnected";
@@ -176,6 +182,10 @@ export const CS_EVENT_TERMINAL_DATA = "cs:terminal-data";
 export const CS_EVENT_TERMINAL_RESIZE = "cs:terminal-resize";
 export const CS_EVENT_TERMINAL_CHANGE = "cs:terminal-change";
 export const CS_EVENT_SHELL_INTEGRATION = "cs:shell-integration";
+/**
+ * Event when variables change
+ */
+export const CS_EVENT_VARS = "cs:vars";
 
 export const remoteCommandOptions = [
   "tmux attach || tmux new",
@@ -524,4 +534,40 @@ export function genTabId(name: string): string {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function genPaneId(_name: string): string {
   return `p-${generatePassword(12)}`;
+}
+
+const terminalFontSizes: number[] = [
+  4, // %25
+  5, // 33%
+  7.5, // 50%
+  10, // 67%
+  11, // 75%
+  12, // 80%
+  13.5, // 90%
+  15, // 100%
+  16.5, // 110%
+  19, // 125%
+  23, // 150%
+  26, // 175%
+  30, // 200%
+  38, // 250%
+  45, // 300%
+  60, // 400%
+  75, // 500%
+];
+
+export function prevTerminalFontSize(fontSize: number): number {
+  const idx = terminalFontSizes.findIndex((s) => s >= fontSize);
+  if (idx === -1) {
+    return terminalFontSizes[0];
+  }
+  return terminalFontSizes[idx - 1];
+}
+
+export function nextTerminalFontSize(fontSize: number): number {
+  const idx = terminalFontSizes.findIndex((s) => s >= fontSize);
+  if (idx === -1) {
+    return terminalFontSizes[terminalFontSizes.length - 1];
+  }
+  return terminalFontSizes[idx + 1];
 }
