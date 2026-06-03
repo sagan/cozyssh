@@ -146,6 +146,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	sessionID := query.Get("sessionId")
 	cols, _ := strconv.Atoi(query.Get("cols"))
 	rows, _ := strconv.Atoi(query.Get("rows"))
+	sessionProxyJump := query.Get("proxyJump")
 	sessionRemoteCommand := query.Get("remoteCommand")
 	noPublicKey := query.Get("noPublicKey") == "1"
 
@@ -192,7 +193,8 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if pClient == nil {
-				pClient, sshSession, remoteCommand, err = sshmanager.DialSSH(host, term, rows, cols, identity, noPublicKey)
+				pClient, sshSession, remoteCommand, err = sshmanager.DialSSH(host, term, rows, cols, identity,
+					sessionProxyJump, noPublicKey)
 			}
 
 			if err != nil {
@@ -238,7 +240,8 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			s.RetryFunc = func() (io.Reader, io.Writer, error) {
 				s.Broadcast(append([]byte(models.WS_MSG_PREFIX_STATE), models.WsMsgStateDisconnected...))
 
-				newPClient, newSess, newRC, err := sshmanager.DialSSH(host, nil, rows, cols, identity, noPublicKey)
+				newPClient, newSess, newRC, err := sshmanager.DialSSH(host, nil, rows, cols, identity,
+					sessionProxyJump, noPublicKey)
 				if err != nil {
 					errStr := strings.ToLower(err.Error())
 					if strings.Contains(errStr, "mismatch") || strings.Contains(errStr, "auth") ||

@@ -753,6 +753,7 @@ export default function DialogManager({
                 new one
                 <br />- <b>title</b> : The opened tab title
                 <br />- <b>remoteCommand</b> : Remote shell command to execute on connected
+                <br />- <b>proxyJump</b> : Proxy jump server
                 <br />- <b>target</b> : The tab id. If the same id tab exists, the new terminal will be opened in the
                 target tab
                 <br />

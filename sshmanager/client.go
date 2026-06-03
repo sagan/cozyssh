@@ -366,9 +366,9 @@ type TerminalUI interface {
 
 // DialSSH resolves standard configs and connects via id_ed25519
 // It always returns a new independent connection.
-func DialSSH(name string, term TerminalUI, rows, cols int, identity string, noPublicKey bool) (
+func DialSSH(name string, term TerminalUI, rows, cols int, identity string, proxyJump string, noPublicKey bool) (
 	*PooledClient, *ssh.Session, string, error) {
-	client, closers, remoteCommand, err := getSSHClient(name, term, identity, noPublicKey)
+	client, closers, remoteCommand, err := getSSHClient(name, term, identity, proxyJump, noPublicKey)
 	if err != nil {
 		return nil, nil, "", err
 	}
@@ -396,7 +396,7 @@ func DialSSH(name string, term TerminalUI, rows, cols int, identity string, noPu
 // identity: directly set the content of the identity file.
 // noPublicKey: skip default public key authentication.
 func getSSHClient(name string, term TerminalUI, identity string,
-	noPublicKey bool) (*ssh.Client, []io.Closer, string, error) {
+	proxyJump string, noPublicKey bool) (*ssh.Client, []io.Closer, string, error) {
 	configPath := filepath.Join(getSSHDir(), "config")
 	f, err := os.Open(configPath)
 	var cfg *ssh_config.Config
@@ -447,12 +447,13 @@ func getSSHClient(name string, term TerminalUI, identity string,
 		}
 	}
 
-	proxyJumpAlias := ""
 	identityFile := ""
 	remoteCommand := ""
 	if cfg != nil {
 		identityFile, _ = cfg.Get(name, "IdentityFile")
-		proxyJumpAlias, _ = cfg.Get(name, "ProxyJump")
+		if proxyJump == "" {
+			proxyJump, _ = cfg.Get(name, "ProxyJump")
+		}
 		remoteCommand, _ = cfg.Get(name, "RemoteCommand")
 	}
 
@@ -621,10 +622,10 @@ func getSSHClient(name string, term TerminalUI, identity string,
 	var closers []io.Closer
 
 	dialFunc := func(config *ssh.ClientConfig) (*ssh.Client, error) {
-		if proxyJumpAlias != "" {
-			proxyClient, proxyClosers, _, err := getSSHClient(proxyJumpAlias, term, "", false)
+		if proxyJump != "" {
+			proxyClient, proxyClosers, _, err := getSSHClient(proxyJump, term, "", "", false)
 			if err != nil {
-				return nil, fmt.Errorf("failed to connect to ProxyJump %s: %w", proxyJumpAlias, err)
+				return nil, fmt.Errorf("failed to connect to ProxyJump %s: %w", proxyJump, err)
 			}
 			closers = append(closers, proxyClosers...)
 			closers = append(closers, proxyClient)
