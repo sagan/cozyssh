@@ -1691,6 +1691,9 @@ export interface HostData {
 	identity_file?: string;
 	is_auto?: boolean;
 	is_favourite?: boolean;
+	password?: string;
+	password_exists?: boolean;
+	clear_password?: boolean;
 }
 export interface ButtonData {
 	id: string;

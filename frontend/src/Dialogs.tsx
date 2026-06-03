@@ -6,6 +6,7 @@ export interface DialogApi {
   alert: typeof csAlert;
   confirm: typeof csConfirm;
   prompt: typeof csPrompt;
+  promptPassword: (message: string, defaultValue?: string) => Promise<string | null>;
 }
 
 interface DialogConfig {
@@ -15,6 +16,7 @@ interface DialogConfig {
   placeholder?: string;
   defaultValue?: string;
   validate?: ((value: string) => string | undefined) | null;
+  inputType?: string;
 }
 
 // 1. Internal registry to bridge the static export to the React provider instance
@@ -28,8 +30,9 @@ const registry = {
 export const dialogs: DialogApi = {
   alert: (message, detail) => registry.current?.alert(message, detail) ?? Promise.resolve(),
   confirm: (message, detail) => registry.current?.confirm(message, detail) ?? Promise.resolve(false),
-  prompt: (message, defaultValue, options) =>
-    registry.current?.prompt(message, defaultValue, options) ?? Promise.resolve(null),
+  prompt: (message, defaultValue) => registry.current?.prompt(message, defaultValue) ?? Promise.resolve(null),
+  promptPassword: (message, defaultValue) =>
+    registry.current?.promptPassword(message, defaultValue) ?? Promise.resolve(null),
 };
 
 export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
@@ -43,6 +46,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
     detail: "",
     placeholder: "",
     validate: null,
+    inputType: "",
   });
 
   const resolveRef = useRef<((value: string | boolean | null) => void) | null>(null);
@@ -64,6 +68,8 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
       confirm: ((message, detail) => triggerDialog({ type: "confirm", message, detail })) as DialogApi["confirm"],
       prompt: ((message, defaultValue) =>
         triggerDialog({ type: "prompt", message, defaultValue })) as DialogApi["prompt"],
+      promptPassword: ((message, defaultValue) =>
+        triggerDialog({ type: "prompt", inputType: "password", message, defaultValue })) as DialogApi["promptPassword"],
     };
   }, []);
 
@@ -112,6 +118,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
               margin="dense"
               fullWidth
               variant="outlined"
+              type={config.inputType || "text"}
               placeholder={config.placeholder}
               value={inputValue}
               error={Boolean(error)}
@@ -124,6 +131,8 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
+                  e.stopPropagation();
+                  e.preventDefault();
                   handleClose(true);
                 }
               }}

@@ -5,6 +5,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -14,7 +15,11 @@ import (
 	"net/http"
 	"os"
 	os_exec "os/exec"
+	"path/filepath"
 	"strings"
+
+	"github.com/go-http-utils/headers"
+	"golang.org/x/term"
 
 	"cozyssh/auth"
 	"cozyssh/config"
@@ -22,13 +27,12 @@ import (
 	"cozyssh/fsapi"
 	"cozyssh/localpty"
 	"cozyssh/models"
+	"cozyssh/passstore"
 	"cozyssh/recents"
 	"cozyssh/scratchpad"
 	"cozyssh/session"
 	"cozyssh/sshmanager"
 	"cozyssh/ws"
-
-	"github.com/go-http-utils/headers"
 )
 
 //go:embed all:frontend/dist
@@ -56,10 +60,49 @@ func Run(ctx context.Context, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}
+
+		passstore.Init(cfg.ConfigDir, cfg.AppPasswordHash)
+
+		var oldPwdVal string
+		if !passstore.IsEmpty() {
+			oldPwdVal, err = readPasswordFromStdin("Enter old app password to re-encrypt stored passwords (press ENTER to skip): ")
+			if err != nil {
+				return fmt.Errorf("failed to read old password: %w", err)
+			}
+
+			if oldPwdVal == "" {
+				fmt.Fprintln(os.Stderr, "WARNING: Resetting the app password without providing the old password will result in losing all saved SSH passwords!")
+				fmt.Fprint(os.Stderr, "Are you sure you want to continue (y/n) [n]? ")
+				line, err := readLineRaw()
+				if err != nil {
+					return fmt.Errorf("failed to read confirmation: %w", err)
+				}
+				answer := strings.ToLower(strings.TrimSpace(line))
+				if answer != "yes" && answer != "y" {
+					fmt.Fprintln(os.Stderr, "Aborted.")
+					return nil
+				}
+			}
+		}
+
 		newPwd, err := cfg.ResetAppPassword()
 		if err != nil {
 			return fmt.Errorf("failed to reset password: %w", err)
 		}
+
+		if oldPwdVal != "" && !passstore.IsEmpty() {
+			passstore.SetAppPasswordHash(cfg.AppPasswordHash)
+			err = passstore.Reencrypt(oldPwdVal, newPwd)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Failed to re-encrypt stored passwords: %v\n", err)
+			} else {
+				log.Printf("Successfully re-encrypted saved SSH passwords with the new app password.")
+			}
+		} else if !passstore.IsEmpty() {
+			os.Remove(filepath.Join(cfg.ConfigDir, "passwords.json"))
+			log.Printf("Saved SSH passwords have been deleted because they cannot be decrypted.")
+		}
+
 		log.Printf("App password has been reset to a new random one.")
 		log.Printf("New app password: %s", newPwd)
 		return nil
@@ -76,6 +119,7 @@ func Run(ctx context.Context, args []string) error {
 	cfg.ApplyConfig()
 	log.Printf("CozySSH %s; Config file: %s", version, cfg.ConfigPath)
 
+	passstore.Init(cfg.ConfigDir, cfg.AppPasswordHash)
 	auth.Init(cfg)
 	ws.SetConfig(cfg)
 	sshmanager.SetConfig(cfg)
@@ -106,6 +150,7 @@ func Run(ctx context.Context, args []string) error {
 				Version:         version,
 				InsecureAllowed: *allowInsecure,
 				IsSecure:        isSecureRequest(r),
+				SavePassword:    cfg.SavePassword,
 			},
 			Hosts:   hosts,
 			Buttons: cfg.Buttons,
@@ -186,6 +231,10 @@ func Run(ctx context.Context, args []string) error {
 					return
 				}
 				if err := sshmanager.SaveHost("", h); err != nil {
+					if errors.Is(err, passstore.ErrNoKey) {
+						http.Error(w, "encryption key not set", http.StatusForbidden)
+						return
+					}
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
@@ -206,6 +255,10 @@ func Run(ctx context.Context, args []string) error {
 					return
 				}
 				if err := sshmanager.SaveHost(name, h); err != nil {
+					if errors.Is(err, passstore.ErrNoKey) {
+						http.Error(w, "encryption key not set", http.StatusForbidden)
+						return
+					}
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
@@ -236,11 +289,52 @@ func Run(ctx context.Context, args []string) error {
 				http.Error(w, "Password cannot be empty", http.StatusBadRequest)
 				return
 			}
+			if !passstore.IsEmpty() {
+				if !passstore.HasEncryptionKey() {
+					if req.Force {
+						os.Remove(filepath.Join(cfg.ConfigDir, "passwords.json"))
+					} else {
+						http.Error(w, "Saved passwords are locked. Please connect to a password-saved host first to unlock before changing password.", http.StatusForbidden)
+						return
+					}
+				} else {
+					if err := passstore.ReencryptWithInMemoryKey(req.NewPassword); err != nil {
+						http.Error(w, "Failed to re-encrypt saved passwords: "+err.Error(), http.StatusInternalServerError)
+						return
+					}
+				}
+			}
 			if err := cfg.ChangeAppPassword(req.NewPassword); err != nil {
 				http.Error(w, "Failed to save", http.StatusInternalServerError)
 				return
 			}
+			passstore.SetAppPasswordHash(cfg.AppPasswordHash)
 			w.Header().Set(headers.ContentType, constants.MIME_JSON)
+			w.WriteHeader(http.StatusNoContent)
+		}))))
+
+	mux.Handle("/api/settings/config", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var req struct {
+				SavePassword string `json:"save_password"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+			p := strings.ToLower(req.SavePassword)
+			if p != "always" && p != "never" && p != "ask" {
+				http.Error(w, "Invalid option. Must be always, never, or ask", http.StatusBadRequest)
+				return
+			}
+			if err := cfg.UpdateSavePassword(p); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 			w.WriteHeader(http.StatusNoContent)
 		}))))
 
@@ -656,4 +750,24 @@ func isSecureRequest(r *http.Request) bool {
 	}
 
 	return false
+}
+
+func readPasswordFromStdin(prompt string) (string, error) {
+	fmt.Fprint(os.Stderr, prompt)
+	fd := int(os.Stdin.Fd())
+	if term.IsTerminal(fd) {
+		bytePassword, err := term.ReadPassword(fd)
+		fmt.Fprintln(os.Stderr) // Print newline since ReadPassword doesn't echo it
+		if err != nil {
+			return "", err
+		}
+		return string(bytePassword), nil
+	}
+	// Fallback for non-TTY
+	var password string
+	_, err := fmt.Scanln(&password)
+	if err != nil {
+		return "", err
+	}
+	return password, nil
 }

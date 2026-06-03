@@ -1,14 +1,23 @@
-- [Test System](#test-system)
-- [Test Server Requirement](#test-server-requirement)
-- [Run Tests](#run-tests)
+- [Unit Tests](#unit-tests)
+- [E2E Tests](#e2e-tests)
+  - [Test Server Requirement](#test-server-requirement)
+  - [Run E2E Tests](#run-e2e-tests)
 
-## Test System
+## Unit Tests
+
+Run unit tests:
+
+```
+go test ./...
+```
+
+## E2E Tests
 
 CozySSH includes integrated (e2e) Go test files. E2E tests use Docker to spawn real "ssh servers" and use [Playwright](https://playwright.dev/) to control real browser instances (Chromium) for UI testing.
 
 To run these tests you need a Linux test server.
 
-## Test Server Requirement
+### Test Server Requirement
 
 - Ubuntu 24.04 amd64 (tested to work, other distros may work too).
 - Go 1.25+, Node.js v24, Docker installed.
@@ -22,7 +31,7 @@ To run these tests you need a Linux test server.
   npx playwright install-deps
   ```
 
-## Run Tests
+### Run E2E Tests
 
 To run tests on Test Server workspace dir:
 

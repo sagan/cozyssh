@@ -54,9 +54,13 @@ import { triggerFocus } from "./store";
 
 const drawerWidth = 260;
 
+const PASSWORD_PLACEHOLDER = "***";
+
 export default function Sidebar({
   sysHostname,
   appVersion,
+  savePassword,
+  onSavePasswordChange,
   mobileOpen,
   onClose,
   onSelect,
@@ -72,6 +76,8 @@ export default function Sidebar({
 }: {
   sysHostname: string;
   appVersion: string;
+  savePassword: string;
+  onSavePasswordChange: (val: string) => void;
   mobileOpen: boolean;
   onClose: () => void;
   onSelect: (host: string) => void;
@@ -192,15 +198,98 @@ export default function Sidebar({
         [HEADER_CONTENT_TYPE]: MIME_JSON,
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
       },
-      body: JSON.stringify({ new_password: newPwd } satisfies PasswordUpdateRequest),
+      body: JSON.stringify({ new_password: newPwd, force: false } satisfies PasswordUpdateRequest),
     });
+
+    if (res.status === 403) {
+      const text = await res.text();
+      if (text.includes("Saved passwords are locked")) {
+        const action = await dialogs.confirm(
+          "Saved passwords are locked. Would you like to enter your old app password to unlock and re-encrypt them? (Selecting Cancel will let you choose to Force Update instead.)",
+        );
+
+        if (action) {
+          const oldPwd = await dialogs.promptPassword("Enter old app password to unlock:");
+          if (!oldPwd) {
+            return;
+          }
+
+          const loginRes = await fetch("/api/login", {
+            method: METHOD_POST,
+            headers: {
+              [HEADER_CONTENT_TYPE]: MIME_JSON,
+            },
+            body: JSON.stringify({ password: oldPwd }),
+          });
+
+          if (loginRes.ok) {
+            const loginData = (await loginRes.json()) as { token: string };
+            const newToken = loginData.token;
+            localStorage.setItem(BROWSER_STORAGE_KEY_TOKEN, newToken);
+
+            const retryRes = await fetch("/api/settings/password", {
+              method: METHOD_POST,
+              headers: {
+                [HEADER_CONTENT_TYPE]: MIME_JSON,
+                [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + newToken,
+              },
+              body: JSON.stringify({ new_password: newPwd, force: false } satisfies PasswordUpdateRequest),
+            });
+
+            if (retryRes.ok) {
+              dialogs.alert("Password updated! You will be logged out.");
+              if (onLogout) {
+                onLogout();
+              }
+              return;
+            } else {
+              const retryErr = await retryRes.text();
+              dialogs.alert("Failed to update password after unlocking: " + (retryErr || retryRes.statusText));
+              return;
+            }
+          } else {
+            dialogs.alert("Incorrect app password.");
+            return;
+          }
+        } else {
+          const forceConfirm = await dialogs.confirm(
+            "Force updating the app password will permanently discard/wipe all saved SSH passwords. Are you sure you want to proceed?",
+          );
+          if (forceConfirm) {
+            const forceRes = await fetch("/api/settings/password", {
+              method: METHOD_POST,
+              headers: {
+                [HEADER_CONTENT_TYPE]: MIME_JSON,
+                [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+              },
+              body: JSON.stringify({ new_password: newPwd, force: true } satisfies PasswordUpdateRequest),
+            });
+
+            if (forceRes.ok) {
+              dialogs.alert("App password updated and saved passwords wiped! You will be logged out.");
+              if (onLogout) {
+                onLogout();
+              }
+              return;
+            } else {
+              const forceErr = await forceRes.text();
+              dialogs.alert("Failed to force update password: " + (forceErr || forceRes.statusText));
+              return;
+            }
+          }
+        }
+        return;
+      }
+    }
+
     if (res.ok) {
       dialogs.alert("Password updated! You will be logged out.");
       if (onLogout) {
         onLogout();
       }
     } else {
-      dialogs.alert("Failed to update password");
+      const errText = await res.text();
+      dialogs.alert("Failed to update password: " + (errText || res.statusText));
     }
   }, [confirmPwd, newPwd, onLogout]);
 
@@ -306,6 +395,9 @@ export default function Sidebar({
       remote_command: "",
       tags: "",
       comment: "",
+      password: "",
+      password_exists: false,
+      clear_password: false,
     };
     setEditingName(null);
     setFormData(data);
@@ -331,6 +423,9 @@ export default function Sidebar({
       remote_command: target.remote_command || "",
       tags: target.tags ? target.tags.join(" ") : "",
       comment: target.comment || "",
+      password: target.password_exists ? PASSWORD_PLACEHOLDER : "",
+      password_exists: target.password_exists,
+      clear_password: false,
     };
     setEditingName(isAuto ? null : target.name);
     setFormData(data);
@@ -405,7 +500,7 @@ export default function Sidebar({
       return;
     }
     const finalName = formData.name.trim() || formData.hostname.trim();
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+    let token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     const url = editingName ? `/api/hosts/${editingName}` : `/api/hosts`;
     const method = editingName ? METHOD_PUT : METHOD_POST;
 
@@ -414,13 +509,27 @@ export default function Sidebar({
       .split(/\s+/)
       .filter((t) => t.trim() !== "");
 
+    let clearPassword = formData.clear_password;
+    let passwordVal = formData.password;
+
+    if (formData.password_exists) {
+      if (formData.password === "") {
+        clearPassword = true;
+        passwordVal = "";
+      } else if (formData.password === PASSWORD_PLACEHOLDER) {
+        passwordVal = "";
+      }
+    }
+
     const payload: HostData = {
       ...formData,
       name: finalName,
       tags: parsedTags,
+      password: passwordVal,
+      clear_password: clearPassword,
     };
 
-    await fetch(url, {
+    const res = await fetch(url, {
       method,
       headers: {
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
@@ -428,6 +537,60 @@ export default function Sidebar({
       },
       body: JSON.stringify(payload),
     });
+
+    if (res.status === 403) {
+      const text = await res.text();
+      if (text.includes("encryption key not set")) {
+        const appPwd = await dialogs.promptPassword(
+          "The password store is locked. Enter your CozySSH app password to unlock and save the host password:",
+        );
+        if (!appPwd) {
+          return;
+        }
+
+        const loginRes = await fetch("/api/login", {
+          method: METHOD_POST,
+          headers: {
+            [HEADER_CONTENT_TYPE]: MIME_JSON,
+          },
+          body: JSON.stringify({ password: appPwd }),
+        });
+
+        if (loginRes.ok) {
+          const loginData = (await loginRes.json()) as { token: string };
+          token = loginData.token;
+          localStorage.setItem(BROWSER_STORAGE_KEY_TOKEN, token);
+
+          const retryRes = await fetch(url, {
+            method,
+            headers: {
+              [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+              [HEADER_CONTENT_TYPE]: MIME_JSON,
+            },
+            body: JSON.stringify(payload),
+          });
+
+          if (retryRes.ok) {
+            setInitialHostFormData(null);
+            setDialogOpen(false);
+            fetchHosts();
+            return;
+          } else {
+            const retryErr = await retryRes.text();
+            dialogs.alert("Failed to save host details after unlocking: " + (retryErr || retryRes.statusText));
+          }
+        } else {
+          dialogs.alert("Incorrect app password. Host was not saved.");
+        }
+        return;
+      }
+    }
+
+    if (!res.ok) {
+      const text = await res.text();
+      dialogs.alert("Failed to save host: " + (text || res.statusText));
+      return;
+    }
 
     setInitialHostFormData(null); // Reset dirty state on successful save
     setDialogOpen(false);
@@ -942,6 +1105,28 @@ export default function Sidebar({
                 </Button>
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="subtitle2" gutterBottom>
+                  Save Password Setting
+                </Typography>
+                <TextField
+                  select
+                  fullWidth
+                  label="Save password setting"
+                  size="small"
+                  margin="dense"
+                  value={savePassword}
+                  onChange={(e) => onSavePasswordChange(e.target.value)}
+                  slotProps={{
+                    select: {
+                      native: true,
+                    },
+                  }}
+                >
+                  <option value="always">always</option>
+                  <option value="never">never</option>
+                  <option value="ask">ask (default)</option>
+                </TextField>
+                <Divider sx={{ my: 2 }} />
+                <Typography variant="subtitle2" gutterBottom>
                   Change App Password
                 </Typography>
                 <TextField
@@ -1126,6 +1311,28 @@ export default function Sidebar({
               value={formData.identity_file}
               onChange={(e) => setFormData({ ...formData, identity_file: e.target.value })}
               placeholder="~/.ssh/id_ed25519"
+            />
+            <TextField
+              fullWidth
+              label="Password (Optional)"
+              size="small"
+              type="password"
+              value={formData.password || ""}
+              onChange={(e) => {
+                let val = e.target.value;
+                if (formData.password === PASSWORD_PLACEHOLDER && val !== PASSWORD_PLACEHOLDER) {
+                  if (val.includes("*")) {
+                    val = val.replace(/\*/g, "");
+                  }
+                }
+                setFormData({ ...formData, password: val });
+              }}
+              onFocus={(e) => {
+                if (formData.password === PASSWORD_PLACEHOLDER) {
+                  e.target.select();
+                }
+              }}
+              placeholder="Optional SSH server password"
             />
             <TextField
               fullWidth

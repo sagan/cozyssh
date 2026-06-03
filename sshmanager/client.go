@@ -1,6 +1,8 @@
 package sshmanager
 
 import (
+	"crypto/sha256"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -17,7 +19,9 @@ import (
 
 	"cozyssh/common"
 	"cozyssh/config"
+	"cozyssh/constants"
 	"cozyssh/models"
+	"cozyssh/passstore"
 )
 
 var globalConfig *config.Config
@@ -113,6 +117,18 @@ func findHostBlock(lines []string, targetAlias string) (int, int) {
 	return start, end
 }
 
+func getCanonicalAddr(h models.HostData) string {
+	user := h.User
+	if user == "" {
+		user = "root"
+	}
+	port := h.Port
+	if port == "" {
+		port = "22"
+	}
+	return fmt.Sprintf("%s@%s:%s", user, h.HostName, port)
+}
+
 // SaveHost replaces an old host block or adds a new one gracefully without destroying file comments
 func SaveHost(oldAlias string, h models.HostData) error {
 	lines, err := readConfigLines()
@@ -168,10 +184,65 @@ func SaveHost(oldAlias string, h models.HostData) error {
 		lines = append(lines, block...)
 	}
 
-	return writeConfigLines(lines)
+	newCanonicalAddr := getCanonicalAddr(h)
+
+	// Determine if there is an old password we should migrate/move
+	var oldCanonicalAddr string
+	if oldAlias != "" {
+		allHosts, _ := ListHosts()
+		for _, oh := range allHosts {
+			if oh.Name == oldAlias {
+				oldCanonicalAddr = getCanonicalAddr(*oh)
+				break
+			}
+		}
+	}
+
+	// Handle password storage update
+	if h.ClearPassword {
+		if oldCanonicalAddr != "" {
+			passstore.Delete(oldCanonicalAddr)
+		}
+		passstore.Delete(newCanonicalAddr)
+	} else if h.Password != "" {
+		if oldCanonicalAddr != "" && oldCanonicalAddr != newCanonicalAddr {
+			passstore.Delete(oldCanonicalAddr)
+		}
+		if err := passstore.Set(newCanonicalAddr, h.Password); err != nil {
+			return fmt.Errorf("failed to save password: %w", err)
+		}
+	} else if oldCanonicalAddr != "" && oldCanonicalAddr != newCanonicalAddr {
+		// Host was renamed/modified, and no new password or clear password was specified.
+		// Migrate key if it exists and passstore is unlocked.
+		if passstore.HasPassword(oldCanonicalAddr) {
+			if passstore.HasEncryptionKey() {
+				pwd, err := passstore.Get(oldCanonicalAddr)
+				if err == nil {
+					if err := passstore.Set(newCanonicalAddr, pwd); err == nil {
+						passstore.Delete(oldCanonicalAddr)
+					}
+				}
+			}
+		}
+	}
+
+	if err := writeConfigLines(lines); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func DeleteHost(name string) error {
+	var canonical string
+	allHosts, _ := ListHosts()
+	for _, oh := range allHosts {
+		if oh.Name == name {
+			canonical = getCanonicalAddr(*oh)
+			break
+		}
+	}
+
 	lines, err := readConfigLines()
 	if err != nil {
 		return err
@@ -179,7 +250,13 @@ func DeleteHost(name string) error {
 	start, end := findHostBlock(lines, name)
 	if start != -1 {
 		lines = append(lines[:start], lines[end:]...)
-		return writeConfigLines(lines)
+		if err := writeConfigLines(lines); err != nil {
+			return err
+		}
+		if canonical != "" {
+			passstore.Delete(canonical)
+		}
+		return nil
 	}
 	return nil
 }
@@ -260,18 +337,25 @@ func ListHosts() ([]*models.HostData, error) {
 					}
 				}
 
+				u := user
+				if u == "" {
+					u = common.User
+				}
+				canonical := fmt.Sprintf("%s@%s:%s", u, hostname, port)
+
 				hosts = append(hosts, &models.HostData{
-					Name:          name,
-					HostName:      hostname,
-					Port:          port,
-					User:          user,
-					ProxyJump:     proxyJump,
-					RemoteCommand: remoteCommand,
-					Tags:          tags,
-					Comment:       comment,
-					Source:        "config",
-					IsAuto:        false,
-					IsFavourite:   isFav,
+					Name:           name,
+					HostName:       hostname,
+					Port:           port,
+					User:           user,
+					ProxyJump:      proxyJump,
+					RemoteCommand:  remoteCommand,
+					Tags:           tags,
+					Comment:        comment,
+					Source:         "config",
+					IsAuto:         false,
+					IsFavourite:    isFav,
+					PasswordExists: passstore.HasPassword(canonical),
 				})
 				seenHosts[name] = true
 				break // only one name rep per block needed for sidebar
@@ -333,12 +417,13 @@ func ListKnownHosts() ([]*models.HostData, error) {
 			// Usually users want to see "root@server"
 			// The requirement says "display 'root@server' style title"
 			hosts = append(hosts, &models.HostData{
-				Name:     "root@" + hostname, // Title style
-				HostName: hostname,
-				Port:     port,
-				User:     "root",
-				Source:   "known_hosts",
-				IsAuto:   true,
+				Name:           "root@" + hostname, // Title style
+				HostName:       hostname,
+				Port:           port,
+				User:           "root",
+				Source:         "known_hosts",
+				IsAuto:         true,
+				PasswordExists: passstore.HasPassword(fmt.Sprintf("root@%s:%s", hostname, port)),
 			})
 			break // Just take the first name for simplicity, or should it be unique?
 		}
@@ -393,7 +478,7 @@ func DialSSH(name string, term TerminalUI, rows, cols int, identity string, prox
 }
 
 // name: server name, or [username[:password]@]hostname[:port].
-// identity: directly set the content of the identity file.
+// $identity: directly set the content of the identity file.
 // noPublicKey: skip default public key authentication.
 func getSSHClient(name string, term TerminalUI, identity string,
 	proxyJump string, noPublicKey bool) (*ssh.Client, []io.Closer, string, error) {
@@ -468,9 +553,37 @@ func getSSHClient(name string, term TerminalUI, identity string,
 		identityFile = common.ExpandPath(identityFile)
 	}
 
+	canonicalAddr := fmt.Sprintf("%s@%s:%s", user, host, port)
+
 	var authMethods []ssh.AuthMethod
 	if password != "" {
 		authMethods = append(authMethods, ssh.Password(password))
+	} else if passstore.HasPassword(canonicalAddr) {
+		pwdCallback := func() (string, error) {
+			if !passstore.HasEncryptionKey() {
+				if term == nil {
+					return "", fmt.Errorf("app password required but terminal is not interactive")
+				}
+				term.Print("\r\n") // start on a new line
+				var appPwd string
+				var err error
+				for attempts := 0; attempts < 3; attempts++ {
+					appPwd, err = term.PromptMasked("Enter CozySSH app password to unlock saved passwords: ")
+					if err != nil {
+						return "", err
+					}
+					if passstore.SetEncryptionKey(appPwd) {
+						break
+					}
+					term.Print("\r\nInvalid app password, please try again.\r\n")
+					if attempts == 2 {
+						return "", fmt.Errorf("too many invalid app password attempts")
+					}
+				}
+			}
+			return passstore.Get(canonicalAddr)
+		}
+		authMethods = append(authMethods, ssh.PasswordCallback(pwdCallback))
 	}
 
 	if identity != "" {
@@ -481,14 +594,86 @@ func getSSHClient(name string, term TerminalUI, identity string,
 	} else if identityFile != "" {
 		keyData, err := os.ReadFile(identityFile)
 		if err == nil {
-			signer, err := ssh.ParsePrivateKey(keyData)
-			if err == nil {
+			identityKey := constants.IDENTITY_PREFIX + getIdentityFileID(keyData)
+			var signer ssh.Signer
+			hasSavedPass := passstore.HasPassword(identityKey)
+
+			if hasSavedPass {
+				if !passstore.HasEncryptionKey() && term != nil {
+					term.Print("\r\n")
+					var appPwd string
+					for attempts := 0; attempts < 3; attempts++ {
+						appPwd, err = term.PromptMasked("Enter CozySSH app password to unlock saved passwords: ")
+						if err != nil {
+							break
+						}
+						if passstore.SetEncryptionKey(appPwd) {
+							break
+						}
+						term.Print("\r\nInvalid app password, please try again.\r\n")
+					}
+				}
+				if passstore.HasEncryptionKey() {
+					pwd, errGet := passstore.Get(identityKey)
+					if errGet == nil {
+						signer, err = ssh.ParsePrivateKeyWithPassphrase(keyData, []byte(pwd))
+					} else {
+						err = errGet
+					}
+				} else {
+					err = passstore.ErrNoKey
+				}
+			} else {
+				signer, err = ssh.ParsePrivateKey(keyData)
+			}
+
+			var passphraseErr *ssh.PassphraseMissingError
+			shouldPrompt := (err != nil && errors.As(err, &passphraseErr)) || (hasSavedPass && err != nil)
+			if shouldPrompt && term != nil {
+				pass, perr := term.PromptMasked(fmt.Sprintf("Enter passphrase for key '%s': ", identityFile))
+				if perr == nil {
+					signer, err = ssh.ParsePrivateKeyWithPassphrase(keyData, []byte(pass))
+					if err == nil {
+						promptOption := "ask"
+						if globalConfig != nil && globalConfig.SavePassword != "" {
+							promptOption = globalConfig.SavePassword
+						}
+						if promptOption == "always" {
+							saveHostPassword(term, identityKey, pass)
+						} else if promptOption == "ask" {
+							term.Print("\r\n") // Start on a new line
+							choice, perr2 := term.Prompt("Do you want to save key passphrase to CozySSH (always / yes(y) / no(n) / never) [no]: ")
+							if perr2 == nil {
+								choice = strings.ToLower(strings.TrimSpace(choice))
+								if choice == "" {
+									choice = "no"
+								}
+								if choice == "always" || choice == "always(a)" || choice == "a" {
+									saveHostPassword(term, identityKey, pass)
+									if globalConfig != nil {
+										globalConfig.UpdateSavePassword("always")
+									}
+								} else if choice == "yes" || choice == "yes(y)" || choice == "y" {
+									saveHostPassword(term, identityKey, pass)
+								} else if choice == "never" || choice == "never(v)" || choice == "v" {
+									if globalConfig != nil {
+										globalConfig.UpdateSavePassword("never")
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			if err == nil && signer != nil {
 				authMethods = append(authMethods, ssh.PublicKeys(signer))
 			}
 		}
 	}
 
-	authMethods = append(authMethods, ssh.KeyboardInteractive(func(user,
+	var usedStoredPassword bool
+	authMethods = append(authMethods, ssh.KeyboardInteractive(func(u,
 		instruction string, questions []string, echos []bool) ([]string, error) {
 		if len(questions) == 0 {
 			return nil, nil
@@ -500,7 +685,35 @@ func getSSHClient(name string, term TerminalUI, identity string,
 		for i, q := range questions {
 			var ans string
 			var err error
-			if i < len(echos) && !echos[i] {
+
+			isPasswordQuestion := i < len(echos) && !echos[i] && (strings.Contains(strings.ToLower(q), "password") || strings.Contains(strings.ToLower(q), "passphrase"))
+
+			if isPasswordQuestion && password == "" && passstore.HasPassword(canonicalAddr) && !usedStoredPassword {
+				if !passstore.HasEncryptionKey() {
+					term.Print("\r\n")
+					var appPwd string
+					for attempts := 0; attempts < 3; attempts++ {
+						appPwd, err = term.PromptMasked("Enter CozySSH app password to unlock saved passwords: ")
+						if err != nil {
+							return nil, err
+						}
+						if passstore.SetEncryptionKey(appPwd) {
+							break
+						}
+						term.Print("\r\nInvalid app password, please try again.\r\n")
+						if attempts == 2 {
+							return nil, fmt.Errorf("too many invalid app password attempts")
+						}
+					}
+				}
+				pwd, err := passstore.Get(canonicalAddr)
+				if err == nil {
+					ans = pwd
+					usedStoredPassword = true
+				} else {
+					ans, err = term.PromptMasked(q)
+				}
+			} else if i < len(echos) && !echos[i] {
 				ans, err = term.PromptMasked(q)
 			} else {
 				ans, err = term.Prompt(q)
@@ -651,6 +864,36 @@ func getSSHClient(name string, term TerminalUI, identity string,
 		if perr == nil {
 			sshConfig.Auth = append(sshConfig.Auth, ssh.Password(pass))
 			client, err = dialFunc(sshConfig)
+			if err == nil && !passstore.HasPassword(canonicalAddr) {
+				promptOption := "ask"
+				if globalConfig != nil && globalConfig.SavePassword != "" {
+					promptOption = globalConfig.SavePassword
+				}
+				if promptOption == "always" {
+					saveHostPassword(term, canonicalAddr, pass)
+				} else if promptOption == "ask" {
+					term.Print("\r\n") // Start on a new line
+					choice, perr2 := term.Prompt("Do you want to save host password to CozySSH (always / yes(y) / no(n) / never) [no]: ")
+					if perr2 == nil {
+						choice = strings.ToLower(strings.TrimSpace(choice))
+						if choice == "" {
+							choice = "no"
+						}
+						if choice == "always" || choice == "always(a)" || choice == "a" {
+							saveHostPassword(term, canonicalAddr, pass)
+							if globalConfig != nil {
+								globalConfig.UpdateSavePassword("always")
+							}
+						} else if choice == "yes" || choice == "yes(y)" || choice == "y" {
+							saveHostPassword(term, canonicalAddr, pass)
+						} else if choice == "never" || choice == "never(v)" || choice == "v" {
+							if globalConfig != nil {
+								globalConfig.UpdateSavePassword("never")
+							}
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -736,4 +979,51 @@ func startKeepAlive(client *ssh.Client) {
 			return
 		}
 	}
+}
+
+func saveHostPassword(term TerminalUI, canonicalAddr string, pass string) {
+	typeName := "host password"
+	displayName := "Host password"
+	if strings.HasPrefix(canonicalAddr, constants.IDENTITY_PREFIX) {
+		typeName = "key passphrase"
+		displayName = "Key passphrase"
+	}
+
+	if !passstore.HasEncryptionKey() {
+		term.Print(fmt.Sprintf("\r\nThe CozySSH password store is locked. To save this %s, you must unlock it.\r\n", typeName))
+		appPwd, err := term.PromptMasked("Enter CozySSH app password: ")
+		if err != nil || appPwd == "" {
+			term.Print(fmt.Sprintf("\r\nSkipping %s saving.\r\n", typeName))
+			return
+		}
+		if passstore.SetEncryptionKey(appPwd) {
+			if err := passstore.Set(canonicalAddr, pass); err != nil {
+				term.Print(fmt.Sprintf("\r\nFailed to save %s: %v\r\n", typeName, err))
+			} else {
+				term.Print(fmt.Sprintf("\r\n%s saved successfully!\r\n", displayName))
+			}
+		} else {
+			term.Print(fmt.Sprintf("\r\nIncorrect app password. Skipping %s saving.\r\n", typeName))
+		}
+	} else {
+		if err := passstore.Set(canonicalAddr, pass); err != nil {
+			term.Print(fmt.Sprintf("\r\nFailed to save %s: %v\r\n", typeName, err))
+		} else {
+			term.Print(fmt.Sprintf("\r\n%s saved successfully!\r\n", displayName))
+		}
+	}
+}
+
+func getIdentityFileID(keyData []byte) string {
+	block, _ := pem.Decode(keyData)
+	if block != nil {
+		if id, ok := block.Headers["id"]; ok && id != "" {
+			return id
+		}
+		if id, ok := block.Headers["ID"]; ok && id != "" {
+			return id
+		}
+	}
+	hash := sha256.Sum256(keyData)
+	return fmt.Sprintf("%x", hash)
 }

@@ -21,4 +21,5 @@ const (
 	WS_PROTOCOL_DUMMY                       = "dummy"     // used as response sec-websocket-protocol header
 	DEFAULT_BUTTON_GROUP                    = "Default"
 	DEFAULT_BUTTON_TYPE                     = "send_string"
+	IDENTITY_PREFIX                         = "$identity:"
 )

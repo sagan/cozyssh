@@ -27,6 +27,7 @@ type Config struct {
 	ConfigDir             string               `yaml:"-"` // internal use
 	Vars                  map[string]string    `yaml:"vars" json:"vars"`
 	InsecureIgnoreHostKey bool                 `yaml:"insecure_ignore_host_key"`
+	SavePassword          string               `yaml:"save_password"`
 	mu                    sync.Mutex
 }
 
@@ -72,6 +73,9 @@ func LoadConfig(customDir string) (*Config, error) {
 	}
 	if cfg.Vars == nil {
 		cfg.Vars = make(map[string]string)
+	}
+	if cfg.SavePassword == "" {
+		cfg.SavePassword = "ask"
 	}
 	cfg.ConfigPath = configPath
 	cfg.ConfigDir = configDir
@@ -131,9 +135,10 @@ func generateAndSaveConfig(path string) (*Config, error) {
 	}
 
 	cfg := &Config{
-		Addr:            "127.0.0.1:8022",
-		AppPasswordHash: string(hash),
-		ConfigPath:      path,
+		Addr:               "127.0.0.1:8022",
+		AppPasswordHash:    string(hash),
+		ConfigPath:         path,
+		SavePassword:       "ask",
 	}
 
 	data, err := yaml.Marshal(cfg)
@@ -448,5 +453,12 @@ func (c *Config) UpdateVars(updates map[string]*string) error {
 		}
 	}
 
+	return c.save()
+}
+
+func (c *Config) UpdateSavePassword(value string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SavePassword = value
 	return c.save()
 }

@@ -435,12 +435,14 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   const [sysHostname, setSysHostname] = useState<string>("");
   const [appVersion, setAppVersion] = useState<string>("dev");
+  const [savePassword, setSavePassword] = useState<string>("ask");
 
   const loadFullData = useCallback(
     (data: FullData) => {
       if (data.sysinfo) {
         setSysHostname(data.sysinfo.hostname || "unknown");
         setAppVersion(data.sysinfo.version || "dev");
+        setSavePassword(data.sysinfo.savePassword || "ask");
       }
       if (data.hosts) {
         setHosts(data.hosts);
@@ -1793,6 +1795,29 @@ export default function Dashboard({ initialData }: DashboardProps) {
           activeTabs={tabs.flatMap((t) => t.panes.filter((p) => p.state !== "stolen").map((p) => p.sessionId || p.id))}
           sysHostname={sysHostname}
           appVersion={appVersion}
+          savePassword={savePassword}
+          onSavePasswordChange={async (val) => {
+            const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+            try {
+              const res = await fetch("/api/settings/config", {
+                method: METHOD_POST,
+                headers: {
+                  [HEADER_CONTENT_TYPE]: MIME_JSON,
+                  [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+                },
+                body: JSON.stringify({ save_password: val }),
+              });
+              if (res.ok) {
+                setSavePassword(val);
+                csNotify("Settings saved successfully!");
+              } else {
+                const errText = await res.text();
+                dialogs.alert("Failed to save setting: " + (errText || res.statusText));
+              }
+            } catch (e) {
+              dialogs.alert("Failed to save setting: " + e);
+            }
+          }}
           onAttach={(id, host, title, isLocked) => {
             handleAttach(id, host, title, isLocked);
             setMobileOpen(false);

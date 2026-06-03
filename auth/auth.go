@@ -15,6 +15,7 @@ import (
 	"cozyssh/config"
 	"cozyssh/constants"
 	"cozyssh/models"
+	"cozyssh/passstore"
 
 	"github.com/go-http-utils/headers"
 )
@@ -44,6 +45,8 @@ func AddAuthRoutes(mux *http.ServeMux, getFullData func(r *http.Request) *models
 			return
 		}
 
+		passstore.SetEncryptionKey(req.Password)
+
 		res := &models.LoginResponse{
 			Token:    generateToken(),
 			Fulldata: getFullData(r),
@@ -53,6 +56,7 @@ func AddAuthRoutes(mux *http.ServeMux, getFullData func(r *http.Request) *models
 	})
 
 	mux.HandleFunc("/api/logout", func(w http.ResponseWriter, r *http.Request) {
+		passstore.ClearEncryptionKey()
 		// Stateless approach relies completely on the frontend purging its LocalStorage token
 		w.Header().Set(headers.ContentType, constants.MIME_JSON)
 		w.WriteHeader(http.StatusNoContent)

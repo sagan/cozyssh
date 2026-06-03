@@ -3,7 +3,8 @@ module cozyssh
 go 1.25.5
 
 require (
-	github.com/aymanbagabas/go-pty v0.2.2
+	github.com/awnumar/memguard v0.23.0
+	github.com/aymanbagabas/go-pty v0.2.3
 	github.com/go-http-utils/headers v0.0.0-20181008091004-fed159eddc2a
 	github.com/gorilla/websocket v1.5.3
 	github.com/kevinburke/ssh_config v1.6.0
@@ -11,13 +12,15 @@ require (
 	github.com/pkg/sftp v1.13.10
 	github.com/playwright-community/playwright-go v0.5700.1
 	github.com/tkrajina/typescriptify-golang-structs v0.2.0
-	golang.org/x/crypto v0.50.0
-	golang.org/x/sys v0.43.0
+	golang.org/x/crypto v0.52.0
+	golang.org/x/sys v0.45.0
+	golang.org/x/term v0.43.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
+	github.com/awnumar/memcall v0.5.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect

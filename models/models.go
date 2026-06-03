@@ -27,10 +27,11 @@ type Manifest struct {
 }
 
 type Sysinfo struct {
-	Hostname        string `json:"hostname"`
-	Version         string `json:"version"`
-	InsecureAllowed bool   `json:"insecureAllowed"`
-	IsSecure        bool   `json:"isSecure"`
+	Hostname           string `json:"hostname"`
+	Version            string `json:"version"`
+	InsecureAllowed    bool   `json:"insecureAllowed"`
+	IsSecure           bool   `json:"isSecure"`
+	SavePassword    string `json:"savePassword"`
 }
 
 type HostData struct {
@@ -48,6 +49,11 @@ type HostData struct {
 	// true if from known_hosts and not config
 	IsAuto      bool `json:"is_auto,omitempty"`
 	IsFavourite bool `json:"is_favourite,omitempty"`
+
+	// Password storage support
+	Password       string `json:"password,omitempty"`
+	PasswordExists bool   `json:"password_exists,omitempty"`
+	ClearPassword  bool   `json:"clear_password,omitempty"`
 }
 
 type ButtonData struct {
@@ -87,6 +93,7 @@ type SessionsCloseRequest struct {
 // POST /api/settings/password payload
 type PasswordUpdateRequest struct {
 	NewPassword string `json:"new_password"`
+	Force       bool   `json:"force"`
 }
 
 // POST /api/tabs/pin payload
