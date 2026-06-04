@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"maps"
 	"net/http"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
 
+	"github.com/go-http-utils/headers"
 	"github.com/gorilla/websocket"
 
 	"cozyssh/auth"
@@ -34,7 +34,9 @@ func SetConfig(cfg *config.Config) {
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Could restrict to same-origin in production
+		origin := r.Header.Get(headers.Origin)
+		host := r.Host
+		return origin == "" || strings.HasSuffix(origin, host)
 	},
 }
 
@@ -101,18 +103,18 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := r.URL.Query()
+	var query url.Values
 	identity := ""
 	if protocols := r.Header.Get(constants.HEADER_SEC_WEBSOCKET_PROTOCOL); protocols != "" {
 		parts := strings.SplitSeq(protocols, ",")
 		for p := range parts {
 			p = strings.TrimSpace(p)
 			if strings.HasPrefix(p, constants.WS_PROTOCOL_QUERY_PREFIX) {
-				// accepts passing parameters through ws protocol header to avoid logging
+				// Only accepts query from ws protocol header to avoid logging.
 				if data, err := base64.RawURLEncoding.DecodeString(
 					p[len(constants.WS_PROTOCOL_QUERY_PREFIX):]); err == nil && len(data) > 0 {
 					if q, err := url.ParseQuery(string(data)); err == nil {
-						maps.Copy(query, q)
+						query = q
 					}
 				}
 			} else if strings.HasPrefix(p, constants.WS_PROTOCOL_IDENTITY_PREFIX) {
@@ -129,6 +131,10 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+	}
+	if query == nil {
+		http.Error(w, "Missing or invalid query parameter", http.StatusBadRequest)
+		return
 	}
 
 	header := http.Header{

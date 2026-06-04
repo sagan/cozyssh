@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-http-utils/headers"
 	"github.com/gorilla/websocket"
 
 	"cozyssh/auth"
@@ -28,7 +29,9 @@ var (
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true
+		origin := r.Header.Get(headers.Origin)
+		host := r.Host
+		return origin == "" || strings.HasSuffix(origin, host)
 	},
 }
 
@@ -259,4 +262,3 @@ func DisconnectAll() {
 		c.Close()
 	}
 }
-

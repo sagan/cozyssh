@@ -156,7 +156,7 @@ func (s *Session) AddListener() (chan []byte, []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	ch := make(chan []byte, 100)
+	ch := make(chan []byte, 10240) // 10KB buffer for each session
 	s.listeners = append(s.listeners, ch)
 	return ch, s.Buffer.Bytes()
 }
@@ -252,9 +252,16 @@ func (m *SessionManager) CloseIfNotLocked(id string) {
 	m.mu.Lock()
 	s, ok := m.sessions[id]
 	m.mu.Unlock()
-	if ok && !s.IsLocked {
-		s.Close()
-		m.Remove(id)
+
+	if ok {
+		s.mu.Lock()
+		locked := s.IsLocked
+		s.mu.Unlock()
+
+		if !locked {
+			s.Close()
+			m.Remove(id)
+		}
 	}
 }
 
@@ -262,9 +269,11 @@ func (m *SessionManager) CloseAllNormal() {
 	m.mu.Lock()
 	var toClose []*Session
 	for _, s := range m.sessions {
+		s.mu.Lock()
 		if !s.IsLocked {
 			toClose = append(toClose, s)
 		}
+		s.mu.Unlock()
 	}
 	m.mu.Unlock()
 
@@ -365,4 +374,3 @@ func (m *SessionManager) DisconnectAllWebsockets() {
 		s.mu.Unlock()
 	}
 }
-

@@ -17,6 +17,7 @@ import (
 	os_exec "os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/go-http-utils/headers"
 	"golang.org/x/term"
@@ -740,8 +741,11 @@ func Run(ctx context.Context, args []string) error {
 
 	addr := cfg.Addr
 	server := &http.Server{
-		Addr:    addr,
-		Handler: mux,
+		Addr:         addr,
+		Handler:      mux,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 60 * time.Second, // longer for streaming responses
+		IdleTimeout:  120 * time.Second,
 	}
 
 	go func() {

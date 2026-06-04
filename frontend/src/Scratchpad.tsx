@@ -7,7 +7,7 @@ import LockIcon from "@mui/icons-material/Lock";
 
 import type { ScratchpadData, ScratchpadDeleteMsg, ScratchpadHelloMsg, ScratchpadPage, ScratchpadSyncMsg } from "./api";
 import {
-  BROWSER_STORAGE_KEY_SCRATCCHPAD_CACHE,
+  BROWSER_STORAGE_KEY_SCRATCHPAD_CACHE,
   BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE,
   BROWSER_STORAGE_KEY_TOKEN,
 } from "./constants";
@@ -26,7 +26,7 @@ const WS_RECONNECT_DELAY_MS = 3000;
 
 const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateChange }, ref) => {
   const [data, setData] = useState<ScratchpadData>(() => {
-    const cached = localStorage.getItem(BROWSER_STORAGE_KEY_SCRATCCHPAD_CACHE);
+    const cached = localStorage.getItem(BROWSER_STORAGE_KEY_SCRATCHPAD_CACHE);
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
@@ -75,7 +75,7 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
   // Update refs synchronously to avoid stale data in callbacks
   useEffect(() => {
     dataRef.current = data;
-    localStorage.setItem(BROWSER_STORAGE_KEY_SCRATCCHPAD_CACHE, JSON.stringify(data));
+    localStorage.setItem(BROWSER_STORAGE_KEY_SCRATCHPAD_CACHE, JSON.stringify(data));
   }, [data]);
 
   useEffect(() => {

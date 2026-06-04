@@ -26,7 +26,7 @@ export const BROWSER_STORAGE_KEY_TOKEN = "cozy_token";
 export const BROWSER_STORAGE_KEY_VARS = "cozy_vars";
 export const BROWSER_STORAGE_KEY_TAB_ID = "cozy_tab_id";
 export const BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE = "cozy_scratchpad_sync_state";
-export const BROWSER_STORAGE_KEY_SCRATCCHPAD_CACHE = "cozy_scratchpad_cache";
+export const BROWSER_STORAGE_KEY_SCRATCHPAD_CACHE = "cozy_scratchpad_cache";
 
 export const LOCAL_VAR_PREFIX = "local_";
 export const VAR_CS_SCROLL_LINES = "cs_scroll_lines";

@@ -87,7 +87,12 @@ func HasEncryptionKey() bool {
 func ClearEncryptionKey() {
 	mu.Lock()
 	defer mu.Unlock()
-	encryptionKeyEnclave = nil
+	if encryptionKeyEnclave != nil {
+		if buf, err := encryptionKeyEnclave.Open(); err == nil {
+			buf.Destroy()
+		}
+		encryptionKeyEnclave = nil
+	}
 }
 
 // HasPassword checks if a password exists for the given address without decrypting it.
@@ -520,10 +525,5 @@ func decrypt(ciphertextStr string, key []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	unpadded, err := unpadPKCS7(plaintext)
-	if err != nil {
-		// Fallback for backward compatibility with unpadded passwords.
-		return plaintext, nil
-	}
-	return unpadded, nil
+	return unpadPKCS7(plaintext)
 }

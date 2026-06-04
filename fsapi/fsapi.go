@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -218,6 +219,10 @@ func handleRename(w http.ResponseWriter, r *http.Request, oldPath string, isLoca
 }
 
 func handleDelete(w http.ResponseWriter, path string, isLocal bool, sftpClient *sftp.Client) {
+	if path == "" || path == "/" || path == `\` {
+		http.Error(w, "Refusing to delete root path", http.StatusBadRequest)
+		return
+	}
 	if isLocal {
 		if err := os.RemoveAll(path); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -422,7 +427,13 @@ func handleUpload(w http.ResponseWriter, r *http.Request, destPath string, isLoc
 			home, _ := os.UserHomeDir()
 			destPath = home
 		}
-		fullPath := filepath.Join(destPath, header.Filename)
+		safeName := filepath.Base(header.Filename)
+		if safeName == "" || safeName == "." || safeName == ".." {
+			http.Error(w, "Invalid filename", http.StatusBadRequest)
+			return
+		}
+		fullPath := filepath.Join(destPath, safeName)
+
 		f, err := os.Create(fullPath)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -431,16 +442,17 @@ func handleUpload(w http.ResponseWriter, r *http.Request, destPath string, isLoc
 		defer f.Close()
 		io.Copy(f, file)
 	} else {
-		// Join path using / for remote SFTP typically
+		// SFTP path separator is always '/'
 		if destPath == "~" {
 			destPath = "."
 		}
-		// SFTP path separator is always '/'
-		fullPath := destPath
-		if !strings.HasSuffix(fullPath, "/") {
-			fullPath += "/"
+
+		safeName := path.Base(header.Filename)
+		if safeName == "" || safeName == "." || safeName == ".." {
+			http.Error(w, "Invalid filename", http.StatusBadRequest)
+			return
 		}
-		fullPath += header.Filename
+		fullPath := path.Join(destPath, safeName)
 
 		f, err := sftpClient.Create(fullPath)
 		if err != nil {
