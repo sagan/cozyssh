@@ -29,8 +29,12 @@ func TestServerManagement(t *testing.T) {
 
 	page.GetByLabel("HostName (IP / Domain)").Fill("192.168.1.100")
 	page.GetByLabel("Alias Name").Fill("my-test-server")
-	page.GetByLabel("User").Fill("ubuntu")
-	page.GetByLabel("Port").Fill("2222")
+	page.GetByLabel("User", playwright.PageGetByLabelOptions{
+		Exact: playwright.Bool(true),
+	}).Fill("ubuntu")
+	page.GetByLabel("Port", playwright.PageGetByLabelOptions{
+		Exact: playwright.Bool(true),
+	}).Fill("2222")
 
 	if err := page.GetByRole("button", playwright.PageGetByRoleOptions{Name: "Save"}).Click(); err != nil {
 		t.Fatalf("failed to click save: %v", err)

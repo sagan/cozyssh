@@ -518,12 +518,14 @@ export default function Sidebar({
     };
 
     let passwordInput: string | undefined = undefined;
+    let expected_fingerprint: string | undefined = undefined;
 
     while (true) {
       try {
         const payload: CopyIDRequest = {
           name: target.name,
           password: passwordInput,
+          expected_fingerprint,
         };
 
         const res = await fetch("/api/hosts/copy-id", {
@@ -534,17 +536,19 @@ export default function Sidebar({
 
         if (!res.ok) {
           const text = await res.text();
-          dialogs.alert(`Error copying SSH key: ${text || res.statusText}`);
+          dialogs.alert(`ssh-copy-id "${payload.name}": Error copying SSH key: ${text || res.statusText}`);
           break;
         }
 
         const data = (await res.json()) as CopyIDResponse;
         if (data.status === "success") {
-          dialogs.alert(data.message);
+          dialogs.alert(`ssh-copy-id "${payload.name}": ${data.message}`);
           break;
         } else if (data.status === "need_app_password") {
           const appPwd = await dialogs.promptPassword(
-            data.message || "The password store is locked. Enter your CozySSH app password to unlock it:",
+            `ssh-copy-id "${payload.name}": ${
+              data.message || "The password store is locked. Enter your CozySSH app password to unlock it:"
+            }`,
           );
           if (!appPwd) {
             break;
@@ -562,22 +566,39 @@ export default function Sidebar({
             localStorage.setItem(BROWSER_STORAGE_KEY_TOKEN, newToken);
             headers[HEADER_AUTHORIZATION] = HEADER_AUTHORIZATION_BEARER_PREFIX + newToken;
           } else {
-            dialogs.alert("Invalid CozySSH app password. Failed to unlock password store.");
+            dialogs.alert(
+              `ssh-copy-id "${payload.name}": Invalid CozySSH app password. Failed to unlock password store.`,
+            );
             break;
           }
         } else if (data.status === "need_password") {
-          const promptMsg = data.message || `Enter password for ${target.user || "root"}@${target.hostname}:`;
+          const promptMsg = `ssh-copy-id "${payload.name}": ${
+            data.message || `Enter password for ${target.user || "root"}@${target.hostname}:`
+          }`;
           const pwd = await dialogs.promptPassword(promptMsg);
           if (pwd === null) {
             break;
           }
           passwordInput = pwd;
+        } else if (data.status === "need_hostkey_confirm") {
+          if (
+            !(await dialogs.confirm(
+              `ssh-copy-id "${payload.name}": host key isn't trusted: ${data.message}. ` +
+                `New host key finterprint: ${data.fingerprint}. Accept it?`,
+            ))
+          ) {
+            return;
+          }
+          if (!data.fingerprint) {
+            break;
+          }
+          expected_fingerprint = data.fingerprint;
         } else {
-          dialogs.alert(`Error: ${data.message}`);
+          dialogs.alert(`ssh-copy-id "${payload.name}": Error: ${data.message}`);
           break;
         }
       } catch (err: unknown) {
-        dialogs.alert(`Failed to run ssh-copy-id: ${err}`);
+        dialogs.alert(`ssh-copy-id "${target.name}": Error: ${err}`);
         break;
       }
     }

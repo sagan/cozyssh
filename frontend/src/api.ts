@@ -128,10 +128,12 @@ export interface ExecResult {
 export interface CopyIDRequest {
     name: string;
     password?: string;
+    expected_fingerprint?: string;
 }
 export interface CopyIDResponse {
-    status: string;
+    status: "success" | "need_password" | "need_app_password" | "need_hostkey_confirm" | "error";
     message: string;
+    fingerprint?: string;
 }
 export interface PreflightResponse {
     insecureAllowed: boolean;

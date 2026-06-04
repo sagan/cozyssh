@@ -126,7 +126,7 @@ outer:
 }
 
 func generateAndSaveConfig(path string) (*Config, error) {
-	password := RandString(22, false)
+	password := RandString(constants.DEFAULT_PASSWORD_LENGTH, false)
 
 	// Hash the password
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -135,10 +135,10 @@ func generateAndSaveConfig(path string) (*Config, error) {
 	}
 
 	cfg := &Config{
-		Addr:               "127.0.0.1:8022",
-		AppPasswordHash:    string(hash),
-		ConfigPath:         path,
-		SavePassword:       "ask",
+		Addr:            "127.0.0.1:8022",
+		AppPasswordHash: string(hash),
+		ConfigPath:      path,
+		SavePassword:    "ask",
 	}
 
 	data, err := yaml.Marshal(cfg)
@@ -195,7 +195,7 @@ func (c *Config) ResetAppPassword() (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	password := RandString(22, false)
+	password := RandString(constants.DEFAULT_PASSWORD_LENGTH, false)
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return "", err

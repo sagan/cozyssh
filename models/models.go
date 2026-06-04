@@ -163,13 +163,15 @@ type ExecResult struct {
 }
 
 type CopyIDRequest struct {
-	Name     string `json:"name"`
-	Password string `json:"password,omitempty"`
+	Name                string `json:"name"`
+	Password            string `json:"password,omitempty"`
+	ExpectedFingerprint string `json:"expected_fingerprint,omitempty"`
 }
 
 type CopyIDResponse struct {
-	Status  string `json:"status"` // "success", "need_password", "error"
-	Message string `json:"message"`
+	Status      string `json:"status" ts_type:"\"success\" | \"need_password\" | \"need_app_password\" | \"need_hostkey_confirm\" | \"error\""`
+	Message     string `json:"message"`
+	Fingerprint string `json:"fingerprint,omitempty"`
 }
 
 type PreflightResponse struct {

@@ -122,7 +122,7 @@ func findHostBlock(lines []string, targetAlias string) (int, int) {
 func getCanonicalAddr(h models.HostData) string {
 	user := h.User
 	if user == "" {
-		user = "root"
+		user = common.User
 	}
 	port := h.Port
 	if port == "" {
@@ -592,7 +592,7 @@ func getSSHClient(name string, term TerminalUI, identity string,
 				term.Print("\r\n") // start on a new line
 				var appPwd string
 				var err error
-				for attempts := 0; attempts < 3; attempts++ {
+				for attempts := range 3 {
 					appPwd, err = term.PromptMasked("Enter CozySSH app password to unlock saved passwords: ")
 					if err != nil {
 						return "", err
@@ -945,9 +945,10 @@ func getSSHClient(name string, term TerminalUI, identity string,
 				if globalConfig != nil && globalConfig.SavePassword != "" {
 					promptOption = globalConfig.SavePassword
 				}
-				if promptOption == "always" {
+				switch promptOption {
+				case "always":
 					saveHostPassword(term, canonicalAddr, pass)
-				} else if promptOption == "ask" {
+				case "ask":
 					term.Print("\r\n") // Start on a new line
 					choice, perr2 := term.Prompt("Do you want to save host password to CozySSH (always / yes(y) / no(n) / never) [no]: ")
 					if perr2 == nil {
@@ -1152,11 +1153,11 @@ func getPubKeyContent(identityFile string) (string, error) {
 	return strings.TrimSpace(string(pubKeyBytes)), nil
 }
 
-func tryPubKeyAuth(host *models.HostData) (bool, error) {
+func tryPubKeyAuth(name string, host *models.HostData, expectedFingerprint string) (bool, *HostKeyVerificationError, error) {
 	identityFile := GetIdentityPathForHost(host)
 	keyData, err := os.ReadFile(identityFile)
 	if err != nil {
-		return false, fmt.Errorf("failed to read identity file: %w", err)
+		return false, nil, fmt.Errorf("failed to read identity file: %w", err)
 	}
 
 	var signer ssh.Signer
@@ -1171,24 +1172,31 @@ func tryPubKeyAuth(host *models.HostData) (bool, error) {
 	}
 
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 
 	authMethods := []ssh.AuthMethod{ssh.PublicKeys(signer)}
 
-	sshConfig := &ssh.ClientConfig{
-		User:              host.User,
-		Auth:              authMethods,
-		HostKeyAlgorithms: resolveHostKeyAlgorithms(host.HostKeyAlgorithms),
-		HostKeyCallback:   ssh.InsecureIgnoreHostKey(),
-		Timeout:           5 * time.Second,
-	}
-	if host.User == "" {
-		sshConfig.User = "root"
-	}
 	port := host.Port
 	if port == "" {
 		port = "22"
+	}
+
+	var hkResult HostKeyResult
+	hkCallback, hkAlgos, err := createCopyIDHostKeyCallback(name, host.HostName, port, expectedFingerprint, &hkResult)
+	if err != nil {
+		return false, nil, err
+	}
+
+	sshConfig := &ssh.ClientConfig{
+		User:              host.User,
+		Auth:              authMethods,
+		HostKeyAlgorithms: hkAlgos,
+		HostKeyCallback:   hkCallback,
+		Timeout:           5 * time.Second,
+	}
+	if host.User == "" {
+		sshConfig.User = common.User
 	}
 	addr := fmt.Sprintf("%s:%s", host.HostName, port)
 
@@ -1203,7 +1211,7 @@ func tryPubKeyAuth(host *models.HostData) (bool, error) {
 	if host.ProxyJump != "" {
 		proxyClient, proxyClosers, _, err := getSSHClient(host.ProxyJump, nil, "", "", false)
 		if err != nil {
-			return false, fmt.Errorf("failed to connect to ProxyJump %s: %w", host.ProxyJump, err)
+			return false, nil, fmt.Errorf("failed to connect to ProxyJump %s: %w", host.ProxyJump, err)
 		}
 		defer func() {
 			for _, c := range proxyClosers {
@@ -1213,34 +1221,35 @@ func tryPubKeyAuth(host *models.HostData) (bool, error) {
 		}()
 		jumpConn, err := proxyClient.Dial(dialNetwork, addr)
 		if err != nil {
-			return false, err
+			if hkResult.Err != nil {
+				return false, hkResult.Err, nil
+			}
+			return false, nil, err
 		}
 		c, chans, reqs, err := ssh.NewClientConn(jumpConn, addr, sshConfig)
 		if err != nil {
-			return false, err
+			if hkResult.Err != nil {
+				return false, hkResult.Err, nil
+			}
+			return false, nil, err
 		}
 		client = ssh.NewClient(c, chans, reqs)
 	} else {
 		var dialErr error
 		client, dialErr = ssh.Dial(dialNetwork, addr, sshConfig)
 		if dialErr != nil {
-			return false, dialErr
+			if hkResult.Err != nil {
+				return false, hkResult.Err, nil
+			}
+			return false, nil, dialErr
 		}
 	}
 
 	client.Close()
-	return true, nil
+	return true, nil, nil
 }
 
-func isAuthError(err error) bool {
-	if err == nil {
-		return false
-	}
-	errStr := strings.ToLower(err.Error())
-	return strings.Contains(errStr, "authenticate") || strings.Contains(errStr, "auth") || strings.Contains(errStr, "handshake failed")
-}
-
-func executeCopyIDWithPassword(host *models.HostData, password string, cmd string) error {
+func executeCopyIDWithPassword(name string, host *models.HostData, password string, cmd string, expectedFingerprint string) (*HostKeyVerificationError, error) {
 	kbAuth := ssh.KeyboardInteractive(func(user, instruction string, questions []string, echos []bool) ([]string, error) {
 		answers := make([]string, len(questions))
 		for i, q := range questions {
@@ -1256,19 +1265,26 @@ func executeCopyIDWithPassword(host *models.HostData, password string, cmd strin
 		kbAuth,
 	}
 
-	sshConfig := &ssh.ClientConfig{
-		User:              host.User,
-		Auth:              authMethods,
-		HostKeyAlgorithms: resolveHostKeyAlgorithms(host.HostKeyAlgorithms),
-		HostKeyCallback:   ssh.InsecureIgnoreHostKey(),
-		Timeout:           5 * time.Second,
-	}
-	if host.User == "" {
-		sshConfig.User = "root"
-	}
 	port := host.Port
 	if port == "" {
 		port = "22"
+	}
+
+	var hkResult HostKeyResult
+	hkCallback, hkAlgos, err := createCopyIDHostKeyCallback(name, host.HostName, port, expectedFingerprint, &hkResult)
+	if err != nil {
+		return nil, err
+	}
+
+	sshConfig := &ssh.ClientConfig{
+		User:              host.User,
+		Auth:              authMethods,
+		HostKeyAlgorithms: hkAlgos,
+		HostKeyCallback:   hkCallback,
+		Timeout:           5 * time.Second,
+	}
+	if host.User == "" {
+		sshConfig.User = common.User
 	}
 	addr := fmt.Sprintf("%s:%s", host.HostName, port)
 
@@ -1280,13 +1296,12 @@ func executeCopyIDWithPassword(host *models.HostData, password string, cmd strin
 	}
 
 	var client *ssh.Client
-	var err error
 	var closers []io.Closer
 
 	if host.ProxyJump != "" {
 		proxyClient, proxyClosers, _, err := getSSHClient(host.ProxyJump, nil, "", "", false)
 		if err != nil {
-			return fmt.Errorf("failed to connect to ProxyJump %s: %w", host.ProxyJump, err)
+			return nil, fmt.Errorf("failed to connect to ProxyJump %s: %w", host.ProxyJump, err)
 		}
 		closers = append(closers, proxyClosers...)
 		closers = append(closers, proxyClient)
@@ -1296,7 +1311,10 @@ func executeCopyIDWithPassword(host *models.HostData, password string, cmd strin
 			for _, c := range closers {
 				c.Close()
 			}
-			return err
+			if hkResult.Err != nil {
+				return hkResult.Err, nil
+			}
+			return nil, err
 		}
 		closers = append(closers, jumpConn)
 
@@ -1305,13 +1323,19 @@ func executeCopyIDWithPassword(host *models.HostData, password string, cmd strin
 			for _, c := range closers {
 				c.Close()
 			}
-			return err
+			if hkResult.Err != nil {
+				return hkResult.Err, nil
+			}
+			return nil, err
 		}
 		client = ssh.NewClient(c, chans, reqs)
 	} else {
 		client, err = ssh.Dial(dialNetwork, addr, sshConfig)
 		if err != nil {
-			return err
+			if hkResult.Err != nil {
+				return hkResult.Err, nil
+			}
+			return nil, err
 		}
 	}
 	defer func() {
@@ -1323,7 +1347,7 @@ func executeCopyIDWithPassword(host *models.HostData, password string, cmd strin
 
 	session, err := client.NewSession()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer session.Close()
 
@@ -1332,18 +1356,26 @@ func executeCopyIDWithPassword(host *models.HostData, password string, cmd strin
 	session.Stderr = &stderrBuf
 
 	if err := session.Run(cmd); err != nil {
-		return fmt.Errorf("failed to execute remote command: %w, stderr: %s", err, stderrBuf.String())
+		return nil, fmt.Errorf("failed to execute remote command: %w, stderr: %s", err, stderrBuf.String())
 	}
 
 	stdout := strings.TrimSpace(stdoutBuf.String())
 	if !strings.Contains(stdout, "KEY_ADDED") && !strings.Contains(stdout, "KEY_ALREADY_EXISTS") {
-		return fmt.Errorf("unexpected command output: %s, stderr: %s", stdout, stderrBuf.String())
+		return nil, fmt.Errorf("unexpected command output: %s, stderr: %s", stdout, stderrBuf.String())
 	}
-	return nil
+	return nil, nil
+}
+
+func isAuthError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := strings.ToLower(err.Error())
+	return strings.Contains(errStr, "authenticate") || strings.Contains(errStr, "auth") || strings.Contains(errStr, "handshake failed")
 }
 
 // CopySSHID attempts to copy the host's public key to the remote authorized_keys file.
-func CopySSHID(name string, password string) (*models.CopyIDResponse, error) {
+func CopySSHID(name string, password string, expectedFingerprint string) (*models.CopyIDResponse, error) {
 	// 1. Find the host configuration
 	hosts, err := ListHosts()
 	if err != nil {
@@ -1359,21 +1391,17 @@ func CopySSHID(name string, password string) (*models.CopyIDResponse, error) {
 	}
 
 	if host == nil {
-		// If not found in config, treat the name itself as the host address/alias
-		// E.g., user@hostname:port
 		host = &models.HostData{
 			Name:     name,
 			HostName: name,
 			Port:     "22",
 			Source:   "",
 		}
-		// Try to parse user/host/port from name
 		if i := strings.LastIndex(name, "@"); i != -1 {
 			userPart := name[:i]
 			hostPart := name[i+1:]
 			if before, after, found := strings.Cut(userPart, ":"); found {
 				host.User = before
-				// Note: we don't use the password from name for copy-id unless we need to
 				_ = after
 			} else {
 				host.User = userPart
@@ -1391,7 +1419,7 @@ func CopySSHID(name string, password string) (*models.CopyIDResponse, error) {
 	}
 
 	if host.User == "" {
-		host.User = "root"
+		host.User = common.User
 	}
 	if host.Port == "" {
 		host.Port = "22"
@@ -1405,8 +1433,14 @@ func CopySSHID(name string, password string) (*models.CopyIDResponse, error) {
 	}
 
 	// 3. Try to connect using the identity file first.
-	// If it succeeds, the key is already present/working on the remote server.
-	success, err := tryPubKeyAuth(host)
+	success, hkErr, err := tryPubKeyAuth(name, host, expectedFingerprint)
+	if hkErr != nil {
+		return &models.CopyIDResponse{
+			Status:      "need_hostkey_confirm",
+			Message:     hkErr.Reason,
+			Fingerprint: hkErr.Fingerprint,
+		}, nil
+	}
 	if err == nil && success {
 		return &models.CopyIDResponse{
 			Status: "success",
@@ -1415,15 +1449,11 @@ func CopySSHID(name string, password string) (*models.CopyIDResponse, error) {
 		}, nil
 	}
 
-	// If there was a network/handshake error other than authentication, fail early
 	if err != nil && !isAuthError(err) {
 		return nil, fmt.Errorf("network connection failed: %w", err)
 	}
 
 	// 4. Identity file auth failed or was not set up.
-	// Try to connect using the password.
-	// First check the provided password from the request.
-	// If not provided, check the stored password.
 	activePassword := password
 	if activePassword == "" {
 		canonicalAddr := fmt.Sprintf("%s@%s:%s", host.User, host.HostName, host.Port)
@@ -1434,7 +1464,6 @@ func CopySSHID(name string, password string) (*models.CopyIDResponse, error) {
 					activePassword = pwd
 				}
 			} else {
-				// Store is locked. We need to prompt the user.
 				return &models.CopyIDResponse{
 					Status:  "need_app_password",
 					Message: "CozySSH password store is locked. Please enter your CozySSH app password to unlock it:",
@@ -1443,7 +1472,6 @@ func CopySSHID(name string, password string) (*models.CopyIDResponse, error) {
 		}
 	}
 
-	// If we still don't have a password, ask the user to provide one.
 	if activePassword == "" {
 		return &models.CopyIDResponse{
 			Status:  "need_password",
@@ -1451,7 +1479,6 @@ func CopySSHID(name string, password string) (*models.CopyIDResponse, error) {
 		}, nil
 	}
 
-	// Try to connect using the password and copy the key.
 	parts := strings.Fields(pubKeyContent)
 	if len(parts) < 2 {
 		return nil, fmt.Errorf("invalid public key format in derived public key")
@@ -1461,7 +1488,14 @@ func CopySSHID(name string, password string) (*models.CopyIDResponse, error) {
 	targetPath := ".ssh/authorized_keys"
 	cmd := fmt.Sprintf(`sh -c 'TARGET="%s"; DIR=$(dirname "$TARGET"); umask 077; mkdir -p "$DIR"; if ! grep -qF "%s" "$TARGET" 2>/dev/null; then echo "%s" >> "$TARGET"; echo "KEY_ADDED"; else echo "KEY_ALREADY_EXISTS"; fi'`, targetPath, keyPart, pubKeyContent)
 
-	err = executeCopyIDWithPassword(host, activePassword, cmd)
+	hkErr, err = executeCopyIDWithPassword(name, host, activePassword, cmd, expectedFingerprint)
+	if hkErr != nil {
+		return &models.CopyIDResponse{
+			Status:      "need_hostkey_confirm",
+			Message:     hkErr.Reason,
+			Fingerprint: hkErr.Fingerprint,
+		}, nil
+	}
 	if err != nil {
 		if isAuthError(err) {
 			return &models.CopyIDResponse{
@@ -1532,4 +1566,172 @@ func resolveHostKeyAlgorithms(option string) []string {
 	} else {
 		return algos
 	}
+}
+
+type HostKeyVerificationError struct {
+	Fingerprint string
+	Reason      string // "mismatch:..." or "unknown:..."
+	Hostname    string
+	RemoteAddr  string
+	KeyType     string
+}
+
+func (e *HostKeyVerificationError) Error() string {
+	return fmt.Sprintf("host key verification failed: %s (%s)", e.Reason, e.Fingerprint)
+}
+
+type HostKeyResult struct {
+	Err *HostKeyVerificationError
+}
+
+func createCopyIDHostKeyCallback(name string, hostStr string, portStr string, expectedFingerprint string, result *HostKeyResult) (ssh.HostKeyCallback, []string, error) {
+	configPath := filepath.Join(getSSHDir(), "config")
+	f, err := os.Open(configPath)
+	var cfg *ssh_config.Config
+	if err == nil {
+		cfg, _ = ssh_config.Decode(f)
+		f.Close()
+	}
+
+	knownHostsFile := filepath.Join(getSSHDir(), "known_hosts")
+	if cfg != nil {
+		if ukh, _ := cfg.Get(name, "UserKnownHostsFile"); ukh != "" {
+			knownHostsFile = common.ExpandPath(ukh)
+		}
+	}
+
+	isKnownHostsNull := knownHostsFile == os.DevNull
+	var khCallback ssh.HostKeyCallback
+	var khErr error
+
+	if !isKnownHostsNull {
+		os.MkdirAll(filepath.Dir(knownHostsFile), 0700)
+		if _, err := os.Stat(knownHostsFile); os.IsNotExist(err) {
+			os.WriteFile(knownHostsFile, []byte(""), 0600)
+		}
+		khCallback, khErr = knownhosts.New(knownHostsFile)
+		if khErr != nil {
+			return nil, nil, khErr
+		}
+	} else {
+		khCallback = func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+			return &knownhosts.KeyError{}
+		}
+	}
+
+	strictHostKeyChecking := "ask"
+	hostKeyAlgorithmsOption := ""
+	if cfg != nil {
+		if shkc, _ := cfg.Get(name, "StrictHostKeyChecking"); shkc != "" {
+			strictHostKeyChecking = strings.ToLower(shkc)
+		}
+		if hka, _ := cfg.Get(name, "HostKeyAlgorithms"); hka != "" {
+			hostKeyAlgorithmsOption = hka
+		}
+	}
+
+	probeAddr := fmt.Sprintf("%s:%s", hostStr, portStr)
+	dummyKey, _, _, _, _ := ssh.ParseAuthorizedKey([]byte("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"))
+	dummyNetAddr := &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 22}
+
+	var prioritizedAlgos []string
+	if khCallback != nil {
+		probeErr := khCallback(probeAddr, dummyNetAddr, dummyKey)
+		var keyErr *knownhosts.KeyError
+		if errors.As(probeErr, &keyErr) && len(keyErr.Want) > 0 {
+			for _, w := range keyErr.Want {
+				prioritizedAlgos = append(prioritizedAlgos, w.Key.Type())
+			}
+		}
+	}
+
+	allowedAlgos := resolveHostKeyAlgorithms(hostKeyAlgorithmsOption)
+	algoMap := make(map[string]bool)
+	var hostKeyAlgorithms []string
+	for _, a := range prioritizedAlgos {
+		if slices.Contains(allowedAlgos, a) && !algoMap[a] {
+			hostKeyAlgorithms = append(hostKeyAlgorithms, a)
+			algoMap[a] = true
+		}
+	}
+	for _, a := range allowedAlgos {
+		if !algoMap[a] {
+			hostKeyAlgorithms = append(hostKeyAlgorithms, a)
+			algoMap[a] = true
+		}
+	}
+
+	cb := func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		if globalConfig != nil && globalConfig.InsecureIgnoreHostKey {
+			return nil
+		}
+		if strictHostKeyChecking == "no" && isKnownHostsNull {
+			return nil
+		}
+
+		fingerprint := ssh.FingerprintSHA256(key)
+
+		// User confirmed this host fingerprint from the frontend
+		if expectedFingerprint != "" && expectedFingerprint == fingerprint {
+			if khCallback != nil && !isKnownHostsNull {
+				errCheck := khCallback(hostname, remote, key)
+				var keyErr *knownhosts.KeyError
+				if errors.As(errCheck, &keyErr) && len(keyErr.Want) == 0 {
+					f, e := os.OpenFile(knownHostsFile, os.O_APPEND|os.O_WRONLY, 0600)
+					if e == nil {
+						line := knownhosts.Line([]string{hostname, remote.String()}, key)
+						f.WriteString(line + "\n")
+						f.Close()
+					}
+				}
+			}
+			return nil
+		}
+
+		if khCallback == nil {
+			return nil
+		}
+
+		errCheck := khCallback(hostname, remote, key)
+		if errCheck == nil {
+			return nil
+		}
+
+		var keyErr *knownhosts.KeyError
+		if errors.As(errCheck, &keyErr) {
+			if len(keyErr.Want) > 0 {
+				result.Err = &HostKeyVerificationError{
+					Fingerprint: fingerprint,
+					Reason:      "mismatch: server host key doesn't match with known_hosts record",
+					Hostname:    hostname,
+					RemoteAddr:  remote.String(),
+					KeyType:     key.Type(),
+				}
+				return result.Err
+			} else {
+				if strictHostKeyChecking == "no" {
+					if !isKnownHostsNull {
+						f, e := os.OpenFile(knownHostsFile, os.O_APPEND|os.O_WRONLY, 0600)
+						if e == nil {
+							line := knownhosts.Line([]string{hostname, remote.String()}, key)
+							f.WriteString(line + "\n")
+							f.Close()
+						}
+					}
+					return nil
+				}
+				result.Err = &HostKeyVerificationError{
+					Fingerprint: fingerprint,
+					Reason:      "unknown: server host key doesn't exist in known_hosts",
+					Hostname:    hostname,
+					RemoteAddr:  remote.String(),
+					KeyType:     key.Type(),
+				}
+				return result.Err
+			}
+		}
+		return errCheck
+	}
+
+	return cb, hostKeyAlgorithms, nil
 }

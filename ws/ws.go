@@ -156,13 +156,15 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	sessionRemoteCommand := query.Get("remoteCommand")
 	noPublicKey := query.Get("noPublicKey") == "1"
 
-	if sessionID == "" {
-		// Fallback to hostname if no unique ID provided
-		if i := strings.LastIndex(host, "@"); i != -1 {
+	user := common.User
+	// sessionID fallbacks to hostname if no unique ID provided
+	if i := strings.LastIndex(host, "@"); i != -1 {
+		if sessionID == "" {
 			sessionID = host[i+1:]
-		} else {
-			sessionID = host
 		}
+		user, _, _ = strings.Cut(host[0:i], ":")
+	} else if sessionID == "" {
+		sessionID = host
 	}
 
 	if reconnect {
@@ -223,7 +225,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 				// The pClient doesn't directly expose them but we have the 'host' name and we can guess or use what was used.
 				// Actually, it's better if getSSHClient returns them or we store them.
 				// For now, let's just use the host name for expansion.
-				expanded := sshmanager.ExpandTokens(remoteCommand, host, "22", "root", host, sessionID)
+				expanded := sshmanager.ExpandTokens(remoteCommand, host, "22", user, host, sessionID)
 				if err := sshSession.Start(expanded); err != nil {
 					pClient.Release()
 					return
@@ -260,7 +262,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 				nw, _ := newSess.StdinPipe()
 
 				if newRC != "" {
-					expanded := sshmanager.ExpandTokens(newRC, host, "22", "root", host, sessionID)
+					expanded := sshmanager.ExpandTokens(newRC, host, "22", user, host, sessionID)
 					if err := newSess.Start(expanded); err != nil {
 						newSess.Close()
 						newPClient.Release()

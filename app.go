@@ -1,6 +1,7 @@
 package cozyssh
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"embed"
@@ -66,15 +67,17 @@ func Run(ctx context.Context, args []string) error {
 
 		var oldPwdVal string
 		if !passstore.IsEmpty() {
-			oldPwdVal, err = readPasswordFromStdin("Enter old app password to re-encrypt stored passwords (press ENTER to skip): ")
+			fmt.Fprint(os.Stderr, "Enter old app password to re-encrypt stored passwords (press ENTER to skip): \n")
+			oldPwd, err := term.ReadPassword(int(os.Stdin.Fd()))
 			if err != nil {
 				return fmt.Errorf("failed to read old password: %w", err)
 			}
+			oldPwdVal = string(oldPwd)
 
 			if oldPwdVal == "" {
 				fmt.Fprintln(os.Stderr, "WARNING: Resetting the app password without providing the old password will result in losing all saved SSH passwords!")
 				fmt.Fprint(os.Stderr, "Are you sure you want to continue (y/n) [n]? ")
-				line, err := readLineRaw()
+				line, err := bufio.NewReader(os.Stdin).ReadString('\n')
 				if err != nil {
 					return fmt.Errorf("failed to read confirmation: %w", err)
 				}
@@ -95,7 +98,7 @@ func Run(ctx context.Context, args []string) error {
 			passstore.SetAppPasswordHash(cfg.AppPasswordHash)
 			err = passstore.Reencrypt(oldPwdVal, newPwd)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: Failed to re-encrypt stored passwords: %v\n", err)
+				return fmt.Errorf("failed to re-encrypt stored passwords: %w", err)
 			} else {
 				log.Printf("Successfully re-encrypted saved SSH passwords with the new app password.")
 			}
@@ -257,7 +260,7 @@ func Run(ctx context.Context, args []string) error {
 				http.Error(w, "Bad Request", http.StatusBadRequest)
 				return
 			}
-			resp, err := sshmanager.CopySSHID(req.Name, req.Password)
+			resp, err := sshmanager.CopySSHID(req.Name, req.Password, req.ExpectedFingerprint)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -779,24 +782,4 @@ func isSecureRequest(r *http.Request) bool {
 	}
 
 	return false
-}
-
-func readPasswordFromStdin(prompt string) (string, error) {
-	fmt.Fprint(os.Stderr, prompt)
-	fd := int(os.Stdin.Fd())
-	if term.IsTerminal(fd) {
-		bytePassword, err := term.ReadPassword(fd)
-		fmt.Fprintln(os.Stderr) // Print newline since ReadPassword doesn't echo it
-		if err != nil {
-			return "", err
-		}
-		return string(bytePassword), nil
-	}
-	// Fallback for non-TTY
-	var password string
-	_, err := fmt.Scanln(&password)
-	if err != nil {
-		return "", err
-	}
-	return password, nil
 }
