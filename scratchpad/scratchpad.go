@@ -250,3 +250,13 @@ func Reload() {
 		}
 	}
 }
+
+// DisconnectAll closes all active WebSocket connections for scratchpad
+func DisconnectAll() {
+	connsMu.Lock()
+	defer connsMu.Unlock()
+	for c := range conns {
+		c.Close()
+	}
+}
+

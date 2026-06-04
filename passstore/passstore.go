@@ -449,6 +449,37 @@ func deriveKey(password string, salt []byte) []byte {
 	return argon2.IDKey([]byte(password), salt, 3, 64*1024, 4, 32)
 }
 
+func padPKCS7(data []byte) []byte {
+	blockSize := 64
+	padding := blockSize - (len(data) % blockSize)
+	padText := make([]byte, padding)
+	for i := range padText {
+		padText[i] = byte(padding)
+	}
+	return append(data, padText...)
+}
+
+func unpadPKCS7(data []byte) ([]byte, error) {
+	blockSize := 64
+	length := len(data)
+	if length == 0 {
+		return nil, errors.New("empty data")
+	}
+	if length%blockSize != 0 {
+		return nil, errors.New("invalid padding: data length is not a multiple of 64")
+	}
+	padding := int(data[length-1])
+	if padding < 1 || padding > blockSize {
+		return nil, errors.New("invalid padding size")
+	}
+	for i := length - padding; i < length; i++ {
+		if data[i] != byte(padding) {
+			return nil, errors.New("invalid padding bytes")
+		}
+	}
+	return data[:length-padding], nil
+}
+
 func encrypt(plaintext []byte, key []byte) (string, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -462,7 +493,8 @@ func encrypt(plaintext []byte, key []byte) (string, error) {
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return "", err
 	}
-	ciphertext := aesgcm.Seal(nonce, nonce, plaintext, nil)
+	padded := padPKCS7(plaintext)
+	ciphertext := aesgcm.Seal(nonce, nonce, padded, nil)
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
@@ -484,5 +516,14 @@ func decrypt(ciphertextStr string, key []byte) ([]byte, error) {
 		return nil, errors.New("ciphertext too short")
 	}
 	nonce, actualCiphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
-	return aesgcm.Open(nil, nonce, actualCiphertext, nil)
+	plaintext, err := aesgcm.Open(nil, nonce, actualCiphertext, nil)
+	if err != nil {
+		return nil, err
+	}
+	unpadded, err := unpadPKCS7(plaintext)
+	if err != nil {
+		// Fallback for backward compatibility with unpadded passwords.
+		return plaintext, nil
+	}
+	return unpadded, nil
 }

@@ -1,6 +1,9 @@
 package sshmanager
 
 import (
+	"cozyssh/common"
+	"cozyssh/models"
+	"fmt"
 	"testing"
 )
 
@@ -54,5 +57,28 @@ func TestExpandTokens(t *testing.T) {
 				t.Errorf("ExpandTokens() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestCopyIDHelpers(t *testing.T) {
+	// 1. Test isAuthError
+	if !isAuthError(fmt.Errorf("ssh: unable to authenticate")) {
+		t.Error("expected true for unable to authenticate")
+	}
+	if !isAuthError(fmt.Errorf("handshake failed: ...")) {
+		t.Error("expected true for handshake failed")
+	}
+	if isAuthError(fmt.Errorf("connection refused")) {
+		t.Error("expected false for connection refused")
+	}
+
+	// 2. Test GetIdentityPathForHost
+	h := &models.HostData{
+		IdentityFile: "~/custom_id",
+	}
+	expected := common.ExpandPath("~/custom_id")
+	got := GetIdentityPathForHost(h)
+	if got != expected {
+		t.Errorf("GetIdentityPathForHost() = %q, want %q", got, expected)
 	}
 }

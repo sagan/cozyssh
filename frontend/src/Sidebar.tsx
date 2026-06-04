@@ -21,6 +21,7 @@ import {
   DialogActions,
   TextField,
   Button,
+  ButtonGroup,
   useMediaQuery,
   useTheme,
   Tabs,
@@ -35,7 +36,7 @@ import AddIcon from "@mui/icons-material/Add";
 import StarIcon from "@mui/icons-material/Star";
 
 import { version as PACKAGE_JSON_VERSION } from "../package.json";
-import type { HostData, PasswordUpdateRequest, SessionPinned } from "./api";
+import type { HostData, PasswordUpdateRequest, SessionPinned, CopyIDRequest, CopyIDResponse } from "./api";
 import {
   METHOD_PUT,
   METHOD_POST,
@@ -393,6 +394,10 @@ export default function Sidebar({
       identity_file: "",
       proxy_jump: "",
       remote_command: "",
+      address_family: "",
+      user_known_hosts_file: "",
+      strict_host_key_checking: "",
+      host_key_algorithms: "",
       tags: "",
       comment: "",
       password: "",
@@ -421,6 +426,10 @@ export default function Sidebar({
       identity_file: target.identity_file || "",
       proxy_jump: target.proxy_jump || "",
       remote_command: target.remote_command || "",
+      address_family: target.address_family || "",
+      user_known_hosts_file: target.user_known_hosts_file || "",
+      strict_host_key_checking: target.strict_host_key_checking || "",
+      host_key_algorithms: target.host_key_algorithms || "",
       tags: target.tags ? target.tags.join(" ") : "",
       comment: target.comment || "",
       password: target.password_exists ? PASSWORD_PLACEHOLDER : "",
@@ -494,6 +503,85 @@ export default function Sidebar({
     });
     fetchHosts();
   }, [contextMenu, fetchHosts]);
+
+  const handleRunCopyID = useCallback(async () => {
+    if (!contextMenu) {
+      return;
+    }
+    const target = contextMenu.target;
+    setContextMenuOpen(false);
+
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+    const headers = {
+      [HEADER_CONTENT_TYPE]: MIME_JSON,
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+    };
+
+    let passwordInput: string | undefined = undefined;
+
+    while (true) {
+      try {
+        const payload: CopyIDRequest = {
+          name: target.name,
+          password: passwordInput,
+        };
+
+        const res = await fetch("/api/hosts/copy-id", {
+          method: METHOD_POST,
+          headers,
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          dialogs.alert(`Error copying SSH key: ${text || res.statusText}`);
+          break;
+        }
+
+        const data = (await res.json()) as CopyIDResponse;
+        if (data.status === "success") {
+          dialogs.alert(data.message);
+          break;
+        } else if (data.status === "need_app_password") {
+          const appPwd = await dialogs.promptPassword(
+            data.message || "The password store is locked. Enter your CozySSH app password to unlock it:",
+          );
+          if (!appPwd) {
+            break;
+          }
+          const loginRes = await fetch("/api/login", {
+            method: METHOD_POST,
+            headers: {
+              [HEADER_CONTENT_TYPE]: MIME_JSON,
+            },
+            body: JSON.stringify({ password: appPwd }),
+          });
+          if (loginRes.ok) {
+            const loginData = (await loginRes.json()) as { token: string };
+            const newToken = loginData.token;
+            localStorage.setItem(BROWSER_STORAGE_KEY_TOKEN, newToken);
+            headers[HEADER_AUTHORIZATION] = HEADER_AUTHORIZATION_BEARER_PREFIX + newToken;
+          } else {
+            dialogs.alert("Invalid CozySSH app password. Failed to unlock password store.");
+            break;
+          }
+        } else if (data.status === "need_password") {
+          const promptMsg = data.message || `Enter password for ${target.user || "root"}@${target.hostname}:`;
+          const pwd = await dialogs.promptPassword(promptMsg);
+          if (pwd === null) {
+            break;
+          }
+          passwordInput = pwd;
+        } else {
+          dialogs.alert(`Error: ${data.message}`);
+          break;
+        }
+      } catch (err: unknown) {
+        dialogs.alert(`Failed to run ssh-copy-id: ${err}`);
+        break;
+      }
+    }
+  }, [contextMenu]);
 
   const handleSaveHost = useCallback(async () => {
     if (!formData.hostname) {
@@ -974,7 +1062,19 @@ export default function Sidebar({
               }
               command += ` -o "RemoteCommand=${target.remote_command}"`;
             }
-            if (target.port !== "22") {
+            if (target.address_family) {
+              command += ` -o "AddressFamily=${target.address_family}"`;
+            }
+            if (target.user_known_hosts_file) {
+              command += ` -o "UserKnownHostsFile=${target.user_known_hosts_file}"`;
+            }
+            if (target.strict_host_key_checking) {
+              command += ` -o "StrictHostKeyChecking=${target.strict_host_key_checking}"`;
+            }
+            if (target.host_key_algorithms) {
+              command += ` -o "HostKeyAlgorithms=${target.host_key_algorithms}"`;
+            }
+            if (target.port && target.port !== "22") {
               command += ` -p ${target.port}`;
             }
             command += ` ${target.user}@${target.hostname}`;
@@ -1003,6 +1103,7 @@ export default function Sidebar({
         >
           Copy ssh-copy-id Command
         </MenuItem>
+        <MenuItem onClick={handleRunCopyID}>Run ssh-copy-id</MenuItem>
         <MenuItem onClick={handleToggleFavourite}>
           {contextMenu?.target.is_favourite ? "Remove From Favourite" : "Add To Favourite"}
         </MenuItem>
@@ -1107,24 +1208,26 @@ export default function Sidebar({
                 <Typography variant="subtitle2" gutterBottom>
                   Save Password Setting
                 </Typography>
-                <TextField
-                  select
-                  fullWidth
-                  label="Save password setting"
-                  size="small"
-                  margin="dense"
-                  value={savePassword}
-                  onChange={(e) => onSavePasswordChange(e.target.value)}
-                  slotProps={{
-                    select: {
-                      native: true,
-                    },
-                  }}
-                >
-                  <option value="always">always</option>
-                  <option value="never">never</option>
-                  <option value="ask">ask (default)</option>
-                </TextField>
+                <ButtonGroup fullWidth size="small" sx={{ mt: 1, mb: 1 }}>
+                  <Button
+                    variant={savePassword === "ask" ? "contained" : "outlined"}
+                    onClick={() => onSavePasswordChange("ask")}
+                  >
+                    ask (default)
+                  </Button>
+                  <Button
+                    variant={savePassword === "always" ? "contained" : "outlined"}
+                    onClick={() => onSavePasswordChange("always")}
+                  >
+                    always
+                  </Button>
+                  <Button
+                    variant={savePassword === "never" ? "contained" : "outlined"}
+                    onClick={() => onSavePasswordChange("never")}
+                  >
+                    never
+                  </Button>
+                </ButtonGroup>
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="subtitle2" gutterBottom>
                   Change App Password
@@ -1345,6 +1448,70 @@ export default function Sidebar({
               value={formData.proxy_jump}
               onChange={(e) => setFormData({ ...formData, proxy_jump: e.target.value })}
               placeholder="e.g. server-foo,server-bar"
+            />
+            <Autocomplete
+              options={["any", "inet", "inet6"]}
+              value={formData.address_family || ""}
+              onChange={(_event, newValue) => {
+                setFormData({ ...formData, address_family: (newValue as "any" | "inet" | "inet6") || "" });
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  fullWidth
+                  label="AddressFamily (Optional)"
+                  size="small"
+                  placeholder="any / inet / inet6"
+                />
+              )}
+            />
+            <Autocomplete
+              freeSolo
+              fullWidth
+              options={["/dev/null", "NUL"]}
+              value={formData.user_known_hosts_file || ""}
+              onInputChange={(_event, newValue) => setFormData({ ...formData, user_known_hosts_file: newValue || "" })}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  fullWidth
+                  label="UserKnownHostsFile (Optional)"
+                  size="small"
+                  placeholder="e.g. ~/.ssh/known_hosts_custom"
+                />
+              )}
+            />
+            <Autocomplete
+              options={["ask", "yes", "no"]}
+              value={formData.strict_host_key_checking || ""}
+              onChange={(_event, newValue) => {
+                setFormData({ ...formData, strict_host_key_checking: (newValue as "ask" | "yes" | "no") || "" });
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  fullWidth
+                  label="StrictHostKeyChecking (Optional)"
+                  size="small"
+                  placeholder="ask / yes / no"
+                />
+              )}
+            />
+            <Autocomplete
+              freeSolo
+              fullWidth
+              options={["+ssh-rsa"]}
+              value={formData.host_key_algorithms || ""}
+              onInputChange={(_event, newValue) => setFormData({ ...formData, host_key_algorithms: newValue || "" })}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  fullWidth
+                  label="HostKeyAlgorithms (Optional)"
+                  size="small"
+                  placeholder="e.g. +ssh-rsa"
+                />
+              )}
             />
             <Autocomplete
               freeSolo

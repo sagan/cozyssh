@@ -105,6 +105,7 @@ func Run(ctx context.Context, args []string) error {
 
 		log.Printf("App password has been reset to a new random one.")
 		log.Printf("New app password: %s", newPwd)
+		log.Printf("If CozySSH is running, restart it to make the change take effect")
 		return nil
 	}
 
@@ -244,6 +245,26 @@ func Run(ctx context.Context, args []string) error {
 			}
 		}))))
 
+	mux.Handle("/api/hosts/copy-id", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var req models.CopyIDRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+			resp, err := sshmanager.CopySSHID(req.Name, req.Password)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set(headers.ContentType, constants.MIME_JSON)
+			json.NewEncoder(w).Encode(resp)
+		}))))
+
 	mux.Handle("/api/hosts/", securityMiddleware(auth.Middleware(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			name := strings.TrimPrefix(r.URL.Path, "/api/hosts/")
@@ -309,6 +330,10 @@ func Run(ctx context.Context, args []string) error {
 				return
 			}
 			passstore.SetAppPasswordHash(cfg.AppPasswordHash)
+
+			session.GlobalManager.DisconnectAllWebsockets()
+			scratchpad.DisconnectAll()
+
 			w.Header().Set(headers.ContentType, constants.MIME_JSON)
 			w.WriteHeader(http.StatusNoContent)
 		}))))

@@ -1,6 +1,7 @@
 package sshmanager
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/pem"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -166,6 +168,18 @@ func SaveHost(oldAlias string, h models.HostData) error {
 	if h.RemoteCommand != "" {
 		block = append(block, fmt.Sprintf("    RemoteCommand %s", h.RemoteCommand))
 	}
+	if h.AddressFamily != "" {
+		block = append(block, fmt.Sprintf("    AddressFamily %s", h.AddressFamily))
+	}
+	if h.UserKnownHostsFile != "" {
+		block = append(block, fmt.Sprintf("    UserKnownHostsFile %s", h.UserKnownHostsFile))
+	}
+	if h.StrictHostKeyChecking != "" {
+		block = append(block, fmt.Sprintf("    StrictHostKeyChecking %s", h.StrictHostKeyChecking))
+	}
+	if h.HostKeyAlgorithms != "" {
+		block = append(block, fmt.Sprintf("    HostKeyAlgorithms %s", h.HostKeyAlgorithms))
+	}
 	block = append(block, "")
 
 	if oldAlias != "" && oldAlias != h.Name {
@@ -296,6 +310,10 @@ func ListHosts() ([]*models.HostData, error) {
 				user, _ := cfg.Get(name, "User")
 				proxyJump, _ := cfg.Get(name, "ProxyJump")
 				remoteCommand, _ := cfg.Get(name, "RemoteCommand")
+				addressFamily, _ := cfg.Get(name, "AddressFamily")
+				userKnownHostsFile, _ := cfg.Get(name, "UserKnownHostsFile")
+				strictHostKeyChecking, _ := cfg.Get(name, "StrictHostKeyChecking")
+				hostKeyAlgorithmsOption, _ := cfg.Get(name, "HostKeyAlgorithms")
 
 				var tags []string
 				var commentParts []string
@@ -303,8 +321,8 @@ func ListHosts() ([]*models.HostData, error) {
 				if start != -1 {
 					for i := start; i < end; i++ {
 						line := strings.TrimSpace(lines[i])
-						if strings.HasPrefix(line, "### ") {
-							content := strings.TrimPrefix(line, "### ")
+						if after, ok := strings.CutPrefix(line, "### "); ok {
+							content := after
 							fields := strings.Fields(content)
 							isTagLine := true
 							if len(fields) == 0 {
@@ -329,13 +347,7 @@ func ListHosts() ([]*models.HostData, error) {
 				}
 				comment := strings.Join(commentParts, " ")
 
-				isFav := false
-				for _, t := range tags {
-					if t == "fav" {
-						isFav = true
-						break
-					}
-				}
+				isFav := slices.Contains(tags, "fav")
 
 				u := user
 				if u == "" {
@@ -344,18 +356,22 @@ func ListHosts() ([]*models.HostData, error) {
 				canonical := fmt.Sprintf("%s@%s:%s", u, hostname, port)
 
 				hosts = append(hosts, &models.HostData{
-					Name:           name,
-					HostName:       hostname,
-					Port:           port,
-					User:           user,
-					ProxyJump:      proxyJump,
-					RemoteCommand:  remoteCommand,
-					Tags:           tags,
-					Comment:        comment,
-					Source:         "config",
-					IsAuto:         false,
-					IsFavourite:    isFav,
-					PasswordExists: passstore.HasPassword(canonical),
+					Name:                  name,
+					HostName:              hostname,
+					Port:                  port,
+					User:                  user,
+					ProxyJump:             proxyJump,
+					RemoteCommand:         remoteCommand,
+					AddressFamily:         addressFamily,
+					UserKnownHostsFile:    userKnownHostsFile,
+					StrictHostKeyChecking: strictHostKeyChecking,
+					HostKeyAlgorithms:     hostKeyAlgorithmsOption,
+					Tags:                  tags,
+					Comment:               comment,
+					Source:                "config",
+					IsAuto:                false,
+					IsFavourite:           isFav,
+					PasswordExists:        passstore.HasPassword(canonical),
 				})
 				seenHosts[name] = true
 				break // only one name rep per block needed for sidebar
@@ -534,12 +550,21 @@ func getSSHClient(name string, term TerminalUI, identity string,
 
 	identityFile := ""
 	remoteCommand := ""
+	addressFamily := ""
 	if cfg != nil {
 		identityFile, _ = cfg.Get(name, "IdentityFile")
 		if proxyJump == "" {
 			proxyJump, _ = cfg.Get(name, "ProxyJump")
 		}
 		remoteCommand, _ = cfg.Get(name, "RemoteCommand")
+		addressFamily, _ = cfg.Get(name, "AddressFamily")
+	}
+
+	dialNetwork := "tcp"
+	if strings.ToLower(addressFamily) == "inet" {
+		dialNetwork = "tcp4"
+	} else if strings.ToLower(addressFamily) == "inet6" {
+		dialNetwork = "tcp6"
 	}
 
 	if noPublicKey {
@@ -638,9 +663,10 @@ func getSSHClient(name string, term TerminalUI, identity string,
 						if globalConfig != nil && globalConfig.SavePassword != "" {
 							promptOption = globalConfig.SavePassword
 						}
-						if promptOption == "always" {
+						switch promptOption {
+						case "always":
 							saveHostPassword(term, identityKey, pass)
-						} else if promptOption == "ask" {
+						case "ask":
 							term.Print("\r\n") // Start on a new line
 							choice, perr2 := term.Prompt("Do you want to save key passphrase to CozySSH (always / yes(y) / no(n) / never) [no]: ")
 							if perr2 == nil {
@@ -648,14 +674,15 @@ func getSSHClient(name string, term TerminalUI, identity string,
 								if choice == "" {
 									choice = "no"
 								}
-								if choice == "always" || choice == "always(a)" || choice == "a" {
+								switch choice {
+								case "always", "always(a)", "a":
 									saveHostPassword(term, identityKey, pass)
 									if globalConfig != nil {
 										globalConfig.UpdateSavePassword("always")
 									}
-								} else if choice == "yes" || choice == "yes(y)" || choice == "y" {
+								case "yes", "yes(y)", "y":
 									saveHostPassword(term, identityKey, pass)
-								} else if choice == "never" || choice == "never(v)" || choice == "v" {
+								case "never", "never(v)", "v":
 									if globalConfig != nil {
 										globalConfig.UpdateSavePassword("never")
 									}
@@ -726,18 +753,45 @@ func getSSHClient(name string, term TerminalUI, identity string,
 		return answers, nil
 	}))
 
+	var khCallback ssh.HostKeyCallback
+	var khErr error
+	isKnownHostsNull := false
+
 	knownHostsFile := filepath.Join(getSSHDir(), "known_hosts")
-	os.MkdirAll(filepath.Dir(knownHostsFile), 0700)
-	if _, err := os.Stat(knownHostsFile); os.IsNotExist(err) {
-		os.WriteFile(knownHostsFile, []byte(""), 0600)
+	if cfg != nil {
+		if ukh, _ := cfg.Get(name, "UserKnownHostsFile"); ukh != "" {
+			knownHostsFile = common.ExpandPath(ukh)
+		}
 	}
 
-	khCallback, err := knownhosts.New(knownHostsFile)
-	if err != nil {
-		if term != nil {
-			term.Print(fmt.Sprintf("\r\nknown_hosts error: %v\r\n", err))
+	if knownHostsFile == os.DevNull {
+		isKnownHostsNull = true
+		khCallback = func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+			return &knownhosts.KeyError{}
 		}
-		return nil, nil, "", err
+	} else {
+		os.MkdirAll(filepath.Dir(knownHostsFile), 0700)
+		if _, err := os.Stat(knownHostsFile); os.IsNotExist(err) {
+			os.WriteFile(knownHostsFile, []byte(""), 0600)
+		}
+		khCallback, khErr = knownhosts.New(knownHostsFile)
+		if khErr != nil {
+			if term != nil {
+				term.Print(fmt.Sprintf("\r\nknown_hosts error: %v\r\n", khErr))
+			}
+			return nil, nil, "", khErr
+		}
+	}
+
+	strictHostKeyChecking := "ask"
+	hostKeyAlgorithmsOption := ""
+	if cfg != nil {
+		if shkc, _ := cfg.Get(name, "StrictHostKeyChecking"); shkc != "" {
+			strictHostKeyChecking = strings.ToLower(shkc)
+		}
+		if hka, _ := cfg.Get(name, "HostKeyAlgorithms"); hka != "" {
+			hostKeyAlgorithmsOption = hka
+		}
 	}
 
 	probeAddr := fmt.Sprintf("%s:%s", host, port)
@@ -754,20 +808,17 @@ func getSSHClient(name string, term TerminalUI, identity string,
 		}
 	}
 
-	defaultAlgos := []string{
-		ssh.KeyAlgoED25519,
-		ssh.KeyAlgoRSASHA256,
-		ssh.KeyAlgoRSASHA512,
-		ssh.KeyAlgoRSA,
-		ssh.KeyAlgoECDSA256,
-		ssh.KeyAlgoECDSA384,
-		ssh.KeyAlgoECDSA521,
-		// ssh.KeyAlgoDSA,
-	}
+	allowedAlgos := resolveHostKeyAlgorithms(hostKeyAlgorithmsOption)
 
 	algoMap := make(map[string]bool)
 	var hostKeyAlgorithms []string
-	for _, a := range append(prioritizedAlgos, defaultAlgos...) {
+	for _, a := range prioritizedAlgos {
+		if slices.Contains(allowedAlgos, a) && !algoMap[a] {
+			hostKeyAlgorithms = append(hostKeyAlgorithms, a)
+			algoMap[a] = true
+		}
+	}
+	for _, a := range allowedAlgos {
 		if !algoMap[a] {
 			hostKeyAlgorithms = append(hostKeyAlgorithms, a)
 			algoMap[a] = true
@@ -776,6 +827,9 @@ func getSSHClient(name string, term TerminalUI, identity string,
 
 	hostKeyCallback := func(hostname string, remote net.Addr, key ssh.PublicKey) error {
 		if globalConfig != nil && globalConfig.InsecureIgnoreHostKey {
+			return nil
+		}
+		if strictHostKeyChecking == "no" && isKnownHostsNull {
 			return nil
 		}
 		var keyErr2 *knownhosts.KeyError
@@ -795,28 +849,50 @@ func getSSHClient(name string, term TerminalUI, identity string,
 			return err
 		} else if errors.As(err, &keyErr) && len(keyErr.Want) == 0 {
 			// Unknown host
-			fingerprint := ssh.FingerprintSHA256(key)
-			prompt := fmt.Sprintf("\r\nThe authenticity of host '%s (%s)' can't be established.\r\n%s key fingerprint is %s.\r\nAre you sure you want to continue connecting (yes/no)? ", hostname, remote.String(), key.Type(), fingerprint)
-
-			if term == nil {
-				return fmt.Errorf("host key unknown, interactive prompt required but not available")
-			}
-
-			resp, e := term.Prompt(prompt)
-			if e != nil {
-				return e
-			}
-			resp = strings.ToLower(strings.TrimSpace(resp))
-			if resp == "yes" || resp == "y" {
-				f, e := os.OpenFile(knownHostsFile, os.O_APPEND|os.O_WRONLY, 0600)
-				if e == nil {
-					line := knownhosts.Line([]string{hostname, remote.String()}, key)
-					f.WriteString(line + "\n")
-					f.Close()
+			switch strictHostKeyChecking {
+			case "no":
+				if !isKnownHostsNull {
+					f, e := os.OpenFile(knownHostsFile, os.O_APPEND|os.O_WRONLY, 0600)
+					if e == nil {
+						line := knownhosts.Line([]string{hostname, remote.String()}, key)
+						f.WriteString(line + "\n")
+						f.Close()
+					}
 				}
 				return nil
+			case "yes":
+				msg := fmt.Sprintf("\r\nHost key verification failed for %s: StrictHostKeyChecking is set to yes.\r\n", hostname)
+				if term != nil {
+					term.Print(msg)
+				}
+				return fmt.Errorf("Host key verification failed (StrictHostKeyChecking=yes)")
+			default:
+				// ask
+				fingerprint := ssh.FingerprintSHA256(key)
+				prompt := fmt.Sprintf("\r\nThe authenticity of host '%s (%s)' can't be established.\r\n%s key fingerprint is %s.\r\nAre you sure you want to continue connecting (yes/no)? ", hostname, remote.String(), key.Type(), fingerprint)
+
+				if term == nil {
+					return fmt.Errorf("host key unknown, interactive prompt required but not available")
+				}
+
+				resp, e := term.Prompt(prompt)
+				if e != nil {
+					return e
+				}
+				resp = strings.ToLower(strings.TrimSpace(resp))
+				if resp == "yes" || resp == "y" {
+					if !isKnownHostsNull {
+						f, e := os.OpenFile(knownHostsFile, os.O_APPEND|os.O_WRONLY, 0600)
+						if e == nil {
+							line := knownhosts.Line([]string{hostname, remote.String()}, key)
+							f.WriteString(line + "\n")
+							f.Close()
+						}
+					}
+					return nil
+				}
+				return fmt.Errorf("Host key verification failed.")
 			}
-			return fmt.Errorf("Host key verification failed.")
 		}
 
 		return err
@@ -843,7 +919,7 @@ func getSSHClient(name string, term TerminalUI, identity string,
 			closers = append(closers, proxyClosers...)
 			closers = append(closers, proxyClient)
 
-			jumpConn, err := proxyClient.Dial("tcp", addr)
+			jumpConn, err := proxyClient.Dial(dialNetwork, addr)
 			if err != nil {
 				return nil, err
 			}
@@ -854,7 +930,7 @@ func getSSHClient(name string, term TerminalUI, identity string,
 			}
 			return ssh.NewClient(c, chans, reqs), nil
 		}
-		return ssh.Dial("tcp", addr, config)
+		return ssh.Dial(dialNetwork, addr, config)
 	}
 
 	client, err = dialFunc(sshConfig)
@@ -879,14 +955,15 @@ func getSSHClient(name string, term TerminalUI, identity string,
 						if choice == "" {
 							choice = "no"
 						}
-						if choice == "always" || choice == "always(a)" || choice == "a" {
+						switch choice {
+						case "always", "always(a)", "a":
 							saveHostPassword(term, canonicalAddr, pass)
 							if globalConfig != nil {
 								globalConfig.UpdateSavePassword("always")
 							}
-						} else if choice == "yes" || choice == "yes(y)" || choice == "y" {
+						case "yes", "yes(y)", "y":
 							saveHostPassword(term, canonicalAddr, pass)
-						} else if choice == "never" || choice == "never(v)" || choice == "v" {
+						case "never", "never(v)", "v":
 							if globalConfig != nil {
 								globalConfig.UpdateSavePassword("never")
 							}
@@ -1026,4 +1103,433 @@ func getIdentityFileID(keyData []byte) string {
 	}
 	hash := sha256.Sum256(keyData)
 	return fmt.Sprintf("%x", hash)
+}
+
+func GetIdentityPathForHost(h *models.HostData) string {
+	identityFile := h.IdentityFile
+	if identityFile == "" {
+		sshDir := getSSHDir()
+		identityFile = filepath.Join(sshDir, "id_ed25519")
+		if _, err := os.Stat(identityFile); os.IsNotExist(err) {
+			identityFile = filepath.Join(sshDir, "id_rsa")
+		}
+	} else {
+		identityFile = common.ExpandPath(identityFile)
+	}
+	return identityFile
+}
+
+func getPubKeyContent(identityFile string) (string, error) {
+	pubPath := identityFile + ".pub"
+	pubBytes, err := os.ReadFile(pubPath)
+	if err == nil {
+		return strings.TrimSpace(string(pubBytes)), nil
+	}
+
+	// Try to derive public key from private key directly
+	keyData, err := os.ReadFile(identityFile)
+	if err != nil {
+		return "", fmt.Errorf("failed to read identity file %s: %w", identityFile, err)
+	}
+
+	var signer ssh.Signer
+	identityKey := constants.IDENTITY_PREFIX + getIdentityFileID(keyData)
+	if passstore.HasPassword(identityKey) && passstore.HasEncryptionKey() {
+		pwd, errGet := passstore.Get(identityKey)
+		if errGet == nil {
+			signer, err = ssh.ParsePrivateKeyWithPassphrase(keyData, []byte(pwd))
+		}
+	} else {
+		signer, err = ssh.ParsePrivateKey(keyData)
+	}
+
+	if err != nil {
+		return "", fmt.Errorf("failed to parse private key (if it is encrypted, please save the passphrase or create a .pub file next to it): %w", err)
+	}
+
+	pubKey := signer.PublicKey()
+	pubKeyBytes := ssh.MarshalAuthorizedKey(pubKey)
+	return strings.TrimSpace(string(pubKeyBytes)), nil
+}
+
+func tryPubKeyAuth(host *models.HostData) (bool, error) {
+	identityFile := GetIdentityPathForHost(host)
+	keyData, err := os.ReadFile(identityFile)
+	if err != nil {
+		return false, fmt.Errorf("failed to read identity file: %w", err)
+	}
+
+	var signer ssh.Signer
+	identityKey := constants.IDENTITY_PREFIX + getIdentityFileID(keyData)
+	if passstore.HasPassword(identityKey) && passstore.HasEncryptionKey() {
+		pwd, errGet := passstore.Get(identityKey)
+		if errGet == nil {
+			signer, err = ssh.ParsePrivateKeyWithPassphrase(keyData, []byte(pwd))
+		}
+	} else {
+		signer, err = ssh.ParsePrivateKey(keyData)
+	}
+
+	if err != nil {
+		return false, err
+	}
+
+	authMethods := []ssh.AuthMethod{ssh.PublicKeys(signer)}
+
+	sshConfig := &ssh.ClientConfig{
+		User:              host.User,
+		Auth:              authMethods,
+		HostKeyAlgorithms: resolveHostKeyAlgorithms(host.HostKeyAlgorithms),
+		HostKeyCallback:   ssh.InsecureIgnoreHostKey(),
+		Timeout:           5 * time.Second,
+	}
+	if host.User == "" {
+		sshConfig.User = "root"
+	}
+	port := host.Port
+	if port == "" {
+		port = "22"
+	}
+	addr := fmt.Sprintf("%s:%s", host.HostName, port)
+
+	dialNetwork := "tcp"
+	if strings.ToLower(host.AddressFamily) == "inet" {
+		dialNetwork = "tcp4"
+	} else if strings.ToLower(host.AddressFamily) == "inet6" {
+		dialNetwork = "tcp6"
+	}
+
+	var client *ssh.Client
+	if host.ProxyJump != "" {
+		proxyClient, proxyClosers, _, err := getSSHClient(host.ProxyJump, nil, "", "", false)
+		if err != nil {
+			return false, fmt.Errorf("failed to connect to ProxyJump %s: %w", host.ProxyJump, err)
+		}
+		defer func() {
+			for _, c := range proxyClosers {
+				c.Close()
+			}
+			proxyClient.Close()
+		}()
+		jumpConn, err := proxyClient.Dial(dialNetwork, addr)
+		if err != nil {
+			return false, err
+		}
+		c, chans, reqs, err := ssh.NewClientConn(jumpConn, addr, sshConfig)
+		if err != nil {
+			return false, err
+		}
+		client = ssh.NewClient(c, chans, reqs)
+	} else {
+		var dialErr error
+		client, dialErr = ssh.Dial(dialNetwork, addr, sshConfig)
+		if dialErr != nil {
+			return false, dialErr
+		}
+	}
+
+	client.Close()
+	return true, nil
+}
+
+func isAuthError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := strings.ToLower(err.Error())
+	return strings.Contains(errStr, "authenticate") || strings.Contains(errStr, "auth") || strings.Contains(errStr, "handshake failed")
+}
+
+func executeCopyIDWithPassword(host *models.HostData, password string, cmd string) error {
+	kbAuth := ssh.KeyboardInteractive(func(user, instruction string, questions []string, echos []bool) ([]string, error) {
+		answers := make([]string, len(questions))
+		for i, q := range questions {
+			if !echos[i] && (strings.Contains(strings.ToLower(q), "password") || strings.Contains(strings.ToLower(q), "passphrase")) {
+				answers[i] = password
+			}
+		}
+		return answers, nil
+	})
+
+	authMethods := []ssh.AuthMethod{
+		ssh.Password(password),
+		kbAuth,
+	}
+
+	sshConfig := &ssh.ClientConfig{
+		User:              host.User,
+		Auth:              authMethods,
+		HostKeyAlgorithms: resolveHostKeyAlgorithms(host.HostKeyAlgorithms),
+		HostKeyCallback:   ssh.InsecureIgnoreHostKey(),
+		Timeout:           5 * time.Second,
+	}
+	if host.User == "" {
+		sshConfig.User = "root"
+	}
+	port := host.Port
+	if port == "" {
+		port = "22"
+	}
+	addr := fmt.Sprintf("%s:%s", host.HostName, port)
+
+	dialNetwork := "tcp"
+	if strings.ToLower(host.AddressFamily) == "inet" {
+		dialNetwork = "tcp4"
+	} else if strings.ToLower(host.AddressFamily) == "inet6" {
+		dialNetwork = "tcp6"
+	}
+
+	var client *ssh.Client
+	var err error
+	var closers []io.Closer
+
+	if host.ProxyJump != "" {
+		proxyClient, proxyClosers, _, err := getSSHClient(host.ProxyJump, nil, "", "", false)
+		if err != nil {
+			return fmt.Errorf("failed to connect to ProxyJump %s: %w", host.ProxyJump, err)
+		}
+		closers = append(closers, proxyClosers...)
+		closers = append(closers, proxyClient)
+
+		jumpConn, err := proxyClient.Dial(dialNetwork, addr)
+		if err != nil {
+			for _, c := range closers {
+				c.Close()
+			}
+			return err
+		}
+		closers = append(closers, jumpConn)
+
+		c, chans, reqs, err := ssh.NewClientConn(jumpConn, addr, sshConfig)
+		if err != nil {
+			for _, c := range closers {
+				c.Close()
+			}
+			return err
+		}
+		client = ssh.NewClient(c, chans, reqs)
+	} else {
+		client, err = ssh.Dial(dialNetwork, addr, sshConfig)
+		if err != nil {
+			return err
+		}
+	}
+	defer func() {
+		client.Close()
+		for _, c := range closers {
+			c.Close()
+		}
+	}()
+
+	session, err := client.NewSession()
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+
+	var stdoutBuf, stderrBuf bytes.Buffer
+	session.Stdout = &stdoutBuf
+	session.Stderr = &stderrBuf
+
+	if err := session.Run(cmd); err != nil {
+		return fmt.Errorf("failed to execute remote command: %w, stderr: %s", err, stderrBuf.String())
+	}
+
+	stdout := strings.TrimSpace(stdoutBuf.String())
+	if !strings.Contains(stdout, "KEY_ADDED") && !strings.Contains(stdout, "KEY_ALREADY_EXISTS") {
+		return fmt.Errorf("unexpected command output: %s, stderr: %s", stdout, stderrBuf.String())
+	}
+	return nil
+}
+
+// CopySSHID attempts to copy the host's public key to the remote authorized_keys file.
+func CopySSHID(name string, password string) (*models.CopyIDResponse, error) {
+	// 1. Find the host configuration
+	hosts, err := ListHosts()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list hosts: %w", err)
+	}
+
+	var host *models.HostData
+	for _, h := range hosts {
+		if h.Name == name {
+			host = h
+			break
+		}
+	}
+
+	if host == nil {
+		// If not found in config, treat the name itself as the host address/alias
+		// E.g., user@hostname:port
+		host = &models.HostData{
+			Name:     name,
+			HostName: name,
+			Port:     "22",
+			Source:   "",
+		}
+		// Try to parse user/host/port from name
+		if i := strings.LastIndex(name, "@"); i != -1 {
+			userPart := name[:i]
+			hostPart := name[i+1:]
+			if before, after, found := strings.Cut(userPart, ":"); found {
+				host.User = before
+				// Note: we don't use the password from name for copy-id unless we need to
+				_ = after
+			} else {
+				host.User = userPart
+			}
+			if idx := strings.LastIndex(hostPart, ":"); idx != -1 {
+				host.HostName = hostPart[:idx]
+				host.Port = hostPart[idx+1:]
+			} else {
+				host.HostName = hostPart
+			}
+		} else if idx := strings.LastIndex(name, ":"); idx != -1 {
+			host.HostName = name[:idx]
+			host.Port = name[idx+1:]
+		}
+	}
+
+	if host.User == "" {
+		host.User = "root"
+	}
+	if host.Port == "" {
+		host.Port = "22"
+	}
+
+	// 2. Resolve identity file and read public key content
+	identityFile := GetIdentityPathForHost(host)
+	pubKeyContent, err := getPubKeyContent(identityFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get public key content: %w", err)
+	}
+
+	// 3. Try to connect using the identity file first.
+	// If it succeeds, the key is already present/working on the remote server.
+	success, err := tryPubKeyAuth(host)
+	if err == nil && success {
+		return &models.CopyIDResponse{
+			Status: "success",
+			Message: fmt.Sprintf(`Identity file already exists on remote host %s@%s:%s (connection succeeded using public key).`,
+				host.User, host.HostName, host.Port),
+		}, nil
+	}
+
+	// If there was a network/handshake error other than authentication, fail early
+	if err != nil && !isAuthError(err) {
+		return nil, fmt.Errorf("network connection failed: %w", err)
+	}
+
+	// 4. Identity file auth failed or was not set up.
+	// Try to connect using the password.
+	// First check the provided password from the request.
+	// If not provided, check the stored password.
+	activePassword := password
+	if activePassword == "" {
+		canonicalAddr := fmt.Sprintf("%s@%s:%s", host.User, host.HostName, host.Port)
+		if passstore.HasPassword(canonicalAddr) {
+			if passstore.HasEncryptionKey() {
+				pwd, errGet := passstore.Get(canonicalAddr)
+				if errGet == nil {
+					activePassword = pwd
+				}
+			} else {
+				// Store is locked. We need to prompt the user.
+				return &models.CopyIDResponse{
+					Status:  "need_app_password",
+					Message: "CozySSH password store is locked. Please enter your CozySSH app password to unlock it:",
+				}, nil
+			}
+		}
+	}
+
+	// If we still don't have a password, ask the user to provide one.
+	if activePassword == "" {
+		return &models.CopyIDResponse{
+			Status:  "need_password",
+			Message: fmt.Sprintf("Authentication failed. Please enter password for %s@%s", host.User, host.HostName),
+		}, nil
+	}
+
+	// Try to connect using the password and copy the key.
+	parts := strings.Fields(pubKeyContent)
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("invalid public key format in derived public key")
+	}
+	keyPart := parts[1]
+
+	targetPath := ".ssh/authorized_keys"
+	cmd := fmt.Sprintf(`sh -c 'TARGET="%s"; DIR=$(dirname "$TARGET"); umask 077; mkdir -p "$DIR"; if ! grep -qF "%s" "$TARGET" 2>/dev/null; then echo "%s" >> "$TARGET"; echo "KEY_ADDED"; else echo "KEY_ALREADY_EXISTS"; fi'`, targetPath, keyPart, pubKeyContent)
+
+	err = executeCopyIDWithPassword(host, activePassword, cmd)
+	if err != nil {
+		if isAuthError(err) {
+			return &models.CopyIDResponse{
+				Status:  "need_password",
+				Message: "Password authentication failed. Please enter the password again.",
+			}, nil
+		}
+		return nil, fmt.Errorf("failed to copy SSH key using password: %w", err)
+	}
+
+	return &models.CopyIDResponse{
+		Status: "success",
+		Message: fmt.Sprintf(`Public key successfully added to authorized_keys of remote %s@%s:%s.`,
+			host.User, host.HostName, host.Port),
+	}, nil
+}
+
+func resolveHostKeyAlgorithms(option string) []string {
+	defaults := []string{
+		ssh.KeyAlgoED25519,
+		ssh.KeyAlgoRSASHA256,
+		ssh.KeyAlgoRSASHA512,
+		ssh.KeyAlgoECDSA256,
+		ssh.KeyAlgoECDSA384,
+		ssh.KeyAlgoECDSA521,
+	}
+
+	if option == "" {
+		return defaults
+	}
+
+	var algos []string
+	rawList := option
+	if strings.HasPrefix(option, "+") || strings.HasPrefix(option, "-") || strings.HasPrefix(option, "^") {
+		rawList = option[1:]
+	}
+	for _, part := range strings.Split(rawList, ",") {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			algos = append(algos, trimmed)
+		}
+	}
+
+	if strings.HasPrefix(option, "+") {
+		res := append([]string{}, defaults...)
+		for _, a := range algos {
+			if !slices.Contains(res, a) {
+				res = append(res, a)
+			}
+		}
+		return res
+	} else if strings.HasPrefix(option, "-") {
+		var res []string
+		for _, d := range defaults {
+			if !slices.Contains(algos, d) {
+				res = append(res, d)
+			}
+		}
+		return res
+	} else if strings.HasPrefix(option, "^") {
+		res := append([]string{}, algos...)
+		for _, d := range defaults {
+			if !slices.Contains(res, d) {
+				res = append(res, d)
+			}
+		}
+		return res
+	} else {
+		return algos
+	}
 }

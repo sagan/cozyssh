@@ -13,7 +13,7 @@
  *   Fallback             → inputmode="none" (suppresses keyboard on most mobile browsers)
  */
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { Box, Paper, IconButton, Button, ButtonGroup, Divider } from "@mui/material";
 import PanToolIcon from "@mui/icons-material/PanTool";
 import PanToolOutlinedIcon from "@mui/icons-material/PanToolOutlined";
@@ -24,7 +24,7 @@ import SouthIcon from "@mui/icons-material/South";
 import WestIcon from "@mui/icons-material/West";
 import EastIcon from "@mui/icons-material/East";
 
-import { VIBRATE_PATTERN } from "./constants";
+import { HASH_MOBILE_INPUT_PANEL, VIBRATE_PATTERN } from "./constants";
 import type { TerminalHandle } from "./Terminal";
 import type { ScratchpadHandle } from "./Scratchpad";
 
@@ -212,6 +212,23 @@ export default function MobileInputBar({
     }
   }, [keyboardHeight]);
 
+  // Push a sentinel history entry when the panel opens; remove it when closed.
+  useEffect(() => {
+    if (extraKeysOpen) {
+      // Only push if we're not already at the sentinel (e.g. StrictMode double-fire)
+      if (!window.location.hash.includes(HASH_MOBILE_INPUT_PANEL)) {
+        history.pushState({ extraKeysPanel: true }, "", "#" + HASH_MOBILE_INPUT_PANEL);
+      }
+    } else {
+      // If the panel was closed by means OTHER than history.back() (e.g. keyboard
+      // opening restored), clean up the sentinel entry so navigation isn't polluted.
+      if (window.location.hash.includes(HASH_MOBILE_INPUT_PANEL)) {
+        history.back();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extraKeysOpen]);
+
   const vibe = () => window.navigator.vibrate?.(VIBRATE_PATTERN);
 
   const startCoords = useRef<{ x: number; y: number } | null>(null);
@@ -219,6 +236,7 @@ export default function MobileInputBar({
   const getTapProps = (action: () => void) => ({
     onPointerDown: (e: React.PointerEvent) => {
       e.preventDefault();
+      // eslint-disable-next-line react-hooks/refs
       startCoords.current = { x: e.clientX, y: e.clientY };
     },
     onPointerUp: (e: React.PointerEvent) => {
@@ -248,10 +266,62 @@ export default function MobileInputBar({
     }
   };
 
-  const handleExtraKeysToggle = () => {
-    const next = !extraKeysOpen;
+  // ── Core close logic (shared by button tap and popstate) ──────────────────
+  // The system keyboard opens asynchronously.  If we remove the panel
+  // immediately, there's a brief gap where neither the panel nor the keyboard
+  // is covering the bottom of the screen, causing a visible flick.  Strategy:
+  // restore inputMode and focus the textarea first (which triggers the keyboard
+  // to open), then wait for the visual viewport to shrink before removing it.
+  const performClose = useCallback(() => {
+    const term = getActiveTerminal();
+    if (term && "getXterm" in term) {
+      const textarea = term.getXterm()?.textarea;
+      if (textarea) textarea.inputMode = "";
+      // Focus triggers the system keyboard to begin opening
+      term.focus();
+    }
 
-    if (next) {
+    const vv = window.visualViewport;
+    if (vv) {
+      const heightAtClose = vv.height;
+      let done = false;
+
+      const finish = () => {
+        if (done) return;
+        done = true;
+        vv.removeEventListener("resize", onVVResize);
+        onExtraKeysOpenChange(false);
+      };
+
+      const onVVResize = () => {
+        // The viewport shrank → the system keyboard is now visible
+        if (vv.height < heightAtClose - 30) finish();
+      };
+
+      vv.addEventListener("resize", onVVResize);
+      // Safety timeout: if the keyboard doesn't open (e.g. hardware keyboard
+      // attached, or focus fails), remove the panel anyway after 400ms.
+      setTimeout(finish, 400);
+    } else {
+      // No visualViewport API — fall back to a simple delay
+      setTimeout(() => onExtraKeysOpenChange(false), 300);
+    }
+  }, [getActiveTerminal, onExtraKeysOpenChange]);
+
+  // Listen for popstate (Android back gesture or history.back() calls).
+  useEffect(() => {
+    const onPopState = () => {
+      if (!window.location.hash.includes(HASH_MOBILE_INPUT_PANEL)) {
+        // The sentinel was popped — close the panel if it is open.
+        performClose();
+      }
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [performClose]);
+
+  const handleExtraKeysToggle = useCallback(() => {
+    if (!extraKeysOpen) {
       // ── Opening the extra-keys panel ──────────────────────────────────────
       // Suppress system keyboard immediately, then show the panel.
       onExtraKeysOpenChange(true);
@@ -264,52 +334,17 @@ export default function MobileInputBar({
         navigator.virtualKeyboard?.hide();
       }
     } else {
-      // ── Closing the extra-keys panel ──────────────────────────────────────
-      // The system keyboard opens asynchronously.  If we remove the panel
-      // immediately, there's a brief gap where neither the panel nor the
-      // keyboard is covering the bottom of the screen, causing a visible
-      // flick.  Strategy: restore inputMode and focus the textarea first
-      // (which triggers the keyboard to open), then wait for the visual
-      // viewport to shrink before actually removing the panel.
-      const term = getActiveTerminal();
-      if (term && "getXterm" in term) {
-        const textarea = term.getXterm()?.textarea;
-        if (textarea) textarea.inputMode = "";
-        // Focus triggers the system keyboard to begin opening
-        term.focus();
-      }
-
-      const vv = window.visualViewport;
-      if (vv) {
-        const heightAtClose = vv.height;
-        let done = false;
-
-        const finish = () => {
-          if (done) {
-            return;
-          }
-          done = true;
-          vv.removeEventListener("resize", onVVResize);
-          onExtraKeysOpenChange(false);
-        };
-
-        const onVVResize = () => {
-          // The viewport shrank → the system keyboard is now visible
-          if (vv.height < heightAtClose - 30) {
-            finish();
-          }
-        };
-
-        vv.addEventListener("resize", onVVResize);
-        // Safety timeout: if the keyboard doesn't open (e.g. hardware keyboard
-        // attached, or focus fails), remove the panel anyway after 400ms.
-        setTimeout(finish, 400);
+      // ── Closing via the "..." button ──────────────────────────────────────
+      // Pop the sentinel history entry.  The popstate handler will invoke
+      // performClose(), keeping a single close code-path.
+      if (window.location.hash.includes(HASH_MOBILE_INPUT_PANEL)) {
+        history.back();
       } else {
-        // No visualViewport API — fall back to a simple delay
-        setTimeout(() => onExtraKeysOpenChange(false), 300);
+        // Sentinel missing (edge case) — close directly.
+        performClose();
       }
     }
-  };
+  }, [extraKeysOpen, getActiveTerminal, onExtraKeysOpenChange, performClose]);
 
   const activeKbHeight = keyboardHeight > 60 ? keyboardHeight : lastKeyboardHeight;
   const panelHeight = activeKbHeight > 60 ? activeKbHeight + 40 : Math.floor(window.innerHeight * 0.38);

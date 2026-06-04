@@ -1691,6 +1691,10 @@ export interface HostData {
 	identity_file?: string;
 	is_auto?: boolean;
 	is_favourite?: boolean;
+	address_family?: "any" | "inet" | "inet6" | "";
+	user_known_hosts_file?: string;
+	strict_host_key_checking?: "yes" | "no" | "ask" | "";
+	host_key_algorithms?: string;
 	password?: string;
 	password_exists?: boolean;
 	clear_password?: boolean;

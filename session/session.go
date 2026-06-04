@@ -352,3 +352,17 @@ func (m *SessionManager) GetPinned() []*models.SessionPinned {
 	}
 	return pinned
 }
+
+func (m *SessionManager) DisconnectAllWebsockets() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, s := range m.sessions {
+		s.mu.Lock()
+		for _, l := range s.listeners {
+			close(l)
+		}
+		s.listeners = nil
+		s.mu.Unlock()
+	}
+}
+

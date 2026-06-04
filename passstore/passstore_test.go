@@ -2,6 +2,9 @@ package passstore
 
 import (
 	"cozyssh/constants"
+	"crypto/aes"
+	"crypto/cipher"
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"testing"
@@ -204,5 +207,55 @@ func TestIsEmptyWithoutFile(t *testing.T) {
 
 	if !IsEmpty() {
 		t.Errorf("IsEmpty should return true if passwords map is empty")
+	}
+}
+
+func TestPKCS7Padding(t *testing.T) {
+	for _, size := range []int{0, 1, 63, 64, 65, 127, 128, 129} {
+		data := make([]byte, size)
+		for i := range data {
+			data[i] = byte(i % 256)
+		}
+		padded := padPKCS7(data)
+		if len(padded)%64 != 0 {
+			t.Errorf("padded length %d is not a multiple of 64 for original size %d", len(padded), size)
+		}
+		unpadded, err := unpadPKCS7(padded)
+		if err != nil {
+			t.Errorf("failed to unpad data of size %d: %v", size, err)
+		}
+		if string(unpadded) != string(data) {
+			t.Errorf("unpadded data does not match original for size %d", size)
+		}
+	}
+}
+
+func TestBackwardCompatibility(t *testing.T) {
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i)
+	}
+
+	rawText := []byte("unpadded_secret_password_123")
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		t.Fatalf("aes.NewCipher failed: %v", err)
+	}
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil {
+		t.Fatalf("cipher.NewGCM failed: %v", err)
+	}
+	nonce := make([]byte, aesgcm.NonceSize())
+	ciphertext := aesgcm.Seal(nonce, nonce, rawText, nil)
+	ciphertextStr := base64.StdEncoding.EncodeToString(ciphertext)
+
+	decrypted, err := decrypt(ciphertextStr, key)
+	if err != nil {
+		t.Fatalf("decrypt failed for unpadded text: %v", err)
+	}
+
+	if string(decrypted) != string(rawText) {
+		t.Errorf("expected decrypted text %q, got %q", string(rawText), string(decrypted))
 	}
 }

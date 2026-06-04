@@ -1814,6 +1814,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
     );
   }, [vars, localVars]);
 
+  useEffect(() => {
+    if (applets.length === 0) {
+      triggerFocus();
+    }
+  }, [applets.length]);
+
   return (
     <ThemeProvider theme={muiTheme}>
       <Box id="main-ui" sx={{ display: "flex", height: viewportHeight, overflow: "hidden" }}>

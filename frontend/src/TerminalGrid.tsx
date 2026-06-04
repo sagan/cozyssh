@@ -201,6 +201,9 @@ export default function TerminalGrid({
                   <Box
                     className="terminal-pane-wrap"
                     data-id={pane.id}
+                    data-session-id={pane.sessionId || ""}
+                    data-name={pane.host}
+                    data-state={pane.state || ""}
                     sx={{
                       flex: 1,
                       height: "100%",

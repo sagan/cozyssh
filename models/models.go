@@ -27,10 +27,10 @@ type Manifest struct {
 }
 
 type Sysinfo struct {
-	Hostname           string `json:"hostname"`
-	Version            string `json:"version"`
-	InsecureAllowed    bool   `json:"insecureAllowed"`
-	IsSecure           bool   `json:"isSecure"`
+	Hostname        string `json:"hostname"`
+	Version         string `json:"version"`
+	InsecureAllowed bool   `json:"insecureAllowed"`
+	IsSecure        bool   `json:"isSecure"`
 	SavePassword    string `json:"savePassword"`
 }
 
@@ -49,6 +49,11 @@ type HostData struct {
 	// true if from known_hosts and not config
 	IsAuto      bool `json:"is_auto,omitempty"`
 	IsFavourite bool `json:"is_favourite,omitempty"`
+
+	AddressFamily         string `json:"address_family,omitempty" ts_type:"\"any\" | \"inet\" | \"inet6\" | \"\""`
+	UserKnownHostsFile    string `json:"user_known_hosts_file,omitempty"`
+	StrictHostKeyChecking string `json:"strict_host_key_checking,omitempty" ts_type:"\"yes\" | \"no\" | \"ask\" | \"\""`
+	HostKeyAlgorithms     string `json:"host_key_algorithms,omitempty"`
 
 	// Password storage support
 	Password       string `json:"password,omitempty"`
@@ -155,6 +160,16 @@ type ExecResult struct {
 	Stdout string `json:"stdout"`
 	Stderr string `json:"stderr"`
 	Error  error  `json:"error" ts_type:"unknown"`
+}
+
+type CopyIDRequest struct {
+	Name     string `json:"name"`
+	Password string `json:"password,omitempty"`
+}
+
+type CopyIDResponse struct {
+	Status  string `json:"status"` // "success", "need_password", "error"
+	Message string `json:"message"`
 }
 
 type PreflightResponse struct {

@@ -114,3 +114,11 @@ export const DEFAULT_SCROLL_LINES = 3;
 export const DEFAULT_TERMINAL_FONT_SIZE = 15;
 
 export const TOAST_KEY_TERMINAL_FONT_SIZE = "cs-terminal-font-size";
+
+/**
+ * Used as a special flag in url hash to indicate the mobile input panel is currently open.
+ * When the user opens the panel, pushState a new state with this hash.
+ * When the user closes the panel, we intercept the popstate event and hide the panel.
+ * This allows the user to use the back gesture to close the panel.
+ */
+export const HASH_MOBILE_INPUT_PANEL = "$mobile-input-panel$";
