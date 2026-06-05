@@ -29,12 +29,21 @@ func TestServerManagement(t *testing.T) {
 
 	page.GetByLabel("HostName (IP / Domain)").Fill("192.168.1.100")
 	page.GetByLabel("Alias Name").Fill("my-test-server")
-	page.GetByLabel("User", playwright.PageGetByLabelOptions{
+
+	// user & port are rendered as Material UI <Autocomplete>, fill the input and press Enter to change the values
+	userInput := page.GetByRole("combobox", playwright.PageGetByRoleOptions{
+		Name:  "User",
 		Exact: playwright.Bool(true),
-	}).Fill("ubuntu")
-	page.GetByLabel("Port", playwright.PageGetByLabelOptions{
+	})
+	userInput.Fill("ubuntu")
+	userInput.Press("Enter")
+
+	portInput := page.GetByRole("combobox", playwright.PageGetByRoleOptions{
+		Name:  "Port",
 		Exact: playwright.Bool(true),
-	}).Fill("2222")
+	})
+	portInput.Fill("2222")
+	portInput.Press("Enter")
 
 	if err := page.GetByRole("button", playwright.PageGetByRoleOptions{Name: "Save"}).Click(); err != nil {
 		t.Fatalf("failed to click save: %v", err)

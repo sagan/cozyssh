@@ -168,9 +168,6 @@ func Run(ctx context.Context, args []string) error {
 	// 3. API Routes setup (to be expanded)
 	auth.AddAuthRoutes(mux, getFullData)
 
-	mux.HandleFunc("/api/ws", ws.HandleTerminal)
-	mux.HandleFunc("/api/ws/scratchpad", scratchpad.HandleWS)
-
 	securityMiddleware := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if *allowInsecure || isSecureRequest(r) {
@@ -180,6 +177,28 @@ func Run(ctx context.Context, args []string) error {
 			http.Error(w, "Security Restriction: CozySSH is not allowed to run in non-local HTTP environment. Use HTTPS or localhost, or lift this restriction with --allow-insecure-http flag.", http.StatusForbidden)
 		})
 	}
+
+	mux.Handle("/api/logout_all", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			if err := cfg.ResetSessionSecret(); err != nil {
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+			passstore.ClearEncryptionKey()
+
+			session.GlobalManager.DisconnectAllWebsockets()
+			scratchpad.DisconnectAll()
+
+			w.Header().Set(headers.ContentType, constants.MIME_JSON)
+			w.WriteHeader(http.StatusNoContent)
+		}))))
+
+	mux.HandleFunc("/api/ws", ws.HandleTerminal)
+	mux.HandleFunc("/api/ws/scratchpad", scratchpad.HandleWS)
 
 	mux.Handle("/api/fs/download", securityMiddleware(http.HandlerFunc(fsapi.HandleDownloadDirect)))
 	mux.Handle("/api/fs/", securityMiddleware(auth.Middleware(http.HandlerFunc(fsapi.HandleFS))))

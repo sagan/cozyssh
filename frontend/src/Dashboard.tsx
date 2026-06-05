@@ -1292,18 +1292,21 @@ export default function Dashboard({ initialData }: DashboardProps) {
             setActiveTabId(tabId);
             setActivePaneId(paneId);
           }
-        } else {
+        } else if (!hash.startsWith("$")) {
           // Single host mode /#host
-          const host =
-            hash !== LOCAL_NAME
-              ? hostsData.find((h) =>
-                  hash.includes("@")
-                    ? hash === `${h.user || "root"}@${h.hostname}`
-                    : h.name === hash || h.hostname === hash,
-                )
-              : { name: LOCAL_NAME };
+          let host = hash;
+          if (host !== LOCAL_NAME) {
+            const matchedHost = hostsData.find((h) =>
+              hash.includes("@")
+                ? hash === `${h.user || "root"}@${h.hostname}`
+                : h.name === hash || h.hostname === hash,
+            );
+            if (matchedHost) {
+              host = matchedHost.name;
+            }
+          }
           if (host) {
-            handleSelectHost(host.name);
+            handleSelectHost(host);
           } else {
             const tabId = genTabId(LOCAL_NAME);
             const paneId = genPaneId(LOCAL_NAME);
@@ -1318,7 +1321,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             ]);
             setActiveTabId(tabId);
             setActivePaneId(paneId);
-            setTimeout(() => dialogs.alert(`SSH server "${hash}" not found in config.`), 100);
+            dialogs.alert(`SSH server "${hash}" not found.`);
           }
         }
       } else if (autoload) {
@@ -1429,6 +1432,41 @@ export default function Dashboard({ initialData }: DashboardProps) {
           [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
         },
       });
+    }
+    localStorage.clear();
+    sessionStorage.clear();
+    if (window.caches) {
+      await caches.delete("api-data-cache");
+      await caches.delete("manifest-cache");
+    }
+    window.location.href = "/login";
+  }, []);
+
+  const handleLogoutAll = useCallback(async () => {
+    const syncState = localStorage.getItem(BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE);
+    if (syncState && syncState !== "synced") {
+      if (
+        !(await dialogs.confirm(
+          "Scratchpad data is not fully synced to the server. Are you sure you want to log out of all browser sessions and clear the local cache?",
+        ))
+      ) {
+        return;
+      }
+    }
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+    if (token) {
+      await fetch("/api/sessions/close_all_normal", {
+        method: METHOD_POST,
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        },
+      }).catch((e) => console.error(e));
+      await fetch("/api/logout_all", {
+        method: METHOD_POST,
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        },
+      }).catch((e) => console.error(e));
     }
     localStorage.clear();
     sessionStorage.clear();
@@ -1836,6 +1874,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             setMobileOpen(false);
           }}
           onLogout={handleLogout}
+          onLogoutAll={handleLogoutAll}
           activeTabs={tabs.flatMap((t) => t.panes.filter((p) => p.state !== "stolen").map((p) => p.sessionId || p.id))}
           sysHostname={sysHostname}
           appVersion={appVersion}

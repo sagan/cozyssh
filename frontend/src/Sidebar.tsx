@@ -67,6 +67,7 @@ export default function Sidebar({
   onSelect,
   onSelectTagAsSplit,
   onLogout,
+  onLogoutAll,
   onOpenScratchpad,
   activeTabs,
   onAttach,
@@ -84,6 +85,7 @@ export default function Sidebar({
   onSelect: (host: string) => void;
   onSelectTagAsSplit?: (tag: string, hosts: string[]) => void;
   onLogout?: () => void;
+  onLogoutAll?: () => void;
   onOpenScratchpad?: () => void;
   activeTabs: string[];
   onAttach: (id: string, host: string, title: string, isLocked: boolean) => void;
@@ -238,7 +240,7 @@ export default function Sidebar({
             });
 
             if (retryRes.ok) {
-              dialogs.alert("Password updated! You will be logged out.");
+              await dialogs.alert("Password updated! You will be logged out.");
               if (onLogout) {
                 onLogout();
               }
@@ -585,6 +587,8 @@ export default function Sidebar({
             !(await dialogs.confirm(
               `ssh-copy-id "${payload.name}": host key isn't trusted: ${data.message}. ` +
                 `New host key finterprint: ${data.fingerprint}. Accept it?`,
+              "",
+              true,
             ))
           ) {
             return;
@@ -852,6 +856,22 @@ export default function Sidebar({
             }}
           >
             Logout
+          </MenuItem>
+          <MenuItem
+            onClick={async () => {
+              setAnchorEl(null);
+              if (
+                await dialogs.confirm(
+                  "Are you sure you want to log out of all browser sessions? This will invalidate all active sessions and require you to sign in again on all devices.",
+                )
+              ) {
+                if (onLogoutAll) {
+                  onLogoutAll();
+                }
+              }
+            }}
+          >
+            Logout All
           </MenuItem>
         </Menu>
       </Toolbar>

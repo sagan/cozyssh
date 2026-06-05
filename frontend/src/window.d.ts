@@ -275,8 +275,14 @@ declare global {
   /**
    * Display an async confirm dialog.
    * The behavior is the same as `window.confirm` except it's non-blocking.
+   * @param message The message to display in the dialog.
+   * @param detail The detail to display in the dialog.
+   * @param verification Set to `true` or a verification string.
+   * If `undefined`, the user can simply click the OK button or press ENTER to confirm.
+   * If `true`, the user must check the checkbox before confirm.
+   * If a string, the user must type the verification string before confirm.
    */
-  function csConfirm(message?: string, detail?: string): Promise<boolean>;
+  function csConfirm(message?: string, detail?: string, verification?: boolean | string): Promise<boolean>;
   /**
    * Display an async prompt dialog.
    * The behavior is the same as `window.prompt` except it's non-blocking.

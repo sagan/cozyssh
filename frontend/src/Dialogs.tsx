@@ -1,6 +1,16 @@
 // async version of alert, confirm, prompt using MUI dialog
 import { type ReactNode, useState, useRef, useEffect } from "react";
-import { Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, TextField, Button } from "@mui/material";
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  TextField,
+  Button,
+  FormControlLabel,
+  Checkbox,
+} from "@mui/material";
 
 export interface DialogApi {
   alert: typeof csAlert;
@@ -17,6 +27,7 @@ interface DialogConfig {
   defaultValue?: string;
   validate?: ((value: string) => string | undefined) | null;
   inputType?: string;
+  verification?: boolean | string;
 }
 
 // 1. Internal registry to bridge the static export to the React provider instance
@@ -29,7 +40,8 @@ const registry = {
 // eslint-disable-next-line react-refresh/only-export-components
 export const dialogs: DialogApi = {
   alert: (message, detail) => registry.current?.alert(message, detail) ?? Promise.resolve(),
-  confirm: (message, detail) => registry.current?.confirm(message, detail) ?? Promise.resolve(false),
+  confirm: (message, detail, verification) =>
+    registry.current?.confirm(message, detail, verification) ?? Promise.resolve(false),
   prompt: (message, defaultValue, options) =>
     registry.current?.prompt(message, defaultValue, options) ?? Promise.resolve(null),
   promptPassword: (message, defaultValue) =>
@@ -39,6 +51,7 @@ export const dialogs: DialogApi = {
 export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
+  const [checked, setChecked] = useState(false);
   const [error, setError] = useState("");
 
   const [config, setConfig] = useState<DialogConfig>({
@@ -48,6 +61,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
     placeholder: "",
     validate: null,
     inputType: "",
+    verification: undefined,
   });
 
   const resolveRef = useRef<((value: string | boolean | null) => void) | null>(null);
@@ -55,6 +69,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
   const triggerDialog = (config: DialogConfig) => {
     setConfig(config);
     setInputValue(config.defaultValue || "");
+    setChecked(false);
     setError("");
     setOpen(true);
     return new Promise<unknown>((resolve) => {
@@ -66,7 +81,8 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     registry.current = {
       alert: ((message, detail) => triggerDialog({ type: "alert", message, detail })) as DialogApi["alert"],
-      confirm: ((message, detail) => triggerDialog({ type: "confirm", message, detail })) as DialogApi["confirm"],
+      confirm: ((message, detail, verification) =>
+        triggerDialog({ type: "confirm", message, detail, verification })) as DialogApi["confirm"],
       prompt: ((message, defaultValue, options) =>
         triggerDialog({ type: "prompt", message, defaultValue, ...options })) as DialogApi["prompt"],
       promptPassword: ((message, defaultValue) =>
@@ -85,6 +101,16 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
+    // Safety guard for verification requirements
+    if (config.type === "confirm") {
+      if (config.verification === true && !checked) {
+        return;
+      }
+      if (typeof config.verification === "string" && inputValue !== config.verification) {
+        return;
+      }
+    }
+
     if (config.type === "prompt" && config.validate) {
       const validationError = config.validate(inputValue);
       if (validationError) {
@@ -96,6 +122,12 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
     setOpen(false);
     resolveRef.current(config.type === "prompt" ? inputValue : true);
   };
+
+  // Determine if the confirmation criteria are unmet
+  const isConfirmDisabled =
+    config.type === "confirm" &&
+    ((config.verification === true && !checked) ||
+      (typeof config.verification === "string" && inputValue !== config.verification));
 
   return (
     <>
@@ -112,8 +144,54 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
         <DialogTitle sx={{ pb: 1 }}>{config.message}</DialogTitle>
         <DialogContent>
           {config.detail && (
-            <DialogContentText sx={{ mb: config.type === "prompt" ? 2 : 0 }}>{config.detail}</DialogContentText>
+            <DialogContentText sx={{ mb: config.type === "prompt" || config.verification ? 2 : 0 }}>
+              {config.detail}
+            </DialogContentText>
           )}
+
+          {/* Checkbox Verification */}
+          {config.type === "confirm" && config.verification === true && (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  autoFocus
+                  checked={checked}
+                  onChange={(e) => setChecked(e.target.checked)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && checked) {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      handleClose(true);
+                    }
+                  }}
+                />
+              }
+              label="I confirm and wish to proceed"
+            />
+          )}
+
+          {/* Text-matching Verification */}
+          {config.type === "confirm" && typeof config.verification === "string" && (
+            <TextField
+              autoFocus
+              margin="dense"
+              fullWidth
+              variant="outlined"
+              placeholder={`Type "${config.verification}" to confirm`}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  if (inputValue === config.verification) {
+                    handleClose(true);
+                  }
+                }
+              }}
+            />
+          )}
+
           {config.type === "prompt" && (
             <TextField
               autoFocus
@@ -151,7 +229,8 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
             onClick={() => handleClose(true)}
             variant={config.type === "alert" ? "text" : "contained"}
             disableElevation
-            autoFocus={config.type !== "prompt"}
+            autoFocus={config.type !== "prompt" && !config.verification}
+            disabled={isConfirmDisabled}
           >
             OK
           </Button>

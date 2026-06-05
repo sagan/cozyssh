@@ -30,6 +30,7 @@ type Config struct {
 	Vars                  map[string]string    `yaml:"vars" json:"vars"`
 	InsecureIgnoreHostKey bool                 `yaml:"insecure_ignore_host_key"`
 	SavePassword          string               `yaml:"save_password"`
+	SessionSecret         string               `yaml:"session_secret"`
 	mu                    sync.Mutex
 }
 
@@ -81,6 +82,13 @@ func LoadConfig(customDir string) (*Config, error) {
 	}
 	cfg.ConfigPath = configPath
 	cfg.ConfigDir = configDir
+
+	if cfg.SessionSecret == "" {
+		cfg.SessionSecret = RandString(32, false)
+		if err := cfg.save(); err != nil {
+			return nil, fmt.Errorf("failed to save config: %w", err)
+		}
+	}
 
 	return &cfg, nil
 }
@@ -141,6 +149,7 @@ func generateAndSaveConfig(path string) (*Config, error) {
 		AppPasswordHash: string(hash),
 		ConfigPath:      path,
 		SavePassword:    "ask",
+		SessionSecret:   RandString(32, false),
 	}
 
 	err = common.AtomicWriteFile(path, func(writer io.Writer) error {
@@ -182,6 +191,14 @@ func (c *Config) save() error {
 	return common.AtomicWriteFile(c.ConfigPath, func(writer io.Writer) error {
 		return yaml.NewEncoder(writer).Encode(c)
 	})
+}
+
+func (c *Config) ResetSessionSecret() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.SessionSecret = RandString(32, false)
+	return c.save()
 }
 
 func (c *Config) ResetAppPassword() (string, error) {

@@ -66,7 +66,7 @@ func AddAuthRoutes(mux *http.ServeMux, getFullData func(r *http.Request) *models
 func generateToken() string {
 	mac := hmac.New(sha256.New, []byte(globalConfig.AppPasswordHash))
 	// Adding a random salt/signature intent parameter
-	mac.Write([]byte("cozyssh-session-v1"))
+	mac.Write([]byte(globalConfig.SessionSecret))
 	sig := hex.EncodeToString(mac.Sum(nil))
 	return constants.COZYSSH_TOKEN_PREFIX + sig
 }
