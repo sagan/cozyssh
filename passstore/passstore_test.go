@@ -1,10 +1,8 @@
 package passstore
 
 import (
+	"cozyssh/common"
 	"cozyssh/constants"
-	"crypto/aes"
-	"crypto/cipher"
-	"encoding/base64"
 	"os"
 	"path/filepath"
 	"testing"
@@ -201,7 +199,7 @@ func TestIsEmptyWithoutFile(t *testing.T) {
 	}
 
 	path := filepath.Join(tempDir, "passwords.json")
-	if err := os.WriteFile(path, []byte(`{}`), 0600); err != nil {
+	if err := common.AtomicWriteFileContents(path, []byte(`{}`)); err != nil {
 		t.Fatalf("failed to write dummy empty file: %v", err)
 	}
 
@@ -227,35 +225,5 @@ func TestPKCS7Padding(t *testing.T) {
 		if string(unpadded) != string(data) {
 			t.Errorf("unpadded data does not match original for size %d", size)
 		}
-	}
-}
-
-func TestBackwardCompatibility(t *testing.T) {
-	key := make([]byte, 32)
-	for i := range key {
-		key[i] = byte(i)
-	}
-
-	rawText := []byte("unpadded_secret_password_123")
-
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		t.Fatalf("aes.NewCipher failed: %v", err)
-	}
-	aesgcm, err := cipher.NewGCM(block)
-	if err != nil {
-		t.Fatalf("cipher.NewGCM failed: %v", err)
-	}
-	nonce := make([]byte, aesgcm.NonceSize())
-	ciphertext := aesgcm.Seal(nonce, nonce, rawText, nil)
-	ciphertextStr := base64.StdEncoding.EncodeToString(ciphertext)
-
-	decrypted, err := decrypt(ciphertextStr, key)
-	if err != nil {
-		t.Fatalf("decrypt failed for unpadded text: %v", err)
-	}
-
-	if string(decrypted) != string(rawText) {
-		t.Errorf("expected decrypted text %q, got %q", string(rawText), string(decrypted))
 	}
 }

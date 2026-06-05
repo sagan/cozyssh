@@ -7,6 +7,7 @@ package e2e
 import (
 	"context"
 	"cozyssh"
+	"cozyssh/common"
 	"cozyssh/constants"
 	"cozyssh/models"
 	"encoding/json"
@@ -158,7 +159,7 @@ app_password_hash: "$2a$10$DHgtL4m5BTrNIzAUqMF2su7E1LgHvLwwdkoHjVMiFzRnOz5M.TH32
 sshdir: "` + filepath.ToSlash(filepath.Join(tmpDir, ".ssh")) + `"
 insecure_ignore_host_key: true
 `
-	err = os.WriteFile(filepath.Join(tmpDir, "config.yaml"), []byte(configContent), 0600)
+	err = common.AtomicWriteFileContents(filepath.Join(tmpDir, "config.yaml"), []byte(configContent))
 	if err != nil {
 		t.Fatal(err)
 	}

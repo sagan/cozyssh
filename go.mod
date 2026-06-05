@@ -3,6 +3,7 @@ module cozyssh
 go 1.25.5
 
 require (
+	codeberg.org/sdassow/atomic v1.2.1
 	github.com/awnumar/memguard v0.23.0
 	github.com/aymanbagabas/go-pty v0.2.3
 	github.com/go-http-utils/headers v0.0.0-20181008091004-fed159eddc2a

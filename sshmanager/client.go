@@ -79,13 +79,20 @@ func readConfigLines() ([]string, error) {
 		}
 		return nil, err
 	}
-	return strings.Split(string(data), "\n"), nil
+	return strings.Split(strings.TrimSpace(string(data)), "\n"), nil
 }
 
 func writeConfigLines(lines []string) error {
 	path := getSSHConfigPath()
 	os.MkdirAll(filepath.Dir(path), 0700)
-	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0600)
+	return common.AtomicWriteFile(path, func(writer io.Writer) error {
+		for _, line := range lines {
+			writer.Write([]byte(line))
+			writer.Write([]byte{0x0a}) // \n
+		}
+		writer.Write([]byte{0x0a})
+		return nil
+	})
 }
 
 func findHostBlock(lines []string, targetAlias string) (int, int) {
@@ -140,7 +147,7 @@ func SaveHost(oldAlias string, h models.HostData) error {
 
 	var block []string
 	if h.Comment != "" {
-		for _, line := range strings.Split(h.Comment, "\n") {
+		for line := range strings.SplitSeq(h.Comment, "\n") {
 			block = append(block, fmt.Sprintf("### %s", strings.TrimSpace(line)))
 		}
 	}
@@ -772,7 +779,7 @@ func getSSHClient(name string, term TerminalUI, identity string,
 	} else {
 		os.MkdirAll(filepath.Dir(knownHostsFile), 0700)
 		if _, err := os.Stat(knownHostsFile); os.IsNotExist(err) {
-			os.WriteFile(knownHostsFile, []byte(""), 0600)
+			common.AtomicWriteFileContents(knownHostsFile, []byte(""))
 		}
 		khCallback, khErr = knownhosts.New(knownHostsFile)
 		if khErr != nil {
@@ -1607,7 +1614,7 @@ func createCopyIDHostKeyCallback(name string, hostStr string, portStr string, ex
 	if !isKnownHostsNull {
 		os.MkdirAll(filepath.Dir(knownHostsFile), 0700)
 		if _, err := os.Stat(knownHostsFile); os.IsNotExist(err) {
-			os.WriteFile(knownHostsFile, []byte(""), 0600)
+			common.AtomicWriteFileContents(knownHostsFile, []byte(""))
 		}
 		khCallback, khErr = knownhosts.New(knownHostsFile)
 		if khErr != nil {

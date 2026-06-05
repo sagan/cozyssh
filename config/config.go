@@ -1,10 +1,12 @@
 package config
 
 import (
+	"cozyssh/common"
 	"cozyssh/constants"
 	"cozyssh/models"
 	"crypto/rand"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"os"
@@ -141,13 +143,10 @@ func generateAndSaveConfig(path string) (*Config, error) {
 		SavePassword:    "ask",
 	}
 
-	data, err := yaml.Marshal(cfg)
+	err = common.AtomicWriteFile(path, func(writer io.Writer) error {
+		return yaml.NewEncoder(writer).Encode(cfg)
+	})
 	if err != nil {
-		return nil, err
-	}
-
-	// Restrict file permissions
-	if err := os.WriteFile(path, data, 0600); err != nil {
 		return nil, err
 	}
 
@@ -180,15 +179,9 @@ func (c *Config) ChangeAppPassword(newPassword string) error {
 }
 
 func (c *Config) save() error {
-	f, err := os.OpenFile(c.ConfigPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	enc := yaml.NewEncoder(f)
-	enc.SetIndent(2)
-	return enc.Encode(c)
+	return common.AtomicWriteFile(c.ConfigPath, func(writer io.Writer) error {
+		return yaml.NewEncoder(writer).Encode(c)
+	})
 }
 
 func (c *Config) ResetAppPassword() (string, error) {

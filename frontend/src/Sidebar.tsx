@@ -158,7 +158,7 @@ export default function Sidebar({
   const [formData, setFormData] = useState<HostForm>({
     name: "",
     hostname: "",
-    user: "",
+    user: "root",
     port: "",
     identity_file: "",
     source: "",
@@ -1408,21 +1408,31 @@ export default function Sidebar({
               required
               autoFocus={!formData.hostname}
             />
-            <TextField
-              fullWidth
-              label="User"
-              size="small"
+            <Autocomplete
+              freeSolo
+              options={["root", "ubuntu", "administrator"]}
               value={formData.user}
-              onChange={(e) => setFormData({ ...formData, user: e.target.value })}
-              placeholder="default: root"
+              onChange={(_event, newValue) => {
+                setFormData({ ...formData, user: newValue || "" });
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  fullWidth
+                  label="User"
+                  size="small"
+                  placeholder="leave empty to use backend current user"
+                />
+              )}
             />
-            <TextField
-              fullWidth
-              label="Port"
-              size="small"
-              value={formData.port}
-              onChange={(e) => setFormData({ ...formData, port: e.target.value })}
-              placeholder="default: 22"
+            <Autocomplete
+              freeSolo
+              options={["22", "222", "2222"]}
+              value={formData.port || ""}
+              onChange={(_event, newValue) => {
+                setFormData({ ...formData, port: newValue || "" });
+              }}
+              renderInput={(params) => <TextField {...params} fullWidth label="Port" size="small" placeholder="22" />}
             />
             <TextField
               fullWidth

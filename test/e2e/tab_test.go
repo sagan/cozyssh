@@ -3,11 +3,11 @@
 package e2e
 
 import (
+	"cozyssh/common"
 	"cozyssh/constants"
 	"cozyssh/models"
 	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -440,7 +440,7 @@ Host fav2
     HostName 127.0.0.1
     User test
 `
-	err := os.WriteFile(filepath.Join(configDir, ".ssh", "config"), []byte(sshConfig), 0600)
+	err := common.AtomicWriteFileContents(filepath.Join(configDir, ".ssh", "config"), []byte(sshConfig))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -512,7 +512,7 @@ Host fav2
     HostName 127.0.0.1
     User test
 `
-	err := os.WriteFile(filepath.Join(configDir, ".ssh", "config"), []byte(sshConfig), 0600)
+	err := common.AtomicWriteFileContents(filepath.Join(configDir, ".ssh", "config"), []byte(sshConfig))
 	if err != nil {
 		t.Fatal(err)
 	}

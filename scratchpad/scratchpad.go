@@ -3,6 +3,7 @@ package scratchpad
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"cozyssh/auth"
+	"cozyssh/common"
 	"cozyssh/constants"
 	"cozyssh/models"
 )
@@ -68,12 +70,9 @@ func save() {
 		return
 	}
 	path := filepath.Join(configDir, "scratchpad.json")
-	data, err := json.Marshal(globalData)
-	if err != nil {
-		log.Println("scratchpad save error:", err)
-		return
-	}
-	os.WriteFile(path, data, 0600)
+	common.AtomicWriteFile(path, func(writer io.Writer) error {
+		return json.NewEncoder(writer).Encode(globalData)
+	})
 }
 
 func broadcast(msg []byte, exclude *websocket.Conn) {

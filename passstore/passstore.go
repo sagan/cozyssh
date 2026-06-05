@@ -1,6 +1,7 @@
 package passstore
 
 import (
+	"cozyssh/common"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -13,10 +14,9 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/awnumar/memguard"
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/bcrypt"
-
-	"github.com/awnumar/memguard"
 )
 
 var (
@@ -25,8 +25,10 @@ var (
 )
 
 type PasswordFile struct {
-	Salt      string            `json:"salt"`
-	Passwords map[string]string `json:"passwords"`
+	Salt         string            `json:"salt"`          // Used to derive KEK via Argon2
+	EncryptedDEK string            `json:"encrypted_dek"` // The auto-generated key, encrypted by KEK
+	DEKNonce     string            `json:"dek_nonce"`     // Nonce used to encrypt the DEK
+	Passwords    map[string]string `json:"passwords"`     // Encrypted via the plaintext DEK
 }
 
 var (
@@ -65,14 +67,75 @@ func SetEncryptionKey(appPassword string) bool {
 		return false
 	}
 
-	// Derive the key
-	salt, err := getOrCreateSalt()
-	if err != nil {
+	pf, err := readPasswordFile()
+	if err != nil || pf.EncryptedDEK == "" {
+		// Either file doesn't exist, is invalid, or has no encrypted DEK.
+		// We generate a new DEK and a new salt.
+		salt := make([]byte, 16)
+		if _, err := io.ReadFull(rand.Reader, salt); err != nil {
+			return false
+		}
+
+		dek := make([]byte, 32)
+		if _, err := io.ReadFull(rand.Reader, dek); err != nil {
+			return false
+		}
+
+		kek := deriveKey(appPassword, salt)
+		defer func() {
+			for i := range kek {
+				kek[i] = 0
+			}
+		}()
+
+		encDEK, nonce, err := encryptDEK(dek, kek)
+		if err != nil {
+			return false
+		}
+
+		if pf == nil {
+			pf = &PasswordFile{}
+		}
+		pf.Salt = base64.StdEncoding.EncodeToString(salt)
+		pf.EncryptedDEK = encDEK
+		pf.DEKNonce = nonce
+		if pf.Passwords == nil {
+			pf.Passwords = make(map[string]string)
+		}
+
+		if err := writePasswordFile(pf); err != nil {
+			return false
+		}
+
+		// Store DEK in enclave
+		encryptionKeyEnclave = memguard.NewBufferFromBytes(dek).Seal()
+		return true
+	}
+
+	// If file exists and has EncryptedDEK
+	salt, err := base64.StdEncoding.DecodeString(pf.Salt)
+	if err != nil || len(salt) == 0 {
 		return false
 	}
 
-	derived := deriveKey(appPassword, salt)
-	encryptionKeyEnclave = memguard.NewBufferFromBytes(derived).Seal()
+	kek := deriveKey(appPassword, salt)
+	defer func() {
+		for i := range kek {
+			kek[i] = 0
+		}
+	}()
+
+	dek, err := decryptDEK(pf.EncryptedDEK, pf.DEKNonce, kek)
+	if err != nil {
+		return false
+	}
+	defer func() {
+		for i := range dek {
+			dek[i] = 0
+		}
+	}()
+
+	encryptionKeyEnclave = memguard.NewBufferFromBytes(dek).Seal()
 	return true
 }
 
@@ -127,13 +190,13 @@ func Get(addr string) (string, error) {
 		return "", fmt.Errorf("no password saved for address %s", addr)
 	}
 
-	keyBuf, err := encryptionKeyEnclave.Open()
+	dekBuf, err := encryptionKeyEnclave.Open()
 	if err != nil {
 		return "", err
 	}
-	defer keyBuf.Destroy()
+	defer dekBuf.Destroy()
 
-	plaintext, err := decrypt(ciphertext, keyBuf.Bytes())
+	plaintext, err := decrypt(ciphertext, dekBuf.Bytes())
 	if err != nil {
 		return "", ErrDecryptionFail
 	}
@@ -152,27 +215,16 @@ func Set(addr string, password string) error {
 
 	pf, err := readPasswordFile()
 	if err != nil {
-		// If read failed (e.g. file doesn't exist), initialize a new structure
-		pf = &PasswordFile{
-			Passwords: make(map[string]string),
-		}
+		return err
 	}
 
-	if pf.Salt == "" {
-		salt, err := getOrCreateSalt()
-		if err != nil {
-			return err
-		}
-		pf.Salt = base64.StdEncoding.EncodeToString(salt)
-	}
-
-	keyBuf, err := encryptionKeyEnclave.Open()
+	dekBuf, err := encryptionKeyEnclave.Open()
 	if err != nil {
 		return err
 	}
-	defer keyBuf.Destroy()
+	defer dekBuf.Destroy()
 
-	ciphertext, err := encrypt([]byte(password), keyBuf.Bytes())
+	ciphertext, err := encrypt([]byte(password), dekBuf.Bytes())
 	if err != nil {
 		return err
 	}
@@ -222,7 +274,7 @@ func IsEmpty() bool {
 	return len(pf.Passwords) == 0
 }
 
-// Reencrypt re-encrypts all stored passwords from an old app password to a one.
+// Reencrypt re-encrypts all stored passwords from an old app password to a new one.
 func Reencrypt(oldPassword string, newPassword string) error {
 	mu.Lock()
 	defer mu.Unlock()
@@ -243,7 +295,7 @@ func Reencrypt(oldPassword string, newPassword string) error {
 		return err
 	}
 
-	if len(pf.Passwords) == 0 {
+	if pf.EncryptedDEK == "" {
 		return nil
 	}
 
@@ -252,73 +304,48 @@ func Reencrypt(oldPassword string, newPassword string) error {
 		return errors.New("invalid salt in passwords file")
 	}
 
-	oldKey := deriveKey(oldPassword, oldSalt)
-
-	// Decrypt all existing passwords
-	decrypted := make(map[string]string)
-	for addr, ciphertext := range pf.Passwords {
-		plaintext, err := decrypt(ciphertext, oldKey)
-		if err != nil {
-			// Wipe oldKey on error
-			for i := range oldKey {
-				oldKey[i] = 0
-			}
-			return fmt.Errorf("failed to decrypt password for %s: %w", addr, err)
+	oldKek := deriveKey(oldPassword, oldSalt)
+	defer func() {
+		for i := range oldKek {
+			oldKek[i] = 0
 		}
-		decrypted[addr] = string(plaintext)
+	}()
+
+	dek, err := decryptDEK(pf.EncryptedDEK, pf.DEKNonce, oldKek)
+	if err != nil {
+		return fmt.Errorf("failed to decrypt DEK: %w", err)
 	}
-	// Wipe oldKey after usage
-	for i := range oldKey {
-		oldKey[i] = 0
-	}
+	defer func() {
+		for i := range dek {
+			dek[i] = 0
+		}
+	}()
 
 	// Generate new salt and key
 	newSalt := make([]byte, 16)
 	if _, err := io.ReadFull(rand.Reader, newSalt); err != nil {
 		return err
 	}
-	newKey := deriveKey(newPassword, newSalt)
-
-	// Encrypt with new key
-	newPasswords := make(map[string]string)
-	for addr, plaintext := range decrypted {
-		ciphertext, err := encrypt([]byte(plaintext), newKey)
-		if err != nil {
-			// Wipe newKey on error
-			for i := range newKey {
-				newKey[i] = 0
-			}
-			return err
+	newKek := deriveKey(newPassword, newSalt)
+	defer func() {
+		for i := range newKek {
+			newKek[i] = 0
 		}
-		newPasswords[addr] = ciphertext
-	}
+	}()
 
-	pf.Salt = base64.StdEncoding.EncodeToString(newSalt)
-	pf.Passwords = newPasswords
-
-	err = writePasswordFile(pf)
+	newEncryptedDEK, newNonce, err := encryptDEK(dek, newKek)
 	if err != nil {
-		// Wipe newKey on error
-		for i := range newKey {
-			newKey[i] = 0
-		}
 		return err
 	}
 
-	// Update active encryption key in memory if it was active
-	if encryptionKeyEnclave != nil {
-		encryptionKeyEnclave = memguard.NewBufferFromBytes(newKey).Seal()
-	} else {
-		// Wipe newKey if it's not active
-		for i := range newKey {
-			newKey[i] = 0
-		}
-	}
+	pf.Salt = base64.StdEncoding.EncodeToString(newSalt)
+	pf.EncryptedDEK = newEncryptedDEK
+	pf.DEKNonce = newNonce
 
-	return nil
+	return writePasswordFile(pf)
 }
 
-// ReencryptWithInMemoryKey re-encrypts all stored passwords using the active key in memory.
+// ReencryptWithInMemoryKey re-encrypts the DEK using the active key in memory and the new app password.
 func ReencryptWithInMemoryKey(newPassword string) error {
 	mu.Lock()
 	defer mu.Unlock()
@@ -335,94 +362,40 @@ func ReencryptWithInMemoryKey(newPassword string) error {
 		return err
 	}
 
-	if len(pf.Passwords) == 0 {
-		return nil
-	}
-
-	// Decrypt all existing passwords using active key
-	keyBuf, err := encryptionKeyEnclave.Open()
+	dekBuf, err := encryptionKeyEnclave.Open()
 	if err != nil {
 		return err
 	}
-	decrypted := make(map[string]string)
-	for addr, ciphertext := range pf.Passwords {
-		plaintext, err := decrypt(ciphertext, keyBuf.Bytes())
-		if err != nil {
-			keyBuf.Destroy()
-			return fmt.Errorf("failed to decrypt password for %s: %w", addr, err)
-		}
-		decrypted[addr] = string(plaintext)
-	}
-	keyBuf.Destroy()
+	defer dekBuf.Destroy()
 
-	// Generate new salt and key
+	// Generate new salt
 	newSalt := make([]byte, 16)
 	if _, err := io.ReadFull(rand.Reader, newSalt); err != nil {
 		return err
 	}
-	newKey := deriveKey(newPassword, newSalt)
-
-	// Encrypt with new key
-	newPasswords := make(map[string]string)
-	for addr, plaintext := range decrypted {
-		ciphertext, err := encrypt([]byte(plaintext), newKey)
-		if err != nil {
-			// Wipe newKey on error
-			for i := range newKey {
-				newKey[i] = 0
-			}
-			return err
+	newKek := deriveKey(newPassword, newSalt)
+	defer func() {
+		for i := range newKek {
+			newKek[i] = 0
 		}
-		newPasswords[addr] = ciphertext
-	}
+	}()
 
-	pf.Salt = base64.StdEncoding.EncodeToString(newSalt)
-	pf.Passwords = newPasswords
-
-	err = writePasswordFile(pf)
+	newEncryptedDEK, newNonce, err := encryptDEK(dekBuf.Bytes(), newKek)
 	if err != nil {
-		// Wipe newKey on error
-		for i := range newKey {
-			newKey[i] = 0
-		}
 		return err
 	}
 
-	encryptionKeyEnclave = memguard.NewBufferFromBytes(newKey).Seal()
-	return nil
+	pf.Salt = base64.StdEncoding.EncodeToString(newSalt)
+	pf.EncryptedDEK = newEncryptedDEK
+	pf.DEKNonce = newNonce
+
+	return writePasswordFile(pf)
 }
 
 // Helper methods
 
 func getPasswordsPath() string {
 	return filepath.Join(configDir, "passwords.json")
-}
-
-func getOrCreateSalt() ([]byte, error) {
-	pf, err := readPasswordFile()
-	if err == nil && pf.Salt != "" {
-		salt, err := base64.StdEncoding.DecodeString(pf.Salt)
-		if err == nil && len(salt) > 0 {
-			return salt, nil
-		}
-	}
-
-	// Create new salt
-	salt := make([]byte, 16)
-	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
-		return nil, err
-	}
-
-	// Persist the salt immediately so subsequent reads use the same salt.
-	pf = &PasswordFile{
-		Salt:      base64.StdEncoding.EncodeToString(salt),
-		Passwords: make(map[string]string),
-	}
-	if err := writePasswordFile(pf); err != nil {
-		return nil, err
-	}
-
-	return salt, nil
 }
 
 func readPasswordFile() (*PasswordFile, error) {
@@ -441,13 +414,11 @@ func readPasswordFile() (*PasswordFile, error) {
 
 func writePasswordFile(pf *PasswordFile) error {
 	path := getPasswordsPath()
-	data, err := json.MarshalIndent(pf, "", "  ")
-	if err != nil {
-		return err
-	}
-	// Restrict to user-only read/write
 	os.MkdirAll(filepath.Dir(path), 0700)
-	return os.WriteFile(path, data, 0600)
+
+	return common.AtomicWriteFile(path, func(writer io.Writer) error {
+		return json.NewEncoder(writer).Encode(pf)
+	})
 }
 
 func deriveKey(password string, salt []byte) []byte {
@@ -526,4 +497,48 @@ func decrypt(ciphertextStr string, key []byte) ([]byte, error) {
 		return nil, err
 	}
 	return unpadPKCS7(plaintext)
+}
+
+func encryptDEK(dek []byte, kek []byte) (string, string, error) {
+	block, err := aes.NewCipher(kek)
+	if err != nil {
+		return "", "", err
+	}
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", "", err
+	}
+	nonce := make([]byte, aesgcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", "", err
+	}
+	ciphertext := aesgcm.Seal(nil, nonce, dek, nil)
+	return base64.StdEncoding.EncodeToString(ciphertext), base64.StdEncoding.EncodeToString(nonce), nil
+}
+
+func decryptDEK(encryptedDEKStr string, nonceStr string, kek []byte) ([]byte, error) {
+	encryptedDEK, err := base64.StdEncoding.DecodeString(encryptedDEKStr)
+	if err != nil {
+		return nil, err
+	}
+	nonce, err := base64.StdEncoding.DecodeString(nonceStr)
+	if err != nil {
+		return nil, err
+	}
+	block, err := aes.NewCipher(kek)
+	if err != nil {
+		return nil, err
+	}
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	if len(nonce) != aesgcm.NonceSize() {
+		return nil, errors.New("invalid nonce size")
+	}
+	dek, err := aesgcm.Open(nil, nonce, encryptedDEK, nil)
+	if err != nil {
+		return nil, err
+	}
+	return dek, nil
 }

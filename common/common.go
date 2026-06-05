@@ -1,9 +1,13 @@
 package common
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"os/user"
 	"strings"
+
+	"codeberg.org/sdassow/atomic"
 )
 
 var (
@@ -41,4 +45,19 @@ func ExpandPath(fspath string) string {
 
 	// 2. Handle environment variable expansion ($VAR or ${VAR})
 	return os.ExpandEnv(fspath)
+}
+
+// Atomically writes data to a file with 0600 permission.
+// It uses a temporary file and atomic rename to ensure that the file is either fully written or not written at all.
+// This prevents data corruption in case of an interruption during the write operation.
+func AtomicWriteFile(path string, writeContent func(writer io.Writer) error) error {
+	reader, writer := io.Pipe()
+	go func() {
+		writer.CloseWithError(writeContent(writer))
+	}()
+	return atomic.WriteFile(path, reader, atomic.FileMode(0600))
+}
+
+func AtomicWriteFileContents(path string, data []byte) error {
+	return atomic.WriteFile(path, bytes.NewReader(data), atomic.FileMode(0600))
 }

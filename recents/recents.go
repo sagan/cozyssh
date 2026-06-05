@@ -1,9 +1,11 @@
 package recents
 
 import (
+	"cozyssh/common"
 	"cozyssh/constants"
 	"cozyssh/models"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -41,12 +43,9 @@ func Save() error {
 	recentsMu.Lock()
 	defer recentsMu.Unlock()
 
-	data, err := json.MarshalIndent(recents, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(filePath, data, 0600)
+	return common.AtomicWriteFile(filePath, func(w io.Writer) error {
+		return json.NewEncoder(w).Encode(recents)
+	})
 }
 
 func Add(host string) {
