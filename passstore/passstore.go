@@ -27,14 +27,13 @@ var (
 type PasswordFile struct {
 	Salt         string            `json:"salt"`          // Used to derive KEK via Argon2
 	EncryptedDEK string            `json:"encrypted_dek"` // The auto-generated key, encrypted by KEK
-	DEKNonce     string            `json:"dek_nonce"`     // Nonce used to encrypt the DEK
 	Passwords    map[string]string `json:"passwords"`     // Encrypted via the plaintext DEK
 }
 
 var (
 	mu                   sync.RWMutex
 	encryptionKeyEnclave *memguard.Enclave
-	configDir            string
+	passwordFile         string
 	appPasswordHash      string
 )
 
@@ -42,7 +41,7 @@ var (
 func Init(dir string, hash string) {
 	mu.Lock()
 	defer mu.Unlock()
-	configDir = dir
+	passwordFile = filepath.Join(dir, "passwords.json")
 	appPasswordHash = hash
 }
 
@@ -88,7 +87,7 @@ func SetEncryptionKey(appPassword string) bool {
 			}
 		}()
 
-		encDEK, nonce, err := encryptDEK(dek, kek)
+		encDEK, err := encryptDEK(dek, kek)
 		if err != nil {
 			return false
 		}
@@ -98,7 +97,6 @@ func SetEncryptionKey(appPassword string) bool {
 		}
 		pf.Salt = base64.StdEncoding.EncodeToString(salt)
 		pf.EncryptedDEK = encDEK
-		pf.DEKNonce = nonce
 		if pf.Passwords == nil {
 			pf.Passwords = make(map[string]string)
 		}
@@ -109,6 +107,9 @@ func SetEncryptionKey(appPassword string) bool {
 
 		// Store DEK in enclave
 		encryptionKeyEnclave = memguard.NewBufferFromBytes(dek).Seal()
+		for i := range dek {
+			dek[i] = 0
+		}
 		return true
 	}
 
@@ -125,7 +126,7 @@ func SetEncryptionKey(appPassword string) bool {
 		}
 	}()
 
-	dek, err := decryptDEK(pf.EncryptedDEK, pf.DEKNonce, kek)
+	dek, err := decryptDEK(pf.EncryptedDEK, kek)
 	if err != nil {
 		return false
 	}
@@ -201,7 +202,12 @@ func Get(addr string) (string, error) {
 		return "", ErrDecryptionFail
 	}
 
-	return string(plaintext), nil
+	result := string(plaintext)
+	// zero plaintext
+	for i := range plaintext {
+		plaintext[i] = 0
+	}
+	return result, nil
 }
 
 // Set encrypts and saves the password for the given address.
@@ -274,6 +280,24 @@ func IsEmpty() bool {
 	return len(pf.Passwords) == 0
 }
 
+func DeletePasswordFile(force bool) error {
+	mu.Lock()
+	defer mu.Unlock()
+	if !force {
+		pf, err := readPasswordFile()
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		if len(pf.Passwords) > 0 {
+			return errors.New("passwords file is not empty")
+		}
+	}
+	return os.Remove(passwordFile)
+}
+
 // Reencrypt re-encrypts all stored passwords from an old app password to a new one.
 func Reencrypt(oldPassword string, newPassword string) error {
 	mu.Lock()
@@ -311,7 +335,7 @@ func Reencrypt(oldPassword string, newPassword string) error {
 		}
 	}()
 
-	dek, err := decryptDEK(pf.EncryptedDEK, pf.DEKNonce, oldKek)
+	dek, err := decryptDEK(pf.EncryptedDEK, oldKek)
 	if err != nil {
 		return fmt.Errorf("failed to decrypt DEK: %w", err)
 	}
@@ -333,14 +357,13 @@ func Reencrypt(oldPassword string, newPassword string) error {
 		}
 	}()
 
-	newEncryptedDEK, newNonce, err := encryptDEK(dek, newKek)
+	newEncryptedDEK, err := encryptDEK(dek, newKek)
 	if err != nil {
 		return err
 	}
 
 	pf.Salt = base64.StdEncoding.EncodeToString(newSalt)
 	pf.EncryptedDEK = newEncryptedDEK
-	pf.DEKNonce = newNonce
 
 	return writePasswordFile(pf)
 }
@@ -380,27 +403,21 @@ func ReencryptWithInMemoryKey(newPassword string) error {
 		}
 	}()
 
-	newEncryptedDEK, newNonce, err := encryptDEK(dekBuf.Bytes(), newKek)
+	newEncryptedDEK, err := encryptDEK(dekBuf.Bytes(), newKek)
 	if err != nil {
 		return err
 	}
 
 	pf.Salt = base64.StdEncoding.EncodeToString(newSalt)
 	pf.EncryptedDEK = newEncryptedDEK
-	pf.DEKNonce = newNonce
 
 	return writePasswordFile(pf)
 }
 
 // Helper methods
 
-func getPasswordsPath() string {
-	return filepath.Join(configDir, "passwords.json")
-}
-
 func readPasswordFile() (*PasswordFile, error) {
-	path := getPasswordsPath()
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(passwordFile)
 	if err != nil {
 		return nil, err
 	}
@@ -413,10 +430,9 @@ func readPasswordFile() (*PasswordFile, error) {
 }
 
 func writePasswordFile(pf *PasswordFile) error {
-	path := getPasswordsPath()
-	os.MkdirAll(filepath.Dir(path), 0700)
+	os.MkdirAll(filepath.Dir(passwordFile), 0700)
 
-	return common.AtomicWriteFile(path, func(writer io.Writer) error {
+	return common.AtomicWriteFile(passwordFile, func(writer io.Writer) error {
 		return json.NewEncoder(writer).Encode(pf)
 	})
 }
@@ -425,35 +441,38 @@ func deriveKey(password string, salt []byte) []byte {
 	return argon2.IDKey([]byte(password), salt, 3, 64*1024, 4, 32)
 }
 
-func padPKCS7(data []byte) []byte {
-	blockSize := 64
-	padding := blockSize - (len(data) % blockSize)
-	padText := make([]byte, padding)
-	for i := range padText {
-		padText[i] = byte(padding)
+// Pad the data (password) to at least 64 bytes to prevent leaking its length.
+// The padding scheme is similar to TLS 1.3: <original text> + marker (0x1) + <zero padding bytes>
+func pad(data []byte) []byte {
+	L := len(data)
+	if L < 63 {
+		res := make([]byte, 64)
+		copy(res, data)
+		res[L] = 0x01
+		return res
 	}
-	return append(data, padText...)
+	res := make([]byte, L+1)
+	copy(res, data)
+	res[L] = 0x01
+	return res
 }
 
-func unpadPKCS7(data []byte) ([]byte, error) {
-	blockSize := 64
-	length := len(data)
-	if length == 0 {
+func unpad(data []byte) ([]byte, error) {
+	L := len(data)
+	if L == 0 {
 		return nil, errors.New("empty data")
 	}
-	if length%blockSize != 0 {
-		return nil, errors.New("invalid padding: data length is not a multiple of 64")
+	i := L - 1
+	for i >= 0 && data[i] == 0x00 {
+		i--
 	}
-	padding := int(data[length-1])
-	if padding < 1 || padding > blockSize {
-		return nil, errors.New("invalid padding size")
+	if i < 0 {
+		return nil, errors.New("invalid padding: no marker found")
 	}
-	for i := length - padding; i < length; i++ {
-		if data[i] != byte(padding) {
-			return nil, errors.New("invalid padding bytes")
-		}
+	if data[i] != 0x01 {
+		return nil, errors.New("invalid padding: marker is not 0x01")
 	}
-	return data[:length-padding], nil
+	return data[:i], nil
 }
 
 func encrypt(plaintext []byte, key []byte) (string, error) {
@@ -469,7 +488,7 @@ func encrypt(plaintext []byte, key []byte) (string, error) {
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return "", err
 	}
-	padded := padPKCS7(plaintext)
+	padded := pad(plaintext)
 	ciphertext := aesgcm.Seal(nonce, nonce, padded, nil)
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
@@ -496,35 +515,31 @@ func decrypt(ciphertextStr string, key []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return unpadPKCS7(plaintext)
+	return unpad(plaintext)
 }
 
-func encryptDEK(dek []byte, kek []byte) (string, string, error) {
+func encryptDEK(dek []byte, kek []byte) (string, error) {
 	block, err := aes.NewCipher(kek)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 	aesgcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 	nonce := make([]byte, aesgcm.NonceSize())
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return "", "", err
+		return "", err
 	}
-	ciphertext := aesgcm.Seal(nil, nonce, dek, nil)
-	return base64.StdEncoding.EncodeToString(ciphertext), base64.StdEncoding.EncodeToString(nonce), nil
+	ciphertext := aesgcm.Seal(nonce, nonce, dek, nil)
+	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
-func decryptDEK(encryptedDEKStr string, nonceStr string, kek []byte) ([]byte, error) {
+func decryptDEK(encryptedDEKStr string, kek []byte) ([]byte, error) {
 	encryptedDEK, err := base64.StdEncoding.DecodeString(encryptedDEKStr)
 	if err != nil {
 		return nil, err
 	}
-	nonce, err := base64.StdEncoding.DecodeString(nonceStr)
-	if err != nil {
-		return nil, err
-	}
 	block, err := aes.NewCipher(kek)
 	if err != nil {
 		return nil, err
@@ -533,10 +548,12 @@ func decryptDEK(encryptedDEKStr string, nonceStr string, kek []byte) ([]byte, er
 	if err != nil {
 		return nil, err
 	}
-	if len(nonce) != aesgcm.NonceSize() {
-		return nil, errors.New("invalid nonce size")
+	nonceSize := aesgcm.NonceSize()
+	if len(encryptedDEK) < nonceSize {
+		return nil, errors.New("encrypted DEK too short")
 	}
-	dek, err := aesgcm.Open(nil, nonce, encryptedDEK, nil)
+	nonce, actualCiphertext := encryptedDEK[:nonceSize], encryptedDEK[nonceSize:]
+	dek, err := aesgcm.Open(nil, nonce, actualCiphertext, nil)
 	if err != nil {
 		return nil, err
 	}

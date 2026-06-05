@@ -208,17 +208,21 @@ func TestIsEmptyWithoutFile(t *testing.T) {
 	}
 }
 
-func TestPKCS7Padding(t *testing.T) {
-	for _, size := range []int{0, 1, 63, 64, 65, 127, 128, 129} {
+func TestPadding(t *testing.T) {
+	for _, size := range []int{0, 1, 62, 63, 64, 65, 127, 128, 129} {
 		data := make([]byte, size)
 		for i := range data {
 			data[i] = byte(i % 256)
 		}
-		padded := padPKCS7(data)
-		if len(padded)%64 != 0 {
-			t.Errorf("padded length %d is not a multiple of 64 for original size %d", len(padded), size)
+		padded := pad(data)
+		expectedLen := size + 1
+		if size < 63 {
+			expectedLen = 64
 		}
-		unpadded, err := unpadPKCS7(padded)
+		if len(padded) != expectedLen {
+			t.Errorf("expected padded length %d, got %d for original size %d", expectedLen, len(padded), size)
+		}
+		unpadded, err := unpad(padded)
 		if err != nil {
 			t.Errorf("failed to unpad data of size %d: %v", size, err)
 		}

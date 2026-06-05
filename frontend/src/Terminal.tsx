@@ -297,7 +297,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       let webglAddon: WebglAddon | null = null;
 
       const term = new Terminal({
-        fontSize: __CS_TERMINAL_FONT_SIZE__,
+        allowProposedApi: true,
         cursorBlink: true,
         theme: {
           background: "#ffffff",
@@ -307,6 +307,8 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
           selectionBackground: "rgba(0, 0, 0, 0.2)",
         },
         fontFamily: 'Consolas, "Courier New", monospace',
+        ...__CS_TERMINAL_OPTIONS__,
+        fontSize: __CS_TERMINAL_FONT_SIZE__,
       });
       const fitAddon = new FitAddon();
       term.loadAddon(fitAddon);

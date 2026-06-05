@@ -22373,6 +22373,10 @@ declare global {
 	 */
 	var __CS_TERMINAL_FONT_SIZE__: number;
 	/**
+	 * Additional xterm.js terminal options. These options are merged with the default options.
+	 */
+	var __CS_TERMINAL_OPTIONS__: ITerminalOptions | undefined;
+	/**
 	 * Focus the terminal with the given pane id.
 	 * @param tabOrPaneId defaults to active terminal pane id.
 	 */

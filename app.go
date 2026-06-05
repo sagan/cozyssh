@@ -16,7 +16,6 @@ import (
 	"net/http"
 	"os"
 	os_exec "os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -86,6 +85,7 @@ func Run(ctx context.Context, args []string) error {
 					fmt.Fprintln(os.Stderr, "Aborted.")
 					return nil
 				}
+				passstore.DeletePasswordFile(true)
 			}
 		}
 
@@ -103,7 +103,7 @@ func Run(ctx context.Context, args []string) error {
 				log.Printf("Successfully re-encrypted saved SSH passwords with the new app password.")
 			}
 		} else if !passstore.IsEmpty() {
-			os.Remove(filepath.Join(cfg.ConfigDir, "passwords.json"))
+			passstore.DeletePasswordFile(true)
 			log.Printf("Saved SSH passwords have been deleted because they cannot be decrypted.")
 		}
 
@@ -333,20 +333,18 @@ func Run(ctx context.Context, args []string) error {
 				http.Error(w, "Password cannot be empty", http.StatusBadRequest)
 				return
 			}
-			if !passstore.IsEmpty() {
-				if !passstore.HasEncryptionKey() {
-					if req.Force {
-						os.Remove(filepath.Join(cfg.ConfigDir, "passwords.json"))
-					} else {
-						http.Error(w, "Saved passwords are locked. Please connect to a password-saved host first to unlock before changing password.", http.StatusForbidden)
-						return
-					}
+			if passstore.IsEmpty() {
+				passstore.DeletePasswordFile(false)
+			} else if !passstore.HasEncryptionKey() {
+				if req.Force {
+					passstore.DeletePasswordFile(true)
 				} else {
-					if err := passstore.ReencryptWithInMemoryKey(req.NewPassword); err != nil {
-						http.Error(w, "Failed to re-encrypt saved passwords: "+err.Error(), http.StatusInternalServerError)
-						return
-					}
+					http.Error(w, "Saved passwords are locked. Please connect to a password-saved host first to unlock before changing password.", http.StatusForbidden)
+					return
 				}
+			} else if err := passstore.ReencryptWithInMemoryKey(req.NewPassword); err != nil {
+				http.Error(w, "Failed to re-encrypt saved passwords: "+err.Error(), http.StatusInternalServerError)
+				return
 			}
 			if err := cfg.ChangeAppPassword(req.NewPassword); err != nil {
 				http.Error(w, "Failed to save", http.StatusInternalServerError)

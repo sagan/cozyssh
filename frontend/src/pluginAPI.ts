@@ -70,6 +70,7 @@ export const moduleCache: Record<string, CsScriptModule> = {};
 
 window.__CS_REMAP_CTRL_L__ = undefined;
 window.__CS_TERMINAL_FONT_SIZE__ = DEFAULT_TERMINAL_FONT_SIZE;
+window.__CS_TERMINAL_OPTIONS__ = undefined;
 window.__CS_AUTORUN_DONE__ = undefined;
 window.__CS_MODULECACHE__ = moduleCache;
 window.__CS_VERSION__ = PACKAGE_JSON_VERSION;

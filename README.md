@@ -131,6 +131,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - `Ctrl + Shift + V (Windows) / Cmd + V (Mac)` : Paste into terminal
   - `Mouse Select` in terminal to copy
   - `Mouse Right Click` in terminal to paste
+  - `Alt + Mouse Wheel` in terminal to fast scroll up / down
 - **Advanced SSH Management**: 🔑
   - **ProxyJump Support**: Full support for OpenSSH standard `ProxyJump` configuration, allowing you to connect to hosts via intermediate jump servers.
   - **RemoteCommand Support**: Support ssh_config `RemoteCommand` configuration, execute a custom command on the remote ssh server after successfully connecting to it.

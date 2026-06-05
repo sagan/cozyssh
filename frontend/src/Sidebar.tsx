@@ -286,7 +286,7 @@ export default function Sidebar({
     }
 
     if (res.ok) {
-      dialogs.alert("Password updated! You will be logged out.");
+      await dialogs.alert("Password updated! You will be logged out.");
       if (onLogout) {
         onLogout();
       }
@@ -1365,6 +1365,7 @@ export default function Sidebar({
                   <br />
                   <b>Mouse Right Click</b> in terminal to paste
                   <br />
+                  <b>Alt + Mouse Wheel</b> in terminal to fast scroll up / down
                 </Typography>
               </>
             )}

@@ -18,7 +18,7 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
   - [`csGetShellIntegration(paneId?: string): ShellIntegration | undefined`](#csgetshellintegrationpaneid-string-shellintegration--undefined)
   - [`csSendData(data: string, paneId?: string): void`](#cssenddatadata-string-paneid-string-void)
   - [`csGetTerminalContents(lines = 100, paneId?: string) : string`](#csgetterminalcontentslines--100-paneid-string--string)
-  - [`csFocus(paneId?: string): void`](#csfocuspaneid-string-void)
+  - [`csFocus(tabOrPaneId?: string): void`](#csfocustaborpaneid-string-void)
   - [`csNotify(msg: string, severity: 'success' | 'info' | 'warning' | 'error' = 'info'): void`](#csnotifymsg-string-severity-success--info--warning--error--info-void)
   - [`csGetAll(): AllObject`](#csgetall-allobject)
   - [`csOpen(target: HostData | string | (HostData | string)[], options?: { name?: string }): void`](#csopentarget-hostdata--string--hostdata--string-options--name-string--void)
@@ -93,6 +93,8 @@ CozySSH sets some global variables in the browser's window object.
 - `window.__CS_PASSTHROUGH_SHORTCUTS__` : `Set<string>` - The list of key combinations that should be passed through to the terminal if terminal has focus. Each element is a key combination string such as `ctrl+shift+m` (all lowercase, modifiers in `ctrl,alt,shift,meta` order). Some key combinations (like `ctrl+c`, `ctrl+d`, etc.) are pre-added to this set by default.
 - `window.__CS_DISABLE_SHORTCUTS__` : `Set<string>` - The list of keyboard shortcuts that should be disabled. The element is in the same format as `__CS_PASSTHROUGH_SHORTCUTS__` element.
 - `window.__CS_USE_STORE__` : `typeof useStore` - The zustand store hook function that CozySSH uses to manage state.
+- `window.__CS_TERMINAL_OPTIONS__` : `ITerminalOptions | undefined` - Additional xterm.js terminal options. These options are merged with the default options and applied when creating a new terminal instance. See [ITerminalOptions](https://xtermjs.org/docs/api/terminal/interfaces/iterminaloptions/) for details. The default options can be found in `frontend/src/Terminal.tsx`.
+- `window.__CS_TERMINAL_FONT_SIZE__` : `number` - The current effective terminal font size in pixels.
 
 ## Available global functions
 
@@ -186,9 +188,9 @@ Returns the contents of the specified terminal buffer as a string.
 - `lines`: The number of lines to return. Defaults to 100. If 0 or negative, all lines will be returned.
 - `paneId`: The ID of the terminal to return the contents of. If not provided, the currently active terminal is used.
 
-### `csFocus(paneId?: string): void`
+### `csFocus(tabOrPaneId?: string): void`
 
-Focuses the specified terminal session if `paneId` is provided, the active instance otherwise.
+Focuses the specified terminal session if `tabOrPaneId` is provided, the active instance otherwise.
 
 ### `csNotify(msg: string, severity: 'success' | 'info' | 'warning' | 'error' = 'info'): void`
 

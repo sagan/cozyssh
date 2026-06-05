@@ -369,7 +369,7 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
     }
   }, [contextMenu, data.pages]);
 
-  const cPage = data.pages.find((p) => p.id === activePageId) || data.pages[0];
+  const cPage: ScratchpadPage | undefined = data.pages.find((p) => p.id === activePageId) || data.pages[0];
 
   return (
     <Box
@@ -431,7 +431,12 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
       </Box>
 
       {/* Editor */}
-      <Box id="scratchpad-editor" data-id={cPage.id} data-title={cPage.title} sx={{ flexGrow: 1, overflow: "hidden" }}>
+      <Box
+        id="scratchpad-editor"
+        data-id={cPage?.id || ""}
+        data-title={cPage?.title || ""}
+        sx={{ flexGrow: 1, overflow: "hidden" }}
+      >
         {cPage && (
           <CodeMirror
             ref={cmRef}
