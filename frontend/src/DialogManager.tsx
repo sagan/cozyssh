@@ -35,7 +35,6 @@ import {
   TERMINAL_FUNCTIONS,
 } from "./constants";
 import {
-  type Recent,
   type ContextMenu,
   type ToastData,
   getKeyCombination,
@@ -49,6 +48,7 @@ import {
   setActivePaneId,
   setActiveTabId,
   setButtonFormData,
+  setEditButton,
   setEditButtonDialogOpen,
   setInitialBtnFormData,
   setNewTabDialogOpen,
@@ -60,8 +60,6 @@ import NewTabDialog from "./NewTabDialog";
 import { dialogs } from "./Dialogs";
 
 export interface DialogManagerProps {
-  activeGroup: string;
-  setEditingButton: React.Dispatch<React.SetStateAction<ButtonData | null>>;
   setInputDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
   contextMenu: ContextMenu | null;
   handleCloseMenu: () => void;
@@ -81,7 +79,6 @@ export interface DialogManagerProps {
   lastMenuBtn: ButtonData | null;
   handleMoveButton: (id: string, dir: number) => void;
   handleDeleteButton: (id: string, name: string) => void;
-  editingButton: ButtonData | null;
   handleCloseBtnDialog: (e: unknown, reason: string) => void;
   handleSaveButton: () => void;
   hosts: HostData[];
@@ -95,7 +92,6 @@ export interface DialogManagerProps {
   sendScope: number;
   setSendScope: React.Dispatch<React.SetStateAction<0 | 1 | 2>>;
   sendParsedString: (s: string) => void;
-  recents: Recent[];
   handleAttach: (id: string, host: string, title: string, isLocked: boolean) => void;
   handleRefresh: () => void;
   handleSelectHost: (h: string) => void;
@@ -136,7 +132,6 @@ export default function DialogManager({
   handleButtonClick,
   handleMoveButton,
   handleDeleteButton,
-  editingButton,
   handleCloseBtnDialog,
   handleSaveButton,
   hosts,
@@ -150,14 +145,13 @@ export default function DialogManager({
   sendScope,
   setSendScope,
   sendParsedString,
-  recents,
   handleAttach,
   handleRefresh,
   handleSelectHost,
-  setEditingButton,
   setInputDialogOpen,
-  activeGroup,
 }: DialogManagerProps) {
+  const activeGroup = useStore((state) => state.activeGroup);
+  const editButton = useStore((state) => state.editButton);
   const toasts = useStore((state) => state.toasts);
   const buttonFormData = useStore((state) => state.buttonFormData);
   const editButtonDialogOpen = useStore((state) => state.editButtonDialogOpen);
@@ -470,7 +464,7 @@ export default function DialogManager({
               order: btnMenuAnchor.btn.order || 0,
               shortcut: btnMenuAnchor.btn.shortcut || "",
             };
-            setEditingButton(btnMenuAnchor.btn);
+            setEditButton(btnMenuAnchor.btn);
             setButtonFormData(data);
             setInitialBtnFormData(data);
             setBtnMenuAnchor(null);
@@ -528,14 +522,14 @@ export default function DialogManager({
       <Dialog
         id="edit-button-dialog"
         disableRestoreFocus
-        data-id={editingButton?.id || ""}
+        data-id={editButton?.id || ""}
         open={editButtonDialogOpen}
         onClose={handleCloseBtnDialog}
         fullWidth
         maxWidth="lg"
       >
         <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pr: 1.5 }}>
-          <span>{editingButton ? "Edit Button " + editingButton.id : "Add Button"}</span>
+          <span>{editButton ? "Edit Button " + editButton.id : "Add Button"}</span>
           <IconButton
             aria-label="more"
             id="title-menu-button"
@@ -554,7 +548,7 @@ export default function DialogManager({
               handleTitleMenuClose();
               handleAddFromUrl();
             }}
-            disabled={!!editingButton}
+            disabled={!!editButton}
           >
             Add From URL
           </MenuItem>
@@ -563,7 +557,7 @@ export default function DialogManager({
               handleTitleMenuClose();
               handleInstallPluginManager();
             }}
-            disabled={!!editingButton}
+            disabled={!!editButton}
           >
             Add Plugin Manager
           </MenuItem>
@@ -900,7 +894,6 @@ export default function DialogManager({
           triggerFocus();
         }}
         hosts={hosts}
-        recents={recents}
         tabs={tabs}
         initialViewMode={newTabDialogInitialViewMode}
         buttons={buttons}

@@ -3,6 +3,7 @@ import { Box, TextField, Tabs, Tab, IconButton } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 
 import type { ButtonData } from "./api";
+import { useStore } from "./store";
 
 const buttonStyleBorder: Record<ButtonData["type"], string> = {
   run_script: "1px dashed",
@@ -29,7 +30,6 @@ const buttonStyleBgColorHover: Record<ButtonData["type"], string> = {
 };
 
 export interface ButtonBarProps {
-  activeGroup: string;
   setActiveGroup: (g: string) => void;
   groups: string[];
   filteredButtons: ButtonData[];
@@ -40,7 +40,6 @@ export interface ButtonBarProps {
 }
 
 export default function ButtonBar({
-  activeGroup,
   setActiveGroup,
   groups,
   filteredButtons,
@@ -49,6 +48,7 @@ export default function ButtonBar({
   setLastMenuBtn,
   onNewButtonClick,
 }: ButtonBarProps) {
+  const activeGroup = useStore((state) => state.activeGroup);
   return (
     <Box
       id="button-bar"

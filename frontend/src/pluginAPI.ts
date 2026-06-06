@@ -47,6 +47,7 @@ import {
   setActiveTabId,
   setButtons,
   setHosts,
+  setLocalVars,
   setTabs,
   setVars,
   triggerFocus,
@@ -236,8 +237,6 @@ export interface PluginAPICallbacks {
   isMobile: boolean;
   /** Ref for the next z-index to assign to a widget applet */
   maxZIndexRef: React.MutableRefObject<number>;
-  /** Update localVars in the store (and sync to localStorage via Dashboard) */
-  setLocalVars: (v: Record<string, string>) => void;
   /** Getter for the live terminal ref map (avoids store coupling) */
   getTerminalRefs: () => TerminalRefMap;
   getApplets: () => AppletData[];
@@ -300,7 +299,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
           newLocalVars[key] = value;
         }
       }
-      cb.setLocalVars(newLocalVars);
+      setLocalVars(newLocalVars);
     }
     if (Object.keys(updates).length === 0) {
       return;

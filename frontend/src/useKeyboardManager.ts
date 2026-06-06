@@ -16,7 +16,6 @@ import {
   DEFAULT_BUTTON_GROUP,
   DEFAULT_SCROLL_LINES,
   DEFAULT_TERMINAL_FONT_SIZE,
-  EVENT_LOCAL_STORAGE_SYNC,
   LOCAL_NAME,
   LOCAL_VAR_PREFIX,
   TOAST_KEY_TERMINAL_FONT_SIZE,
@@ -27,6 +26,7 @@ import { getIntVar, getKeyCombination, isMuiDialogOpen, nextTerminalFontSize, pr
 import {
   type TerminalRefMap,
   getStore,
+  setActiveGroup,
   setActivePaneId,
   setActiveTabId,
   setNewTabDialogInitialViewMode,
@@ -346,8 +346,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           while (nextIdx !== idx && groups[nextIdx].startsWith("_")) {
             nextIdx = (e.shiftKey ? nextIdx - 1 + groups.length : nextIdx + 1) % groups.length;
           }
-          localStorage.setItem(BROWSER_STORAGE_KEY_ACTIVE_GROUP, groups[nextIdx]);
-          window.dispatchEvent(new Event(EVENT_LOCAL_STORAGE_SYNC));
+          setActiveGroup(groups[nextIdx]);
           return;
         }
 
@@ -447,8 +446,6 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
     handleSelectHost,
     handleOpenScratchpad,
     handleCloseTabOrPane,
-    setNewTabDialogOpen,
-    setNewTabDialogInitialViewMode,
     searchInputRef,
     setSearchOpen,
     getTerminalRefs,

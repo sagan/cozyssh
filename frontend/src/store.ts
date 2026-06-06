@@ -10,11 +10,17 @@
 
 import { create } from "zustand";
 
-import type { HostData, ButtonData, WsTerminalMessage } from "./api";
-import type { HostForm, NewTabDialogViewMode, Severity, ShellIntegration, Toast } from "./common";
+import type { HostData, ButtonData, WsTerminalMessage, Recent } from "./api";
+import type { HostForm, ViewMode, Severity, ShellIntegration, Toast } from "./common";
 import type { TerminalHandle } from "./Terminal";
 import type { ScratchpadHandle } from "./Scratchpad";
-import { BROWSER_STORAGE_KEY_LOCAL_VARS, BROWSER_STORAGE_KEY_VARS, DEFAULT_BUTTON_GROUP } from "./constants";
+import {
+  BROWSER_STORAGE_KEY_ACTIVE_GROUP,
+  BROWSER_STORAGE_KEY_LOCAL_VARS,
+  BROWSER_STORAGE_KEY_RECENTS,
+  BROWSER_STORAGE_KEY_VARS,
+  DEFAULT_BUTTON_GROUP,
+} from "./constants";
 
 // Re-exported so consumers don't need to import from Dashboard.tsx
 export interface PaneData {
@@ -41,8 +47,14 @@ export interface TabData {
 export type TerminalRefMap = Record<string, TerminalHandle | ScratchpadHandle | null>;
 
 interface Store {
+  activeGroup: string;
+  recents: Recent[];
   toasts: Toast[];
   editHostName: string;
+  /**
+   * Current editing button
+   */
+  editButton: ButtonData | null;
   hostFormData: HostForm;
   initialHostFormData: HostForm | null;
   buttonFormData: ButtonData;
@@ -50,7 +62,7 @@ interface Store {
   editButtonDialogOpen: boolean;
   editHostDialogOpen: boolean;
   newTabDialogOpen: boolean;
-  newTabDialogInitialViewMode: NewTabDialogViewMode;
+  newTabDialogInitialViewMode: ViewMode;
   sysHostname: string;
   unreadTabIds: Set<string>;
   focusTrigger: number;
@@ -66,25 +78,27 @@ interface Store {
   shellIntegrations: Record<string, ShellIntegration>;
 }
 
-function loadVarsFromStorate(key: string): Record<string, string> {
-  let vars: Record<string, string> | undefined;
+function loadFromStorage<T>(key: string, defaultValue: T): T {
   const varsStr = localStorage.getItem(key);
+  if (typeof defaultValue === "string") {
+    return varsStr ? (varsStr as T) : defaultValue;
+  }
   if (varsStr) {
     try {
-      vars = JSON.parse(varsStr);
+      return JSON.parse(varsStr);
     } catch {
-      // do nothing
+      /* empty */
     }
   }
-  if (!vars || typeof vars !== "object") {
-    vars = {};
-  }
-  return vars;
+  return defaultValue;
 }
 
 export const useStore = create<Store>(() => ({
+  activeGroup: loadFromStorage(BROWSER_STORAGE_KEY_ACTIVE_GROUP, DEFAULT_BUTTON_GROUP),
+  recents: loadFromStorage(BROWSER_STORAGE_KEY_RECENTS, []),
   toasts: [],
   editHostName: "",
+  editButton: null,
   hostFormData: {
     name: "",
     hostname: "",
@@ -122,8 +136,8 @@ export const useStore = create<Store>(() => ({
   activePaneId: "",
   hosts: [],
   buttons: [],
-  vars: loadVarsFromStorate(BROWSER_STORAGE_KEY_VARS),
-  localVars: loadVarsFromStorate(BROWSER_STORAGE_KEY_LOCAL_VARS),
+  vars: loadFromStorage(BROWSER_STORAGE_KEY_VARS, {}),
+  localVars: loadFromStorage(BROWSER_STORAGE_KEY_LOCAL_VARS, {}),
   shellIntegrations: {},
 }));
 
@@ -152,6 +166,21 @@ export const notify = (msg: string, severity: Severity = "info", key?: string) =
   }, 4000);
 };
 
+export const setEditButton = (editButton: ButtonData | null) => useStore.setState({ editButton });
+
+export const setActiveGroup = (activeGroup: string) => {
+  useStore.setState({ activeGroup });
+  localStorage.setItem(BROWSER_STORAGE_KEY_ACTIVE_GROUP, activeGroup);
+};
+
+export const setRecents = (update: Recent[] | ((prev: Recent[]) => Recent[])) => {
+  useStore.setState((state) => {
+    const next = typeof update === "function" ? update(state.recents) : update;
+    localStorage.setItem(BROWSER_STORAGE_KEY_RECENTS, JSON.stringify(next));
+    return { recents: next };
+  });
+};
+
 export const setToasts = (update: Toast[] | ((data: Toast[]) => Toast[])) =>
   useStore.setState((state) => ({
     toasts: typeof update === "function" ? update(state.toasts) : update,
@@ -167,7 +196,7 @@ export const setEditButtonDialogOpen = (editButtonDialogOpen: boolean) => useSto
 export const setEditHostDialogOpen = (editHostDialogOpen: boolean) => useStore.setState({ editHostDialogOpen });
 export const setNewTabDialogOpen = (newTabDialogOpen: boolean) => useStore.setState({ newTabDialogOpen });
 
-export const setNewTabDialogInitialViewMode = (newTabDialogInitialViewMode: NewTabDialogViewMode) =>
+export const setNewTabDialogInitialViewMode = (newTabDialogInitialViewMode: ViewMode) =>
   useStore.setState({ newTabDialogInitialViewMode });
 
 export const setSysHostname = (sysHostname: string) => useStore.setState({ sysHostname });
@@ -203,7 +232,30 @@ export const setVars = (vars: Record<string, string>) => {
   localStorage.setItem(BROWSER_STORAGE_KEY_VARS, JSON.stringify(vars));
 };
 
-export const setLocalVars = (localVars: Record<string, string>) => useStore.setState({ localVars });
+export const setLocalVars = (localVars: Record<string, string>) => {
+  useStore.setState({ localVars });
+  localStorage.setItem(BROWSER_STORAGE_KEY_LOCAL_VARS, JSON.stringify(localVars));
+};
+
+/**
+ * Clean Cross-Tab Synchronization
+ * Listens to storage events outside of React to ensure updates from other
+ * browser tabs sync instantaneously into the global Zustand snapshot.
+ */
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (e) => {
+    try {
+      if (e.key === BROWSER_STORAGE_KEY_VARS) {
+        useStore.setState({ vars: e.newValue ? JSON.parse(e.newValue) : {} });
+      }
+      if (e.key === BROWSER_STORAGE_KEY_LOCAL_VARS) {
+        useStore.setState({ localVars: e.newValue ? JSON.parse(e.newValue) : {} });
+      }
+    } catch (err) {
+      console.warn("Failed to sync cross-tab localStorage update:", err);
+    }
+  });
+}
 
 export const setShellIntegrations = (
   update:

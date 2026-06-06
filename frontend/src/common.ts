@@ -24,7 +24,7 @@ export type ServiceWorkerStatus =
 
 export type ScratchpadSyncState = "offline" | "syncing" | "synced" | "dirty";
 
-export type NewTabDialogViewMode = "servers" | "tabs" | "buttons";
+export type ViewMode = "servers" | "tabs" | "buttons";
 
 export type Severity = "success" | "info" | "warning" | "error";
 
@@ -37,13 +37,6 @@ export type Toast = ToastData & {
   id: number | string;
   key?: string;
 };
-
-export const recentSchema = z.object({
-  host: z.string(),
-  last_used: z.number(), // unix timestamp in seconds
-});
-
-export type Recent = z.infer<typeof recentSchema>;
 
 // Define button schema in client side ts
 export const ButtonDataSchema = z.object({

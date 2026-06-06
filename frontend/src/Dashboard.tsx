@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "react-router";
 import {
   Box,
@@ -33,9 +33,6 @@ import type {
 } from "./api";
 import {
   DEFAULT_SCROLL_LINES,
-  BROWSER_STORAGE_KEY_ACTIVE_GROUP,
-  BROWSER_STORAGE_KEY_LOCAL_VARS,
-  BROWSER_STORAGE_KEY_RECENTS,
   BROWSER_STORAGE_KEY_TAB_ID,
   BROWSER_STORAGE_KEY_TOKEN,
   DEFAULT_BUTTON_GROUP,
@@ -60,7 +57,6 @@ import {
 } from "./constants";
 import {
   type ContextMenu,
-  type Recent,
   type ScratchpadSyncState,
   type CSEventDetailVars,
   CS_EVENT_VARS,
@@ -83,15 +79,16 @@ import {
   setHosts,
   setButtons,
   setVars,
-  setLocalVars as storeSetLocalVars,
   triggerFocus,
   setSysHostname,
   setEditButtonDialogOpen,
   setButtonFormData,
   setInitialBtnFormData,
   notify,
+  setActiveGroup,
+  setRecents,
+  setEditButton,
 } from "./store";
-import { useLocalStorage } from "./useLocalStorage";
 import { setupPluginAPI, runScript, moduleCache } from "./pluginAPI";
 import { useKeyboardManager } from "./useKeyboardManager";
 import Sidebar from "./Sidebar";
@@ -116,6 +113,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const hosts = useStore((state) => state.hosts);
   const buttons = useStore((state) => state.buttons);
   const vars = useStore((state) => state.vars);
+  const localVars = useStore((state) => state.localVars);
 
   // ── UI-only state (stays in React) ────────────────────────────────────
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
@@ -140,8 +138,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
   /** Height of the on-screen keyboard in px (0 when hidden) */
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
-  const [activeGroup, setActiveGroup] = useLocalStorage(BROWSER_STORAGE_KEY_ACTIVE_GROUP, DEFAULT_BUTTON_GROUP);
-  const [editingButton, setEditingButton] = useState<ButtonData | null>(null);
   const [btnMenuAnchor, setBtnMenuAnchor] = useState<{ anchor: HTMLElement; btn: ButtonData } | null>(null);
   const [lastMenuBtn, setLastMenuBtn] = useState<ButtonData | null>(null);
   const handleNewButtonClick = useCallback(() => {
@@ -151,32 +147,24 @@ export default function Dashboard({ initialData }: DashboardProps) {
       name: "",
       type: "send_string",
       payload: "",
-      group: activeGroup,
+      group: getStore().activeGroup,
       autorun: 0,
       order: maxOrder + 10 || 10,
       shortcut: "",
     };
-    setEditingButton(null);
+    setEditButton(null);
     setButtonFormData(data);
     setInitialBtnFormData(data);
     setEditButtonDialogOpen(true);
-  }, [activeGroup, buttons]);
-  const [buttonsLoaded, setButtonsLoaded] = useState(false);
+  }, [buttons]);
   const [inputDialogOpen, setInputDialogOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [appendNewLine, setAppendNewLine] = useState(true);
   const [sendScope, setSendScope] = useState<0 | 1 | 2>(0);
-  const [recents, setRecents] = useLocalStorage<Recent[]>(BROWSER_STORAGE_KEY_RECENTS, []);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const sidebarFilterRef = useRef<HTMLInputElement>(null);
-
-  // localVars uses useLocalStorage for persistence; synced into store for pluginAPI
-  const [localVars, setLocalVars] = useLocalStorage<Record<string, string>>(BROWSER_STORAGE_KEY_LOCAL_VARS, {});
-  useEffect(() => {
-    storeSetLocalVars(localVars);
-  }, [localVars]);
 
   // sendScope needs to be readable from stable callbacks
   const sendScopeRef = useRef<0 | 1 | 2>(0);
@@ -184,26 +172,16 @@ export default function Dashboard({ initialData }: DashboardProps) {
     sendScopeRef.current = sendScope;
   }, [sendScope]);
 
-  useEffect(() => {
-    localStorage.setItem(BROWSER_STORAGE_KEY_ACTIVE_GROUP, activeGroup);
-  }, [activeGroup]);
-
-  const [groups, filteredButtons] = useMemo(() => {
+  const [groups, filteredButtons] = useStore((state) => {
     const groups = [
       DEFAULT_BUTTON_GROUP,
       ...Array.from(
-        new Set(buttons.map((b) => b.group || DEFAULT_BUTTON_GROUP).filter((g) => g !== DEFAULT_BUTTON_GROUP)),
+        new Set(state.buttons.map((b) => b.group || DEFAULT_BUTTON_GROUP).filter((g) => g !== DEFAULT_BUTTON_GROUP)),
       ),
     ].sort();
-    const filteredButtons = buttons.filter((b) => (b.group || DEFAULT_BUTTON_GROUP) === activeGroup);
+    const filteredButtons = state.buttons.filter((b) => (b.group || DEFAULT_BUTTON_GROUP) === state.activeGroup);
     return [groups, filteredButtons];
-  }, [buttons, activeGroup]);
-
-  useEffect(() => {
-    if (buttonsLoaded && !groups.includes(activeGroup)) {
-      setActiveGroup(DEFAULT_BUTTON_GROUP);
-    }
-  }, [groups, buttonsLoaded, activeGroup, setActiveGroup]);
+  });
 
   useEffect(() => {
     appletRefs.current = applets;
@@ -312,7 +290,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         }
       }
     },
-    [setRecents],
+    [],
   );
 
   const handleSelectTagAsSplit = useCallback(
@@ -380,29 +358,25 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [appVersion, setAppVersion] = useState<string>("dev");
   const [savePassword, setSavePassword] = useState<string>("ask");
 
-  const loadFullData = useCallback(
-    (data: FullData) => {
-      if (data.sysinfo) {
-        setSysHostname(data.sysinfo.hostname || "unknown");
-        setAppVersion(data.sysinfo.version || "dev");
-        setSavePassword(data.sysinfo.savePassword || "ask");
-      }
-      if (data.hosts) {
-        setHosts(data.hosts);
-      }
-      if (data.buttons) {
-        setButtons(data.buttons || []);
-        setButtonsLoaded(true);
-      }
-      if (data.vars) {
-        setVars(data.vars || {});
-      }
-      if (data.recents) {
-        setRecents(data.recents);
-      }
-    },
-    [setRecents],
-  );
+  const loadFullData = useCallback((data: FullData) => {
+    if (data.sysinfo) {
+      setSysHostname(data.sysinfo.hostname || "unknown");
+      setAppVersion(data.sysinfo.version || "dev");
+      setSavePassword(data.sysinfo.savePassword || "ask");
+    }
+    if (data.hosts) {
+      setHosts(data.hosts);
+    }
+    if (data.buttons) {
+      setButtons(data.buttons || []);
+    }
+    if (data.vars) {
+      setVars(data.vars || {});
+    }
+    if (data.recents) {
+      setRecents(data.recents);
+    }
+  }, []);
 
   const handleRefresh = useCallback(async () => {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
@@ -1054,7 +1028,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               (document.querySelector("#button-bar .MuiTabScrollButton-root:last-of-type") as HTMLElement)?.click();
               break;
             case "NEXT_BUTTON_GROUP": {
-              const idx = groups.indexOf(activeGroup);
+              const idx = groups.indexOf(getStore().activeGroup);
               let nextIdx = (idx + 1) % groups.length;
               while (nextIdx !== idx && groups[nextIdx].startsWith("_")) {
                 nextIdx = (nextIdx + 1) % groups.length;
@@ -1063,7 +1037,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               break;
             }
             case "PREV_BUTTON_GROUP": {
-              const idx = groups.indexOf(activeGroup);
+              const idx = groups.indexOf(getStore().activeGroup);
               let prevIdx = (idx - 1 + groups.length) % groups.length;
               while (prevIdx !== idx && groups[prevIdx].startsWith("_")) {
                 prevIdx = (prevIdx - 1 + groups.length) % groups.length;
@@ -1088,16 +1062,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
           break;
       }
     },
-    [
-      activeGroup,
-      groups,
-      handleCloneSession,
-      handleCloseTabOrPane,
-      handleOpenScratchpad,
-      handleSelectHost,
-      sendParsedString,
-      setActiveGroup,
-    ],
+    [groups, handleCloneSession, handleCloseTabOrPane, handleOpenScratchpad, handleSelectHost, sendParsedString],
   );
 
   useEffect(() => {
@@ -1594,7 +1559,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
       setMobileAppletsOpen,
       isMobile,
       maxZIndexRef,
-      setLocalVars,
       getTerminalRefs,
       getApplets,
       handleCloseTabOrPane,
@@ -1605,7 +1569,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
     handleSelectHost,
     handleSelectTagAsSplit,
     isMobile,
-    setLocalVars,
     handleCloseTabOrPane,
     getTerminalRefs,
     getApplets,
@@ -1627,10 +1590,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   const handleSaveButton = useCallback(async () => {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    const method = editingButton ? METHOD_PUT : METHOD_POST;
-    const url = editingButton ? `/api/buttons/${editingButton.id}` : "/api/buttons";
-    if (editingButton) {
-      delete moduleCache[editingButton.id];
+    const { editButton } = getStore();
+    const method = editButton ? METHOD_PUT : METHOD_POST;
+    const url = editButton ? `/api/buttons/${editButton.id}` : "/api/buttons";
+    if (editButton) {
+      delete moduleCache[editButton.id];
     }
     await fetch(url, {
       method,
@@ -1650,10 +1614,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
       .then((r) => r.json() as Promise<ButtonData[]>)
       .then((data) => {
         setButtons(data || []);
-        setButtonsLoaded(true);
         setActiveGroup(getStore().buttonFormData.group || DEFAULT_BUTTON_GROUP);
       });
-  }, [editingButton, setActiveGroup]);
+  }, []);
 
   const handleDeleteButton = useCallback(async (id: string, name: string) => {
     setBtnMenuAnchor(null);
@@ -1674,7 +1637,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
     });
     const data: ButtonData[] = await res.json();
     setButtons(data || []);
-    setButtonsLoaded(true);
   }, []);
 
   const handleMoveButton = useCallback(async (id: string, direction: number) => {
@@ -1695,7 +1657,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
     });
     const data: ButtonData[] = await res.json();
     setButtons(data || []);
-    setButtonsLoaded(true);
   }, []);
 
   const handleCloseBtnDialog = useCallback((_e: unknown, reason: string) => {
@@ -1885,7 +1846,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
             keyboardHeight={keyboardHeight}
           />
           <ButtonBar
-            activeGroup={activeGroup}
             setActiveGroup={setActiveGroup}
             groups={groups}
             filteredButtons={filteredButtons}
@@ -2087,7 +2047,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
         lastMenuBtn={lastMenuBtn}
         handleMoveButton={handleMoveButton}
         handleDeleteButton={handleDeleteButton}
-        editingButton={editingButton}
         handleCloseBtnDialog={handleCloseBtnDialog}
         handleSaveButton={handleSaveButton}
         hosts={hosts}
@@ -2101,10 +2060,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         sendScope={sendScope}
         setSendScope={setSendScope}
         sendParsedString={sendParsedString}
-        recents={recents}
-        setEditingButton={setEditingButton}
         setInputDialogOpen={setInputDialogOpen}
-        activeGroup={activeGroup}
         handleButtonClick={handleButtonClick}
         handleAttach={handleAttach}
         handleRefresh={handleRefresh}

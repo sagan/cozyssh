@@ -34,21 +34,13 @@ import {
   HEADER_AUTHORIZATION_BEARER_PREFIX,
   LOCAL_NAME,
 } from "./constants";
-import { filterHosts, searchString } from "./common";
-import type { TabData } from "./store";
-
-interface Recent {
-  host: string;
-  last_used: number;
-}
-
-type ViewMode = "servers" | "tabs" | "buttons";
+import { type ViewMode, filterHosts, searchString } from "./common";
+import { getStore, type TabData } from "./store";
 
 interface NewTabDialogProps {
   open: boolean;
   onClose: () => void;
   hosts: HostData[];
-  recents: Recent[];
   tabs?: TabData[];
   buttons?: ButtonData[];
   activeGroup?: string;
@@ -63,7 +55,6 @@ export default function NewTabDialog({
   open,
   onClose,
   hosts,
-  recents,
   tabs = [],
   buttons = [],
   activeGroup,
@@ -110,11 +101,11 @@ export default function NewTabDialog({
       return [];
     }
     const f = filter.toLowerCase();
-    return recents
-      .filter((r) => r.host.toLowerCase().includes(f))
+    return getStore()
+      .recents.filter((r) => r.host.toLowerCase().includes(f))
       .sort((a, b) => b.last_used - a.last_used)
       .slice(0, 5);
-  }, [recents, filter, viewMode]);
+  }, [filter, viewMode]);
 
   const filteredHosts = useMemo(() => {
     if (viewMode !== "servers") {
