@@ -83,6 +83,7 @@ export default function NewTabDialog({
   const [localPinned, setLocalPinned] = useState<SessionPinned[]>([]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setViewMode(initialViewMode);
   }, [initialViewMode]);
 

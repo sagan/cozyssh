@@ -73,6 +73,7 @@ func generateToken() string {
 
 func SignDownloadToken(id, path string, expires int64) string {
 	mac := hmac.New(sha256.New, []byte(globalConfig.AppPasswordHash))
+	mac.Write([]byte(globalConfig.SessionSecret))
 	fmt.Fprintf(mac, "%s:%s:%d", id, path, expires)
 	return hex.EncodeToString(mac.Sum(nil))
 }

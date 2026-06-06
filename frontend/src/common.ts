@@ -195,6 +195,20 @@ export const remoteCommandOptions = [
 ] as const;
 
 export const defaultTheme = createTheme({
+  components: {
+    MuiDialog: {
+      defaultProps: {
+        container: () => {
+          // 1. Check if the browser is currently in fullscreen mode
+          const isFullscreen = !!document.fullscreenElement;
+
+          // 2. If fullscreen, portal to #main-content so it sits in the Top Layer.
+          // Otherwise, fall back to document.body (completely avoiding the MUI bug).
+          return isFullscreen ? document.getElementById("main-content") : document.body;
+        },
+      },
+    },
+  },
   cssVariables: true,
   palette: {
     mode: "light",
@@ -250,6 +264,19 @@ export const terminalKeyShortcuts = new Set([
   "ctrl+p", // Fetch previous command (Up)
   "ctrl+n", // Fetch next command (Down)
   "alt+.", // Insert last argument of previous command
+]);
+
+/**
+ * These shortcuts should be ignored by the terminal, and handled by the browser.
+ */
+export const terminalIgnoreKeyShortcuts = new Set([
+  "f3", // search
+  "shift+f3", // reverse search
+  "f5", // reload
+  "ctrl+f5", // force reload
+  "f6", // Toggle select address bar
+  "f11", // fullscreen
+  "f12", // developer tools
 ]);
 
 /**
@@ -570,4 +597,11 @@ export function nextTerminalFontSize(fontSize: number): number {
     return terminalFontSizes[terminalFontSizes.length - 1];
   }
   return terminalFontSizes[idx + 1];
+}
+
+/**
+ * Return true if there is any MUI Dialog open.
+ */
+export function isMuiDialogOpen(): boolean {
+  return !!document.querySelector("body > div.MuiDialog-root");
 }

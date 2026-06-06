@@ -14,9 +14,25 @@ import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import CloudDoneIcon from "@mui/icons-material/CloudDone";
 import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
 
-import type { NewTabDialogViewMode, ScratchpadSyncState } from "./common";
-import { type TerminalRefMap, setActivePaneId, setActiveTabId, triggerFocus, useStore } from "./store";
+import {
+  CS_EVENT_TERMINAL_CHANGE,
+  getIntVar,
+  type CSEventDetailTerminalChange,
+  type ScratchpadSyncState,
+} from "./common";
+import {
+  type TerminalRefMap,
+  deleteUnreadTabId,
+  setActivePaneId,
+  setActiveTabId,
+  setNewTabDialogInitialViewMode,
+  setNewTabDialogOpen,
+  triggerFocus,
+  useStore,
+} from "./store";
 import type { AppletData } from "./AppletWrapper";
+import { APP_NAME, LOCAL_NAME, VAR_CS_NOWAKELOCK } from "./constants";
+import { useWakeLock } from "./useWakeLock";
 
 export interface TabBarProps {
   mobileOpen: boolean;
@@ -27,15 +43,12 @@ export interface TabBarProps {
   searchQuery: string;
   setSearchQuery: React.Dispatch<React.SetStateAction<string>>;
   terminalRefs: React.MutableRefObject<TerminalRefMap>;
-  unreadTabIds: Set<string>;
   isMobile: boolean;
   applets: AppletData[];
   scratchpadSyncState: ScratchpadSyncState;
   handleContextMenu: (e: React.MouseEvent, tabId: string) => void;
   handleCloseTab: (e: React.MouseEvent, tabId: string) => void;
   handleCloseSearch: () => void;
-  setNewTabDialogInitialViewMode: React.Dispatch<React.SetStateAction<NewTabDialogViewMode>>;
-  setNewTabDialogOpen: (open: boolean) => void;
 }
 
 export default function TabBar({
@@ -47,18 +60,47 @@ export default function TabBar({
   searchQuery,
   setSearchQuery,
   terminalRefs,
-  unreadTabIds,
   isMobile,
   applets,
   scratchpadSyncState,
   handleContextMenu,
   handleCloseTab,
   handleCloseSearch,
-  setNewTabDialogInitialViewMode,
-  setNewTabDialogOpen,
 }: TabBarProps) {
-  const { focusSearchInputTrigger, tabs, activeTabId, activePaneId } = useStore();
+  const focusSearchInputTrigger = useStore((state) => state.focusSearchInputTrigger);
+  const tabs = useStore((state) => state.tabs);
+  const vars = useStore((state) => state.vars);
+  const localVars = useStore((state) => state.localVars);
+  const activeTabId = useStore((state) => state.activeTabId);
+  const activePaneId = useStore((state) => state.activePaneId);
+  const unreadTabIds = useStore((state) => state.unreadTabIds);
+  const sysHostname = useStore((state) => state.sysHostname);
   const searchInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  useWakeLock(tabs.length > 0 && getIntVar(vars, localVars, VAR_CS_NOWAKELOCK) !== 1);
+
+  useEffect(() => {
+    if (unreadTabIds.has(activeTabId)) {
+      deleteUnreadTabId(activeTabId);
+    }
+  }, [activeTabId, unreadTabIds]);
+
+  useEffect(() => {
+    const active = tabs.find((t) => t.id === activeTabId);
+    if (!active || active.title === LOCAL_NAME) {
+      document.title = APP_NAME + " " + sysHostname;
+    } else {
+      document.title = `${active.title} - ${APP_NAME} ${sysHostname}`;
+    }
+  }, [tabs, activeTabId, sysHostname]);
+
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent(CS_EVENT_TERMINAL_CHANGE, {
+        detail: { activePaneId } satisfies CSEventDetailTerminalChange,
+      }),
+    );
+  }, [activePaneId]);
 
   useEffect(() => {
     if (focusSearchInputTrigger > 0 && searchOpen) {

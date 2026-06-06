@@ -10,18 +10,18 @@
 
 import { create } from "zustand";
 
-import type { HostData, ButtonData } from "./api";
-import type { ShellIntegration } from "./common";
+import type { HostData, ButtonData, WsTerminalMessage } from "./api";
+import type { HostForm, NewTabDialogViewMode, Severity, ShellIntegration, Toast } from "./common";
 import type { TerminalHandle } from "./Terminal";
 import type { ScratchpadHandle } from "./Scratchpad";
-import { BROWSER_STORAGE_KEY_LOCAL_VARS, BROWSER_STORAGE_KEY_VARS } from "./constants";
+import { BROWSER_STORAGE_KEY_LOCAL_VARS, BROWSER_STORAGE_KEY_VARS, DEFAULT_BUTTON_GROUP } from "./constants";
 
 // Re-exported so consumers don't need to import from Dashboard.tsx
 export interface PaneData {
   id: string;
   sessionId?: string;
   host: string;
-  state?: string;
+  state: WsTerminalMessage["state"];
   cloneFrom?: string;
   // optional session scope params
   options?: Record<string, string>;
@@ -41,6 +41,18 @@ export interface TabData {
 export type TerminalRefMap = Record<string, TerminalHandle | ScratchpadHandle | null>;
 
 interface Store {
+  toasts: Toast[];
+  editHostName: string;
+  hostFormData: HostForm;
+  initialHostFormData: HostForm | null;
+  buttonFormData: ButtonData;
+  initialBtnFormData: ButtonData | null;
+  editButtonDialogOpen: boolean;
+  editHostDialogOpen: boolean;
+  newTabDialogOpen: boolean;
+  newTabDialogInitialViewMode: NewTabDialogViewMode;
+  sysHostname: string;
+  unreadTabIds: Set<string>;
   focusTrigger: number;
   focusSearchInputTrigger: number;
   tabs: TabData[];
@@ -71,6 +83,38 @@ function loadVarsFromStorate(key: string): Record<string, string> {
 }
 
 export const useStore = create<Store>(() => ({
+  toasts: [],
+  editHostName: "",
+  hostFormData: {
+    name: "",
+    hostname: "",
+    user: "root",
+    port: "22",
+    identity_file: "",
+    source: "",
+    proxy_jump: "",
+    remote_command: "",
+    tags: "",
+    comment: "",
+  },
+  initialHostFormData: null,
+  buttonFormData: {
+    id: "",
+    name: "",
+    type: "send_string",
+    payload: "",
+    group: DEFAULT_BUTTON_GROUP,
+    autorun: 0,
+    order: 0,
+    shortcut: "",
+  },
+  initialBtnFormData: null,
+  editButtonDialogOpen: false,
+  editHostDialogOpen: false,
+  newTabDialogOpen: false,
+  newTabDialogInitialViewMode: "servers",
+  sysHostname: "",
+  unreadTabIds: new Set<string>(),
   focusTrigger: 0,
   focusSearchInputTrigger: 0,
   tabs: [],
@@ -91,6 +135,53 @@ export const triggerFocus = () =>
 export const triggerFocusSearchInput = () =>
   useStore.setState((state) => ({
     focusSearchInputTrigger: state.focusSearchInputTrigger + 1,
+  }));
+
+let toastId = 0;
+export const notify = (msg: string, severity: Severity = "info", key?: string) => {
+  const id = key ? `${key}-${toastId++}` : toastId++;
+  setToasts((prev) => {
+    const newToast = { id, key, msg, severity };
+    const newToasts = key
+      ? [...prev.filter((t) => typeof t.id === "number" || !t.id.startsWith(key + "-")), newToast]
+      : [...prev, newToast];
+    return newToasts.slice(-3); // Keep last 3
+  });
+  setTimeout(() => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, 4000);
+};
+
+export const setToasts = (update: Toast[] | ((data: Toast[]) => Toast[])) =>
+  useStore.setState((state) => ({
+    toasts: typeof update === "function" ? update(state.toasts) : update,
+  }));
+export const setEditHostName = (editHostName: string) => useStore.setState({ editHostName });
+export const setHostFormData = (hostFormData: HostForm) => useStore.setState({ hostFormData });
+export const setInitialHostFormData = (initialHostFormData: HostForm | null) =>
+  useStore.setState({ initialHostFormData });
+export const setButtonFormData = (buttonFormData: ButtonData) => useStore.setState({ buttonFormData });
+export const setInitialBtnFormData = (initialBtnFormData: ButtonData | null) =>
+  useStore.setState({ initialBtnFormData });
+export const setEditButtonDialogOpen = (editButtonDialogOpen: boolean) => useStore.setState({ editButtonDialogOpen });
+export const setEditHostDialogOpen = (editHostDialogOpen: boolean) => useStore.setState({ editHostDialogOpen });
+export const setNewTabDialogOpen = (newTabDialogOpen: boolean) => useStore.setState({ newTabDialogOpen });
+
+export const setNewTabDialogInitialViewMode = (newTabDialogInitialViewMode: NewTabDialogViewMode) =>
+  useStore.setState({ newTabDialogInitialViewMode });
+
+export const setSysHostname = (sysHostname: string) => useStore.setState({ sysHostname });
+
+export const setUnreadTabIds = (unreadTabIds: Set<string>) => useStore.setState({ unreadTabIds });
+
+export const deleteUnreadTabId = (tabId: string) =>
+  useStore.setState((state) => ({
+    unreadTabIds: new Set([...state.unreadTabIds].filter((id) => id !== tabId)),
+  }));
+
+export const addUnreadTabId = (tabId: string) =>
+  useStore.setState((state) => ({
+    unreadTabIds: new Set([...state.unreadTabIds, tabId]),
   }));
 
 export const setTabs = (update: TabData[] | ((data: TabData[]) => TabData[])) =>

@@ -72,7 +72,13 @@ declare global {
    */
   var __CS_PASSTHROUGH_SHORTCUTS__: Set<string>;
   /**
-   * The list of key combinations that should be disabled.
+   * The list of key combinations that should be ignored by the terminal, and handled by the browser.
+   * The element is in the same format as `__CS_PASSTHROUGH_SHORTCUTS__` element.
+   * Some key combinations (like `f5`, `f11`, `f12`, etc.) are pre-added to this set by default.
+   */
+  var __CS_TERMINAL_IGNORE_SHORTCUTS__: Set<string>;
+  /**
+   * The list of CozySSH shortcut key combinations that should be disabled.
    * The element is in the same format as `__CS_PASSTHROUGH_SHORTCUTS__` element.
    */
   var __CS_DISABLE_SHORTCUTS__: Set<string>;

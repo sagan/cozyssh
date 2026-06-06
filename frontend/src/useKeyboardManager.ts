@@ -23,18 +23,14 @@ import {
   VAR_CS_SCROLL_LINES,
   VAR_CS_TERMINAL_FONT_SIZE,
 } from "./constants";
-import {
-  type NewTabDialogViewMode,
-  getIntVar,
-  getKeyCombination,
-  nextTerminalFontSize,
-  prevTerminalFontSize,
-} from "./common";
+import { getIntVar, getKeyCombination, isMuiDialogOpen, nextTerminalFontSize, prevTerminalFontSize } from "./common";
 import {
   type TerminalRefMap,
   getStore,
   setActivePaneId,
   setActiveTabId,
+  setNewTabDialogInitialViewMode,
+  setNewTabDialogOpen,
   setTabs,
   triggerFocus,
   triggerFocusSearchInput,
@@ -50,10 +46,6 @@ export interface KeyboardManagerOptions {
   handleOpenScratchpad: () => void;
   /** Close the active pane, or the whole tab if it's the last pane */
   handleCloseTabOrPane: (tabOrPaneId?: string) => void;
-  /** Open / close the new-tab dialog */
-  setNewTabDialogOpen: (open: boolean) => void;
-  /** Set the initial view mode of the new-tab dialog */
-  setNewTabDialogInitialViewMode: (mode: NewTabDialogViewMode) => void;
   /** Ref to the terminal search input */
   searchInputRef: React.RefObject<HTMLInputElement | null>;
   /** Open the in-terminal search bar */
@@ -73,8 +65,6 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
     handleSelectHost,
     handleOpenScratchpad,
     handleCloseTabOrPane,
-    setNewTabDialogOpen,
-    setNewTabDialogInitialViewMode,
     searchInputRef,
     setSearchOpen,
     getTerminalRefs,
@@ -140,7 +130,17 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
 
       // ── Named shortcuts ───────────────────────────────────────────────────
       switch (keycomb) {
+        case "alt+enter": {
+          e.preventDefault();
+          if (document.fullscreenElement) {
+            document.exitFullscreen();
+          } else {
+            document.getElementById("main-content")?.requestFullscreen();
+          }
+          return;
+        }
         case "ctrl+alt+0": {
+          e.preventDefault();
           const { vars, localVars } = getStore();
           let varName: string;
           if (!vars[VAR_CS_TERMINAL_FONT_SIZE] || localVars[LOCAL_VAR_PREFIX + VAR_CS_TERMINAL_FONT_SIZE]) {
@@ -155,6 +155,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           return;
         }
         case "alt+-": {
+          e.preventDefault();
           const { vars, localVars } = getStore();
           let varName: string;
           if (!vars[VAR_CS_TERMINAL_FONT_SIZE] || localVars[LOCAL_VAR_PREFIX + VAR_CS_TERMINAL_FONT_SIZE]) {
@@ -175,6 +176,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         }
         case "alt+=": // in most keyboard layout the "+" key lowercase char is "="
         case "alt++": {
+          e.preventDefault();
           let varName: string;
           if (!vars[VAR_CS_TERMINAL_FONT_SIZE] || localVars[LOCAL_VAR_PREFIX + VAR_CS_TERMINAL_FONT_SIZE]) {
             varName = LOCAL_VAR_PREFIX + VAR_CS_TERMINAL_FONT_SIZE;
@@ -232,7 +234,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
 
         case "alt+i":
         case "alt+shift+i":
-          if (!document.querySelector("body > div.MuiDialog-root")) {
+          if (!isMuiDialogOpen()) {
             e.preventDefault();
             if (keycomb === "alt+shift+i") {
               csSetSidebarFilter("");
@@ -378,11 +380,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         }
 
         case "ctrl+shift+f":
-          if (
-            !document.querySelector("body > div.MuiDialog-root") &&
-            terminalRefs[activePaneId] &&
-            "clear" in terminalRefs[activePaneId]!
-          ) {
+          if (!isMuiDialogOpen() && terminalRefs[activePaneId] && "clear" in terminalRefs[activePaneId]!) {
             e.preventDefault();
             setSearchOpen(true);
             triggerFocusSearchInput();

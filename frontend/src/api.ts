@@ -182,7 +182,7 @@ export interface ScratchpadHelloMsg {
 }
 export interface WsTerminalMessage {
     type: "historyStart" | "tabState" | "state";
-    state: string;
+    state: "stolen" | "disconnected" | "connected" | "connecting" | "exited" | "";
     isPinned: boolean;
     isLocked: boolean;
 }

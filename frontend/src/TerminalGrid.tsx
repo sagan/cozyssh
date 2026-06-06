@@ -1,46 +1,42 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import { Box, Tooltip, IconButton, Typography } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import AddIcon from "@mui/icons-material/Add";
 import ViewSidebarIcon from "@mui/icons-material/ViewSidebar";
 
 import { VIBRATE_PATTERN } from "./constants";
-import { type NewTabDialogViewMode, type ScratchpadSyncState, genPaneId } from "./common";
+import { type ScratchpadSyncState, genPaneId } from "./common";
 import {
   type PaneData,
   type TerminalRefMap,
+  addUnreadTabId,
   getStore,
   setActivePaneId,
   setActiveTabId,
+  setNewTabDialogInitialViewMode,
+  setNewTabDialogOpen,
   setShellIntegrations,
   setTabs,
   useStore,
 } from "./store";
 import type { AppletData } from "./AppletWrapper";
-import Scratchpad, { type ScratchpadHandle } from "./Scratchpad";
-import TerminalComponent, { type TerminalHandle } from "./Terminal";
+import Scratchpad from "./Scratchpad";
+import TerminalComponent from "./Terminal";
 import FileBrowser from "./FileBrowser";
 import MobileInputBar from "./MobileInputBar";
 
 export interface TerminalGridProps {
   terminalRefs: React.MutableRefObject<TerminalRefMap>;
-  isCtrlActive: boolean;
-  setIsCtrlActive: (v: boolean) => void;
-  isAltActive: boolean;
-  setIsAltActive: (v: boolean) => void;
   onTerminalFocus: () => void;
   onTerminalBlur: () => void;
   scratchpadSyncState: ScratchpadSyncState;
   setScratchpadSyncState: (v: ScratchpadSyncState) => void;
-  handleTerminalData: (tabId: string) => void;
   isTouch: boolean;
   isMobile: boolean;
   mobileAppletsOpen: boolean;
   setMobileAppletsOpen: (v: boolean) => void;
   applets: AppletData[];
   setMobileOpen: (v: boolean) => void;
-  setNewTabDialogOpen: (v: boolean) => void;
-  setNewTabDialogInitialViewMode: React.Dispatch<React.SetStateAction<NewTabDialogViewMode>>;
   handleTouchStart: (e: React.TouchEvent) => void;
   handleTouchEnd: (e: React.TouchEvent) => void;
   handleSendKey: (key: string) => void;
@@ -49,27 +45,19 @@ export interface TerminalGridProps {
   extraKeysOpen: boolean;
   onExtraKeysOpenChange: (v: boolean) => void;
   keyboardHeight: number;
-  getActiveTerminal: () => TerminalHandle | ScratchpadHandle | null;
 }
 
 export default function TerminalGrid({
   terminalRefs,
-  isCtrlActive,
-  setIsCtrlActive,
-  isAltActive,
-  setIsAltActive,
   setScratchpadSyncState,
   onTerminalFocus,
   onTerminalBlur,
-  handleTerminalData,
   isTouch,
   isMobile,
   mobileAppletsOpen,
   setMobileAppletsOpen,
   applets,
   setMobileOpen,
-  setNewTabDialogOpen,
-  setNewTabDialogInitialViewMode,
   handleTouchStart,
   handleTouchEnd,
   handleSendKey,
@@ -78,9 +66,25 @@ export default function TerminalGrid({
   extraKeysOpen,
   onExtraKeysOpenChange,
   keyboardHeight,
-  getActiveTerminal,
 }: TerminalGridProps) {
-  const { focusTrigger, tabs, activeTabId, activePaneId, shellIntegrations, vars, localVars } = useStore();
+  const focusTrigger = useStore((state) => state.focusTrigger);
+  const tabs = useStore((state) => state.tabs);
+  const activeTabId = useStore((state) => state.activeTabId);
+  const activePaneId = useStore((state) => state.activePaneId);
+  const shellIntegrations = useStore((state) => state.shellIntegrations);
+  const vars = useStore((state) => state.vars);
+  const localVars = useStore((state) => state.localVars);
+
+  const [isCtrlActive, setIsCtrlActive] = useState(false);
+  const [isAltActive, setIsAltActive] = useState(false);
+
+  const handleTerminalData = useCallback((tabId: string) => {
+    const { activeTabId, unreadTabIds } = getStore();
+    if (activeTabId === tabId || unreadTabIds.has(tabId)) {
+      return;
+    }
+    addUnreadTabId(tabId);
+  }, []);
 
   // ── Gesture-mode: non-passive native touch listeners ─────────────────────
   // React synthetic touch events are passive (cannot preventDefault), so we
@@ -245,7 +249,7 @@ export default function TerminalGrid({
                         onTerminalFocus={onTerminalFocus}
                         isAltActive={isAltActive}
                         onAltDone={() => setIsAltActive(false)}
-                        onStateChange={(state) => {
+                        onStateChange={(state: PaneData["state"]) => {
                           setTabs((prev) =>
                             prev.map((t) =>
                               t.id === tab.id
@@ -441,6 +445,7 @@ export default function TerminalGrid({
       </Box>
 
       <MobileInputBar
+        terminalRefs={terminalRefs}
         isCtrlActive={isCtrlActive}
         setIsCtrlActive={setIsCtrlActive}
         isAltActive={isAltActive}
@@ -451,7 +456,6 @@ export default function TerminalGrid({
         extraKeysOpen={extraKeysOpen}
         onExtraKeysOpenChange={onExtraKeysOpenChange}
         keyboardHeight={keyboardHeight}
-        getActiveTerminal={getActiveTerminal}
       />
     </>
   );

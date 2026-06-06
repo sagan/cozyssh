@@ -123,6 +123,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - `Alt + Shift + 1-9,0` : Click the button in button bar
   - `Alt + J / Alt + K` : Scroll terminal down / up by a few lines
   - `Alt + Shift + J / Alt + Shift + K` : Scroll terminal down / up by a page
+  - `Alt + Enter` : Toggle fullscreen of main terminal area
   - `Alt + - / Alt + +` : Decrease / increase terminal font size
   - `Ctrl + Alt + 0` : Reset to default terminal font size (15px)
   - `Ctrl + Shift + F` : Open terminal search box

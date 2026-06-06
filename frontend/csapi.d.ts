@@ -1709,6 +1709,12 @@ export interface ButtonData {
 	order: number;
 	shortcut: string;
 }
+export interface WsTerminalMessage {
+	type: "historyStart" | "tabState" | "state";
+	state: "stolen" | "disconnected" | "connected" | "connecting" | "exited" | "";
+	isPinned: boolean;
+	isLocked: boolean;
+}
 export type PropertyValue<TValue> = TValue extends Array<infer AValue> ? Array<AValue extends infer TUnpacked & {} ? TUnpacked : AValue> : TValue extends infer TUnpacked & {} ? TUnpacked : TValue;
 export type Fallback<T> = {
 	[P in keyof T]: T[P] | readonly NonNullable<T[P]>[];
@@ -22264,7 +22270,7 @@ export interface PaneData {
 	id: string;
 	sessionId?: string;
 	host: string;
-	state?: string;
+	state: WsTerminalMessage["state"];
 	cloneFrom?: string;
 	options?: Record<string, string>;
 }
@@ -22280,6 +22286,8 @@ export interface TabData {
 }
 export type TerminalRefMap = Record<string, TerminalHandle | ScratchpadHandle | null>;
 export interface Store {
+	sysHostname: string;
+	unreadTabIds: Set<string>;
 	focusTrigger: number;
 	focusSearchInputTrigger: number;
 	tabs: TabData[];
@@ -22360,7 +22368,13 @@ declare global {
 	 */
 	var __CS_PASSTHROUGH_SHORTCUTS__: Set<string>;
 	/**
-	 * The list of key combinations that should be disabled.
+	 * The list of key combinations that should be ignored by the terminal, and handled by the browser.
+	 * The element is in the same format as `__CS_PASSTHROUGH_SHORTCUTS__` element.
+	 * Some key combinations (like `f5`, `f11`, `f12`, etc.) are pre-added to this set by default.
+	 */
+	var __CS_TERMINAL_IGNORE_SHORTCUTS__: Set<string>;
+	/**
+	 * The list of CozySSH shortcut key combinations that should be disabled.
 	 * The element is in the same format as `__CS_PASSTHROUGH_SHORTCUTS__` element.
 	 */
 	var __CS_DISABLE_SHORTCUTS__: Set<string>;

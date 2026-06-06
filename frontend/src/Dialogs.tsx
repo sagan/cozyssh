@@ -11,6 +11,7 @@ import {
   FormControlLabel,
   Checkbox,
 } from "@mui/material";
+import { triggerFocus } from "./store";
 
 export interface DialogApi {
   alert: typeof csAlert;
@@ -98,6 +99,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
     if (!confirmed) {
       setOpen(false);
       resolveRef.current(config.type === "prompt" ? null : false);
+      triggerFocus();
       return;
     }
 
@@ -121,6 +123,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
 
     setOpen(false);
     resolveRef.current(config.type === "prompt" ? inputValue : true);
+    triggerFocus();
   };
 
   // Determine if the confirmation criteria are unmet

@@ -38,10 +38,11 @@ import {
   LOCAL_VAR_PREFIX,
   DEFAULT_TERMINAL_FONT_SIZE,
 } from "./constants";
-import { type Severity, generatePassword, terminalKeyShortcuts } from "./common";
+import { generatePassword, isMuiDialogOpen, terminalIgnoreKeyShortcuts, terminalKeyShortcuts } from "./common";
 import {
   type TerminalRefMap,
   getStore,
+  notify,
   setActivePaneId,
   setActiveTabId,
   setButtons,
@@ -76,6 +77,7 @@ window.__CS_MODULECACHE__ = moduleCache;
 window.__CS_VERSION__ = PACKAGE_JSON_VERSION;
 window.__CS_USE_STORE__ = useStore;
 window.__CS_PASSTHROUGH_SHORTCUTS__ = terminalKeyShortcuts;
+window.__CS_TERMINAL_IGNORE_SHORTCUTS__ = terminalIgnoreKeyShortcuts;
 window.__CS_DISABLE_SHORTCUTS__ = disableShortcuts;
 
 // window.csSetSidebarFilter = undefined; // Assigned in Sidebar useEffect
@@ -83,6 +85,8 @@ window.csAlert = dialogs.alert;
 window.csConfirm = dialogs.confirm;
 window.csPrompt = dialogs.prompt;
 window.csPromptPassword = dialogs.promptPassword;
+window.csRunScript = runScript;
+window.csNotify = notify;
 
 export interface CsExecResult {
   error: unknown;
@@ -139,10 +143,7 @@ const virtualModulesImportRegex = (() => {
   );
 })();
 
-export async function runScript(
-  btn: Pick<ButtonData, "id" | "name" | "type" | "payload">,
-  notify: (msg: string, severity?: Severity) => void,
-) {
+export async function runScript(btn: Pick<ButtonData, "id" | "name" | "type" | "payload">) {
   let moduleObj: CsScriptModule;
   let cached = false;
 
@@ -214,8 +215,6 @@ export async function runScript(
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export interface PluginAPICallbacks {
-  /** Show a toast notification */
-  notify: (msg: string, severity?: "success" | "info" | "warning" | "error", key?: string) => void;
   /** Apply a new MUI theme */
   setTheme: (options: unknown, ...args: unknown[]) => void;
   /** Open a new terminal tab */
@@ -372,10 +371,6 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     };
   };
 
-  window.csRunScript = async (script: ButtonData) => {
-    await runScript(script, cb.notify);
-  };
-
   window.csSendData = (data: string, paneId?: string) => {
     const { activePaneId } = getStore();
     const refs = cb.getTerminalRefs();
@@ -411,8 +406,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
   };
 
   window.csFocus = (tabOrPaneId?: string) => {
-    // any dialog is open (so the terminal can't get focus)
-    if (document.querySelector("body > div.MuiDialog-root")) {
+    if (isMuiDialogOpen()) {
       return;
     }
     const { activePaneId, tabs } = getStore();
@@ -434,8 +428,6 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     }
     triggerFocus();
   };
-
-  window.csNotify = cb.notify;
 
   window.csFetch = async (url: string, options = {}) => {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
@@ -715,11 +707,9 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
       "csGetTerminalHandle",
       "csGetShellIntegration",
       "csGetAll",
-      "csRunScript",
       "csSendData",
       "csGetTerminalContents",
       "csFocus",
-      "csNotify",
       "csFetch",
       "csExec",
       "csSetTheme",

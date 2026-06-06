@@ -7,11 +7,11 @@ import (
 var (
 	WsMsgStateConnecting, _ = json.Marshal(&WsTerminalMessage{
 		Type:  WsTerminalMessageTypeState,
-		State: "connecting to ssh server",
+		State: "connecting",
 	})
 	WsMsgStateDisconnected, _ = json.Marshal(&WsTerminalMessage{
 		Type:  WsTerminalMessageTypeState,
-		State: "disconnected to ssh server",
+		State: "disconnected",
 	})
 	WsMsgStateExited, _ = json.Marshal(&WsTerminalMessage{
 		Type:  WsTerminalMessageTypeState,
@@ -19,7 +19,7 @@ var (
 	})
 	WsMsgStateDisconnectedFatal, _ = json.Marshal(&WsTerminalMessage{
 		Type:  WsTerminalMessageTypeState,
-		State: "disconnected (fatal)",
+		State: "disconnected", // TODO: fatal disconnected
 	})
 	WsMsgStateConnected, _ = json.Marshal(&WsTerminalMessage{
 		Type:  WsTerminalMessageTypeState,

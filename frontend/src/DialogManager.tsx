@@ -36,24 +36,32 @@ import {
 } from "./constants";
 import {
   type Recent,
-  type Toast,
   type ContextMenu,
-  type NewTabDialogViewMode,
   type ToastData,
   getKeyCombination,
   ButtonDataSchema,
   generatePassword,
   removePassFromHost,
 } from "./common";
-import { type TabData, setActivePaneId, setActiveTabId, triggerFocus, useStore } from "./store";
+import {
+  type TabData,
+  getStore,
+  setActivePaneId,
+  setActiveTabId,
+  setButtonFormData,
+  setEditButtonDialogOpen,
+  setInitialBtnFormData,
+  setNewTabDialogOpen,
+  setToasts,
+  triggerFocus,
+  useStore,
+} from "./store";
 import NewTabDialog from "./NewTabDialog";
 import { dialogs } from "./Dialogs";
 
 export interface DialogManagerProps {
   activeGroup: string;
   setEditingButton: React.Dispatch<React.SetStateAction<ButtonData | null>>;
-  setInitialBtnFormData: React.Dispatch<React.SetStateAction<ButtonData | null>>;
-  setButtonDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setInputDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
   contextMenu: ContextMenu | null;
   handleCloseMenu: () => void;
@@ -73,10 +81,7 @@ export interface DialogManagerProps {
   lastMenuBtn: ButtonData | null;
   handleMoveButton: (id: string, dir: number) => void;
   handleDeleteButton: (id: string, name: string) => void;
-  buttonDialogOpen: boolean;
   editingButton: ButtonData | null;
-  buttonFormData: ButtonData;
-  setButtonFormData: (v: ButtonData) => void;
   handleCloseBtnDialog: (e: unknown, reason: string) => void;
   handleSaveButton: () => void;
   hosts: HostData[];
@@ -90,15 +95,10 @@ export interface DialogManagerProps {
   sendScope: number;
   setSendScope: React.Dispatch<React.SetStateAction<0 | 1 | 2>>;
   sendParsedString: (s: string) => void;
-  newTabDialogOpen: boolean;
-  setNewTabDialogOpen: (v: boolean) => void;
   recents: Recent[];
-  newTabDialogInitialViewMode: NewTabDialogViewMode;
   handleAttach: (id: string, host: string, title: string, isLocked: boolean) => void;
   handleRefresh: () => void;
   handleSelectHost: (h: string) => void;
-  toasts: Toast[];
-  setToasts: React.Dispatch<React.SetStateAction<Toast[]>>;
   handleButtonClick: (btn: Pick<ButtonData, "id" | "name" | "type" | "payload">) => Promise<void>;
 }
 
@@ -136,10 +136,7 @@ export default function DialogManager({
   handleButtonClick,
   handleMoveButton,
   handleDeleteButton,
-  buttonDialogOpen,
   editingButton,
-  buttonFormData,
-  setButtonFormData,
   handleCloseBtnDialog,
   handleSaveButton,
   hosts,
@@ -153,22 +150,22 @@ export default function DialogManager({
   sendScope,
   setSendScope,
   sendParsedString,
-  newTabDialogOpen,
-  setNewTabDialogOpen,
   recents,
-  newTabDialogInitialViewMode,
   handleAttach,
   handleRefresh,
   handleSelectHost,
-  toasts,
-  setToasts,
   setEditingButton,
-  setInitialBtnFormData,
-  setButtonDialogOpen,
   setInputDialogOpen,
   activeGroup,
 }: DialogManagerProps) {
-  const { tabs, activeTabId, buttons } = useStore();
+  const toasts = useStore((state) => state.toasts);
+  const buttonFormData = useStore((state) => state.buttonFormData);
+  const editButtonDialogOpen = useStore((state) => state.editButtonDialogOpen);
+  const newTabDialogInitialViewMode = useStore((state) => state.newTabDialogInitialViewMode);
+  const newTabDialogOpen = useStore((state) => state.newTabDialogOpen);
+  const tabs = useStore((state) => state.tabs);
+  const activeTabId = useStore((state) => state.activeTabId);
+  const buttons = useStore((state) => state.buttons);
 
   const [titleMenuAnchor, setTitleMenuAnchor] = useState<null | HTMLElement>(null);
   const [importTip, setImportTip] = useState<ToastData | null>(null);
@@ -180,11 +177,11 @@ export default function DialogManager({
   }, [activeTabId, tabs]);
 
   useEffect(() => {
-    if (!buttonDialogOpen) {
+    if (!editButtonDialogOpen) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setImportTip(null);
     }
-  }, [buttonDialogOpen]);
+  }, [editButtonDialogOpen]);
 
   const handleTitleMenuClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
     setTitleMenuAnchor(event.currentTarget);
@@ -258,7 +255,7 @@ export default function DialogManager({
             name: validatedData.name,
             type: validatedData.type,
             payload: validatedData.payload,
-            group: validatedData.group || buttonFormData.group || DEFAULT_BUTTON_GROUP,
+            group: validatedData.group || getStore().buttonFormData.group || DEFAULT_BUTTON_GROUP,
             autorun: validatedData.autorun,
             order: validatedData.order,
             shortcut: validatedData.shortcut,
@@ -319,9 +316,9 @@ export default function DialogManager({
             name: buttonName,
             type: "run_script",
             payload: text,
-            group: group || buttonFormData.group || DEFAULT_BUTTON_GROUP,
+            group: group || getStore().buttonFormData.group || DEFAULT_BUTTON_GROUP,
             autorun: 0,
-            order: buttonFormData.order || 0,
+            order: getStore().buttonFormData.order || 0,
             shortcut: "",
           });
 
@@ -337,7 +334,7 @@ export default function DialogManager({
         });
       }
     },
-    [buttonFormData.group, buttonFormData.order, buttons, setButtonFormData],
+    [buttons],
   );
 
   const handleAddFromUrl = useCallback(async () => {
@@ -477,7 +474,7 @@ export default function DialogManager({
             setButtonFormData(data);
             setInitialBtnFormData(data);
             setBtnMenuAnchor(null);
-            setButtonDialogOpen(true);
+            setEditButtonDialogOpen(true);
           }}
         >
           Edit Button
@@ -532,7 +529,7 @@ export default function DialogManager({
         id="edit-button-dialog"
         disableRestoreFocus
         data-id={editingButton?.id || ""}
-        open={buttonDialogOpen}
+        open={editButtonDialogOpen}
         onClose={handleCloseBtnDialog}
         fullWidth
         maxWidth="lg"
@@ -806,7 +803,7 @@ export default function DialogManager({
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setButtonDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => setEditButtonDialogOpen(false)}>Cancel</Button>
           <Button
             variant="contained"
             onClick={handleSaveButton}
@@ -817,7 +814,14 @@ export default function DialogManager({
         </DialogActions>
       </Dialog>
 
-      <Dialog open={inputDialogOpen} onClose={handleCloseInputDialog} disableRestoreFocus fullWidth maxWidth="sm">
+      <Dialog
+        id="input-dialog"
+        open={inputDialogOpen}
+        onClose={handleCloseInputDialog}
+        disableRestoreFocus
+        fullWidth
+        maxWidth="sm"
+      >
         <DialogTitle>Terminal Input</DialogTitle>
         <DialogContent sx={{ pt: 1 }}>
           <TextField

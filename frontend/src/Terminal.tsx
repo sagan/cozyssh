@@ -38,7 +38,9 @@ import {
   getKeyCombination,
   base64urlEncode,
   terminalKeyShortcuts,
+  terminalIgnoreKeyShortcuts,
 } from "./common";
+import type { PaneData } from "./store";
 
 export interface TerminalHandle {
   sendData: (data: string) => void;
@@ -82,7 +84,7 @@ interface TerminalProps {
   onAltDone?: () => void;
   onTerminalFocus: () => void;
   onTerminalBlur: () => void;
-  onStateChange?: (state: string) => void;
+  onStateChange?: (state: PaneData["state"]) => void;
   onTabStateChange?: (state: { isPinned: boolean; isLocked: boolean }) => void;
   onStolen?: () => void;
   onManualReconnect?: (wasStolen: boolean) => void;
@@ -743,11 +745,17 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
         if (e.type !== "keydown") {
           return true;
         }
+
+        const kcomb = getKeyCombination(e);
+
+        if (terminalIgnoreKeyShortcuts.has(kcomb)) {
+          return false;
+        }
+
         // Allow all standard typing (including Shift) to pass through to xterm
         if (!e.ctrlKey && !e.altKey && !e.metaKey) {
           return true;
         }
-        const kcomb = getKeyCombination(e);
 
         if (__CS_REMAP_CTRL_L__) {
           if (kcomb === "ctrl+l") {
@@ -855,7 +863,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
 
         isDead = false;
         deathType = null;
-        onStateChange?.("connecting to host");
+        onStateChange?.("connecting");
         const ws = new WebSocket(wsUrl, websocket_protocols);
         ws.binaryType = "arraybuffer";
         wsRef.current = ws;
@@ -1001,7 +1009,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
             );
             return;
           }
-          onStateChange?.("disconnected to ssh server");
+          onStateChange?.("disconnected");
           window.dispatchEvent(
             new CustomEvent(CS_EVENT_TERMINAL_DISCONNECTED, {
               detail: {

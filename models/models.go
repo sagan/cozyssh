@@ -245,7 +245,7 @@ const (
 
 type WsTerminalMessage struct {
 	Type     WsTerminalMessageType `json:"type" ts_type:"\"historyStart\" | \"tabState\" | \"state\""`
-	State    string                `json:"state"`
+	State    string                `json:"state" ts_type:"\"stolen\" | \"disconnected\" | \"connected\" | \"connecting\" | \"exited\" | \"\""`
 	IsPinned bool                  `json:"isPinned"`
 	IsLocked bool                  `json:"isLocked"`
 }

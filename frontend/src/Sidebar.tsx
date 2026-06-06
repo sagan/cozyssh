@@ -51,14 +51,21 @@ import {
 } from "./constants";
 import { type HostForm, type ServiceWorkerStatus, filterHosts, remoteCommandOptions, searchString } from "./common";
 import { dialogs } from "./Dialogs";
-import { triggerFocus } from "./store";
+import {
+  getStore,
+  setEditHostDialogOpen,
+  setEditHostName,
+  setHostFormData,
+  setInitialHostFormData,
+  triggerFocus,
+  useStore,
+} from "./store";
 
 const drawerWidth = 260;
 
 const PASSWORD_PLACEHOLDER = "***";
 
 export default function Sidebar({
-  sysHostname,
   appVersion,
   savePassword,
   onSavePasswordChange,
@@ -69,14 +76,12 @@ export default function Sidebar({
   onLogout,
   onLogoutAll,
   onOpenScratchpad,
-  activeTabs,
   onAttach,
   onRefresh,
   hosts,
   fetchHosts,
   filterRef,
 }: {
-  sysHostname: string;
   appVersion: string;
   savePassword: string;
   onSavePasswordChange: (val: string) => void;
@@ -87,16 +92,16 @@ export default function Sidebar({
   onLogout?: () => void;
   onLogoutAll?: () => void;
   onOpenScratchpad?: () => void;
-  activeTabs: string[];
   onAttach: (id: string, host: string, title: string, isLocked: boolean) => void;
   onRefresh?: () => void;
   hosts: HostData[];
   fetchHosts: () => void;
   filterRef: React.RefObject<HTMLInputElement | null>;
 }) {
+  const hostFormData = useStore((state) => state.hostFormData);
+  const sysHostname = useStore((state) => state.sysHostname);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
-
   const [loading, setLoading] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
@@ -154,22 +159,8 @@ export default function Sidebar({
   const tagsContainerRef = useRef<HTMLDivElement>(null);
   const [selectedIndex, setSelectedIndex] = useState(-1);
 
-  // Host CRUD State
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingName, setEditingName] = useState<string | null>(null);
-  const [formData, setFormData] = useState<HostForm>({
-    name: "",
-    hostname: "",
-    user: "root",
-    port: "",
-    identity_file: "",
-    source: "",
-    proxy_jump: "",
-    remote_command: "",
-    tags: "",
-    comment: "",
-  });
-  const [initialHostFormData, setInitialHostFormData] = useState<HostForm | null>(null);
+  const editHostDialogOpen = useStore((state) => state.editHostDialogOpen);
+  const editHostName = useStore((state) => state.editHostName);
 
   // Context Menu State
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
@@ -406,10 +397,10 @@ export default function Sidebar({
       password_exists: false,
       clear_password: false,
     };
-    setEditingName(null);
-    setFormData(data);
+    setEditHostName("");
+    setHostFormData(data);
     setInitialHostFormData(data);
-    setDialogOpen(true);
+    setEditHostDialogOpen(true);
   }, []);
 
   const handleEditOpen = useCallback(() => {
@@ -438,10 +429,10 @@ export default function Sidebar({
       password_exists: target.password_exists,
       clear_password: false,
     };
-    setEditingName(isAuto ? null : target.name);
-    setFormData(data);
+    setEditHostName(isAuto ? "" : target.name);
+    setHostFormData(data);
     setInitialHostFormData(data);
-    setDialogOpen(true);
+    setEditHostDialogOpen(true);
   }, [contextMenu]);
 
   const handleDelete = useCallback(async () => {
@@ -609,33 +600,35 @@ export default function Sidebar({
   }, [contextMenu]);
 
   const handleSaveHost = useCallback(async () => {
-    if (!formData.hostname) {
+    const { hostFormData } = getStore();
+    if (!hostFormData.hostname) {
       return;
     }
-    const finalName = formData.name.trim() || formData.hostname.trim();
+    const finalName = hostFormData.name.trim() || hostFormData.hostname.trim();
     let token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    const url = editingName ? `/api/hosts/${editingName}` : `/api/hosts`;
-    const method = editingName ? METHOD_PUT : METHOD_POST;
+    const { editHostName: editingHostName } = getStore();
+    const url = editingHostName ? `/api/hosts/${editingHostName}` : `/api/hosts`;
+    const method = editingHostName ? METHOD_PUT : METHOD_POST;
 
-    const parsedTags = formData.tags
+    const parsedTags = hostFormData.tags
       .replace(/,/g, " ")
       .split(/\s+/)
       .filter((t) => t.trim() !== "");
 
-    let clearPassword = formData.clear_password;
-    let passwordVal = formData.password;
+    let clearPassword = hostFormData.clear_password;
+    let passwordVal = hostFormData.password;
 
-    if (formData.password_exists) {
-      if (formData.password === "") {
+    if (hostFormData.password_exists) {
+      if (hostFormData.password === "") {
         clearPassword = true;
         passwordVal = "";
-      } else if (formData.password === PASSWORD_PLACEHOLDER) {
+      } else if (hostFormData.password === PASSWORD_PLACEHOLDER) {
         passwordVal = "";
       }
     }
 
     const payload: HostData = {
-      ...formData,
+      ...hostFormData,
       name: finalName,
       tags: parsedTags,
       password: passwordVal,
@@ -685,7 +678,7 @@ export default function Sidebar({
 
           if (retryRes.ok) {
             setInitialHostFormData(null);
-            setDialogOpen(false);
+            setEditHostDialogOpen(false);
             fetchHosts();
             return;
           } else {
@@ -706,21 +699,19 @@ export default function Sidebar({
     }
 
     setInitialHostFormData(null); // Reset dirty state on successful save
-    setDialogOpen(false);
+    setEditHostDialogOpen(false);
     fetchHosts();
-  }, [editingName, fetchHosts, formData]);
+  }, [fetchHosts]);
 
-  const handleCloseHostDialog = useCallback(
-    (_e: unknown, reason: string) => {
-      const isDirty = initialHostFormData && JSON.stringify(formData) !== JSON.stringify(initialHostFormData);
-      if (isDirty && (reason === "backdropClick" || reason === "escapeKeyDown")) {
-        return;
-      }
-      setDialogOpen(false);
-      triggerFocus();
-    },
-    [formData, initialHostFormData],
-  );
+  const handleCloseHostDialog = useCallback((_e: unknown, reason: string) => {
+    const { hostFormData, initialHostFormData } = getStore();
+    const isDirty = initialHostFormData && JSON.stringify(hostFormData) !== JSON.stringify(initialHostFormData);
+    if (isDirty && (reason === "backdropClick" || reason === "escapeKeyDown")) {
+      return;
+    }
+    setEditHostDialogOpen(false);
+    triggerFocus();
+  }, []);
 
   const filteredHosts = useMemo(() => {
     const filtered = filterHosts(hosts, filterStr);
@@ -1200,20 +1191,16 @@ export default function Sidebar({
             {dialogTab === 0 && (
               <List dense sx={{ border: "1px solid #ddd", borderRadius: 1 }}>
                 {pinnedSessions.map((ps) => {
-                  const isLocal = activeTabs.includes(ps.id);
-                  const canAttach = !isLocal;
                   return (
                     <ListItem key={ps.id} divider>
                       <ListItemText primary={ps.title} secondary={`${ps.host} (Listeners: ${ps.listenerCount})`} />
-                      {canAttach && (
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          onClick={() => onAttach(ps.id, ps.host, ps.title, !!ps.isLocked)}
-                        >
-                          Attach
-                        </Button>
-                      )}
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => onAttach(ps.id, ps.host, ps.title, ps.isLocked)}
+                      >
+                        Attach
+                      </Button>
                     </ListItem>
                   );
                 })}
@@ -1349,6 +1336,8 @@ export default function Sidebar({
                   <br />
                   <b>Alt + Shift + J / Alt + Shift + K</b> : Scroll terminal down / up by a page
                   <br />
+                  <b>Alt + Enter</b> : Toggle fullscreen of main terminal area
+                  <br />
                   <b>Alt + - / Alt + +</b> : Decrease / increase terminal font size
                   <br />
                   <b>Ctrl + Alt + 0</b> : Reset to default terminal font size (15px)
@@ -1402,39 +1391,39 @@ export default function Sidebar({
       {/* Host CRUD Dialog */}
       <Dialog
         id="edit-host-dialog"
-        data-name={editingName}
-        open={dialogOpen}
+        data-name={editHostName}
+        open={editHostDialogOpen}
         disableRestoreFocus
         onClose={handleCloseHostDialog}
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>{editingName ? `Edit Host ${editingName}` : "Add Host"}</DialogTitle>
+        <DialogTitle>{editHostName ? `Edit Host ${editHostName}` : "Add Host"}</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 1, display: "flex", flexDirection: "column", gap: 2 }}>
             <TextField
               fullWidth
               label="Alias Name"
               size="small"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder={formData.hostname || "e.g. production-database"}
+              value={hostFormData.name}
+              onChange={(e) => setHostFormData({ ...hostFormData, name: e.target.value })}
+              placeholder={hostFormData.hostname || "e.g. production-database"}
             />
             <TextField
               fullWidth
               label="HostName (IP / Domain)"
               size="small"
-              value={formData.hostname}
-              onChange={(e) => setFormData({ ...formData, hostname: e.target.value })}
+              value={hostFormData.hostname}
+              onChange={(e) => setHostFormData({ ...hostFormData, hostname: e.target.value })}
               required
-              autoFocus={!formData.hostname}
+              autoFocus={!hostFormData.hostname}
             />
             <Autocomplete
               freeSolo
               options={["root", "ubuntu", "administrator"]}
-              value={formData.user}
+              value={hostFormData.user}
               onChange={(_event, newValue) => {
-                setFormData({ ...formData, user: newValue || "" });
+                setHostFormData({ ...hostFormData, user: newValue || "" });
               }}
               renderInput={(params) => (
                 <TextField
@@ -1449,9 +1438,9 @@ export default function Sidebar({
             <Autocomplete
               freeSolo
               options={["22", "222", "2222"]}
-              value={formData.port || ""}
+              value={hostFormData.port || ""}
               onChange={(_event, newValue) => {
-                setFormData({ ...formData, port: newValue || "" });
+                setHostFormData({ ...hostFormData, port: newValue || "" });
               }}
               renderInput={(params) => <TextField {...params} fullWidth label="Port" size="small" placeholder="22" />}
             />
@@ -1459,16 +1448,16 @@ export default function Sidebar({
               fullWidth
               label="Tags (Optional)"
               size="small"
-              value={formData.tags}
-              onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+              value={hostFormData.tags}
+              onChange={(e) => setHostFormData({ ...hostFormData, tags: e.target.value })}
               placeholder="e.g. production web"
             />
             <TextField
               fullWidth
               label="IdentityFile (Optional)"
               size="small"
-              value={formData.identity_file}
-              onChange={(e) => setFormData({ ...formData, identity_file: e.target.value })}
+              value={hostFormData.identity_file}
+              onChange={(e) => setHostFormData({ ...hostFormData, identity_file: e.target.value })}
               placeholder="~/.ssh/id_ed25519"
             />
             <TextField
@@ -1476,18 +1465,18 @@ export default function Sidebar({
               label="Password (Optional)"
               size="small"
               type="password"
-              value={formData.password || ""}
+              value={hostFormData.password || ""}
               onChange={(e) => {
                 let val = e.target.value;
-                if (formData.password === PASSWORD_PLACEHOLDER && val !== PASSWORD_PLACEHOLDER) {
+                if (hostFormData.password === PASSWORD_PLACEHOLDER && val !== PASSWORD_PLACEHOLDER) {
                   if (val.includes("*")) {
                     val = val.replace(/\*/g, "");
                   }
                 }
-                setFormData({ ...formData, password: val });
+                setHostFormData({ ...hostFormData, password: val });
               }}
               onFocus={(e) => {
-                if (formData.password === PASSWORD_PLACEHOLDER) {
+                if (hostFormData.password === PASSWORD_PLACEHOLDER) {
                   e.target.select();
                 }
               }}
@@ -1497,15 +1486,15 @@ export default function Sidebar({
               fullWidth
               label="ProxyJump (Optional)"
               size="small"
-              value={formData.proxy_jump}
-              onChange={(e) => setFormData({ ...formData, proxy_jump: e.target.value })}
+              value={hostFormData.proxy_jump}
+              onChange={(e) => setHostFormData({ ...hostFormData, proxy_jump: e.target.value })}
               placeholder="e.g. server-foo,server-bar"
             />
             <Autocomplete
               options={["any", "inet", "inet6"]}
-              value={formData.address_family || ""}
+              value={hostFormData.address_family || ""}
               onChange={(_event, newValue) => {
-                setFormData({ ...formData, address_family: (newValue as "any" | "inet" | "inet6") || "" });
+                setHostFormData({ ...hostFormData, address_family: (newValue as "any" | "inet" | "inet6") || "" });
               }}
               renderInput={(params) => (
                 <TextField
@@ -1521,8 +1510,10 @@ export default function Sidebar({
               freeSolo
               fullWidth
               options={["/dev/null", "NUL"]}
-              value={formData.user_known_hosts_file || ""}
-              onInputChange={(_event, newValue) => setFormData({ ...formData, user_known_hosts_file: newValue || "" })}
+              value={hostFormData.user_known_hosts_file || ""}
+              onInputChange={(_event, newValue) =>
+                setHostFormData({ ...hostFormData, user_known_hosts_file: newValue || "" })
+              }
               renderInput={(params) => (
                 <TextField
                   {...params}
@@ -1535,9 +1526,12 @@ export default function Sidebar({
             />
             <Autocomplete
               options={["ask", "yes", "no"]}
-              value={formData.strict_host_key_checking || ""}
+              value={hostFormData.strict_host_key_checking || ""}
               onChange={(_event, newValue) => {
-                setFormData({ ...formData, strict_host_key_checking: (newValue as "ask" | "yes" | "no") || "" });
+                setHostFormData({
+                  ...hostFormData,
+                  strict_host_key_checking: (newValue as "ask" | "yes" | "no") || "",
+                });
               }}
               renderInput={(params) => (
                 <TextField
@@ -1553,8 +1547,10 @@ export default function Sidebar({
               freeSolo
               fullWidth
               options={["+ssh-rsa"]}
-              value={formData.host_key_algorithms || ""}
-              onInputChange={(_event, newValue) => setFormData({ ...formData, host_key_algorithms: newValue || "" })}
+              value={hostFormData.host_key_algorithms || ""}
+              onInputChange={(_event, newValue) =>
+                setHostFormData({ ...hostFormData, host_key_algorithms: newValue || "" })
+              }
               renderInput={(params) => (
                 <TextField
                   {...params}
@@ -1568,9 +1564,9 @@ export default function Sidebar({
             <Autocomplete
               freeSolo
               options={remoteCommandOptions}
-              value={formData.remote_command}
+              value={hostFormData.remote_command}
               onInputChange={(_event, newValue) => {
-                setFormData({ ...formData, remote_command: newValue });
+                setHostFormData({ ...hostFormData, remote_command: newValue });
               }}
               renderInput={(params) => (
                 <TextField
@@ -1588,15 +1584,15 @@ export default function Sidebar({
               size="small"
               multiline
               rows={2}
-              value={formData.comment}
-              onChange={(e) => setFormData({ ...formData, comment: e.target.value })}
+              value={hostFormData.comment}
+              onChange={(e) => setHostFormData({ ...hostFormData, comment: e.target.value })}
               placeholder="Host description..."
             />
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleSaveHost} disabled={!formData.hostname}>
+          <Button onClick={() => setEditHostDialogOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleSaveHost} disabled={!hostFormData.hostname}>
             Save
           </Button>
         </DialogActions>

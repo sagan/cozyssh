@@ -25,10 +25,11 @@ import WestIcon from "@mui/icons-material/West";
 import EastIcon from "@mui/icons-material/East";
 
 import { HASH_MOBILE_INPUT_PANEL, VIBRATE_PATTERN } from "./constants";
-import type { TerminalHandle } from "./Terminal";
-import type { ScratchpadHandle } from "./Scratchpad";
+import type { TerminalRefMap } from "./store";
+import { getStore } from "./store";
 
 export interface MobileInputBarProps {
+  terminalRefs: React.MutableRefObject<TerminalRefMap>;
   isCtrlActive: boolean;
   setIsCtrlActive: (v: boolean) => void;
   isAltActive: boolean;
@@ -40,7 +41,6 @@ export interface MobileInputBarProps {
   onExtraKeysOpenChange: (v: boolean) => void;
   /** Height of the on-screen keyboard in px (0 when keyboard is hidden) */
   keyboardHeight: number;
-  getActiveTerminal: () => TerminalHandle | ScratchpadHandle | null;
 }
 
 // ── Key definitions ───────────────────────────────────────────────────────────
@@ -191,6 +191,7 @@ const PANEL_BTN_SX = (wide?: boolean) =>
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function MobileInputBar({
+  terminalRefs,
   isCtrlActive,
   setIsCtrlActive,
   isAltActive,
@@ -201,7 +202,6 @@ export default function MobileInputBar({
   extraKeysOpen,
   onExtraKeysOpenChange,
   keyboardHeight,
-  getActiveTerminal,
 }: MobileInputBarProps) {
   const [lastKeyboardHeight, setLastKeyboardHeight] = useState(0);
 
@@ -273,7 +273,7 @@ export default function MobileInputBar({
   // restore inputMode and focus the textarea first (which triggers the keyboard
   // to open), then wait for the visual viewport to shrink before removing it.
   const performClose = useCallback(() => {
-    const term = getActiveTerminal();
+    const term = terminalRefs.current[getStore().activePaneId];
     if (term && "getXterm" in term) {
       const textarea = term.getXterm()?.textarea;
       if (textarea) textarea.inputMode = "";
@@ -306,7 +306,7 @@ export default function MobileInputBar({
       // No visualViewport API — fall back to a simple delay
       setTimeout(() => onExtraKeysOpenChange(false), 300);
     }
-  }, [getActiveTerminal, onExtraKeysOpenChange]);
+  }, [onExtraKeysOpenChange, terminalRefs]);
 
   // Listen for popstate (Android back gesture or history.back() calls).
   useEffect(() => {
@@ -325,7 +325,7 @@ export default function MobileInputBar({
       // ── Opening the extra-keys panel ──────────────────────────────────────
       // Suppress system keyboard immediately, then show the panel.
       onExtraKeysOpenChange(true);
-      const term = getActiveTerminal();
+      const term = terminalRefs.current[getStore().activePaneId];
       if (term && "getXterm" in term) {
         const textarea = term.getXterm()?.textarea;
         if (textarea) {
@@ -344,7 +344,7 @@ export default function MobileInputBar({
         performClose();
       }
     }
-  }, [extraKeysOpen, getActiveTerminal, onExtraKeysOpenChange, performClose]);
+  }, [extraKeysOpen, onExtraKeysOpenChange, performClose, terminalRefs]);
 
   const activeKbHeight = keyboardHeight > 60 ? keyboardHeight : lastKeyboardHeight;
   const panelHeight = activeKbHeight > 60 ? activeKbHeight + 40 : Math.floor(window.innerHeight * 0.38);

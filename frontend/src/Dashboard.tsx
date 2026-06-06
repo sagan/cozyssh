@@ -32,7 +32,6 @@ import type {
   TabsLockRequest,
 } from "./api";
 import {
-  APP_NAME,
   DEFAULT_SCROLL_LINES,
   BROWSER_STORAGE_KEY_ACTIVE_GROUP,
   BROWSER_STORAGE_KEY_LOCAL_VARS,
@@ -50,7 +49,6 @@ import {
   MIME_JSON,
   VAR_CS_NOAUTOLOAD,
   VAR_CS_NOAUTORUN,
-  VAR_CS_NOWAKELOCK,
   VAR_CS_SCROLL_LINES,
   VAR_NOAUTOLOAD,
   VAR_NOAUTORUN,
@@ -62,14 +60,9 @@ import {
 } from "./constants";
 import {
   type ContextMenu,
-  type CSEventDetailTerminalChange,
-  type NewTabDialogViewMode,
   type Recent,
   type ScratchpadSyncState,
-  type Severity,
-  type Toast,
   type CSEventDetailVars,
-  CS_EVENT_TERMINAL_CHANGE,
   CS_EVENT_VARS,
   defaultTheme,
   genTabId,
@@ -92,6 +85,11 @@ import {
   setVars,
   setLocalVars as storeSetLocalVars,
   triggerFocus,
+  setSysHostname,
+  setEditButtonDialogOpen,
+  setButtonFormData,
+  setInitialBtnFormData,
+  notify,
 } from "./store";
 import { useLocalStorage } from "./useLocalStorage";
 import { setupPluginAPI, runScript, moduleCache } from "./pluginAPI";
@@ -105,7 +103,6 @@ import ButtonBar from "./ButtonBar";
 import DialogManager from "./DialogManager";
 import AppletWrapper, { type AppletData } from "./AppletWrapper";
 import { dialogs } from "./Dialogs";
-import { useWakeLock } from "./useWakeLock";
 
 interface DashboardProps {
   initialData?: FullData;
@@ -116,7 +113,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const isTouch = useMediaQuery("(pointer: coarse)");
   // ── Store state (shared with pluginAPI and keyboard manager) ────────────
-  const { tabs, activeTabId, activePaneId, hosts, buttons, vars } = useStore();
+  const hosts = useStore((state) => state.hosts);
+  const buttons = useStore((state) => state.buttons);
+  const vars = useStore((state) => state.vars);
 
   // ── UI-only state (stays in React) ────────────────────────────────────
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
@@ -126,11 +125,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
   // and also written into the store so pluginAPI / useKeyboardManager can read it.
   const terminalRefs = useRef<{ [key: string]: TerminalHandle | ScratchpadHandle | null }>({});
   const [viewportHeight, setViewportHeight] = useState("100dvh");
-  const [isCtrlActive, setIsCtrlActive] = useState(false);
-  const [isAltActive, setIsAltActive] = useState(false);
   const [scratchpadSyncState, setScratchpadSyncState] = useState<ScratchpadSyncState>("offline");
   const [memoTabId, setMemoTabId] = useState<string | null>(null);
-  const [unreadTabIds, setUnreadTabIds] = useState<Set<string>>(new Set());
   const [applets, setApplets] = useState<AppletData[]>([]);
   const appletRefs = useRef<AppletData[]>([]);
   const maxZIndexRef = useRef(10000);
@@ -145,19 +141,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const [activeGroup, setActiveGroup] = useLocalStorage(BROWSER_STORAGE_KEY_ACTIVE_GROUP, DEFAULT_BUTTON_GROUP);
-  const [buttonDialogOpen, setButtonDialogOpen] = useState(false);
   const [editingButton, setEditingButton] = useState<ButtonData | null>(null);
-  const [buttonFormData, setButtonFormData] = useState<ButtonData>({
-    id: "",
-    name: "",
-    type: "send_string",
-    payload: "",
-    group: DEFAULT_BUTTON_GROUP,
-    autorun: 0,
-    order: 0,
-    shortcut: "",
-  });
-  const [initialBtnFormData, setInitialBtnFormData] = useState<ButtonData | null>(null);
   const [btnMenuAnchor, setBtnMenuAnchor] = useState<{ anchor: HTMLElement; btn: ButtonData } | null>(null);
   const [lastMenuBtn, setLastMenuBtn] = useState<ButtonData | null>(null);
   const handleNewButtonClick = useCallback(() => {
@@ -175,18 +159,14 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setEditingButton(null);
     setButtonFormData(data);
     setInitialBtnFormData(data);
-    setButtonDialogOpen(true);
+    setEditButtonDialogOpen(true);
   }, [activeGroup, buttons]);
   const [buttonsLoaded, setButtonsLoaded] = useState(false);
   const [inputDialogOpen, setInputDialogOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [appendNewLine, setAppendNewLine] = useState(true);
   const [sendScope, setSendScope] = useState<0 | 1 | 2>(0);
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const toastIdRef = useRef(0);
   const [recents, setRecents] = useLocalStorage<Recent[]>(BROWSER_STORAGE_KEY_RECENTS, []);
-  const [newTabDialogOpen, setNewTabDialogOpen] = useState(false);
-  const [newTabDialogInitialViewMode, setNewTabDialogInitialViewMode] = useState<NewTabDialogViewMode>("servers");
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -203,56 +183,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
   useEffect(() => {
     sendScopeRef.current = sendScope;
   }, [sendScope]);
-
-  useEffect(() => {
-    window.dispatchEvent(
-      new CustomEvent(CS_EVENT_TERMINAL_CHANGE, {
-        detail: { activePaneId } satisfies CSEventDetailTerminalChange,
-      }),
-    );
-  }, [activePaneId]);
-
-  const csNotify = useCallback((msg: string, severity: Severity = "info", key?: string) => {
-    let id: string | number;
-    toastIdRef.current++;
-    id = toastIdRef.current;
-    if (key) {
-      id = `${key}-${id}`;
-    }
-    setToasts((prev) => {
-      const newToast = { id, key, msg, severity };
-      const newToasts = key
-        ? [...prev.filter((t) => typeof t.id === "number" || !t.id.startsWith(key + "-")), newToast]
-        : [...prev, newToast];
-      return newToasts.slice(-3); // Keep last 3
-    });
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4000);
-  }, []);
-
-  const handleTerminalData = useCallback((tabId: string) => {
-    setUnreadTabIds((prev) => {
-      // Don't mark active tab or already unread tabs
-      if (tabId === getStore().activeTabId || prev.has(tabId)) {
-        return prev;
-      }
-      const next = new Set(prev);
-      next.add(tabId);
-      return next;
-    });
-  }, []);
-
-  useEffect(() => {
-    if (unreadTabIds.has(activeTabId)) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setUnreadTabIds((prev) => {
-        const next = new Set(prev);
-        next.delete(activeTabId);
-        return next;
-      });
-    }
-  }, [activeTabId, unreadTabIds]);
 
   useEffect(() => {
     localStorage.setItem(BROWSER_STORAGE_KEY_ACTIVE_GROUP, activeGroup);
@@ -331,7 +261,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         }
       }
       if (targetTab) {
-        const newPane: PaneData = { id: paneId, sessionId, host, options };
+        const newPane: PaneData = { id: paneId, sessionId, host, options, state: "" };
         setTabs((prev) =>
           prev.map((t) => (t.id === target ? { ...t, panes: [...t.panes, newPane], activePaneId: paneId } : t)),
         );
@@ -342,7 +272,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         const newTab: TabData = {
           id: tabId,
           title: title || hostTitle(host),
-          panes: [{ id: paneId, host, options }],
+          panes: [{ id: paneId, host, options, state: "" }],
           activePaneId: paneId,
         };
         setTabs((prev) => [...prev, newTab]);
@@ -394,6 +324,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             id: genPaneId(host),
             host,
             options: hostOptions?.[i],
+            state: "",
           }) satisfies PaneData,
       );
       const newTab: TabData = {
@@ -435,7 +366,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       ...prev,
       {
         id: tabId,
-        panes: [{ id: paneId, sessionId: id, host }],
+        panes: [{ id: paneId, sessionId: id, host, state: "" }],
         activePaneId: paneId,
         title,
         isPinned: true,
@@ -446,7 +377,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setActivePaneId(paneId);
   }, []);
 
-  const [sysHostname, setSysHostname] = useState<string>("");
   const [appVersion, setAppVersion] = useState<string>("dev");
   const [savePassword, setSavePassword] = useState<string>("ask");
 
@@ -656,7 +586,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const applyMode = () => {
       if (extraKeysOpen) {
         // Only suppress the active terminal
-        const term = terminalRefs.current[activePaneId];
+        const term = terminalRefs.current[getStore().activePaneId];
         if (term && "getXterm" in term) {
           const textarea = term.getXterm()?.textarea as HTMLTextAreaElement | undefined;
           if (textarea) {
@@ -683,7 +613,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     // delay to make sure the textarea exists when we try to patch it.
     const t = setTimeout(applyMode, 350);
     return () => clearTimeout(t);
-  }, [extraKeysOpen, activePaneId]);
+  }, [extraKeysOpen]);
 
   const fetchHosts = useCallback(async () => {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
@@ -707,8 +637,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   // these variables are only used in initial phrase, so don't add them to dependency array
   const [startupParams] = useSearchParams();
-
-  useWakeLock(tabs.length > 0 && getIntVar(vars, localVars, VAR_CS_NOWAKELOCK) !== 1);
 
   const handleCloneSession = useCallback((id: string, cloneInSameTab?: boolean) => {
     setContextMenu(null);
@@ -900,7 +828,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const newTab: TabData = {
       id: tabId,
       title: "Scratchpad",
-      panes: [{ id: tabId, host: "scratchpad" }],
+      panes: [{ id: tabId, host: "scratchpad", state: "" }],
       activePaneId: tabId,
       type: "scratchpad",
     };
@@ -1153,7 +1081,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
           break;
 
         case "run_script":
-          await runScript(btn, csNotify);
+          await runScript(btn);
           break;
 
         default:
@@ -1162,7 +1090,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
     },
     [
       activeGroup,
-      csNotify,
       groups,
       handleCloneSession,
       handleCloseTabOrPane,
@@ -1197,7 +1124,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             return;
           }
           if (!r.ok) {
-            csNotify(`Fail to load data: status=${r.status}`);
+            notify(`Fail to load data: status=${r.status}`);
             return;
           }
           data = (await r.json()) as FullData;
@@ -1209,7 +1136,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             ...tabs,
             {
               id: tabId,
-              panes: [{ id: paneId, host: LOCAL_NAME }],
+              panes: [{ id: paneId, host: LOCAL_NAME, state: "" }],
               activePaneId: paneId,
               title: LOCAL_NAME,
             },
@@ -1284,7 +1211,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               ...tabs,
               {
                 id: tabId,
-                panes: [{ id: paneId, host: LOCAL_NAME }],
+                panes: [{ id: paneId, host: LOCAL_NAME, state: "" }],
                 activePaneId: paneId,
                 title: LOCAL_NAME,
               },
@@ -1314,7 +1241,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               ...tabs,
               {
                 id: tabId,
-                panes: [{ id: paneId, host: LOCAL_NAME }],
+                panes: [{ id: paneId, host: LOCAL_NAME, state: "" }],
                 activePaneId: paneId,
                 title: LOCAL_NAME,
               },
@@ -1332,12 +1259,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
             const paneId = p.id;
             return {
               id: p.id,
-              panes: [{ id: paneId, host: p.host }],
+              panes: [{ id: paneId, host: p.host, state: "" }],
               activePaneId: paneId,
               title: p.title,
               isPinned: true,
               isLocked: p.isLocked,
-            };
+            } satisfies TabData;
           });
           if (pinnedTabs.length > 0) {
             setTabs((prev) => (prev.length > 0 ? prev : pinnedTabs));
@@ -1356,7 +1283,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                 : [
                     {
                       id: tabId,
-                      panes: [{ id: paneId, host: LOCAL_NAME }],
+                      panes: [{ id: paneId, host: LOCAL_NAME, state: "" }],
                       activePaneId: paneId,
                       title: LOCAL_NAME,
                     },
@@ -1378,7 +1305,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               : [
                   {
                     id: tabId,
-                    panes: [{ id: paneId, host: LOCAL_NAME }],
+                    panes: [{ id: paneId, host: LOCAL_NAME, state: "" }],
                     activePaneId: paneId,
                     title: LOCAL_NAME,
                   },
@@ -1398,15 +1325,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
     // Run ONLY once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    const active = tabs.find((t) => t.id === activeTabId);
-    if (!active || active.title === LOCAL_NAME) {
-      document.title = APP_NAME + " " + sysHostname;
-    } else {
-      document.title = `${active.title} - ${APP_NAME} ${sysHostname}`;
-    }
-  }, [tabs, activeTabId, sysHostname]);
 
   const handleLogout = useCallback(async () => {
     const syncState = localStorage.getItem(BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE);
@@ -1660,11 +1578,14 @@ export default function Dashboard({ initialData }: DashboardProps) {
     triggerFocus();
   }, [contextMenu]);
 
+  const getTerminalRefs = useCallback(() => terminalRefs.current, []);
+  const getApplets = useCallback(() => appletRefs.current, []);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const setTheme = useCallback((options: any, ...args: any[]) => setMuiTheme(createTheme(options, ...args)), []);
+
   useEffect(() => {
     return setupPluginAPI({
-      notify: csNotify,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setTheme: (options: any, ...args: any[]) => setMuiTheme(createTheme(options, ...args)),
+      setTheme,
       handleSelectHost,
       handleSelectTagAsSplit,
       handleAttach,
@@ -1674,12 +1595,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
       isMobile,
       maxZIndexRef,
       setLocalVars,
-      getTerminalRefs: () => terminalRefs.current,
-      getApplets: () => appletRefs.current,
+      getTerminalRefs,
+      getApplets,
       handleCloseTabOrPane,
     });
   }, [
-    csNotify,
     handleAttach,
     handleRefresh,
     handleSelectHost,
@@ -1687,6 +1607,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
     isMobile,
     setLocalVars,
     handleCloseTabOrPane,
+    getTerminalRefs,
+    getApplets,
+    setTheme,
   ]);
 
   // ── Keyboard shortcuts (reads fresh state from store — tiny stable dep array) ──
@@ -1696,11 +1619,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
     handleSelectHost,
     handleOpenScratchpad,
     handleCloseTabOrPane,
-    setNewTabDialogOpen,
-    setNewTabDialogInitialViewMode,
     searchInputRef,
     setSearchOpen,
-    getTerminalRefs: () => terminalRefs.current,
+    getTerminalRefs,
     sidebarFilterRef,
   });
 
@@ -1717,10 +1638,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
         [HEADER_CONTENT_TYPE]: MIME_JSON,
       },
-      body: JSON.stringify(buttonFormData),
+      body: JSON.stringify(getStore().buttonFormData),
     });
     setInitialBtnFormData(null);
-    setButtonDialogOpen(false);
+    setEditButtonDialogOpen(false);
     fetch("/api/buttons", {
       headers: {
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
@@ -1730,9 +1651,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
       .then((data) => {
         setButtons(data || []);
         setButtonsLoaded(true);
-        setActiveGroup(buttonFormData.group || DEFAULT_BUTTON_GROUP);
+        setActiveGroup(getStore().buttonFormData.group || DEFAULT_BUTTON_GROUP);
       });
-  }, [buttonFormData, editingButton, setActiveGroup]);
+  }, [editingButton, setActiveGroup]);
 
   const handleDeleteButton = useCallback(async (id: string, name: string) => {
     setBtnMenuAnchor(null);
@@ -1777,17 +1698,15 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setButtonsLoaded(true);
   }, []);
 
-  const handleCloseBtnDialog = useCallback(
-    (_e: unknown, reason: string) => {
-      const isDirty = initialBtnFormData && JSON.stringify(buttonFormData) !== JSON.stringify(initialBtnFormData);
-      if (isDirty && (reason === "backdropClick" || reason === "escapeKeyDown")) {
-        return;
-      }
-      setButtonDialogOpen(false);
-      triggerFocus();
-    },
-    [buttonFormData, initialBtnFormData],
-  );
+  const handleCloseBtnDialog = useCallback((_e: unknown, reason: string) => {
+    const { buttonFormData, initialBtnFormData } = getStore();
+    const isDirty = initialBtnFormData && JSON.stringify(buttonFormData) !== JSON.stringify(initialBtnFormData);
+    if (isDirty && (reason === "backdropClick" || reason === "escapeKeyDown")) {
+      return;
+    }
+    setEditButtonDialogOpen(false);
+    triggerFocus();
+  }, []);
 
   const [lastKeyboardHeight, setLastKeyboardHeight] = useState(0);
 
@@ -1858,6 +1777,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
     }
   }, [applets.length]);
 
+  console.log("Dashboard render");
+
   return (
     <ThemeProvider theme={muiTheme}>
       <Box id="main-ui" sx={{ display: "flex", height: viewportHeight, overflow: "hidden" }}>
@@ -1875,8 +1796,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
           }}
           onLogout={handleLogout}
           onLogoutAll={handleLogoutAll}
-          activeTabs={tabs.flatMap((t) => t.panes.filter((p) => p.state !== "stolen").map((p) => p.sessionId || p.id))}
-          sysHostname={sysHostname}
           appVersion={appVersion}
           savePassword={savePassword}
           onSavePasswordChange={async (val) => {
@@ -1892,7 +1811,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               });
               if (res.ok) {
                 setSavePassword(val);
-                csNotify("Settings saved successfully!");
+                notify("Settings saved successfully!");
               } else {
                 const errText = await res.text();
                 dialogs.alert("Failed to save setting: " + (errText || res.statusText));
@@ -1918,7 +1837,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
           filterRef={sidebarFilterRef}
         />
         <Box
-          id="ui-fix-spacer"
+          id="main-content"
           component="main"
           sx={{
             flexGrow: 1,
@@ -1937,35 +1856,25 @@ export default function Dashboard({ initialData }: DashboardProps) {
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
             terminalRefs={terminalRefs}
-            unreadTabIds={unreadTabIds}
             isMobile={isMobile}
             applets={applets}
             scratchpadSyncState={scratchpadSyncState}
             handleContextMenu={handleContextMenu}
             handleCloseTab={handleCloseTab}
             handleCloseSearch={handleCloseSearch}
-            setNewTabDialogInitialViewMode={setNewTabDialogInitialViewMode}
-            setNewTabDialogOpen={setNewTabDialogOpen}
           />
           <TerminalGrid
             terminalRefs={terminalRefs}
             onTerminalBlur={onTerminalBlur}
             onTerminalFocus={onTerminalFocus}
-            isCtrlActive={isCtrlActive}
-            setIsCtrlActive={setIsCtrlActive}
-            isAltActive={isAltActive}
-            setIsAltActive={setIsAltActive}
             scratchpadSyncState={scratchpadSyncState}
             setScratchpadSyncState={setScratchpadSyncState}
-            handleTerminalData={handleTerminalData}
             isTouch={isTouch}
             isMobile={isMobile}
             mobileAppletsOpen={mobileAppletsOpen}
             setMobileAppletsOpen={setMobileAppletsOpen}
             applets={applets}
             setMobileOpen={setMobileOpen}
-            setNewTabDialogOpen={setNewTabDialogOpen}
-            setNewTabDialogInitialViewMode={setNewTabDialogInitialViewMode}
             handleTouchStart={handleTouchStart}
             handleTouchEnd={handleTouchEnd}
             handleSendKey={handleSendKey}
@@ -1974,7 +1883,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
             extraKeysOpen={extraKeysOpen}
             onExtraKeysOpenChange={setExtraKeysOpen}
             keyboardHeight={keyboardHeight}
-            getActiveTerminal={() => terminalRefs.current[activePaneId]}
           />
           <ButtonBar
             activeGroup={activeGroup}
@@ -2179,10 +2087,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         lastMenuBtn={lastMenuBtn}
         handleMoveButton={handleMoveButton}
         handleDeleteButton={handleDeleteButton}
-        buttonDialogOpen={buttonDialogOpen}
         editingButton={editingButton}
-        buttonFormData={buttonFormData}
-        setButtonFormData={setButtonFormData}
         handleCloseBtnDialog={handleCloseBtnDialog}
         handleSaveButton={handleSaveButton}
         hosts={hosts}
@@ -2196,21 +2101,14 @@ export default function Dashboard({ initialData }: DashboardProps) {
         sendScope={sendScope}
         setSendScope={setSendScope}
         sendParsedString={sendParsedString}
-        newTabDialogOpen={newTabDialogOpen}
-        setNewTabDialogOpen={setNewTabDialogOpen}
         recents={recents}
-        newTabDialogInitialViewMode={newTabDialogInitialViewMode}
         setEditingButton={setEditingButton}
-        setInitialBtnFormData={setInitialBtnFormData}
-        setButtonDialogOpen={setButtonDialogOpen}
         setInputDialogOpen={setInputDialogOpen}
         activeGroup={activeGroup}
         handleButtonClick={handleButtonClick}
         handleAttach={handleAttach}
         handleRefresh={handleRefresh}
         handleSelectHost={handleSelectHost}
-        toasts={toasts}
-        setToasts={setToasts}
       />
     </ThemeProvider>
   );
