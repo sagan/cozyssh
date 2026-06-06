@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router";
+import { useShallow } from "zustand/react/shallow";
 import {
   Box,
   CssBaseline,
@@ -33,7 +34,6 @@ import type {
 } from "./api";
 import {
   DEFAULT_SCROLL_LINES,
-  BROWSER_STORAGE_KEY_TAB_ID,
   BROWSER_STORAGE_KEY_TOKEN,
   DEFAULT_BUTTON_GROUP,
   HEADER_AUTHORIZATION,
@@ -51,15 +51,11 @@ import {
   VAR_NOAUTORUN,
   VIBRATE_PATTERN,
   BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE,
-  VAR_CS_REMAP_CTRL_L,
-  VAR_CS_TERMINAL_FONT_SIZE,
-  DEFAULT_TERMINAL_FONT_SIZE,
+  ID_TERMINAL_SEARCH_INPUT,
 } from "./constants";
 import {
   type ContextMenu,
   type ScratchpadSyncState,
-  type CSEventDetailVars,
-  CS_EVENT_VARS,
   defaultTheme,
   genTabId,
   getIntVar,
@@ -88,6 +84,14 @@ import {
   setActiveGroup,
   setRecents,
   setEditButton,
+  setInputDialogOpen,
+  setInputValue,
+  setBtnMenuAnchor,
+  setMobileOpen,
+  setMobileAppletsOpen,
+  setSearchOpen,
+  setSendScope,
+  activatePane,
 } from "./store";
 import { setupPluginAPI, runScript, moduleCache } from "./pluginAPI";
 import { useKeyboardManager } from "./useKeyboardManager";
@@ -99,6 +103,7 @@ import TerminalGrid from "./TerminalGrid";
 import ButtonBar from "./ButtonBar";
 import DialogManager from "./DialogManager";
 import AppletWrapper, { type AppletData } from "./AppletWrapper";
+import SideEffect from "./SideEffect";
 import { dialogs } from "./Dialogs";
 
 interface DashboardProps {
@@ -106,19 +111,20 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ initialData }: DashboardProps) {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
-  const isTouch = useMediaQuery("(pointer: coarse)");
-  // ── Store state (shared with pluginAPI and keyboard manager) ────────────
-  const hosts = useStore((state) => state.hosts);
-  const buttons = useStore((state) => state.buttons);
-  const vars = useStore((state) => state.vars);
-  const localVars = useStore((state) => state.localVars);
+  const mobileAppletsOpen = useStore((state) => state.mobileAppletsOpen);
+  const groups = useStore(
+    useShallow((state) =>
+      [
+        DEFAULT_BUTTON_GROUP,
+        ...Array.from(
+          new Set(state.buttons.map((b) => b.group || DEFAULT_BUTTON_GROUP).filter((g) => g !== DEFAULT_BUTTON_GROUP)),
+        ),
+      ].sort(),
+    ),
+  );
 
   // ── UI-only state (stays in React) ────────────────────────────────────
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [mobileAppletsOpen, setMobileAppletsOpen] = useState(false);
   // terminalRefs is kept as a local ref for all Dashboard-internal usage,
   // and also written into the store so pluginAPI / useKeyboardManager can read it.
   const terminalRefs = useRef<{ [key: string]: TerminalHandle | ScratchpadHandle | null }>({});
@@ -138,16 +144,19 @@ export default function Dashboard({ initialData }: DashboardProps) {
   /** Height of the on-screen keyboard in px (0 when hidden) */
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
-  const [btnMenuAnchor, setBtnMenuAnchor] = useState<{ anchor: HTMLElement; btn: ButtonData } | null>(null);
-  const [lastMenuBtn, setLastMenuBtn] = useState<ButtonData | null>(null);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const isTouch = useMediaQuery("(pointer: coarse)");
+
   const handleNewButtonClick = useCallback(() => {
+    const { activeGroup, buttons } = getStore();
     const maxOrder = buttons.length > 0 ? Math.max(...buttons.map((b) => b.order || 0)) : 0;
     const data: ButtonData = {
       id: "",
       name: "",
       type: "send_string",
       payload: "",
-      group: getStore().activeGroup,
+      group: activeGroup,
       autorun: 0,
       order: maxOrder + 10 || 10,
       shortcut: "",
@@ -156,36 +165,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setButtonFormData(data);
     setInitialBtnFormData(data);
     setEditButtonDialogOpen(true);
-  }, [buttons]);
-  const [inputDialogOpen, setInputDialogOpen] = useState(false);
-  const [inputValue, setInputValue] = useState("");
-  const [appendNewLine, setAppendNewLine] = useState(true);
-  const [sendScope, setSendScope] = useState<0 | 1 | 2>(0);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const sidebarFilterRef = useRef<HTMLInputElement>(null);
-
-  // sendScope needs to be readable from stable callbacks
-  const sendScopeRef = useRef<0 | 1 | 2>(0);
-  useEffect(() => {
-    sendScopeRef.current = sendScope;
-  }, [sendScope]);
-
-  const [groups, filteredButtons] = useStore((state) => {
-    const groups = [
-      DEFAULT_BUTTON_GROUP,
-      ...Array.from(
-        new Set(state.buttons.map((b) => b.group || DEFAULT_BUTTON_GROUP).filter((g) => g !== DEFAULT_BUTTON_GROUP)),
-      ),
-    ].sort();
-    const filteredButtons = state.buttons.filter((b) => (b.group || DEFAULT_BUTTON_GROUP) === state.activeGroup);
-    return [groups, filteredButtons];
-  });
+  }, []);
 
   useEffect(() => {
     appletRefs.current = applets;
   }, [applets]);
+
+  const hasSidebarApplet = useMemo(() => !!applets.find((a) => a.position === "sidebar"), [applets]);
 
   const handleSelectHost = useCallback(
     async (
@@ -212,11 +198,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         for (const tab of getStore().tabs) {
           for (const pane of tab.panes) {
             if (pane.id === options.id) {
-              setActiveTabId(tab.id);
-              setActivePaneId(pane.id);
-              if (tab.activePaneId !== pane.id) {
-                setTabs((prev) => prev.map((t) => (t.id === tab.id ? { ...t, activePaneId: pane.id } : t)));
-              }
+              activatePane(pane.id, tab.id);
               triggerFocus();
               return;
             }
@@ -400,11 +382,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   const [muiTheme, setMuiTheme] = useState(defaultTheme);
 
-  const handleCloseInputDialog = useCallback(() => {
-    setInputDialogOpen(false);
-    triggerFocus();
-  }, []);
-
   const handleCloseSearch = useCallback(() => {
     setSearchOpen(false);
     const term = terminalRefs.current[getStore().activePaneId];
@@ -423,7 +400,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, []);
 
   const sendParsedString = useCallback(async (input: string) => {
-    const scope = sendScopeRef.current;
+    const scope = getStore().sendScope;
     const { tabs: currentTabs, activeTabId, activePaneId } = getStore();
     let targetPaneIds: string[] = [];
     if (scope === 2) {
@@ -500,12 +477,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
     },
     [gestureMode, isMobile, isTouch],
   );
-
-  const tabId = useRef(sessionStorage.getItem(BROWSER_STORAGE_KEY_TAB_ID) || genTabId(""));
-
-  useEffect(() => {
-    sessionStorage.setItem(BROWSER_STORAGE_KEY_TAB_ID, tabId.current);
-  }, []);
 
   // 1. Add this ref right above the visualViewport useEffect
   const extraKeysOpenRef = useRef(extraKeysOpen);
@@ -1004,7 +975,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
             case "SEARCH":
               setSearchOpen(true);
-              setTimeout(() => searchInputRef.current?.focus(), 100);
+              setTimeout(() => document.getElementById(ID_TERMINAL_SEARCH_INPUT)?.focus(), 100);
               break;
 
             default:
@@ -1066,6 +1037,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   );
 
   useEffect(() => {
+    const { vars, localVars } = getStore();
     const autorun = getIntVar(vars, localVars, VAR_CS_NOAUTORUN) !== 1 && startupParams.get(VAR_NOAUTORUN) !== "1";
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     const hash = window.location.hash.substring(1);
@@ -1556,7 +1528,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
       handleAttach,
       handleRefresh,
       setApplets,
-      setMobileAppletsOpen,
       isMobile,
       maxZIndexRef,
       getTerminalRefs,
@@ -1582,10 +1553,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     handleSelectHost,
     handleOpenScratchpad,
     handleCloseTabOrPane,
-    searchInputRef,
-    setSearchOpen,
     getTerminalRefs,
-    sidebarFilterRef,
   });
 
   const handleSaveButton = useCallback(async () => {
@@ -1709,44 +1677,16 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, []);
 
   useEffect(() => {
-    __CS_REMAP_CTRL_L__ = getIntVar(vars, localVars, VAR_CS_REMAP_CTRL_L);
-    const fontSize = Math.max(1, getIntVar(vars, localVars, VAR_CS_TERMINAL_FONT_SIZE, DEFAULT_TERMINAL_FONT_SIZE));
-    if (fontSize !== __CS_TERMINAL_FONT_SIZE__) {
-      for (const term of Object.values(terminalRefs.current)) {
-        if (term && "getXterm" in term) {
-          const xterm = term.getXterm();
-          if (xterm) {
-            xterm.options.fontSize = fontSize;
-          }
-        }
-      }
-      __CS_TERMINAL_FONT_SIZE__ = fontSize;
-    }
-    window.dispatchEvent(
-      new CustomEvent(CS_EVENT_VARS, {
-        detail: {
-          vars,
-          localVars,
-        } satisfies CSEventDetailVars,
-      }),
-    );
-  }, [vars, localVars]);
-
-  useEffect(() => {
     if (applets.length === 0) {
       triggerFocus();
     }
   }, [applets.length]);
-
-  console.log("Dashboard render");
 
   return (
     <ThemeProvider theme={muiTheme}>
       <Box id="main-ui" sx={{ display: "flex", height: viewportHeight, overflow: "hidden" }}>
         <CssBaseline />
         <Sidebar
-          mobileOpen={mobileOpen}
-          onClose={() => setMobileOpen(false)}
           onSelect={(host) => {
             handleSelectHost(host);
             setMobileOpen(false);
@@ -1789,13 +1729,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
             handleRefresh();
             setMobileOpen(false);
           }}
-          hosts={hosts}
           fetchHosts={fetchHosts}
           onOpenScratchpad={() => {
             handleOpenScratchpad();
             setMobileOpen(false);
           }}
-          filterRef={sidebarFilterRef}
         />
         <Box
           id="main-content"
@@ -1809,16 +1747,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
           }}
         >
           <TabBar
-            mobileOpen={mobileOpen}
-            setMobileOpen={setMobileOpen}
-            mobileAppletsOpen={mobileAppletsOpen}
-            setMobileAppletsOpen={setMobileAppletsOpen}
-            searchOpen={searchOpen}
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
             terminalRefs={terminalRefs}
             isMobile={isMobile}
-            applets={applets}
+            hasSidebarApplet={hasSidebarApplet}
             scratchpadSyncState={scratchpadSyncState}
             handleContextMenu={handleContextMenu}
             handleCloseTab={handleCloseTab}
@@ -1832,10 +1763,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             setScratchpadSyncState={setScratchpadSyncState}
             isTouch={isTouch}
             isMobile={isMobile}
-            mobileAppletsOpen={mobileAppletsOpen}
-            setMobileAppletsOpen={setMobileAppletsOpen}
-            applets={applets}
-            setMobileOpen={setMobileOpen}
+            hasSidebarApplet={hasSidebarApplet}
             handleTouchStart={handleTouchStart}
             handleTouchEnd={handleTouchEnd}
             handleSendKey={handleSendKey}
@@ -1845,15 +1773,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             onExtraKeysOpenChange={setExtraKeysOpen}
             keyboardHeight={keyboardHeight}
           />
-          <ButtonBar
-            setActiveGroup={setActiveGroup}
-            groups={groups}
-            filteredButtons={filteredButtons}
-            handleButtonClick={handleButtonClick}
-            setBtnMenuAnchor={setBtnMenuAnchor}
-            setLastMenuBtn={setLastMenuBtn}
-            onNewButtonClick={handleNewButtonClick}
-          />
+          <ButtonBar groups={groups} handleButtonClick={handleButtonClick} onNewButtonClick={handleNewButtonClick} />
           <Box
             id="mobile-keyboard-spacer"
             sx={{
@@ -2042,30 +1962,18 @@ export default function Dashboard({ initialData }: DashboardProps) {
         handleRename={handleRename}
         handleCloseOther={handleCloseOther}
         handleCloseRight={handleCloseRight}
-        btnMenuAnchor={btnMenuAnchor}
-        setBtnMenuAnchor={setBtnMenuAnchor}
-        lastMenuBtn={lastMenuBtn}
         handleMoveButton={handleMoveButton}
         handleDeleteButton={handleDeleteButton}
         handleCloseBtnDialog={handleCloseBtnDialog}
         handleSaveButton={handleSaveButton}
-        hosts={hosts}
         groups={groups}
-        inputDialogOpen={inputDialogOpen}
-        handleCloseInputDialog={handleCloseInputDialog}
-        inputValue={inputValue}
-        setInputValue={setInputValue}
-        appendNewLine={appendNewLine}
-        setAppendNewLine={setAppendNewLine}
-        sendScope={sendScope}
-        setSendScope={setSendScope}
         sendParsedString={sendParsedString}
-        setInputDialogOpen={setInputDialogOpen}
         handleButtonClick={handleButtonClick}
         handleAttach={handleAttach}
         handleRefresh={handleRefresh}
         handleSelectHost={handleSelectHost}
       />
+      <SideEffect terminalRefs={terminalRefs} />
     </ThemeProvider>
   );
 }

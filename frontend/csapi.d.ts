@@ -1709,6 +1709,10 @@ export interface ButtonData {
 	order: number;
 	shortcut: string;
 }
+export interface Recent {
+	host: string;
+	last_used: number;
+}
 export interface WsTerminalMessage {
 	type: "historyStart" | "tabState" | "state";
 	state: "stolen" | "disconnected" | "connected" | "connecting" | "exited" | "";
@@ -22048,7 +22052,19 @@ declare namespace DataType {
 	type TryTactic = "flip-block" | "flip-inline" | "flip-start" | (string & {});
 	type VisualBox = "border-box" | "content-box" | "padding-box";
 }
+export type ViewMode = "servers" | "tabs" | "buttons";
 export type Severity = "success" | "info" | "warning" | "error";
+export type ToastData = {
+	msg: string;
+	severity: Severity;
+};
+export type Toast = ToastData & {
+	id: number | string;
+	key?: string;
+};
+export type HostForm = Omit<HostData, "tags"> & {
+	tags: string;
+};
 export interface CommandHistoryEntry {
 	commandId: string;
 	command?: string;
@@ -22286,6 +22302,33 @@ export interface TabData {
 }
 export type TerminalRefMap = Record<string, TerminalHandle | ScratchpadHandle | null>;
 export interface Store {
+	sendScope: 0 | 1 | 2;
+	searchOpen: boolean;
+	mobileOpen: boolean;
+	mobileAppletsOpen: boolean;
+	activeGroup: string;
+	recents: Recent[];
+	toasts: Toast[];
+	editHostName: string;
+	/**
+	 * Current editing button
+	 */
+	editButton: ButtonData | null;
+	lastMenuBtn: ButtonData | null;
+	btnMenuAnchor: {
+		anchor: HTMLElement;
+		btn: ButtonData;
+	} | null;
+	hostFormData: HostForm;
+	initialHostFormData: HostForm | null;
+	buttonFormData: ButtonData;
+	initialBtnFormData: ButtonData | null;
+	editButtonDialogOpen: boolean;
+	editHostDialogOpen: boolean;
+	inputDialogOpen: boolean;
+	inputValue: string;
+	newTabDialogOpen: boolean;
+	newTabDialogInitialViewMode: ViewMode;
 	sysHostname: string;
 	unreadTabIds: Set<string>;
 	focusTrigger: number;

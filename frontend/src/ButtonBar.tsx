@@ -3,7 +3,9 @@ import { Box, TextField, Tabs, Tab, IconButton } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 
 import type { ButtonData } from "./api";
-import { useStore } from "./store";
+import { setActiveGroup, setBtnMenuAnchor, setLastMenuBtn, useStore } from "./store";
+import { useShallow } from "zustand/react/shallow";
+import { DEFAULT_BUTTON_GROUP } from "./constants";
 
 const buttonStyleBorder: Record<ButtonData["type"], string> = {
   run_script: "1px dashed",
@@ -30,25 +32,17 @@ const buttonStyleBgColorHover: Record<ButtonData["type"], string> = {
 };
 
 export interface ButtonBarProps {
-  setActiveGroup: (g: string) => void;
   groups: string[];
-  filteredButtons: ButtonData[];
   handleButtonClick: (btn: Pick<ButtonData, "id" | "name" | "type" | "payload">) => void;
-  setBtnMenuAnchor: (obj: { anchor: HTMLElement; btn: ButtonData } | null) => void;
-  setLastMenuBtn: (btn: ButtonData) => void;
   onNewButtonClick: () => void;
 }
 
-export default function ButtonBar({
-  setActiveGroup,
-  groups,
-  filteredButtons,
-  handleButtonClick,
-  setBtnMenuAnchor,
-  setLastMenuBtn,
-  onNewButtonClick,
-}: ButtonBarProps) {
+export default function ButtonBar({ groups, handleButtonClick, onNewButtonClick }: ButtonBarProps) {
   const activeGroup = useStore((state) => state.activeGroup);
+  const filteredButtons = useStore(
+    useShallow((state) => state.buttons.filter((b) => (b.group || DEFAULT_BUTTON_GROUP) === state.activeGroup)),
+  );
+
   return (
     <Box
       id="button-bar"

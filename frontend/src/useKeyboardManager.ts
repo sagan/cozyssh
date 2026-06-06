@@ -16,6 +16,7 @@ import {
   DEFAULT_BUTTON_GROUP,
   DEFAULT_SCROLL_LINES,
   DEFAULT_TERMINAL_FONT_SIZE,
+  ID_SIDEBAR_FILTER,
   LOCAL_NAME,
   LOCAL_VAR_PREFIX,
   TOAST_KEY_TERMINAL_FONT_SIZE,
@@ -25,13 +26,14 @@ import {
 import { getIntVar, getKeyCombination, isMuiDialogOpen, nextTerminalFontSize, prevTerminalFontSize } from "./common";
 import {
   type TerminalRefMap,
+  activatePane,
   getStore,
   setActiveGroup,
   setActivePaneId,
   setActiveTabId,
   setNewTabDialogInitialViewMode,
   setNewTabDialogOpen,
-  setTabs,
+  setSearchOpen,
   triggerFocus,
   triggerFocusSearchInput,
 } from "./store";
@@ -46,14 +48,8 @@ export interface KeyboardManagerOptions {
   handleOpenScratchpad: () => void;
   /** Close the active pane, or the whole tab if it's the last pane */
   handleCloseTabOrPane: (tabOrPaneId?: string) => void;
-  /** Ref to the terminal search input */
-  searchInputRef: React.RefObject<HTMLInputElement | null>;
-  /** Open the in-terminal search bar */
-  setSearchOpen: (open: boolean) => void;
   /** Getter for the live terminal ref map */
   getTerminalRefs: () => TerminalRefMap;
-  /** Ref to the sidebar filter input */
-  sidebarFilterRef: React.RefObject<HTMLInputElement | null>;
 }
 
 export const disableShortcuts = new Set<string>();
@@ -65,10 +61,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
     handleSelectHost,
     handleOpenScratchpad,
     handleCloseTabOrPane,
-    searchInputRef,
-    setSearchOpen,
     getTerminalRefs,
-    sidebarFilterRef,
   } = options;
 
   useEffect(() => {
@@ -239,7 +232,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
             if (keycomb === "alt+shift+i") {
               csSetSidebarFilter("");
             }
-            sidebarFilterRef.current?.focus();
+            document.getElementById(ID_SIDEBAR_FILTER)?.focus();
           }
           return;
 
@@ -254,20 +247,14 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           if (activeTab.panes.length <= 1 || keycomb === "alt+shift+h") {
             // single pane tab or shift pressed, switch to prev tab
             const prevIdx = (idx - 1 + tabs.length) % tabs.length;
-            const targetTab = tabs[prevIdx];
-            const targetPaneId = targetTab.activePaneId;
-            setActiveTabId(targetTab.id);
-            setActivePaneId(targetPaneId);
-            setTabs((tabs) => tabs.map((t) => (t.id === targetTab.id ? { ...t, activePaneId: targetPaneId } : t)));
+            activatePane(tabs[prevIdx].activePaneId, tabs[prevIdx].id);
             (document.activeElement as HTMLElement)?.blur?.();
             triggerFocus();
           } else {
             // multiple-panes tab, switch to prev pane of this tab
             const paneIdx = activeTab.panes.findIndex((p) => p.id === activePaneId);
             const prevPaneIdx = (paneIdx - 1 + activeTab.panes.length) % activeTab.panes.length;
-            const targetPaneId = activeTab.panes[prevPaneIdx].id;
-            setActivePaneId(targetPaneId);
-            setTabs((tabs) => tabs.map((t) => (t.id === activeTab.id ? { ...t, activePaneId: targetPaneId } : t)));
+            activatePane(activeTab.panes[prevPaneIdx].id);
             (document.activeElement as HTMLElement)?.blur?.();
             triggerFocus();
           }
@@ -285,20 +272,14 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           if (activeTab.panes.length <= 1 || keycomb === "alt+shift+l") {
             // single pane tab or shift pressed, switch to next tab
             const nextIdx = (idx + 1) % tabs.length;
-            const targetTab = tabs[nextIdx];
-            const targetPaneId = targetTab.activePaneId;
-            setActiveTabId(targetTab.id);
-            setActivePaneId(targetPaneId);
-            setTabs((tabs) => tabs.map((t) => (t.id === targetTab.id ? { ...t, activePaneId: targetPaneId } : t)));
+            activatePane(tabs[nextIdx].activePaneId, tabs[nextIdx].id);
             (document.activeElement as HTMLElement)?.blur?.();
             triggerFocus();
           } else {
             // multiple-panes tab, switch to next pane of this tab
             const paneIdx = activeTab.panes.findIndex((p) => p.id === activePaneId);
             const nextPaneIdx = (paneIdx + 1) % activeTab.panes.length;
-            const targetPaneId = activeTab.panes[nextPaneIdx].id;
-            setActivePaneId(targetPaneId);
-            setTabs((tabs) => tabs.map((t) => (t.id === activeTab.id ? { ...t, activePaneId: targetPaneId } : t)));
+            activatePane(activeTab.panes[nextPaneIdx].id);
             (document.activeElement as HTMLElement)?.blur?.();
             triggerFocus();
           }
@@ -330,9 +311,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           e.preventDefault();
           const activeTab = tabs.find((t) => t.id === activeTabId);
           if (activeTab && activeTab.panes.length > 0) {
-            const pid = activeTab.panes[0].id;
-            setActivePaneId(pid);
-            setTabs((tabs) => tabs.map((t) => (t.id === activeTabId ? { ...t, activePaneId: pid } : t)));
+            activatePane(activeTab.panes[0].id, activeTab.id);
             triggerFocus();
           }
           return;
@@ -446,10 +425,8 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
     handleSelectHost,
     handleOpenScratchpad,
     handleCloseTabOrPane,
-    searchInputRef,
     setSearchOpen,
     getTerminalRefs,
     handleCloneSession,
-    sidebarFilterRef,
   ]);
 }

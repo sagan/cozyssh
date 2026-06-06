@@ -40,7 +40,7 @@ import {
   terminalKeyShortcuts,
   terminalIgnoreKeyShortcuts,
 } from "./common";
-import type { PaneData } from "./store";
+import { getStore, type PaneData } from "./store";
 
 export interface TerminalHandle {
   sendData: (data: string) => void;
@@ -93,8 +93,6 @@ interface TerminalProps {
   onDataReceived?: () => void;
   cloneFrom?: string;
   isTouch?: boolean;
-  vars: Record<string, string>;
-  localVars: Record<string, string>;
 }
 
 const RECENT_COMMANDS_NUM = 10;
@@ -119,8 +117,6 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       onDataReceived,
       cloneFrom,
       isTouch,
-      vars,
-      localVars,
       onTerminalBlur,
       onTerminalFocus,
     },
@@ -297,6 +293,8 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
 
       // Track the webgl addon
       let webglAddon: WebglAddon | null = null;
+
+      const { vars, localVars } = getStore();
 
       const term = new Terminal({
         allowProposedApi: true,
@@ -650,9 +648,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
 
           // Decode the base64 payload and write to the OS clipboard
           const decoded = atob(b64);
-          navigator.clipboard.writeText(decoded).catch((err) => {
-            console.warn("OSC 52: clipboard write failed:", err);
-          });
+          navigator.clipboard.writeText(decoded).catch(() => {});
         } catch (e) {
           console.error("Error parsing OSC 52:", e);
         }
@@ -1170,9 +1166,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
         selectionTimeout = setTimeout(() => {
           const selection = term.getSelection();
           if (selection) {
-            navigator.clipboard.writeText(selection).catch((err) => {
-              console.error("Failed to copy text: ", err);
-            });
+            navigator.clipboard.writeText(selection).catch(() => {});
           }
         }, 200);
       });
@@ -1191,9 +1185,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
               ws.send(new TextEncoder().encode(text));
             }
           })
-          .catch((err) => {
-            console.error("Failed to read clipboard: ", err);
-          });
+          .catch(() => {});
       };
 
       const container = terminalRef.current;

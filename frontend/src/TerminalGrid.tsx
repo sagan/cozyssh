@@ -9,17 +9,18 @@ import { type ScratchpadSyncState, genPaneId } from "./common";
 import {
   type PaneData,
   type TerminalRefMap,
+  activatePane,
   addUnreadTabId,
   getStore,
   setActivePaneId,
-  setActiveTabId,
+  setMobileAppletsOpen,
+  setMobileOpen,
   setNewTabDialogInitialViewMode,
   setNewTabDialogOpen,
   setShellIntegrations,
   setTabs,
   useStore,
 } from "./store";
-import type { AppletData } from "./AppletWrapper";
 import Scratchpad from "./Scratchpad";
 import TerminalComponent from "./Terminal";
 import FileBrowser from "./FileBrowser";
@@ -33,10 +34,7 @@ export interface TerminalGridProps {
   setScratchpadSyncState: (v: ScratchpadSyncState) => void;
   isTouch: boolean;
   isMobile: boolean;
-  mobileAppletsOpen: boolean;
-  setMobileAppletsOpen: (v: boolean) => void;
-  applets: AppletData[];
-  setMobileOpen: (v: boolean) => void;
+  hasSidebarApplet: boolean;
   handleTouchStart: (e: React.TouchEvent) => void;
   handleTouchEnd: (e: React.TouchEvent) => void;
   handleSendKey: (key: string) => void;
@@ -54,10 +52,7 @@ export default function TerminalGrid({
   onTerminalBlur,
   isTouch,
   isMobile,
-  mobileAppletsOpen,
-  setMobileAppletsOpen,
-  applets,
-  setMobileOpen,
+  hasSidebarApplet,
   handleTouchStart,
   handleTouchEnd,
   handleSendKey,
@@ -72,8 +67,6 @@ export default function TerminalGrid({
   const activeTabId = useStore((state) => state.activeTabId);
   const activePaneId = useStore((state) => state.activePaneId);
   const shellIntegrations = useStore((state) => state.shellIntegrations);
-  const vars = useStore((state) => state.vars);
-  const localVars = useStore((state) => state.localVars);
 
   const [isCtrlActive, setIsCtrlActive] = useState(false);
   const [isAltActive, setIsAltActive] = useState(false);
@@ -219,9 +212,7 @@ export default function TerminalGrid({
                       zIndex: activePaneId === pane.id ? 1 : 0,
                     }}
                     onClick={() => {
-                      setActiveTabId(tab.id);
-                      setActivePaneId(pane.id);
-                      setTabs((tabs) => tabs.map((t) => (t.id === tab.id ? { ...t, activePaneId: pane.id } : t)));
+                      activatePane(pane.id, tab.id);
                     }}
                   >
                     {tab.type === "scratchpad" ? (
@@ -236,8 +227,11 @@ export default function TerminalGrid({
                         key={pane.id}
                         options={pane.options}
                         ref={(el) => {
-                          if (el) terminalRefs.current[pane.id] = el;
-                          else delete terminalRefs.current[pane.id];
+                          if (el) {
+                            terminalRefs.current[pane.id] = el;
+                          } else {
+                            delete terminalRefs.current[pane.id];
+                          }
                         }}
                         host={pane.host}
                         sessionId={pane.sessionId || pane.id}
@@ -307,8 +301,6 @@ export default function TerminalGrid({
                             setActivePaneId(newPaneId);
                           }
                         }}
-                        vars={vars}
-                        localVars={localVars}
                         isTouch={isTouch}
                       />
                     )}
@@ -419,11 +411,11 @@ export default function TerminalGrid({
                   <AddIcon sx={{ fontSize: 32 }} />
                 </IconButton>
               </Tooltip>
-              {isMobile && applets.filter((a) => a.position === "sidebar").length > 0 && (
+              {isMobile && hasSidebarApplet && (
                 <Tooltip title="Open Applets">
                   <IconButton
                     color="inherit"
-                    onClick={() => setMobileAppletsOpen(!mobileAppletsOpen)}
+                    onClick={() => setMobileAppletsOpen((a) => !a)}
                     sx={{
                       width: 64,
                       height: 64,

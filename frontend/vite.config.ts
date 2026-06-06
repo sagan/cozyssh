@@ -3,12 +3,25 @@ import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import babel from "@rolldown/plugin-babel";
 import { VitePWA } from "vite-plugin-pwa";
 
+const debug = false;
+
 // https://vite.dev/config/
 export default defineConfig({
   build: {
     emptyOutDir: true,
     sourcemap: true,
+    minify: !debug,
   },
+  resolve: debug
+    ? {
+        alias: {
+          // Swaps the standard renderer for the profiling-enabled renderer
+          "react-dom/client": "react-dom/profiling",
+          // If your app or third-party libraries use the old scheduler directly:
+          "scheduler/tracing": "scheduler/tracing-profiling",
+        },
+      }
+    : undefined,
   plugins: [
     react(),
     babel({ presets: [reactCompilerPreset()] }),

@@ -47,11 +47,15 @@ import {
   getStore,
   setActivePaneId,
   setActiveTabId,
+  setBtnMenuAnchor,
   setButtonFormData,
   setEditButton,
   setEditButtonDialogOpen,
   setInitialBtnFormData,
+  setInputDialogOpen,
+  setInputValue,
   setNewTabDialogOpen,
+  setSendScope,
   setToasts,
   triggerFocus,
   useStore,
@@ -60,10 +64,10 @@ import NewTabDialog from "./NewTabDialog";
 import { dialogs } from "./Dialogs";
 
 export interface DialogManagerProps {
-  setInputDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  groups: string[];
+  memoTabId: string | null;
   contextMenu: ContextMenu | null;
   handleCloseMenu: () => void;
-  memoTabId: string | null;
   handleUnpinTab: (id: string) => void;
   handlePinTab: (id: string) => void;
   handleUnlockTab: (id: string) => void;
@@ -74,23 +78,10 @@ export interface DialogManagerProps {
   handleRename: () => void;
   handleCloseOther: () => void;
   handleCloseRight: () => void;
-  btnMenuAnchor: { anchor: HTMLElement; btn: ButtonData } | null;
-  setBtnMenuAnchor: (v: { anchor: HTMLElement; btn: ButtonData } | null) => void;
-  lastMenuBtn: ButtonData | null;
   handleMoveButton: (id: string, dir: number) => void;
   handleDeleteButton: (id: string, name: string) => void;
   handleCloseBtnDialog: (e: unknown, reason: string) => void;
   handleSaveButton: () => void;
-  hosts: HostData[];
-  groups: string[];
-  inputDialogOpen: boolean;
-  handleCloseInputDialog: () => void;
-  inputValue: string;
-  setInputValue: (v: string) => void;
-  appendNewLine: boolean;
-  setAppendNewLine: (v: boolean) => void;
-  sendScope: number;
-  setSendScope: React.Dispatch<React.SetStateAction<0 | 1 | 2>>;
   sendParsedString: (s: string) => void;
   handleAttach: (id: string, host: string, title: string, isLocked: boolean) => void;
   handleRefresh: () => void;
@@ -113,9 +104,10 @@ const buttonTypes: [ButtonData["type"], string][] = [
 ];
 
 export default function DialogManager({
+  groups,
+  memoTabId,
   contextMenu,
   handleCloseMenu,
-  memoTabId,
   handleUnpinTab,
   handlePinTab,
   handleUnlockTab,
@@ -126,45 +118,39 @@ export default function DialogManager({
   handleRename,
   handleCloseOther,
   handleCloseRight,
-  btnMenuAnchor,
-  setBtnMenuAnchor,
-  lastMenuBtn,
   handleButtonClick,
   handleMoveButton,
   handleDeleteButton,
   handleCloseBtnDialog,
   handleSaveButton,
-  hosts,
-  groups,
-  inputDialogOpen,
-  handleCloseInputDialog,
-  inputValue,
-  setInputValue,
-  appendNewLine,
-  setAppendNewLine,
-  sendScope,
-  setSendScope,
   sendParsedString,
   handleAttach,
   handleRefresh,
   handleSelectHost,
-  setInputDialogOpen,
 }: DialogManagerProps) {
-  const activeGroup = useStore((state) => state.activeGroup);
+  const hosts = useStore((state) => state.hosts);
+  const lastMenuBtn = useStore((state) => state.lastMenuBtn);
   const editButton = useStore((state) => state.editButton);
+  const btnMenuAnchor = useStore((state) => state.btnMenuAnchor);
   const toasts = useStore((state) => state.toasts);
   const buttonFormData = useStore((state) => state.buttonFormData);
   const editButtonDialogOpen = useStore((state) => state.editButtonDialogOpen);
-  const newTabDialogInitialViewMode = useStore((state) => state.newTabDialogInitialViewMode);
   const newTabDialogOpen = useStore((state) => state.newTabDialogOpen);
   const tabs = useStore((state) => state.tabs);
   const activeTabId = useStore((state) => state.activeTabId);
   const buttons = useStore((state) => state.buttons);
+  const inputDialogOpen = useStore((state) => state.inputDialogOpen);
+  const inputValue = useStore((state) => state.inputValue);
+  const sendScope = useStore((state) => state.sendScope);
 
+  const [appendNewLine, setAppendNewLine] = useState(true);
   const [titleMenuAnchor, setTitleMenuAnchor] = useState<null | HTMLElement>(null);
   const [importTip, setImportTip] = useState<ToastData | null>(null);
 
-  const titleMenuOpen = Boolean(titleMenuAnchor);
+  const handleCloseInputDialog = useCallback(() => {
+    setInputDialogOpen(false);
+    triggerFocus();
+  }, []);
 
   const activeTab: TabData | undefined = useMemo(() => {
     return tabs.find((t) => t.id === activeTabId);
@@ -533,8 +519,8 @@ export default function DialogManager({
           <IconButton
             aria-label="more"
             id="title-menu-button"
-            aria-controls={titleMenuOpen ? "title-menu" : undefined}
-            aria-expanded={titleMenuOpen ? "true" : undefined}
+            aria-controls={titleMenuAnchor ? "title-menu" : undefined}
+            aria-expanded={titleMenuAnchor ? "true" : undefined}
             aria-haspopup="true"
             onClick={handleTitleMenuClick}
             size="small"
@@ -542,7 +528,7 @@ export default function DialogManager({
             <MoreVertIcon fontSize="small" />
           </IconButton>
         </DialogTitle>
-        <Menu id="title-menu" anchorEl={titleMenuAnchor} open={titleMenuOpen} onClose={handleTitleMenuClose}>
+        <Menu id="title-menu" anchorEl={titleMenuAnchor} open={!!titleMenuAnchor} onClose={handleTitleMenuClose}>
           <MenuItem
             onClick={() => {
               handleTitleMenuClose();
@@ -893,11 +879,6 @@ export default function DialogManager({
           setNewTabDialogOpen(false);
           triggerFocus();
         }}
-        hosts={hosts}
-        tabs={tabs}
-        initialViewMode={newTabDialogInitialViewMode}
-        buttons={buttons}
-        activeGroup={activeGroup}
         onExecuteButton={(btn) => {
           handleButtonClick(btn);
           setNewTabDialogOpen(false);

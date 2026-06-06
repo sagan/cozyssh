@@ -41,14 +41,13 @@ import {
 import { generatePassword, isMuiDialogOpen, terminalIgnoreKeyShortcuts, terminalKeyShortcuts } from "./common";
 import {
   type TerminalRefMap,
+  activatePane,
   getStore,
   notify,
-  setActivePaneId,
-  setActiveTabId,
   setButtons,
   setHosts,
   setLocalVars,
-  setTabs,
+  setMobileAppletsOpen,
   setVars,
   triggerFocus,
   useStore,
@@ -88,6 +87,67 @@ window.csPrompt = dialogs.prompt;
 window.csPromptPassword = dialogs.promptPassword;
 window.csRunScript = runScript;
 window.csNotify = notify;
+
+window.csFocus = (tabOrPaneId?: string) => {
+  if (isMuiDialogOpen()) {
+    return;
+  }
+  if (tabOrPaneId) {
+    const tab = getStore().tabs.find((t) => t.id === tabOrPaneId);
+    if (tab) {
+      activatePane(tab.activePaneId, tab.id);
+    } else {
+      activatePane(tabOrPaneId);
+    }
+  }
+  triggerFocus();
+};
+
+window.csFetch = async (url: string, options = {}) => {
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+  const { key: t, ...fetchOptions } = options;
+  const proxyUrl = `/api/fetch?_t=${t || `${Date.now()}-${generatePassword(12)}`}`;
+  const rawHeaders = new Headers(fetchOptions.headers);
+  const headers: Record<string, string> = {};
+  const restricted = [HEADER_AUTHORIZATION, HEADER_REFERER, HEADER_ORIGIN, HEADER_USER_AGENT, HEADER_COOKIE];
+  headers[HEADER_AUTHORIZATION] = HEADER_AUTHORIZATION_BEARER_PREFIX + token;
+  headers[HEADER_X_COZYSSH_URL] = url;
+  for (const key in rawHeaders) {
+    if (restricted.includes(key.toLowerCase())) {
+      headers[HEADER_X_COZYSSH_FETCH_PREFIX + key] = rawHeaders.get(key)!;
+    } else {
+      headers[key] = rawHeaders.get(key)!;
+    }
+  }
+  return fetch(proxyUrl, { ...fetchOptions, headers });
+};
+
+window.csExec = async (cmdline: string) => {
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+  const res = await fetch("/api/exec", {
+    method: METHOD_POST,
+    headers: {
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      [HEADER_CONTENT_TYPE]: MIME_JSON,
+    },
+    body: JSON.stringify({ cmdline } satisfies ExecRequest),
+  });
+  if (!res.ok) {
+    throw new Error("Exec failed: " + res.statusText);
+  }
+  return res.json() as Promise<ExecResult>;
+};
+
+window.csGetVar = ((name?: string) => {
+  const { vars, localVars } = getStore();
+  if (name) {
+    if (name.toLowerCase().startsWith(LOCAL_VAR_PREFIX)) {
+      return localVars[name];
+    }
+    return vars[name];
+  }
+  return { ...vars, ...localVars };
+}) as typeof window.csGetVar;
 
 export interface CsExecResult {
   error: unknown;
@@ -213,6 +273,11 @@ export async function runScript(btn: Pick<ButtonData, "id" | "name" | "type" | "
   }
 }
 
+window.csGetShellIntegration = (paneId?: string) => {
+  const { shellIntegrations, activePaneId } = getStore();
+  return shellIntegrations[paneId ?? activePaneId];
+};
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export interface PluginAPICallbacks {
@@ -231,8 +296,6 @@ export interface PluginAPICallbacks {
   handleRefresh: () => Promise<void>;
   /** React state setter for applets */
   setApplets: React.Dispatch<React.SetStateAction<AppletData[]>>;
-  /** React state setter for the mobile applets drawer */
-  setMobileAppletsOpen: React.Dispatch<React.SetStateAction<boolean>>;
   /** Whether we're in mobile layout */
   isMobile: boolean;
   /** Ref for the next z-index to assign to a widget applet */
@@ -244,7 +307,196 @@ export interface PluginAPICallbacks {
   handleCloseTabOrPane: (tabOrPaneId?: string) => void;
 }
 
-// ── Setup / teardown ───────────────────────────────────────────────────────────
+window.csSetVar = async (nameOrVars: string | Record<string, string | undefined>, value?: string | undefined) => {
+  const { vars, localVars } = getStore();
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+  const updates: Record<string, string | null> = {};
+  const localUpdates: Record<string, string | undefined> = {};
+
+  if (typeof nameOrVars === "string") {
+    if (nameOrVars.toLowerCase().startsWith(LOCAL_VAR_PREFIX)) {
+      localUpdates[nameOrVars] = value;
+    } else {
+      updates[nameOrVars] = value === undefined ? null : value;
+    }
+  } else {
+    for (const k in nameOrVars) {
+      const v = nameOrVars[k];
+      if (k.toLowerCase().startsWith(LOCAL_VAR_PREFIX)) {
+        localUpdates[k] = v;
+      } else {
+        updates[k] = v === undefined ? null : v;
+      }
+    }
+  }
+
+  if (Object.keys(localUpdates).length > 0) {
+    const newLocalVars = { ...localVars };
+    for (const [key, value] of Object.entries(localUpdates)) {
+      if (value === undefined) {
+        delete newLocalVars[key];
+      } else {
+        newLocalVars[key] = value;
+      }
+    }
+    setLocalVars(newLocalVars);
+  }
+  if (Object.keys(updates).length === 0) {
+    return;
+  }
+
+  const r = await fetch("/api/vars", {
+    method: METHOD_PUT,
+    headers: {
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      [HEADER_CONTENT_TYPE]: MIME_JSON,
+    },
+    body: JSON.stringify(updates),
+  });
+  if (!r.ok) {
+    throw new Error(await r.text());
+  }
+
+  const nextVars = { ...vars };
+  for (const k in updates) {
+    const v = updates[k];
+    if (v === null) {
+      delete nextVars[k];
+    } else {
+      nextVars[k] = v;
+    }
+  }
+  setVars(nextVars);
+};
+
+// ── Button / Host CRUD API ────────────────────────────────────────────────
+
+window.csUpdateButton = async (btn: ButtonData | ButtonData[]): Promise<void> => {
+  const btns = Array.isArray(btn) ? btn : [btn];
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+
+  const res = await fetch("/api/buttons", {
+    method: METHOD_POST,
+    headers: {
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      [HEADER_CONTENT_TYPE]: MIME_JSON,
+    },
+    body: JSON.stringify(btns),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to update button: ${res.statusText}`);
+  }
+
+  // Refresh buttons in store
+  const refreshRes = await fetch("/api/buttons", {
+    headers: {
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+    },
+  });
+  if (refreshRes.ok) {
+    const data: ButtonData[] = await refreshRes.json();
+    setButtons(data || []);
+  }
+};
+
+window.csDeleteButton = async (id: string): Promise<void> => {
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+  const res = await fetch(`/api/buttons/${id}`, {
+    method: METHOD_DELETE,
+    headers: {
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to delete button: ${res.statusText}`);
+  }
+
+  // Refresh buttons in store
+  const refreshRes = await fetch("/api/buttons", {
+    headers: {
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+    },
+  });
+  if (refreshRes.ok) {
+    const data: ButtonData[] = await refreshRes.json();
+    setButtons(data || []);
+  }
+};
+
+window.csUpdateHost = async (host: HostData): Promise<void> => {
+  const { hosts } = getStore();
+  const exists = hosts.some((h) => h.name === host.name && h.source === "config");
+
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+  const method = exists ? METHOD_PUT : METHOD_POST;
+  const url = exists ? `/api/hosts/${encodeURIComponent(host.name)}` : "/api/hosts";
+
+  const body: HostData = {
+    name: host.name,
+    hostname: host.hostname,
+    user: host.user || "root",
+    port: host.port ? String(host.port) : "22",
+    identity_file: host.identity_file || "",
+    proxy_jump: host.proxy_jump || "",
+    remote_command: host.remote_command || "",
+    tags: host.tags || [],
+    comment: host.comment || "",
+    source: host.source || "",
+  };
+
+  const res = await fetch(url, {
+    method,
+    headers: {
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      [HEADER_CONTENT_TYPE]: MIME_JSON,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to update host: ${res.statusText}`);
+  }
+
+  // Refresh hosts in store
+  const refreshRes = await fetch("/api/hosts", {
+    headers: {
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+    },
+  });
+  if (refreshRes.ok) {
+    const data: HostData[] = await refreshRes.json();
+    setHosts(data || []);
+  }
+};
+
+window.csDeleteHost = async (name: string): Promise<void> => {
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+  const res = await fetch(`/api/hosts/${encodeURIComponent(name)}`, {
+    method: METHOD_DELETE,
+    headers: {
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to delete host: ${res.statusText}`);
+  }
+
+  // Refresh hosts in store
+  const refreshRes = await fetch("/api/hosts", {
+    headers: {
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+    },
+  });
+  if (refreshRes.ok) {
+    const data: HostData[] = await refreshRes.json();
+    setHosts(data || []);
+  }
+};
+
+// ── Dynamic API functions Setup / teardown ───────────────────────────────────────────────────────────
 
 /**
  * Installs all window.cs* functions using the provided stable callbacks.
@@ -254,87 +506,15 @@ export interface PluginAPICallbacks {
  *   useEffect(() => setupPluginAPI(callbacks), []);
  */
 export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
-  // ── Variable API ─────────────────────────────────────────────────────────
-
-  window.csGetVar = ((name?: string) => {
-    const { vars, localVars } = getStore();
-    if (name) {
-      if (name.toLowerCase().startsWith(LOCAL_VAR_PREFIX)) {
-        return localVars[name];
-      }
-      return vars[name];
-    }
-    return { ...vars, ...localVars };
-  }) as typeof window.csGetVar;
-
-  window.csSetVar = async (nameOrVars: string | Record<string, string | undefined>, value?: string | undefined) => {
-    const { vars, localVars } = getStore();
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    const updates: Record<string, string | null> = {};
-    const localUpdates: Record<string, string | undefined> = {};
-
-    if (typeof nameOrVars === "string") {
-      if (nameOrVars.toLowerCase().startsWith(LOCAL_VAR_PREFIX)) {
-        localUpdates[nameOrVars] = value;
-      } else {
-        updates[nameOrVars] = value === undefined ? null : value;
-      }
-    } else {
-      for (const k in nameOrVars) {
-        const v = nameOrVars[k];
-        if (k.toLowerCase().startsWith(LOCAL_VAR_PREFIX)) {
-          localUpdates[k] = v;
-        } else {
-          updates[k] = v === undefined ? null : v;
-        }
-      }
-    }
-
-    if (Object.keys(localUpdates).length > 0) {
-      const newLocalVars = { ...localVars };
-      for (const [key, value] of Object.entries(localUpdates)) {
-        if (value === undefined) {
-          delete newLocalVars[key];
-        } else {
-          newLocalVars[key] = value;
-        }
-      }
-      setLocalVars(newLocalVars);
-    }
-    if (Object.keys(updates).length === 0) {
-      return;
-    }
-
-    const r = await fetch("/api/vars", {
-      method: METHOD_PUT,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        [HEADER_CONTENT_TYPE]: MIME_JSON,
-      },
-      body: JSON.stringify(updates),
-    });
-    if (!r.ok) {
-      throw new Error(await r.text());
-    }
-
-    const nextVars = { ...vars };
-    for (const k in updates) {
-      const v = updates[k];
-      if (v === null) {
-        delete nextVars[k];
-      } else {
-        nextVars[k] = v;
-      }
-    }
-    setVars(nextVars);
-  };
+  window.csAttach = cb.handleAttach;
+  window.csRefresh = cb.handleRefresh;
+  window.csClose = cb.handleCloseTabOrPane;
+  window.csSetTheme = cb.setTheme;
 
   window.csGetApplet = ((name?: string) => {
     const applets = cb.getApplets();
     return name ? applets.find((a) => a.name === name) : applets;
   }) as typeof window.csGetApplet;
-
-  // ── Terminal API ──────────────────────────────────────────────────────────
 
   window.csGetTerminal = (paneId?: string) => {
     const { activePaneId } = getStore();
@@ -348,11 +528,6 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     const refs = cb.getTerminalRefs();
     const ref = refs[paneId ?? activePaneId];
     return ref && "getXterm" in ref ? ref : undefined;
-  };
-
-  window.csGetShellIntegration = (paneId?: string) => {
-    const { shellIntegrations, activePaneId } = getStore();
-    return shellIntegrations[paneId ?? activePaneId];
   };
 
   window.csGetAll = () => {
@@ -404,69 +579,6 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     return lines.join("\n");
   };
 
-  window.csFocus = (tabOrPaneId?: string) => {
-    if (isMuiDialogOpen()) {
-      return;
-    }
-    const { activePaneId, tabs } = getStore();
-    if (tabOrPaneId) {
-      const tab = tabs.find((t) => t.id === tabOrPaneId);
-      if (tab) {
-        setActiveTabId(tab.id);
-        setActivePaneId(tab.activePaneId);
-      } else if (tabOrPaneId !== activePaneId) {
-        const allPanes = tabs.flatMap((t) => t.panes.map((p) => ({ tabId: t.id, paneId: p.id })));
-        const idx = allPanes.findIndex((p) => p.paneId === tabOrPaneId);
-        if (idx >= 0) {
-          const target = allPanes[idx];
-          setActiveTabId(target.tabId);
-          setActivePaneId(target.paneId);
-          setTabs((tabs) => tabs.map((t) => (t.id === target.tabId ? { ...t, activePaneId: target.paneId } : t)));
-        }
-      }
-    }
-    triggerFocus();
-  };
-
-  window.csFetch = async (url: string, options = {}) => {
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    const { key: t, ...fetchOptions } = options;
-    const proxyUrl = `/api/fetch?_t=${t || `${Date.now()}-${generatePassword(12)}`}`;
-    const rawHeaders = new Headers(fetchOptions.headers);
-    const headers: Record<string, string> = {};
-    const restricted = [HEADER_AUTHORIZATION, HEADER_REFERER, HEADER_ORIGIN, HEADER_USER_AGENT, HEADER_COOKIE];
-    headers[HEADER_AUTHORIZATION] = HEADER_AUTHORIZATION_BEARER_PREFIX + token;
-    headers[HEADER_X_COZYSSH_URL] = url;
-    for (const key in rawHeaders) {
-      if (restricted.includes(key.toLowerCase())) {
-        headers[HEADER_X_COZYSSH_FETCH_PREFIX + key] = rawHeaders.get(key)!;
-      } else {
-        headers[key] = rawHeaders.get(key)!;
-      }
-    }
-    return fetch(proxyUrl, { ...fetchOptions, headers });
-  };
-
-  window.csExec = async (cmdline: string) => {
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    const res = await fetch("/api/exec", {
-      method: METHOD_POST,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        [HEADER_CONTENT_TYPE]: MIME_JSON,
-      },
-      body: JSON.stringify({ cmdline } satisfies ExecRequest),
-    });
-    if (!res.ok) {
-      throw new Error("Exec failed: " + res.statusText);
-    }
-    return res.json() as Promise<ExecResult>;
-  };
-
-  window.csSetTheme = (options, ...args) => cb.setTheme(options, ...args);
-
-  // ── Navigation API ────────────────────────────────────────────────────────
-
   window.csOpen = (host, { title, target }: { title?: string; target?: string } = {}) => {
     const { hosts } = getStore();
     const targetHosts = Array.isArray(host) ? host.slice(0, 4) : [host];
@@ -509,20 +621,6 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     }
   };
 
-  window.csAttach = (id: string, host: string, title: string, isLocked = false) => {
-    cb.handleAttach(id, host, title, isLocked);
-  };
-
-  window.csRefresh = async () => {
-    await cb.handleRefresh();
-  };
-
-  window.csClose = (tabOrPaneId?: string) => {
-    cb.handleCloseTabOrPane(tabOrPaneId);
-  };
-
-  // ── Applet API ────────────────────────────────────────────────────────────
-
   window.csOpenApplet = (
     name,
     node,
@@ -537,7 +635,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
       parsedPos = "widget";
     }
     if (cb.isMobile && parsedPos === "sidebar" && window.__CS_AUTORUN_DONE__) {
-      cb.setMobileAppletsOpen(true);
+      setMobileAppletsOpen(true);
     }
     cb.setApplets((prev) => {
       const existing = prev.find((a) => a.name === name);
@@ -564,153 +662,13 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     cb.setApplets((prev) => prev.filter((a) => a.name !== name));
   };
 
-  // applets live in React state
-  // own csGetApplet useEffect that depends on [applets].
-  // We leave it as-is in Dashboard rather than fighting React here.
-  // window.csGetApplet = (_name?: string) => {};
-
-  // ── Button / Host CRUD API ────────────────────────────────────────────────
-
-  window.csUpdateButton = async (btn: ButtonData | ButtonData[]): Promise<void> => {
-    const btns = Array.isArray(btn) ? btn : [btn];
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-
-    const res = await fetch("/api/buttons", {
-      method: METHOD_POST,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        [HEADER_CONTENT_TYPE]: MIME_JSON,
-      },
-      body: JSON.stringify(btns),
-    });
-
-    if (!res.ok) {
-      throw new Error(`Failed to update button: ${res.statusText}`);
-    }
-
-    // Refresh buttons in store
-    const refreshRes = await fetch("/api/buttons", {
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      },
-    });
-    if (refreshRes.ok) {
-      const data: ButtonData[] = await refreshRes.json();
-      setButtons(data || []);
-    }
-  };
-
-  window.csDeleteButton = async (id: string): Promise<void> => {
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    const res = await fetch(`/api/buttons/${id}`, {
-      method: METHOD_DELETE,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      },
-    });
-
-    if (!res.ok) {
-      throw new Error(`Failed to delete button: ${res.statusText}`);
-    }
-
-    // Refresh buttons in store
-    const refreshRes = await fetch("/api/buttons", {
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      },
-    });
-    if (refreshRes.ok) {
-      const data: ButtonData[] = await refreshRes.json();
-      setButtons(data || []);
-    }
-  };
-
-  window.csUpdateHost = async (host: HostData): Promise<void> => {
-    const { hosts } = getStore();
-    const exists = hosts.some((h) => h.name === host.name && h.source === "config");
-
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    const method = exists ? METHOD_PUT : METHOD_POST;
-    const url = exists ? `/api/hosts/${encodeURIComponent(host.name)}` : "/api/hosts";
-
-    const body: HostData = {
-      name: host.name,
-      hostname: host.hostname,
-      user: host.user || "root",
-      port: host.port ? String(host.port) : "22",
-      identity_file: host.identity_file || "",
-      proxy_jump: host.proxy_jump || "",
-      remote_command: host.remote_command || "",
-      tags: host.tags || [],
-      comment: host.comment || "",
-      source: host.source || "",
-    };
-
-    const res = await fetch(url, {
-      method,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        [HEADER_CONTENT_TYPE]: MIME_JSON,
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      throw new Error(`Failed to update host: ${res.statusText}`);
-    }
-
-    // Refresh hosts in store
-    const refreshRes = await fetch("/api/hosts", {
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      },
-    });
-    if (refreshRes.ok) {
-      const data: HostData[] = await refreshRes.json();
-      setHosts(data || []);
-    }
-  };
-
-  window.csDeleteHost = async (name: string): Promise<void> => {
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    const res = await fetch(`/api/hosts/${encodeURIComponent(name)}`, {
-      method: METHOD_DELETE,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      },
-    });
-
-    if (!res.ok) {
-      throw new Error(`Failed to delete host: ${res.statusText}`);
-    }
-
-    // Refresh hosts in store
-    const refreshRes = await fetch("/api/hosts", {
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      },
-    });
-    if (refreshRes.ok) {
-      const data: HostData[] = await refreshRes.json();
-      setHosts(data || []);
-    }
-  };
-
-  // ── Teardown ──────────────────────────────────────────────────────────────
-
   return () => {
     const keys = [
-      "csGetVar",
-      "csSetVar",
       "csGetTerminal",
       "csGetTerminalHandle",
-      "csGetShellIntegration",
       "csGetAll",
       "csSendData",
       "csGetTerminalContents",
-      "csFocus",
-      "csFetch",
-      "csExec",
       "csSetTheme",
       "csOpen",
       "csAttach",
@@ -719,10 +677,6 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
       "csOpenApplet",
       "csCloseApplet",
       "csGetApplet",
-      "csUpdateButton",
-      "csDeleteButton",
-      "csUpdateHost",
-      "csDeleteHost",
     ] as const;
     for (const k of keys) {
       delete (window as Partial<typeof globalThis>)[k];

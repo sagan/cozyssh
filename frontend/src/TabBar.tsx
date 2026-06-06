@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Box, Tabs, Tab, IconButton, TextField } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import AddIcon from "@mui/icons-material/Add";
@@ -14,37 +14,25 @@ import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import CloudDoneIcon from "@mui/icons-material/CloudDone";
 import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
 
-import {
-  CS_EVENT_TERMINAL_CHANGE,
-  getIntVar,
-  type CSEventDetailTerminalChange,
-  type ScratchpadSyncState,
-} from "./common";
+import { type CSEventDetailTerminalChange, type ScratchpadSyncState, CS_EVENT_TERMINAL_CHANGE } from "./common";
 import {
   type TerminalRefMap,
   deleteUnreadTabId,
   setActivePaneId,
   setActiveTabId,
+  setMobileAppletsOpen,
+  setMobileOpen,
   setNewTabDialogInitialViewMode,
   setNewTabDialogOpen,
   triggerFocus,
   useStore,
 } from "./store";
-import type { AppletData } from "./AppletWrapper";
-import { APP_NAME, LOCAL_NAME, VAR_CS_NOWAKELOCK } from "./constants";
-import { useWakeLock } from "./useWakeLock";
+import { APP_NAME, ID_TERMINAL_SEARCH_INPUT, LOCAL_NAME } from "./constants";
 
 export interface TabBarProps {
-  mobileOpen: boolean;
-  setMobileOpen: (v: boolean) => void;
-  mobileAppletsOpen: boolean;
-  setMobileAppletsOpen: (v: boolean) => void;
-  searchOpen: boolean;
-  searchQuery: string;
-  setSearchQuery: React.Dispatch<React.SetStateAction<string>>;
   terminalRefs: React.MutableRefObject<TerminalRefMap>;
   isMobile: boolean;
-  applets: AppletData[];
+  hasSidebarApplet: boolean;
   scratchpadSyncState: ScratchpadSyncState;
   handleContextMenu: (e: React.MouseEvent, tabId: string) => void;
   handleCloseTab: (e: React.MouseEvent, tabId: string) => void;
@@ -52,16 +40,9 @@ export interface TabBarProps {
 }
 
 export default function TabBar({
-  mobileOpen,
-  setMobileOpen,
-  mobileAppletsOpen,
-  setMobileAppletsOpen,
-  searchOpen,
-  searchQuery,
-  setSearchQuery,
   terminalRefs,
   isMobile,
-  applets,
+  hasSidebarApplet,
   scratchpadSyncState,
   handleContextMenu,
   handleCloseTab,
@@ -69,15 +50,13 @@ export default function TabBar({
 }: TabBarProps) {
   const focusSearchInputTrigger = useStore((state) => state.focusSearchInputTrigger);
   const tabs = useStore((state) => state.tabs);
-  const vars = useStore((state) => state.vars);
-  const localVars = useStore((state) => state.localVars);
   const activeTabId = useStore((state) => state.activeTabId);
   const activePaneId = useStore((state) => state.activePaneId);
   const unreadTabIds = useStore((state) => state.unreadTabIds);
   const sysHostname = useStore((state) => state.sysHostname);
-  const searchInputRef = React.useRef<HTMLInputElement | null>(null);
+  const searchOpen = useStore((state) => state.searchOpen);
 
-  useWakeLock(tabs.length > 0 && getIntVar(vars, localVars, VAR_CS_NOWAKELOCK) !== 1);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     if (unreadTabIds.has(activeTabId)) {
@@ -104,7 +83,7 @@ export default function TabBar({
 
   useEffect(() => {
     if (focusSearchInputTrigger > 0 && searchOpen) {
-      searchInputRef.current?.focus();
+      document.getElementById(ID_TERMINAL_SEARCH_INPUT)?.focus();
     }
   }, [searchOpen, focusSearchInputTrigger]);
 
@@ -128,7 +107,7 @@ export default function TabBar({
             color="inherit"
             aria-label="open drawer"
             edge="start"
-            onClick={() => setMobileOpen(!mobileOpen)}
+            onClick={() => setMobileOpen((a) => !a)}
             sx={{ ml: 1, display: { md: "none" } }}
           >
             <MenuIcon />
@@ -235,8 +214,8 @@ export default function TabBar({
           >
             <AddIcon fontSize="small" />
           </IconButton>
-          {isMobile && applets.filter((a) => a.position === "sidebar").length > 0 && (
-            <IconButton color="inherit" onClick={() => setMobileAppletsOpen(!mobileAppletsOpen)} sx={{ mr: 1 }}>
+          {isMobile && hasSidebarApplet && (
+            <IconButton color="inherit" onClick={() => setMobileAppletsOpen((a) => !a)} sx={{ mr: 1 }}>
               <ViewSidebarIcon />
             </IconButton>
           )}
@@ -261,7 +240,7 @@ export default function TabBar({
               }}
             >
               <TextField
-                inputRef={searchInputRef}
+                id={ID_TERMINAL_SEARCH_INPUT}
                 size="small"
                 placeholder="Find"
                 value={searchQuery}

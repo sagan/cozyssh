@@ -48,6 +48,7 @@ import {
   BROWSER_STORAGE_KEY_TOKEN,
   APP_NAME,
   LOCAL_NAME,
+  ID_SIDEBAR_FILTER,
 } from "./constants";
 import { type HostForm, type ServiceWorkerStatus, filterHosts, remoteCommandOptions, searchString } from "./common";
 import { dialogs } from "./Dialogs";
@@ -57,6 +58,7 @@ import {
   setEditHostName,
   setHostFormData,
   setInitialHostFormData,
+  setMobileOpen,
   triggerFocus,
   useStore,
 } from "./store";
@@ -69,8 +71,6 @@ export default function Sidebar({
   appVersion,
   savePassword,
   onSavePasswordChange,
-  mobileOpen,
-  onClose,
   onSelect,
   onSelectTagAsSplit,
   onLogout,
@@ -78,15 +78,11 @@ export default function Sidebar({
   onOpenScratchpad,
   onAttach,
   onRefresh,
-  hosts,
   fetchHosts,
-  filterRef,
 }: {
   appVersion: string;
   savePassword: string;
   onSavePasswordChange: (val: string) => void;
-  mobileOpen: boolean;
-  onClose: () => void;
   onSelect: (host: string) => void;
   onSelectTagAsSplit?: (tag: string, hosts: string[]) => void;
   onLogout?: () => void;
@@ -94,12 +90,12 @@ export default function Sidebar({
   onOpenScratchpad?: () => void;
   onAttach: (id: string, host: string, title: string, isLocked: boolean) => void;
   onRefresh?: () => void;
-  hosts: HostData[];
   fetchHosts: () => void;
-  filterRef: React.RefObject<HTMLInputElement | null>;
 }) {
+  const mobileOpen = useStore((state) => state.mobileOpen);
   const hostFormData = useStore((state) => state.hostFormData);
   const sysHostname = useStore((state) => state.sysHostname);
+  const hosts = useStore((state) => state.hosts);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const [loading, setLoading] = useState(false);
@@ -435,6 +431,10 @@ export default function Sidebar({
     setEditHostDialogOpen(true);
   }, [contextMenu]);
 
+  const closeMobileSidebar = useCallback(() => {
+    setMobileOpen(false);
+  }, []);
+
   const handleDelete = useCallback(async () => {
     if (!contextMenu) {
       return;
@@ -762,11 +762,11 @@ export default function Sidebar({
         if (selectedIndex >= 0 && selectedIndex < flatFilteredHosts.length) {
           onSelect(flatFilteredHosts[selectedIndex].name);
           setFilterStr("");
-          filterRef.current?.blur();
+          document.getElementById(ID_SIDEBAR_FILTER)?.blur();
         }
       }
     },
-    [flatFilteredHosts, onSelect, selectedIndex, filterRef],
+    [flatFilteredHosts, onSelect, selectedIndex],
   );
 
   const uniqueTags = useMemo(() => {
@@ -790,7 +790,7 @@ export default function Sidebar({
       id="sidebar"
       variant={isMobile ? "temporary" : "permanent"}
       open={isMobile ? mobileOpen : true}
-      onClose={onClose}
+      onClose={closeMobileSidebar}
       ModalProps={{ keepMounted: true }}
       sx={{
         width: drawerWidth,
@@ -822,7 +822,7 @@ export default function Sidebar({
               setAnchorEl(null);
               setSettingsOpen(true);
               if (isMobile) {
-                onClose();
+                closeMobileSidebar();
               }
             }}
           >
@@ -870,7 +870,6 @@ export default function Sidebar({
       <Box sx={{ px: 2, pb: 1, display: "flex", flexDirection: "column", gap: 1 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <TextField
-            inputRef={filterRef}
             size="small"
             type="search"
             id="sidebar-filter"
@@ -925,7 +924,7 @@ export default function Sidebar({
                       } else {
                         setFilterStr(`#${tag} `);
                       }
-                      filterRef.current?.focus();
+                      document.getElementById(ID_SIDEBAR_FILTER)?.focus();
                     }}
                     onContextMenu={(e) => handleTagContextMenu(e, tag)}
                     sx={{

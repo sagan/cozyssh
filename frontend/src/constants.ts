@@ -24,7 +24,6 @@ export const BROWSER_STORAGE_KEY_LOCAL_VARS = "cozy_localvars";
 export const BROWSER_STORAGE_KEY_RECENTS = "cozy_recents";
 export const BROWSER_STORAGE_KEY_TOKEN = "cozy_token";
 export const BROWSER_STORAGE_KEY_VARS = "cozy_vars";
-export const BROWSER_STORAGE_KEY_TAB_ID = "cozy_tab_id";
 export const BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE = "cozy_scratchpad_sync_state";
 export const BROWSER_STORAGE_KEY_SCRATCHPAD_CACHE = "cozy_scratchpad_cache";
 
@@ -122,3 +121,7 @@ export const TOAST_KEY_TERMINAL_FONT_SIZE = "cs-terminal-font-size";
  * This allows the user to use the back gesture to close the panel.
  */
 export const HASH_MOBILE_INPUT_PANEL = "$mobile-input-panel$";
+
+export const ID_TERMINAL_SEARCH_INPUT = "terminal-search-input";
+
+export const ID_SIDEBAR_FILTER = "sidebar-filter";

@@ -25,7 +25,7 @@ import TabIcon from "@mui/icons-material/Tab";
 import PushPinIcon from "@mui/icons-material/PushPin";
 import SmartButtonIcon from "@mui/icons-material/SmartButton";
 
-import type { HostData, SessionPinned, ButtonData } from "./api";
+import type { SessionPinned, ButtonData } from "./api";
 import {
   BROWSER_STORAGE_KEY_TOKEN,
   BUILTIN_BUTTONS,
@@ -35,16 +35,11 @@ import {
   LOCAL_NAME,
 } from "./constants";
 import { type ViewMode, filterHosts, searchString } from "./common";
-import { getStore, type TabData } from "./store";
+import { getStore, useStore } from "./store";
 
 interface NewTabDialogProps {
   open: boolean;
   onClose: () => void;
-  hosts: HostData[];
-  tabs?: TabData[];
-  buttons?: ButtonData[];
-  activeGroup?: string;
-  initialViewMode?: ViewMode;
   onSelect: (host: string) => void;
   onSelectTab: (tabId: string) => void;
   onAttachPinned: (id: string, host: string, title: string, isLocked: boolean) => void;
@@ -54,19 +49,20 @@ interface NewTabDialogProps {
 export default function NewTabDialog({
   open,
   onClose,
-  hosts,
-  tabs = [],
-  buttons = [],
-  activeGroup,
-  initialViewMode = "servers",
   onSelect,
   onSelectTab,
   onAttachPinned,
   onExecuteButton,
 }: NewTabDialogProps) {
+  const tabs = useStore((state) => state.tabs);
+  const hosts = useStore((state) => state.hosts);
+  const buttons = useStore((state) => state.buttons);
+  const activeGroup = useStore((state) => state.activeGroup);
+  const newTabDialogInitialViewMode = useStore((state) => state.newTabDialogInitialViewMode);
+
   const [filter, setFilter] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
+  const [viewMode, setViewMode] = useState<ViewMode>(newTabDialogInitialViewMode);
   const inputRef = useRef<HTMLInputElement>(null);
   const selectedItemRef = useRef<HTMLDivElement>(null);
   const swipeStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
@@ -75,8 +71,8 @@ export default function NewTabDialog({
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setViewMode(initialViewMode);
-  }, [initialViewMode]);
+    setViewMode(newTabDialogInitialViewMode);
+  }, [newTabDialogInitialViewMode]);
 
   useEffect(() => {
     if (open) {
