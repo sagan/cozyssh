@@ -312,6 +312,22 @@ export const setLocalVars = (localVars: Record<string, string>) => {
 };
 
 /**
+ * Clear all in-memory store data - call it when log out
+ */
+export const clearData = () =>
+  useStore.setState({
+    activeGroup: "",
+    hosts: [],
+    tabs: [],
+    buttons: [],
+    recents: [],
+    toasts: [],
+    vars: {},
+    localVars: {},
+    shellIntegrations: {},
+  });
+
+/**
  * Clean Cross-Tab Synchronization
  * Listens to storage events outside of React to ensure updates from other
  * browser tabs sync instantaneously into the global Zustand snapshot.

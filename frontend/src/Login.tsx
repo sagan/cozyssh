@@ -7,7 +7,7 @@ import { APP_NAME, BROWSER_STORAGE_KEY_TOKEN, HEADER_CONTENT_TYPE, METHOD_POST, 
 import { loginTheme } from "./common";
 import { dialogs } from "./Dialogs";
 
-export default function Login({ onLoginSuccess }: { onLoginSuccess?: (data: FullData) => void }) {
+export default function Login({ onLoginSuccess }: { onLoginSuccess: (data: FullData) => void }) {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
 

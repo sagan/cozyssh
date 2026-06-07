@@ -125,3 +125,7 @@ export const HASH_MOBILE_INPUT_PANEL = "$mobile-input-panel$";
 export const ID_TERMINAL_SEARCH_INPUT = "terminal-search-input";
 
 export const ID_SIDEBAR_FILTER = "sidebar-filter";
+
+export const CACHE_API_DATA = "api-data-cache";
+
+export const CACHE_MANIFEST = "manifest-cache";

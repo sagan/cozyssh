@@ -141,7 +141,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           } else {
             varName = VAR_CS_TERMINAL_FONT_SIZE;
           }
-          if (DEFAULT_TERMINAL_FONT_SIZE !== __CS_TERMINAL_FONT_SIZE__) {
+          if (DEFAULT_TERMINAL_FONT_SIZE !== (__CS_TERMINAL_OPTIONS__.fontSize || DEFAULT_TERMINAL_FONT_SIZE)) {
             csSetVar(varName, DEFAULT_TERMINAL_FONT_SIZE.toString());
             csNotify(`Terminal font size reset to ${DEFAULT_TERMINAL_FONT_SIZE}`, "info", TOAST_KEY_TERMINAL_FONT_SIZE);
           }
@@ -156,8 +156,8 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           } else {
             varName = VAR_CS_TERMINAL_FONT_SIZE;
           }
-          const fontSize = prevTerminalFontSize(__CS_TERMINAL_FONT_SIZE__);
-          if (fontSize !== __CS_TERMINAL_FONT_SIZE__) {
+          const fontSize = prevTerminalFontSize(__CS_TERMINAL_OPTIONS__.fontSize || DEFAULT_TERMINAL_FONT_SIZE);
+          if (fontSize !== (__CS_TERMINAL_OPTIONS__.fontSize || DEFAULT_TERMINAL_FONT_SIZE)) {
             csSetVar(varName, fontSize.toString());
             csNotify(
               `Terminal font size: ${fontSize.toFixed(1).padStart(4, "0")}`,
@@ -176,8 +176,8 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           } else {
             varName = VAR_CS_TERMINAL_FONT_SIZE;
           }
-          const fontSize = nextTerminalFontSize(__CS_TERMINAL_FONT_SIZE__);
-          if (fontSize !== __CS_TERMINAL_FONT_SIZE__) {
+          const fontSize = nextTerminalFontSize(__CS_TERMINAL_OPTIONS__.fontSize || DEFAULT_TERMINAL_FONT_SIZE);
+          if (fontSize !== (__CS_TERMINAL_OPTIONS__.fontSize || DEFAULT_TERMINAL_FONT_SIZE)) {
             csSetVar(varName, fontSize.toString());
             csNotify(
               `Terminal font size: ${fontSize.toFixed(1).padStart(4, "0")}`,

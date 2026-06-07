@@ -78,21 +78,20 @@ interface TerminalProps {
   options?: Record<string, string>;
   sessionId: string;
   isActive: boolean;
-  isCtrlActive?: boolean;
-  onCtrlDone?: () => void;
-  isAltActive?: boolean;
-  onAltDone?: () => void;
+  isCtrlActive: boolean;
+  onCtrlDone: () => void;
+  isAltActive: boolean;
+  onAltDone: () => void;
   onTerminalFocus: () => void;
   onTerminalBlur: () => void;
-  onStateChange?: (state: PaneData["state"]) => void;
-  onTabStateChange?: (state: { isPinned: boolean; isLocked: boolean }) => void;
-  onStolen?: () => void;
-  onManualReconnect?: (wasStolen: boolean) => void;
-  onCwdChange?: (cwd: string) => void;
-  onShellIntegrationChange?: (info: ShellIntegration) => void;
-  onDataReceived?: () => void;
+  onStateChange: (state: PaneData["state"]) => void;
+  onTabStateChange: (state: { isPinned: boolean; isLocked: boolean }) => void;
+  onStolen: () => void;
+  onManualReconnect: (wasStolen: boolean) => void;
+  onShellIntegrationChange: (info: ShellIntegration) => void;
+  onDataReceived: () => void;
   cloneFrom?: string;
-  isTouch?: boolean;
+  isTouch: boolean;
 }
 
 const RECENT_COMMANDS_NUM = 10;
@@ -112,7 +111,6 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       onTabStateChange,
       onStolen,
       onManualReconnect,
-      onCwdChange,
       onShellIntegrationChange,
       onDataReceived,
       cloneFrom,
@@ -156,9 +154,6 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
           } satisfies CSEventDetailShellIntegration,
         }),
       );
-      if (updates.cwd) {
-        onCwdChange?.(updates.cwd);
-      }
     };
 
     const unescapeOsc3008 = (s: string): string => {
@@ -308,7 +303,6 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
         },
         fontFamily: 'Consolas, "Courier New", monospace',
         ...__CS_TERMINAL_OPTIONS__,
-        fontSize: __CS_TERMINAL_FONT_SIZE__,
       });
       const fitAddon = new FitAddon();
       term.loadAddon(fitAddon);

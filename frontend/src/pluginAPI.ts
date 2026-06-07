@@ -36,7 +36,6 @@ import {
   MIME_JSON,
   LOCAL_NAME,
   LOCAL_VAR_PREFIX,
-  DEFAULT_TERMINAL_FONT_SIZE,
 } from "./constants";
 import { generatePassword, isMuiDialogOpen, terminalIgnoreKeyShortcuts, terminalKeyShortcuts } from "./common";
 import {
@@ -55,6 +54,7 @@ import {
 import { dialogs } from "./Dialogs";
 import type { AppletData, AppletPosition } from "./AppletWrapper";
 import { disableShortcuts } from "./useKeyboardManager";
+import type { ITerminalOptions } from "@xterm/xterm";
 
 /**
  * The module type of custom script
@@ -70,8 +70,6 @@ export interface CsScriptModule {
 export const moduleCache: Record<string, CsScriptModule> = {};
 
 window.__CS_REMAP_CTRL_L__ = undefined;
-window.__CS_TERMINAL_FONT_SIZE__ = DEFAULT_TERMINAL_FONT_SIZE;
-window.__CS_TERMINAL_OPTIONS__ = undefined;
 window.__CS_AUTORUN_DONE__ = undefined;
 window.__CS_MODULECACHE__ = moduleCache;
 window.__CS_VERSION__ = PACKAGE_JSON_VERSION;
@@ -79,6 +77,67 @@ window.__CS_USE_STORE__ = useStore;
 window.__CS_PASSTHROUGH_SHORTCUTS__ = terminalKeyShortcuts;
 window.__CS_TERMINAL_IGNORE_SHORTCUTS__ = terminalIgnoreKeyShortcuts;
 window.__CS_DISABLE_SHORTCUTS__ = disableShortcuts;
+
+// Use Proxy to intercept __CS_TERMINAL_OPTIONS__
+(function () {
+  let isCallbackScheduled = false;
+
+  function onObjectSettled(finalValue: ITerminalOptions) {
+    // console.log("[Callback] __CS_TERMINAL_OPTIONS__ Object changes finalized. New state:", finalValue);
+    const terminals = csGetAll().terminals;
+    for (const term of Object.values(terminals)) {
+      if (term && "getXterm" in term) {
+        const xterm = term.getXterm();
+        if (xterm) {
+          xterm.options = finalValue;
+        }
+      }
+    }
+  }
+
+  function scheduleCallback() {
+    if (!isCallbackScheduled) {
+      isCallbackScheduled = true;
+      queueMicrotask(() => {
+        onObjectSettled(currentTarget);
+        isCallbackScheduled = false;
+      });
+    }
+  }
+
+  const mutationHandler: ProxyHandler<ITerminalOptions> = {
+    set(target, prop, value, receiver) {
+      const success = Reflect.set(target, prop, value, receiver);
+      if (success) {
+        scheduleCallback();
+      }
+      return success;
+    },
+  };
+
+  // FIX 1 & 2: Check if window.myObj already has data from previous scripts.
+  // Then, immediately wrap it in a Proxy so property changes work right away.
+  const initialData = window.__CS_TERMINAL_OPTIONS__ || {};
+  let currentTarget: ITerminalOptions = new Proxy(initialData, mutationHandler);
+
+  // If there was already data present on load, trigger the callback for it
+  if (window.__CS_TERMINAL_OPTIONS__) {
+    scheduleCallback();
+  }
+
+  Object.defineProperty(window, "__CS_TERMINAL_OPTIONS__", {
+    get() {
+      return currentTarget;
+    },
+    set(newValue: ITerminalOptions) {
+      // Fallback to {} if someone sets it to null/undefined to prevent proxy crashes
+      currentTarget = new Proxy(newValue || {}, mutationHandler);
+      scheduleCallback();
+    },
+    configurable: true,
+    enumerable: true,
+  });
+})();
 
 // window.csSetSidebarFilter = undefined; // Assigned in Sidebar useEffect
 window.csAlert = dialogs.alert;

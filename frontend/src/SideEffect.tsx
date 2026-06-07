@@ -21,7 +21,7 @@ export default function SideEffect({ terminalRefs }: { terminalRefs: React.Mutab
     __CS_REMAP_CTRL_L__ = getIntVar(vars, localVars, VAR_CS_REMAP_CTRL_L);
 
     const fontSize = Math.max(1, getIntVar(vars, localVars, VAR_CS_TERMINAL_FONT_SIZE, DEFAULT_TERMINAL_FONT_SIZE));
-    if (fontSize !== __CS_TERMINAL_FONT_SIZE__) {
+    if (fontSize !== (__CS_TERMINAL_OPTIONS__.fontSize || DEFAULT_TERMINAL_FONT_SIZE)) {
       for (const term of Object.values(terminalRefs.current)) {
         if (term && "getXterm" in term) {
           const xterm = term.getXterm();
@@ -30,7 +30,7 @@ export default function SideEffect({ terminalRefs }: { terminalRefs: React.Mutab
           }
         }
       }
-      __CS_TERMINAL_FONT_SIZE__ = fontSize;
+      __CS_TERMINAL_OPTIONS__.fontSize = fontSize;
     }
 
     window.dispatchEvent(

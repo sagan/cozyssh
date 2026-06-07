@@ -52,6 +52,8 @@ import {
   VIBRATE_PATTERN,
   BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE,
   ID_TERMINAL_SEARCH_INPUT,
+  CACHE_API_DATA,
+  CACHE_MANIFEST,
 } from "./constants";
 import {
   type ContextMenu,
@@ -92,6 +94,7 @@ import {
   setSearchOpen,
   setSendScope,
   activatePane,
+  clearData,
 } from "./store";
 import { setupPluginAPI, runScript, moduleCache } from "./pluginAPI";
 import { useKeyboardManager } from "./useKeyboardManager";
@@ -1290,9 +1293,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
     }
     localStorage.clear();
     sessionStorage.clear();
+    clearData();
     if (window.caches) {
-      await caches.delete("api-data-cache");
-      await caches.delete("manifest-cache");
+      await caches.delete(CACHE_API_DATA);
+      await caches.delete(CACHE_MANIFEST);
     }
     window.location.href = "/login";
   }, []);
@@ -1325,9 +1329,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
     }
     localStorage.clear();
     sessionStorage.clear();
+    clearData();
     if (window.caches) {
-      await caches.delete("api-data-cache");
-      await caches.delete("manifest-cache");
+      await caches.delete(CACHE_API_DATA);
+      await caches.delete(CACHE_MANIFEST);
     }
     window.location.href = "/login";
   }, []);

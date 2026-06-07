@@ -88,13 +88,10 @@ declare global {
    */
   var __CS_REMAP_CTRL_L__: undefined | number;
   /**
-   * Used as xterm.js terminal options.fontSize
+   * Used to set additional xterm.js terminal options. These options are merged with the default options.
+   * It uses Proxy so any modification takes effect to all terminals immediately.
    */
-  var __CS_TERMINAL_FONT_SIZE__: number;
-  /**
-   * Additional xterm.js terminal options. These options are merged with the default options.
-   */
-  var __CS_TERMINAL_OPTIONS__: ITerminalOptions | undefined;
+  var __CS_TERMINAL_OPTIONS__: ITerminalOptions;
   /**
    * Focus the terminal with the given pane id.
    * @param tabOrPaneId defaults to active terminal pane id.

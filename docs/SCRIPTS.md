@@ -91,10 +91,10 @@ CozySSH sets some global variables in the browser's window object.
 - `window.__CS_MODULECACHE__` : `Record<string, CsScriptModule>` - The module cache of imported scripts. The key is the button internal id.
 - `window.__CS_VERSION__` : `string` - The current frontend version of CozySSH. E.g. `0.1.26`.
 - `window.__CS_PASSTHROUGH_SHORTCUTS__` : `Set<string>` - The list of key combinations that should be passed through to the terminal if terminal has focus. Each element is a key combination string such as `ctrl+shift+m` (all lowercase, modifiers in `ctrl,alt,shift,meta` order). Some key combinations (like `ctrl+c`, `ctrl+d`, etc.) are pre-added to this set by default.
+- `window.__CS_TERMINAL_IGNORE_SHORTCUTS__` - The list of key combinations that should be ignored by the terminal, and handled by the browser. The element is in the same format as `__CS_PASSTHROUGH_SHORTCUTS__` element. Some key combinations (like `f5`, `f11`, `f12`, etc.) are pre-added to this set by default.
 - `window.__CS_DISABLE_SHORTCUTS__` : `Set<string>` - The list of keyboard shortcuts that should be disabled. The element is in the same format as `__CS_PASSTHROUGH_SHORTCUTS__` element.
-- `window.__CS_USE_STORE__` : `typeof useStore` - The zustand store hook function that CozySSH uses to manage state.
-- `window.__CS_TERMINAL_OPTIONS__` : `ITerminalOptions | undefined` - Additional xterm.js terminal options. These options are merged with the default options and applied when creating a new terminal instance. See [ITerminalOptions](https://xtermjs.org/docs/api/terminal/interfaces/iterminaloptions/) for details. The default options can be found in `frontend/src/Terminal.tsx`.
-- `window.__CS_TERMINAL_FONT_SIZE__` : `number` - The current effective terminal font size in pixels.
+- `window.__CS_USE_STORE__` : `typeof useStore` - The [zustand][] store hook function that CozySSH uses to manage state.
+- `window.__CS_TERMINAL_OPTIONS__` : `ITerminalOptions | undefined` - Used to set additional xterm.js terminal options. These options are merged with the default options. It uses Proxy so any modification takes effect to all terminals immediately. See xterm.js [ITerminalOptions](https://xtermjs.org/docs/api/terminal/interfaces/iterminaloptions/) for details. The default options can be found in `frontend/src/Terminal.tsx`.
 
 ## Available global functions
 
@@ -569,3 +569,4 @@ export default {
 You can find more examples in [CozySSH Plugins][].
 
 [CozySSH Plugins]: https://github.com/sagan/cozyssh-plugins
+[zustand]: https://github.com/pmndrs/zustand

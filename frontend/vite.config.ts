@@ -3,6 +3,8 @@ import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import babel from "@rolldown/plugin-babel";
 import { VitePWA } from "vite-plugin-pwa";
 
+import { CACHE_API_DATA, CACHE_MANIFEST } from "./src/constants";
+
 const debug = false;
 
 // https://vite.dev/config/
@@ -45,7 +47,7 @@ export default defineConfig({
             urlPattern: /\/manifest\.json$/,
             handler: "NetworkFirst",
             options: {
-              cacheName: "manifest-cache",
+              cacheName: CACHE_MANIFEST,
               expiration: {
                 maxEntries: 1,
               },
@@ -55,7 +57,7 @@ export default defineConfig({
             urlPattern: /\/api\/(?:fulldata|hosts)$/,
             handler: "NetworkFirst",
             options: {
-              cacheName: "api-data-cache",
+              cacheName: CACHE_API_DATA,
               expiration: {
                 maxEntries: 100,
                 // maxAgeSeconds: 60 * 60 * 24 * 365,

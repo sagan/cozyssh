@@ -62,6 +62,7 @@ import {
   triggerFocus,
   useStore,
 } from "./store";
+import { useShallow } from "zustand/react/shallow";
 
 const drawerWidth = 260;
 
@@ -84,14 +85,19 @@ export default function Sidebar({
   savePassword: string;
   onSavePasswordChange: (val: string) => void;
   onSelect: (host: string) => void;
-  onSelectTagAsSplit?: (tag: string, hosts: string[]) => void;
-  onLogout?: () => void;
-  onLogoutAll?: () => void;
-  onOpenScratchpad?: () => void;
+  onSelectTagAsSplit: (tag: string, hosts: string[]) => void;
+  onLogout: () => void;
+  onLogoutAll: () => void;
+  onOpenScratchpad: () => void;
   onAttach: (id: string, host: string, title: string, isLocked: boolean) => void;
-  onRefresh?: () => void;
+  onRefresh: () => void;
   fetchHosts: () => void;
 }) {
+  const activeSessionIds = useStore(
+    useShallow((state) =>
+      state.tabs.flatMap((t) => t.panes.filter((p) => p.state !== "stolen").map((p) => p.sessionId || p.id)),
+    ),
+  );
   const mobileOpen = useStore((state) => state.mobileOpen);
   const hostFormData = useStore((state) => state.hostFormData);
   const sysHostname = useStore((state) => state.sysHostname);
@@ -228,9 +234,7 @@ export default function Sidebar({
 
             if (retryRes.ok) {
               await dialogs.alert("Password updated! You will be logged out.");
-              if (onLogout) {
-                onLogout();
-              }
+              onLogout();
               return;
             } else {
               const retryErr = await retryRes.text();
@@ -257,9 +261,7 @@ export default function Sidebar({
 
             if (forceRes.ok) {
               dialogs.alert("App password updated and saved passwords wiped! You will be logged out.");
-              if (onLogout) {
-                onLogout();
-              }
+              onLogout();
               return;
             } else {
               const forceErr = await forceRes.text();
@@ -274,9 +276,7 @@ export default function Sidebar({
 
     if (res.ok) {
       await dialogs.alert("Password updated! You will be logged out.");
-      if (onLogout) {
-        onLogout();
-      }
+      onLogout();
     } else {
       const errText = await res.text();
       dialogs.alert("Failed to update password: " + (errText || res.statusText));
@@ -810,9 +810,7 @@ export default function Sidebar({
           <MenuItem
             onClick={() => {
               setAnchorEl(null);
-              if (onRefresh) {
-                onRefresh();
-              }
+              onRefresh();
             }}
           >
             Refresh
@@ -831,17 +829,15 @@ export default function Sidebar({
           <MenuItem
             onClick={() => {
               setAnchorEl(null);
-              if (onOpenScratchpad) {
-                onOpenScratchpad();
-              }
+              onOpenScratchpad();
             }}
           >
             Open Scratchpad
           </MenuItem>
           <MenuItem
-            onClick={() => {
+            onClick={async () => {
               setAnchorEl(null);
-              if (onLogout) {
+              if (await dialogs.confirm("Log out of current device?")) {
                 onLogout();
               }
             }}
@@ -856,9 +852,7 @@ export default function Sidebar({
                   "Are you sure you want to log out of all browser sessions? This will invalidate all active sessions and require you to sign in again on all devices.",
                 )
               ) {
-                if (onLogoutAll) {
-                  onLogoutAll();
-                }
+                onLogoutAll();
               }
             }}
           >
@@ -1190,16 +1184,19 @@ export default function Sidebar({
             {dialogTab === 0 && (
               <List dense sx={{ border: "1px solid #ddd", borderRadius: 1 }}>
                 {pinnedSessions.map((ps) => {
+                  const canAttach = !activeSessionIds.includes(ps.id);
                   return (
                     <ListItem key={ps.id} divider>
                       <ListItemText primary={ps.title} secondary={`${ps.host} (Listeners: ${ps.listenerCount})`} />
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={() => onAttach(ps.id, ps.host, ps.title, ps.isLocked)}
-                      >
-                        Attach
-                      </Button>
+                      {canAttach && (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => onAttach(ps.id, ps.host, ps.title, ps.isLocked)}
+                        >
+                          Attach
+                        </Button>
+                      )}
                     </ListItem>
                   );
                 })}

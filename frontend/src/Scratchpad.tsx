@@ -19,7 +19,7 @@ export interface ScratchpadHandle {
 }
 
 interface ScratchpadProps {
-  onSyncStateChange?: (state: ScratchpadSyncState) => void;
+  onSyncStateChange: (state: ScratchpadSyncState) => void;
 }
 
 const WS_RECONNECT_DELAY_MS = 3000;
