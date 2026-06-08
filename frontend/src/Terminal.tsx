@@ -38,7 +38,7 @@ import {
   getKeyCombination,
   base64urlEncode,
   terminalKeyShortcuts,
-  terminalIgnoreKeyShortcuts,
+  nonCharKeys,
 } from "./common";
 import { getStore, type PaneData } from "./store";
 
@@ -738,12 +738,8 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
 
         const kcomb = getKeyCombination(e);
 
-        if (terminalIgnoreKeyShortcuts.has(kcomb)) {
-          return false;
-        }
-
         // Allow all standard typing (including Shift) to pass through to xterm
-        if (!e.ctrlKey && !e.altKey && !e.metaKey) {
+        if (!e.ctrlKey && !e.altKey && !e.metaKey && !nonCharKeys.has(e.key.toLowerCase())) {
           return true;
         }
 

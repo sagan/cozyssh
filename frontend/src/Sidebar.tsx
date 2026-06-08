@@ -28,15 +28,42 @@ import {
   Tab,
   Chip,
   Divider,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Tooltip,
 } from "@mui/material";
 import ComputerIcon from "@mui/icons-material/Computer";
 import DnsIcon from "@mui/icons-material/Dns";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import AddIcon from "@mui/icons-material/Add";
 import StarIcon from "@mui/icons-material/Star";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
+import LockIcon from "@mui/icons-material/Lock";
+import LockOpenIcon from "@mui/icons-material/LockOpen";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 
 import { version as PACKAGE_JSON_VERSION } from "../package.json";
-import type { HostData, PasswordUpdateRequest, SessionPinned, CopyIDRequest, CopyIDResponse } from "./api";
+import type {
+  HostData,
+  PasswordUpdateRequest,
+  SessionPinned,
+  CopyIDRequest,
+  CopyIDResponse,
+  PasswordsResponse,
+  PasswordsUnlockRequest,
+  PasswordsRevealRequest,
+  PasswordsRevealResponse,
+  PasswordsChangeRequest,
+  PasswordsDeleteRequest,
+} from "./api";
 import {
   METHOD_PUT,
   METHOD_POST,
@@ -113,11 +140,14 @@ export default function Sidebar({
   const [confirmPwd, setConfirmPwd] = useState("");
   const [pinnedSessions, setPinnedSessions] = useState<SessionPinned[]>([]);
   const [dialogTab, setDialogTab] = useState(0);
+  const [dialogAppPassword, setDialogAppPassword] = useState<string | null>(null);
+  const [passwordsState, setPasswordsState] = useState<PasswordsResponse>({ locked: true, keys: [] });
+  const [revealedPasswords, setRevealedPasswords] = useState<{ [key: string]: string }>({});
 
   const [swStatus, setSwStatus] = useState<ServiceWorkerStatus>("unknown");
 
   useEffect(() => {
-    if (settingsOpen && dialogTab === 1) {
+    if (settingsOpen && dialogTab === 2) {
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker
           .getRegistration()
@@ -181,6 +211,283 @@ export default function Sidebar({
       delete (window as Partial<typeof globalThis>).csSetSidebarFilter;
     };
   }, []);
+
+  const fetchPasswords = useCallback(async () => {
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+    try {
+      const r = await fetch("/api/passwords", {
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        },
+      });
+      if (r.ok) {
+        const data = (await r.json()) as PasswordsResponse;
+        setPasswordsState(data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch passwords:", e);
+    }
+  }, []);
+
+  const handleLock = useCallback(async () => {
+    setDialogAppPassword(null);
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+    try {
+      const res = await fetch("/api/passwords/lock", {
+        method: METHOD_POST,
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        },
+      });
+      if (res.ok) {
+        setRevealedPasswords({});
+        fetchPasswords();
+      } else {
+        dialogs.alert("Failed to lock password store");
+      }
+    } catch (e) {
+      console.error(e);
+      dialogs.alert("Failed to lock password store");
+    }
+  }, [fetchPasswords]);
+
+  useEffect(() => {
+    if (settingsOpen && dialogTab === 1) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchPasswords();
+    }
+  }, [settingsOpen, dialogTab, fetchPasswords]);
+
+  useEffect(() => {
+    if (!settingsOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDialogAppPassword(null);
+      setRevealedPasswords({});
+    }
+  }, [settingsOpen]);
+
+  const handleReveal = useCallback(
+    async (key: string) => {
+      let pwd = dialogAppPassword;
+      if (!pwd) {
+        const entered = await dialogs.promptPassword("Enter App Password to confirm:");
+        if (entered === null) {
+          return;
+        }
+        const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+        try {
+          const verifyRes = await fetch("/api/passwords/unlock", {
+            method: METHOD_POST,
+            headers: {
+              [HEADER_CONTENT_TYPE]: MIME_JSON,
+              [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+            },
+            body: JSON.stringify({ app_password: entered } satisfies PasswordsUnlockRequest),
+          });
+          if (!verifyRes.ok) {
+            dialogs.alert("Incorrect app password");
+            return;
+          }
+          pwd = entered;
+          setDialogAppPassword(entered);
+          setPasswordsState((prev) => ({ ...prev, locked: false }));
+        } catch (e) {
+          console.error(e);
+          dialogs.alert("Verification failed");
+          return;
+        }
+      }
+
+      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+      try {
+        const res = await fetch("/api/passwords/reveal", {
+          method: METHOD_POST,
+          headers: {
+            [HEADER_CONTENT_TYPE]: MIME_JSON,
+            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+          },
+          body: JSON.stringify({ key } satisfies PasswordsRevealRequest),
+        });
+        if (res.ok) {
+          const data = (await res.json()) as PasswordsRevealResponse;
+          setRevealedPasswords((prev) => ({ ...prev, [key]: data.password }));
+        } else {
+          dialogs.alert("Failed to reveal password");
+        }
+      } catch (e) {
+        console.error(e);
+        dialogs.alert("Failed to reveal password");
+      }
+    },
+    [dialogAppPassword],
+  );
+
+  const handleCopyPassword = useCallback(
+    async (key: string) => {
+      let pwd = revealedPasswords[key];
+      if (!pwd) {
+        let appPwd = dialogAppPassword;
+        if (!appPwd) {
+          const entered = await dialogs.promptPassword("Enter App Password to confirm:");
+          if (entered === null) {
+            return;
+          }
+          const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+          try {
+            const verifyRes = await fetch("/api/passwords/unlock", {
+              method: METHOD_POST,
+              headers: {
+                [HEADER_CONTENT_TYPE]: MIME_JSON,
+                [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+              },
+              body: JSON.stringify({ app_password: entered } satisfies PasswordsUnlockRequest),
+            });
+            if (!verifyRes.ok) {
+              dialogs.alert("Incorrect app password");
+              return;
+            }
+            appPwd = entered;
+            setDialogAppPassword(entered);
+            setPasswordsState((prev) => ({ ...prev, locked: false }));
+          } catch (e) {
+            console.error(e);
+            dialogs.alert("Verification failed");
+            return;
+          }
+        }
+
+        const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+        try {
+          const res = await fetch("/api/passwords/reveal", {
+            method: METHOD_POST,
+            headers: {
+              [HEADER_CONTENT_TYPE]: MIME_JSON,
+              [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+            },
+            body: JSON.stringify({ key } satisfies PasswordsRevealRequest),
+          });
+          if (res.ok) {
+            const data = (await res.json()) as PasswordsRevealResponse;
+            pwd = data.password;
+          } else {
+            dialogs.alert("Failed to retrieve password");
+            return;
+          }
+        } catch (e) {
+          console.error(e);
+          dialogs.alert("Failed to retrieve password");
+          return;
+        }
+      }
+
+      if (pwd) {
+        try {
+          await navigator.clipboard.writeText(pwd);
+        } catch (err) {
+          console.error("Failed to copy password:", err);
+        }
+      }
+    },
+    [dialogAppPassword, revealedPasswords],
+  );
+
+  const handleChangePassword = useCallback(
+    async (key: string) => {
+      const isLocked = passwordsState.locked && !dialogAppPassword;
+      if (isLocked) {
+        const entered = await dialogs.promptPassword("Enter App Password to confirm:");
+        if (entered === null) {
+          return;
+        }
+        const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+        try {
+          const verifyRes = await fetch("/api/passwords/unlock", {
+            method: METHOD_POST,
+            headers: {
+              [HEADER_CONTENT_TYPE]: MIME_JSON,
+              [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+            },
+            body: JSON.stringify({ app_password: entered } satisfies PasswordsUnlockRequest),
+          });
+          if (!verifyRes.ok) {
+            dialogs.alert("Incorrect app password");
+            return;
+          }
+          setDialogAppPassword(entered);
+          setPasswordsState((prev) => ({ ...prev, locked: false }));
+        } catch (e) {
+          console.error(e);
+          dialogs.alert("Verification failed");
+          return;
+        }
+      }
+
+      const newPwd = await dialogs.promptPassword(`Enter new password for ${key}:`);
+      if (newPwd === null) {
+        return;
+      }
+
+      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+      try {
+        const res = await fetch("/api/passwords/change", {
+          method: METHOD_POST,
+          headers: {
+            [HEADER_CONTENT_TYPE]: MIME_JSON,
+            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+          },
+          body: JSON.stringify({ key, password: newPwd } satisfies PasswordsChangeRequest),
+        });
+        if (res.ok) {
+          setRevealedPasswords((prev) => {
+            if (key in prev) {
+              return { ...prev, [key]: newPwd };
+            }
+            return prev;
+          });
+          dialogs.alert("Password updated successfully");
+        } else {
+          dialogs.alert("Failed to update password");
+        }
+      } catch (e) {
+        console.error(e);
+        dialogs.alert("Failed to update password");
+      }
+    },
+    [passwordsState.locked, dialogAppPassword],
+  );
+
+  const handleDeletePassword = useCallback(
+    async (key: string) => {
+      if (!(await dialogs.confirm(`Are you sure you want to delete the password for ${key}?`))) {
+        return;
+      }
+      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+      try {
+        const res = await fetch("/api/passwords/delete", {
+          method: METHOD_POST,
+          headers: {
+            [HEADER_CONTENT_TYPE]: MIME_JSON,
+            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+          },
+          body: JSON.stringify({ key } satisfies PasswordsDeleteRequest),
+        });
+        if (res.ok) {
+          fetchPasswords();
+          setRevealedPasswords((prev) => {
+            const next = { ...prev };
+            delete next[key];
+            return next;
+          });
+        } else {
+          dialogs.alert("Failed to delete password");
+        }
+      } catch (e) {
+        console.error(e);
+        dialogs.alert("Failed to delete password");
+      }
+    },
+    [fetchPasswords],
+  );
 
   const handleSavePassword = useCallback(async () => {
     if (newPwd !== confirmPwd) {
@@ -1174,6 +1481,7 @@ export default function Sidebar({
             allowScrollButtonsMobile
           >
             <Tab label="Sessions" />
+            <Tab label="Passwords" />
             <Tab label="Settings" />
             <Tab label="Shortcuts" />
             <Tab label="About" />
@@ -1209,6 +1517,117 @@ export default function Sidebar({
             )}
 
             {dialogTab === 1 && (
+              <>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontSize: "1rem", fontWeight: "bold" }}>
+                    Saved Passwords
+                  </Typography>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    {!passwordsState.locked && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="warning"
+                        onClick={handleLock}
+                        sx={{ py: 0.25, px: 1, minWidth: 0, textTransform: "none", fontSize: "0.75rem", height: 24 }}
+                      >
+                        Lock
+                      </Button>
+                    )}
+                    <Chip
+                      icon={passwordsState.locked ? <LockIcon fontSize="small" /> : <LockOpenIcon fontSize="small" />}
+                      label={passwordsState.locked ? "Locked" : "Unlocked"}
+                      color={passwordsState.locked ? "warning" : "success"}
+                      size="small"
+                      variant="outlined"
+                    />
+                  </Box>
+                </Box>
+                {passwordsState.keys.length > 0 ? (
+                  <TableContainer
+                    component={Paper}
+                    sx={{
+                      maxHeight: 350,
+                      border: "1px solid",
+                      borderColor: "divider",
+                      borderRadius: 1,
+                      boxShadow: "none",
+                    }}
+                  >
+                    <Table size="small" stickyHeader>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: "bold" }}>Key</TableCell>
+                          <TableCell sx={{ fontWeight: "bold" }}>Password</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                            Actions
+                          </TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {passwordsState.keys.map((key) => {
+                          const isRevealed = key in revealedPasswords;
+                          const displayVal = isRevealed ? revealedPasswords[key] : PASSWORD_PLACEHOLDER;
+                          return (
+                            <TableRow key={key} hover>
+                              <TableCell sx={{ fontFamily: "monospace", wordBreak: "break-all" }}>{key}</TableCell>
+                              <TableCell sx={{ fontFamily: "monospace" }}>{displayVal}</TableCell>
+                              <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
+                                <Tooltip title={isRevealed ? "Hide" : "Reveal"}>
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => {
+                                      if (isRevealed) {
+                                        setRevealedPasswords((prev) => {
+                                          const next = { ...prev };
+                                          delete next[key];
+                                          return next;
+                                        });
+                                      } else {
+                                        handleReveal(key);
+                                      }
+                                    }}
+                                  >
+                                    {isRevealed ? (
+                                      <VisibilityOffIcon fontSize="small" />
+                                    ) : (
+                                      <VisibilityIcon fontSize="small" />
+                                    )}
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Copy Password">
+                                  <IconButton size="small" onClick={() => handleCopyPassword(key)}>
+                                    <ContentCopyIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Change">
+                                  <IconButton size="small" color="primary" onClick={() => handleChangePassword(key)}>
+                                    <EditIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Delete">
+                                  <IconButton size="small" color="error" onClick={() => handleDeletePassword(key)}>
+                                    <DeleteIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                ) : (
+                  <Box
+                    sx={{ py: 4, textAlign: "center", border: "1px dashed", borderColor: "divider", borderRadius: 1 }}
+                  >
+                    <Typography color="text.secondary">No passwords saved in the store.</Typography>
+                  </Box>
+                )}
+              </>
+            )}
+
+            {dialogTab === 2 && (
               <>
                 <Typography variant="subtitle2" gutterBottom>
                   Service Worker & Cache
@@ -1286,7 +1705,7 @@ export default function Sidebar({
               </>
             )}
 
-            {dialogTab === 2 && (
+            {dialogTab === 3 && (
               <>
                 <Typography variant="subtitle2" gutterBottom>
                   Keyboard Shortcuts
@@ -1334,6 +1753,9 @@ export default function Sidebar({
                   <br />
                   <b>Alt + Enter</b> : Toggle fullscreen of main terminal area
                   <br />
+                  <b>Alt + Backquote</b> : Close any dialog (Similar to Esc but works even if terminal is in fullscreen
+                  mode)
+                  <br />
                   <b>Alt + - / Alt + +</b> : Decrease / increase terminal font size
                   <br />
                   <b>Ctrl + Alt + 0</b> : Reset to default terminal font size (15px)
@@ -1355,7 +1777,7 @@ export default function Sidebar({
               </>
             )}
 
-            {dialogTab === 3 && (
+            {dialogTab === 4 && (
               <Box sx={{ textAlign: "center", mt: 4 }}>
                 <Typography variant="h5" gutterBottom sx={{ fontWeight: "bold" }}>
                   CozySSH

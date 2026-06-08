@@ -140,6 +140,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
 
   useEffect(() => {
     if (isActive && !loading && currentPath === "") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchFiles();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -223,6 +223,43 @@ export const loginTheme = createTheme({
  * These shortcuts should be handled by the terminal / shell itself.
  */
 export const terminalKeyShortcuts = new Set([
+  // basic keys
+  "tab",
+  "ctrl+i", // same as tab
+  "shift+tab",
+  "backspace",
+  "delete",
+  "insert",
+  "enter",
+  "escape",
+  "ctrl+[", // same as escape
+  "ctrl+]", // telnet quit
+  "home",
+  "end",
+  "pageup",
+  "pagedown",
+  "arrowup",
+  "arrowdown",
+  "arrowleft",
+  "arrowright",
+  "alt+arrowup",
+  "alt+arrowdown",
+  "alt+arrowleft",
+  "alt+arrowright",
+  "ctrl+arrowup",
+  "ctrl+arrowdown",
+  "ctrl+arrowleft",
+  "ctrl+arrowright",
+  "shift+arrowup",
+  "shift+arrowdown",
+  "shift+arrowleft",
+  "shift+arrowright",
+  "shift+home",
+  "shift+end",
+  "shift+pageup",
+  "shift+pagedown",
+  // "shift+insert", // paste. handled by xterm.js
+
   // TTY / Kernel Signals
   "ctrl+c", // SIGINT (Kill process)
   "ctrl+d", // EOF (End of input / Exit)
@@ -250,6 +287,11 @@ export const terminalKeyShortcuts = new Set([
   "alt+t", // Swap current word with previous word
   "ctrl+h", // Backspace
   "ctrl+l", // Clear screen and redraw current line
+  "ctrl+v", // Quoted Insert
+  "ctrl+o", // Execute and display next line
+  "ctrl+_", // Undo last change
+  "alt+u", // Upper case from cursor to end of word. Note we don't add alt+ l / c since CozySSH itself uses them
+  "alt+r", // Readline revert-line
 
   // Shell / Readline Shortcuts (Emacs Mode) - History & Search
   "ctrl+r", // Reverse history search
@@ -260,16 +302,32 @@ export const terminalKeyShortcuts = new Set([
 ]);
 
 /**
- * These shortcuts should be ignored by the terminal, and handled by the browser.
+ * Keys that doesn't produce any character.
  */
-export const terminalIgnoreKeyShortcuts = new Set([
-  "f3", // search
-  "shift+f3", // reverse search
-  "f5", // reload
-  "ctrl+f5", // force reload
-  "f6", // Toggle select address bar
-  "f11", // fullscreen
-  "f12", // developer tools
+export const nonCharKeys = new Set([
+  "f1",
+  "f2",
+  "f3",
+  "f4",
+  "f5",
+  "f6",
+  "f7",
+  "f8",
+  "f9",
+  "f10",
+  "f11",
+  "f12",
+  "home",
+  "end",
+  "backspace",
+  "insert",
+  "delete",
+  "pageup",
+  "pagedown",
+  "arrowup",
+  "arrowdown",
+  "arrowleft",
+  "arrowright",
 ]);
 
 /**
@@ -593,8 +651,71 @@ export function nextTerminalFontSize(fontSize: number): number {
 }
 
 /**
- * Return true if there is any MUI Dialog open.
+ * Return true if there is any MUI modal dialog open (except async alert / confirm / prompt dialogs).
  */
 export function isMuiDialogOpen(): boolean {
-  return !!document.querySelector("body > div.MuiDialog-root");
+  return !!document.querySelector(".MuiDialog-root:not(#async-modal-dialog)");
+}
+
+/**
+ * Parse `[username[:password]@]hostname[:port]` to host data.
+ * If a field isn't present, set it to undefined.
+ */
+export function parseHostName(
+  name: string,
+  defaultUser?: string,
+): Pick<HostData, "hostname"> & Partial<Pick<HostData, "user" | "password" | "port">> {
+  let hostname = "";
+  let user: string | undefined;
+  let password: string | undefined;
+  let port: string | undefined;
+
+  const i = name.lastIndexOf("@");
+  if (i === -1) {
+    hostname = name;
+  } else {
+    hostname = name.slice(i + 1);
+    user = name.slice(0, i);
+    const j = user.indexOf(":");
+    if (j !== -1) {
+      password = user.slice(j + 1);
+      user = user.slice(0, j);
+      try {
+        password = decodeURIComponent(password);
+      } catch {
+        // ignore
+      }
+    }
+    try {
+      user = decodeURIComponent(user);
+    } catch {
+      // ignore
+    }
+  }
+  const j = hostname.lastIndexOf(":");
+  if (j !== -1) {
+    port = hostname.slice(j + 1);
+    hostname = hostname.slice(0, j);
+  }
+  return {
+    user: user || defaultUser,
+    password,
+    port,
+    hostname,
+  };
+}
+
+/**
+ * Return `user@hostname:port` or `hostname:port`. `port` is always present and defaults to `22`.
+ * If defaultUser is provided, it always returns`user@hostname:port`
+ */
+export function getCanonicalHostString(
+  host: Pick<HostData, "hostname"> & Partial<Pick<HostData, "user" | "port">>,
+  defaultUser?: string,
+): string {
+  if (host.user || defaultUser) {
+    return `${encodeURIComponent((host.user || defaultUser) as string)}@${host.hostname}:${host.port || "22"}`;
+  } else {
+    return `${host.hostname}:${host.port || "22"}`;
+  }
 }

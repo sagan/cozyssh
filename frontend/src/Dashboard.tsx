@@ -65,6 +65,8 @@ import {
   genPaneId,
   hostTitle,
   removePassFromHost,
+  parseHostName,
+  getCanonicalHostString,
 } from "./common";
 import {
   type TabData,
@@ -1161,17 +1163,22 @@ export default function Dashboard({ initialData }: DashboardProps) {
           }
         } else if (!hash.startsWith("$")) {
           // Single host mode /#host
+          let qs = "";
           let host = hash;
+          const qIdx = host.lastIndexOf("?");
+          if (qIdx >= 0) {
+            qs = host.slice(qIdx);
+            host = host.slice(0, qIdx);
+          }
           if (host !== LOCAL_NAME) {
-            const matchedHost = hostsData.find((h) =>
-              hash.includes("@")
-                ? hash === `${h.user || "root"}@${h.hostname}`
-                : h.name === hash || h.hostname === hash,
-            );
+            const parsedHost = parseHostName(host);
+            const parsedHostString = getCanonicalHostString(parsedHost);
+            const matchedHost = hostsData.find((h) => getCanonicalHostString(h) === parsedHostString);
             if (matchedHost) {
               host = matchedHost.name;
             }
           }
+          host += qs;
           if (host) {
             handleSelectHost(host);
           } else {
@@ -1888,6 +1895,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             open
             onClose={() => setApplets((prev) => prev.filter((a) => a.name !== applet.name))}
             fullWidth
+            fullScreen={applet.fullScreen}
             maxWidth={false}
             slotProps={{
               paper: {

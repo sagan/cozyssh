@@ -280,6 +280,26 @@ func IsEmpty() bool {
 	return len(pf.Passwords) == 0
 }
 
+// ListKeys returns a list of all password keys.
+func ListKeys() ([]string, error) {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	pf, err := readPasswordFile()
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []string{}, nil
+		}
+		return nil, err
+	}
+
+	keys := make([]string, 0, len(pf.Passwords))
+	for k := range pf.Passwords {
+		keys = append(keys, k)
+	}
+	return keys, nil
+}
+
 func DeletePasswordFile(force bool) error {
 	mu.Lock()
 	defer mu.Unlock()

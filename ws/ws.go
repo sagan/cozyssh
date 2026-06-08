@@ -163,6 +163,9 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			sessionID = host[i+1:]
 		}
 		user, _, _ = strings.Cut(host[0:i], ":")
+		if _u, err := url.PathUnescape(user); err == nil {
+			user = _u
+		}
 	} else if sessionID == "" {
 		sessionID = host
 	}

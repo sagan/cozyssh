@@ -22353,6 +22353,7 @@ export interface AppletData {
 	width?: number | string;
 	height?: number | string;
 	zIndex?: number;
+	fullScreen?: boolean;
 }
 /**
  * The module type of custom script
@@ -22410,12 +22411,6 @@ declare global {
 	 * Some key combinations (like `ctrl+c`, `ctrl+d`, etc.) are pre-added to this set by default.
 	 */
 	var __CS_PASSTHROUGH_SHORTCUTS__: Set<string>;
-	/**
-	 * The list of key combinations that should be ignored by the terminal, and handled by the browser.
-	 * The element is in the same format as `__CS_PASSTHROUGH_SHORTCUTS__` element.
-	 * Some key combinations (like `f5`, `f11`, `f12`, etc.) are pre-added to this set by default.
-	 */
-	var __CS_TERMINAL_IGNORE_SHORTCUTS__: Set<string>;
 	/**
 	 * The list of CozySSH shortcut key combinations that should be disabled.
 	 * The element is in the same format as `__CS_PASSTHROUGH_SHORTCUTS__` element.
@@ -22571,6 +22566,21 @@ declare global {
 	 */
 	function csExec(cmdline: string): Promise<CsExecResult>;
 	/**
+	 * Execute a shell command in the context of a specific terminal pane.
+	 *
+	 * For SSH terminals, the command is run over a new background SSH channel
+	 * opened from the existing connection — it is invisible to the visible
+	 * terminal and does not disturb the interactive session.
+	 *
+	 * For local-shell terminals (and when no matching pane is found), the
+	 * behaviour is identical to {@link csExec}.
+	 *
+	 * @param cmdline The command line to execute on the remote (or local) host.
+	 * @param paneId  The pane whose SSH connection to reuse.
+	 *                Defaults to the currently active pane.
+	 */
+	function csExecInTerminal(cmdline: string, paneId?: string): Promise<CsExecResult>;
+	/**
 	 * Open a custom UI applet.
 	 * @param name The name of the applet. If an applet with the same name already exists, it will be replaced.
 	 * @param node The React component to render as the applet's UI.
@@ -22583,11 +22593,7 @@ declare global {
 	 * @param options.height Initial height for applet of `widget` and `dialog` position.
 	 * Can be integer (in pixels) or CSS size string (e.g. `500`, `40vh`)
 	 */
-	function csOpenApplet(name: string, node: Node | React.ComponentType, options?: {
-		position?: AppletPosition;
-		width?: number | string;
-		height?: number | string;
-	}): void;
+	function csOpenApplet(name: string, node: Node | React.ComponentType, options?: Partial<Omit<AppletData, "name" | "node">>): void;
 	/**
 	 * Close a custom UI applet.
 	 */

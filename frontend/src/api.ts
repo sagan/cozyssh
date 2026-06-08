@@ -125,6 +125,10 @@ export interface ExecResult {
     stderr: string;
     error: unknown;
 }
+export interface ExecInTerminalRequest {
+    cmdline: string;
+    paneId?: string;
+}
 export interface CopyIDRequest {
     name: string;
     password?: string;
@@ -190,4 +194,24 @@ export interface WsResizeMsg {
     type: "resize";
     cols: number;
     rows: number;
+}
+export interface PasswordsResponse {
+    locked: boolean;
+    keys: string[];
+}
+export interface PasswordsUnlockRequest {
+    app_password: string;
+}
+export interface PasswordsRevealRequest {
+    key: string;
+}
+export interface PasswordsRevealResponse {
+    password: string;
+}
+export interface PasswordsChangeRequest {
+    key: string;
+    password: string;
+}
+export interface PasswordsDeleteRequest {
+    key: string;
 }

@@ -12,6 +12,7 @@ import {
   Checkbox,
 } from "@mui/material";
 import { triggerFocus } from "./store";
+import { isMuiDialogOpen } from "./common";
 
 export interface DialogApi {
   alert: typeof csAlert;
@@ -99,7 +100,9 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
     if (!confirmed) {
       setOpen(false);
       resolveRef.current(config.type === "prompt" ? null : false);
-      triggerFocus();
+      if (!isMuiDialogOpen()) {
+        triggerFocus();
+      }
       return;
     }
 
@@ -123,7 +126,9 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
 
     setOpen(false);
     resolveRef.current(config.type === "prompt" ? inputValue : true);
-    triggerFocus();
+    if (!isMuiDialogOpen()) {
+      triggerFocus();
+    }
   };
 
   // Determine if the confirmation criteria are unmet

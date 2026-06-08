@@ -41,6 +41,8 @@ import {
   ButtonDataSchema,
   generatePassword,
   removePassFromHost,
+  parseHostName,
+  getCanonicalHostString,
 } from "./common";
 import {
   type TabData,
@@ -899,17 +901,12 @@ export default function DialogManager({
           host = removePassFromHost(host);
           // Check if it's a direct connection and not in known hosts
           if (host.includes(".") || host.includes(":") || host === "localhost") {
-            const known = hosts.find((h) => h.name === host || h.hostname === host);
+            const parsedHost = parseHostName(host);
+            const parsedHostString = getCanonicalHostString(parsedHost);
+            const known = hosts.find((h) => getCanonicalHostString(h) === parsedHostString);
             if (!known) {
               // Automatically add to ~/.ssh/config
               const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-              let user = "root";
-              let hostname = host;
-              const i = host.lastIndexOf("@");
-              if (i !== -1) {
-                user = host.slice(0, i);
-                hostname = host.slice(i + 1);
-              }
               try {
                 await fetch("/api/hosts", {
                   method: METHOD_POST,
@@ -918,10 +915,10 @@ export default function DialogManager({
                     [HEADER_CONTENT_TYPE]: MIME_JSON,
                   },
                   body: JSON.stringify({
-                    name: host,
-                    hostname: hostname,
-                    user: user,
+                    user: "",
                     port: "22",
+                    name: parsedHost.hostname,
+                    ...parsedHost,
                   } satisfies HostData),
                 });
                 handleRefresh(); // Refresh hosts list

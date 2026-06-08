@@ -23,6 +23,7 @@ export interface AppletData {
   width?: number | string;
   height?: number | string;
   zIndex?: number;
+  fullScreen?: boolean;
 }
 
 export default function AppletWrapper({ applet, onClose, onSwitchPosition, onFocus }: AppletWrapperProps) {

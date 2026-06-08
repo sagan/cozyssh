@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle, useCallback } from "react";
 import { Box, Typography, IconButton, Tabs, Tab, Menu, MenuItem } from "@mui/material";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
+import { markdown } from "@codemirror/lang-markdown";
 import { EditorView } from "@codemirror/view";
 import AddIcon from "@mui/icons-material/Add";
 import LockIcon from "@mui/icons-material/Lock";
@@ -443,7 +444,7 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
             value={cPage.content}
             height="100%"
             style={{ height: "100%" }}
-            extensions={[EditorView.lineWrapping]}
+            extensions={[markdown(), EditorView.lineWrapping]}
             onChange={handleEditorChange}
             readOnly={cPage.locked}
           />

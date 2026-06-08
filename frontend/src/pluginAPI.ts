@@ -37,7 +37,7 @@ import {
   LOCAL_NAME,
   LOCAL_VAR_PREFIX,
 } from "./constants";
-import { generatePassword, isMuiDialogOpen, terminalIgnoreKeyShortcuts, terminalKeyShortcuts } from "./common";
+import { generatePassword, isMuiDialogOpen, terminalKeyShortcuts } from "./common";
 import {
   type TerminalRefMap,
   activatePane,
@@ -52,7 +52,7 @@ import {
   useStore,
 } from "./store";
 import { dialogs } from "./Dialogs";
-import type { AppletData, AppletPosition } from "./AppletWrapper";
+import type { AppletData } from "./AppletWrapper";
 import { disableShortcuts } from "./useKeyboardManager";
 import type { ITerminalOptions } from "@xterm/xterm";
 
@@ -75,7 +75,6 @@ window.__CS_MODULECACHE__ = moduleCache;
 window.__CS_VERSION__ = PACKAGE_JSON_VERSION;
 window.__CS_USE_STORE__ = useStore;
 window.__CS_PASSTHROUGH_SHORTCUTS__ = terminalKeyShortcuts;
-window.__CS_TERMINAL_IGNORE_SHORTCUTS__ = terminalIgnoreKeyShortcuts;
 window.__CS_DISABLE_SHORTCUTS__ = disableShortcuts;
 
 // Use Proxy to intercept __CS_TERMINAL_OPTIONS__
@@ -193,6 +192,24 @@ window.csExec = async (cmdline: string) => {
   });
   if (!res.ok) {
     throw new Error("Exec failed: " + res.statusText);
+  }
+  return res.json() as Promise<ExecResult>;
+};
+
+window.csExecInTerminal = async (cmdline: string, paneId?: string) => {
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+  // Resolve paneId: use provided value, fall back to active pane.
+  const resolvedPaneId = paneId ?? getStore().activePaneId;
+  const res = await fetch("/api/exec_in_terminal", {
+    method: METHOD_POST,
+    headers: {
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      [HEADER_CONTENT_TYPE]: MIME_JSON,
+    },
+    body: JSON.stringify({ cmdline, paneId: resolvedPaneId }),
+  });
+  if (!res.ok) {
+    throw new Error("ExecInTerminal failed: " + res.statusText);
   }
   return res.json() as Promise<ExecResult>;
 };
@@ -680,20 +697,22 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     }
   };
 
-  window.csOpenApplet = (
-    name,
-    node,
-    options: { position?: AppletPosition; width?: number | string; height?: number | string } = {},
-  ) => {
-    let parsedPos: AppletPosition;
-    if (options.position === "dialog") {
-      parsedPos = "dialog";
-    } else if (options.position === "sidebar" || cb.isMobile) {
-      parsedPos = "sidebar";
-    } else {
-      parsedPos = "widget";
+  window.csOpenApplet = (name, node, options = {}) => {
+    // eslint-disable-next-line prefer-const
+    let { position, ...opts } = options;
+    if (!position) {
+      if (cb.isMobile) {
+        position = "sidebar";
+      } else {
+        position = "widget";
+      }
     }
-    if (cb.isMobile && parsedPos === "sidebar" && window.__CS_AUTORUN_DONE__) {
+    if (!opts.zIndex) {
+      opts.zIndex = cb.maxZIndexRef.current++;
+    } else if (opts.zIndex > cb.maxZIndexRef.current) {
+      cb.maxZIndexRef.current = opts.zIndex;
+    }
+    if (cb.isMobile && position === "sidebar" && window.__CS_AUTORUN_DONE__) {
       setMobileAppletsOpen(true);
     }
     cb.setApplets((prev) => {
@@ -708,10 +727,8 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
         {
           name,
           node,
-          position: parsedPos,
-          width: options.width,
-          height: options.height,
-          zIndex: cb.maxZIndexRef.current++,
+          position,
+          ...opts,
         },
       ];
     });

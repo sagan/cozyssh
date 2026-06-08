@@ -359,6 +359,124 @@ func Run(ctx context.Context, args []string) error {
 			w.WriteHeader(http.StatusNoContent)
 		}))))
 
+	mux.Handle("/api/passwords", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			keys, err := passstore.ListKeys()
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			resp := &models.PasswordsResponse{
+				Locked: !passstore.HasEncryptionKey(),
+				Keys:   keys,
+			}
+			w.Header().Set(headers.ContentType, constants.MIME_JSON)
+			json.NewEncoder(w).Encode(resp)
+		}))))
+
+	mux.Handle("/api/passwords/lock", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			passstore.ClearEncryptionKey()
+			w.WriteHeader(http.StatusNoContent)
+		}))))
+
+	mux.Handle("/api/passwords/unlock", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var req models.PasswordsUnlockRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+			if !cfg.VerifyPassword(req.AppPassword) {
+				http.Error(w, "Incorrect app password", http.StatusUnauthorized)
+				return
+			}
+			if !passstore.SetEncryptionKey(req.AppPassword) {
+				http.Error(w, "Failed to unlock password store", http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		}))))
+
+	mux.Handle("/api/passwords/reveal", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var req models.PasswordsRevealRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Key == "" {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+			if !passstore.HasEncryptionKey() {
+				http.Error(w, "Password store is locked", http.StatusForbidden)
+				return
+			}
+			pwd, err := passstore.Get(req.Key)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			resp := &models.PasswordsRevealResponse{
+				Password: pwd,
+			}
+			w.Header().Set(headers.ContentType, constants.MIME_JSON)
+			json.NewEncoder(w).Encode(resp)
+		}))))
+
+	mux.Handle("/api/passwords/change", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var req models.PasswordsChangeRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Key == "" {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+			if !passstore.HasEncryptionKey() {
+				http.Error(w, "Password store is locked", http.StatusForbidden)
+				return
+			}
+			if err := passstore.Set(req.Key, req.Password); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		}))))
+
+	mux.Handle("/api/passwords/delete", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var req models.PasswordsDeleteRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Key == "" {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+			if err := passstore.Delete(req.Key); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		}))))
+
 	mux.Handle("/api/settings/config", securityMiddleware(auth.Middleware(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
@@ -691,6 +809,60 @@ func Run(ctx context.Context, args []string) error {
 				Stdout: stdout,
 				Stderr: stderr,
 				Error:  err,
+			})
+		}))))
+
+	mux.Handle("/api/exec_in_terminal", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var req models.ExecInTerminalRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+
+			var stdout, stderr string
+			var execErr error
+
+			// Look up the session – paneId doubles as the backend session ID.
+			s := session.GlobalManager.Get(req.PaneId)
+			if s != nil {
+				if pClient, ok := s.SSHClient.(*sshmanager.PooledClient); ok {
+					// SSH session: run command over a fresh background channel.
+					stdout, stderr, execErr = sshmanager.ExecSSHCommand(pClient, req.Cmdline)
+				} else {
+					// Local-shell session: fall through to local exec below.
+					s = nil
+				}
+			}
+
+			if s == nil {
+				// Local fallback (same behaviour as /api/exec).
+				var cmd *os_exec.Cmd
+				if !localpty.DefaultShellIsLegacyPowershell {
+					cmd = os_exec.Command(localpty.DefaultShell, "-l", "-c", req.Cmdline)
+				} else {
+					cmd = os_exec.Command(localpty.DefaultShell, "-Command", req.Cmdline)
+				}
+				if home, err := os.UserHomeDir(); err == nil {
+					cmd.Dir = home
+				}
+				var stdoutBuf, stderrBuf bytes.Buffer
+				cmd.Stdout = &stdoutBuf
+				cmd.Stderr = &stderrBuf
+				execErr = cmd.Run()
+				stdout = stdoutBuf.String()
+				stderr = stderrBuf.String()
+			}
+
+			w.Header().Set(headers.ContentType, constants.MIME_JSON)
+			json.NewEncoder(w).Encode(&models.ExecResult{
+				Stdout: stdout,
+				Stderr: stderr,
+				Error:  execErr,
 			})
 		}))))
 

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -529,6 +530,13 @@ func getSSHClient(name string, term TerminalUI, identity string,
 			password = after
 		} else {
 			user = userPart
+		}
+
+		if _u, err := url.PathUnescape(user); err == nil {
+			user = _u
+		}
+		if _p, err := url.PathUnescape(password); err == nil {
+			password = _p
 		}
 
 		if i := strings.LastIndex(hostPart, ":"); i != -1 {
@@ -1066,6 +1074,26 @@ func startKeepAlive(client *ssh.Client) {
 	}
 }
 
+// ExecSSHCommand runs cmdline on the remote host via a new non-PTY SSH channel
+// spawned from the given PooledClient. It returns stdout, stderr, and any error
+// (including non-zero exit codes wrapped via *ssh.ExitError).
+// The PooledClient ref-count is NOT incremented — the caller is responsible for
+// ensuring the client stays alive for the duration of the call.
+func ExecSSHCommand(pClient *PooledClient, cmdline string) (stdout, stderr string, err error) {
+	sess, err := pClient.Client.NewSession()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to open SSH session: %w", err)
+	}
+	defer sess.Close()
+
+	var stdoutBuf, stderrBuf bytes.Buffer
+	sess.Stdout = &stdoutBuf
+	sess.Stderr = &stderrBuf
+
+	err = sess.Run(cmdline)
+	return stdoutBuf.String(), stderrBuf.String(), err
+}
+
 func saveHostPassword(term TerminalUI, canonicalAddr string, pass string) {
 	typeName := "host password"
 	displayName := "Host password"
@@ -1405,14 +1433,12 @@ func CopySSHID(name string, password string, expectedFingerprint string) (*model
 			Source:   "",
 		}
 		if i := strings.LastIndex(name, "@"); i != -1 {
-			userPart := name[:i]
 			hostPart := name[i+1:]
-			if before, after, found := strings.Cut(userPart, ":"); found {
-				host.User = before
-				_ = after
-			} else {
-				host.User = userPart
+			userPart, _, _ := strings.Cut(name[:i], ":")
+			if _u, err := url.PathUnescape(userPart); err == nil {
+				userPart = _u
 			}
+			host.User = userPart
 			if idx := strings.LastIndex(hostPart, ":"); idx != -1 {
 				host.HostName = hostPart[:idx]
 				host.Port = hostPart[idx+1:]

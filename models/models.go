@@ -162,6 +162,12 @@ type ExecResult struct {
 	Error  error  `json:"error" ts_type:"unknown"`
 }
 
+// POST /api/exec_in_terminal payload
+type ExecInTerminalRequest struct {
+	Cmdline string `json:"cmdline"`
+	PaneId  string `json:"paneId,omitempty"`
+}
+
 type CopyIDRequest struct {
 	Name                string `json:"name"`
 	Password            string `json:"password,omitempty"`
@@ -256,5 +262,32 @@ type WsResizeMsg struct {
 	Rows uint16                `json:"rows"`
 }
 
+type PasswordsResponse struct {
+	Locked bool     `json:"locked"`
+	Keys   []string `json:"keys"`
+}
+
+type PasswordsUnlockRequest struct {
+	AppPassword string `json:"app_password"`
+}
+
+type PasswordsRevealRequest struct {
+	Key string `json:"key"`
+}
+
+type PasswordsRevealResponse struct {
+	Password string `json:"password"`
+}
+
+type PasswordsChangeRequest struct {
+	Key      string `json:"key"`
+	Password string `json:"password"`
+}
+
+type PasswordsDeleteRequest struct {
+	Key string `json:"key"`
+}
+
 // current it's not converted to TS automatically
 const WS_MSG_PREFIX_STATE = "STATE:"
+

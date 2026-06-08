@@ -123,6 +123,22 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
 
       // ── Named shortcuts ───────────────────────────────────────────────────
       switch (keycomb) {
+        case "alt+`": {
+          // Alt + Backquote
+          const dialogs = document.querySelectorAll(".MuiDialog-root");
+          if (dialogs.length > 0) {
+            e.preventDefault();
+            dialogs[dialogs.length - 1].dispatchEvent(
+              new KeyboardEvent("keydown", {
+                key: "Escape",
+                code: "Escape",
+                bubbles: true,
+                cancelable: true,
+              }),
+            );
+          }
+          return;
+        }
         case "alt+enter": {
           e.preventDefault();
           if (document.fullscreenElement) {
