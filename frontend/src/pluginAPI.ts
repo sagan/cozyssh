@@ -37,7 +37,7 @@ import {
   LOCAL_NAME,
   LOCAL_VAR_PREFIX,
 } from "./constants";
-import { generatePassword, isMuiDialogOpen, terminalKeyShortcuts } from "./common";
+import { generatePassword, isMuiDialogOpen, liquidEngine, terminalKeyShortcuts } from "./common";
 import {
   type TerminalRefMap,
   activatePane,
@@ -76,6 +76,7 @@ window.__CS_VERSION__ = PACKAGE_JSON_VERSION;
 window.__CS_USE_STORE__ = useStore;
 window.__CS_PASSTHROUGH_SHORTCUTS__ = terminalKeyShortcuts;
 window.__CS_DISABLE_SHORTCUTS__ = disableShortcuts;
+window.__CS_LIQUID_ENGINE__ = liquidEngine;
 
 // Use Proxy to intercept __CS_TERMINAL_OPTIONS__
 (function () {

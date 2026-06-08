@@ -100,6 +100,7 @@ import {
   setSendScope,
   activatePane,
   clearData,
+  setAppendNewLine,
 } from "./store";
 import { setupPluginAPI, runScript, moduleCache } from "./pluginAPI";
 import { useKeyboardManager } from "./useKeyboardManager";
@@ -865,6 +866,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               setInputValue(btn.payload);
               setInputLiquid(true);
               setSendScope(0);
+              setAppendNewLine(false);
               setInputDialogOpen(true);
             }
           } else {
@@ -975,6 +977,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             case "INPUT":
               setInputValue("");
               setSendScope(0);
+              setAppendNewLine(true);
               setInputLiquid(false);
               setInputDialogOpen(true);
               break;

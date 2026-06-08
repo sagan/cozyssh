@@ -47,6 +47,10 @@ export type TerminalRefMap = Record<string, TerminalHandle | ScratchpadHandle | 
 
 interface Store {
   sendScope: 0 | 1 | 2;
+  /**
+   * Terminal Input dialog: Append new line (\n) checkbox
+   */
+  appendNewLine: boolean;
   searchOpen: boolean;
   mobileOpen: boolean;
   mobileAppletsOpen: boolean;
@@ -103,6 +107,7 @@ function loadFromStorage<T>(key: string, defaultValue: T): T {
 
 export const useStore = create<Store>(() => ({
   sendScope: 0,
+  appendNewLine: true,
   searchOpen: false,
   mobileOpen: false,
   mobileAppletsOpen: false,
@@ -185,6 +190,11 @@ export const notify = (msg: string, severity: Severity = "info", key?: string) =
 };
 
 export const setSendScope = (sendScope: 0 | 1 | 2) => useStore.setState({ sendScope });
+
+export const setAppendNewLine = (update: boolean | ((data: boolean) => boolean)) =>
+  useStore.setState((state) => ({
+    appendNewLine: typeof update === "function" ? update(state.appendNewLine) : update,
+  }));
 
 export const setSearchOpen = (update: boolean | ((data: boolean) => boolean)) =>
   useStore.setState((state) => ({

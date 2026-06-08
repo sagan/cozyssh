@@ -5,7 +5,6 @@ import type { Terminal } from "@xterm/xterm";
 import { DEFAULT_BUTTON_GROUP } from "./constants";
 import { Liquid } from "liquidjs";
 
-
 export type Expect<T extends true> = T;
 export type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2 ? true : false;
 
@@ -723,7 +722,23 @@ export function getCanonicalHostString(
   }
 }
 
-export const liquidEngine = new Liquid();
+function liquidFs(): never {
+  throw new Error("File system not implemented");
+}
+
+export const liquidEngine = new Liquid({
+  // https://liquidjs.com/tutorials/truthy-and-falsy.html
+  jsTruthy: true,
+  relativeReference: false,
+  // https://github.com/harttle/liquidjs/issues/131
+  fs: {
+    resolve: liquidFs,
+    exists: liquidFs,
+    existsSync: liquidFs,
+    readFile: liquidFs,
+    readFileSync: liquidFs,
+  },
+});
 
 export function getTemplateVariables(templateStr: string): string[] {
   try {
@@ -760,4 +775,3 @@ export function getTemplateVariables(templateStr: string): string[] {
     return [];
   }
 }
-

@@ -24,6 +24,7 @@ import type { CsExecResult, CsScriptModule } from "./pluginAPI";
 import type { TerminalRefMap, TabData, UseStore } from "./store";
 import type { AppletData } from "./AppletWrapper";
 import type { ShellIntegration, TerminalHandle } from "./Terminal";
+import type { Liquid } from "liquidjs";
 
 declare global {
   /**
@@ -86,6 +87,10 @@ declare global {
    * It uses Proxy so any modification takes effect to all terminals immediately.
    */
   var __CS_TERMINAL_OPTIONS__: ITerminalOptions;
+  /**
+   * The LiquidJs Engine instannce that CozySSH uses for send_string buttons & Terminal Input dialog.
+   */
+  var __CS_LIQUID_ENGINE__: Liquid;
   /**
    * Focus the terminal with the given pane id.
    * @param tabOrPaneId defaults to active terminal pane id.

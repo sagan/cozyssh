@@ -93,7 +93,8 @@ CozySSH sets some global variables in the browser's window object.
 - `window.__CS_PASSTHROUGH_SHORTCUTS__` : `Set<string>` - The list of key combinations that should be passed through to the terminal if terminal has focus. Each element is a key combination string such as `ctrl+shift+m` (all lowercase, modifiers in `ctrl,alt,shift,meta` order). Some key combinations (like `ctrl+c`, `ctrl+d`, etc.) are pre-added to this set by default.
 - `window.__CS_DISABLE_SHORTCUTS__` : `Set<string>` - The list of keyboard shortcuts that should be disabled. The element is in the same format as `__CS_PASSTHROUGH_SHORTCUTS__` element.
 - `window.__CS_USE_STORE__` : `typeof useStore` - The [zustand][] store hook function that CozySSH uses to manage state.
-- `window.__CS_TERMINAL_OPTIONS__` : `ITerminalOptions | undefined` - Used to set additional xterm.js terminal options. These options are merged with the default options. It uses Proxy so any modification takes effect to all terminals immediately. See xterm.js [ITerminalOptions](https://xtermjs.org/docs/api/terminal/interfaces/iterminaloptions/) for details. The default options can be found in `frontend/src/Terminal.tsx`.
+- `window.__CS_TERMINAL_OPTIONS__` : `ITerminalOptions` - Used to set additional xterm.js terminal options. These options are merged with the default options. It uses Proxy so any modification takes effect to all terminals immediately. See xterm.js [ITerminalOptions](https://xtermjs.org/docs/api/terminal/interfaces/iterminaloptions/) for details. The default options can be found in `frontend/src/Terminal.tsx`.
+- `window.__CS_LIQUID_ENGINE__` : `Liquid` - The LiquidJs Engine instannce that CozySSH uses for send_string buttons & Terminal Input dialog.
 
 ## Available global functions
 

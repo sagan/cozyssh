@@ -15,6 +15,7 @@ import {
   MenuItem,
   Alert,
   IconButton,
+  Chip,
 } from "@mui/material";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import CodeMirror from "@uiw/react-codemirror";
@@ -65,6 +66,7 @@ import {
   setToasts,
   triggerFocus,
   useStore,
+  setAppendNewLine,
 } from "./store";
 import NewTabDialog from "./NewTabDialog";
 import { dialogs } from "./Dialogs";
@@ -151,8 +153,8 @@ export default function DialogManager({
   const inputLiquid = useStore((state) => state.inputLiquid);
   const activePaneId = useStore((state) => state.activePaneId);
   const shellIntegrations = useStore((state) => state.shellIntegrations);
+  const appendNewLine = useStore((state) => state.appendNewLine);
 
-  const [appendNewLine, setAppendNewLine] = useState(true);
   const [titleMenuAnchor, setTitleMenuAnchor] = useState<null | HTMLElement>(null);
   const [importTip, setImportTip] = useState<ToastData | null>(null);
 
@@ -758,7 +760,7 @@ export default function DialogManager({
           </Box>
 
           {buttonFormData.type === "send_string" ? (
-            buttonFormData.liquidjs === 1 || buttonFormData.liquidjs === 2 ? (
+            buttonFormData.liquidjs ? (
               <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                 <Box
                   sx={{
@@ -773,6 +775,7 @@ export default function DialogManager({
                 >
                   <CodeMirror
                     value={buttonFormData.payload}
+                    placeholder="LiquidJS template"
                     height="200px"
                     theme="light"
                     extensions={[liquid(), EditorView.lineWrapping]}
@@ -780,37 +783,18 @@ export default function DialogManager({
                     style={{ fontSize: "12px" }}
                   />
                 </Box>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.8 }}>
+                  <b>Available System Variables</b>:&nbsp;
+                  <Chip color="success" label="shellIntegration" />
+                  <Chip color="success" label="vars" />
+                  <Chip color="success" label="localVars" />
+                </Box>
                 {editButtonVars.length > 0 && (
-                  <Box sx={{ mt: 0.5 }}>
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ display: "block", mb: 0.5, fontWeight: "bold" }}
-                    >
-                      Detected Variables:
-                    </Typography>
-                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.8 }}>
-                      {editButtonVars.map((v) => (
-                        <Box
-                          key={v}
-                          sx={{
-                            px: 1.2,
-                            py: 0.4,
-                            borderRadius: 1,
-                            bgcolor: "primary.light",
-                            color: "primary.contrastText",
-                            fontSize: "0.75rem",
-                            fontWeight: 600,
-                            border: "1px solid",
-                            borderColor: "primary.main",
-                            display: "inline-flex",
-                            alignItems: "center",
-                          }}
-                        >
-                          {v}
-                        </Box>
-                      ))}
-                    </Box>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.8 }}>
+                    <b>Detected Custom Variables:</b>
+                    {editButtonVars.map((v) => (
+                      <Chip color="secondary" label={v} />
+                    ))}
                   </Box>
                 )}
               </Box>
@@ -1025,7 +1009,7 @@ export default function DialogManager({
                       handleCloseInputDialog();
                     }
                   }}
-                  autoFocus
+                  autoFocus={varsList.length === 0}
                   slotProps={{ input: { sx: { fontFamily: "monospace", fontSize: "0.85rem" } } }}
                 />
               </Box>
@@ -1050,16 +1034,18 @@ export default function DialogManager({
                   }}
                 >
                   {varsList.length > 0 ? (
-                    varsList.map((vname) => (
+                    varsList.map((vname, i) => (
                       <TextField
                         key={vname}
                         fullWidth
                         label={vname}
+                        autoFocus={i === 0}
                         size="small"
                         value={userVars[vname] || ""}
                         onChange={(e) => setUserVars((prev) => ({ ...prev, [vname]: e.target.value }))}
+                        placeholder="Ctrl + Enter to send"
                         onKeyDown={(e) => {
-                          if (e.key === "Enter") {
+                          if (e.key === "Enter" && e.ctrlKey) {
                             e.preventDefault();
                             if (inputValue) {
                               const data = appendNewLine ? inputValue + "\n" : inputValue;

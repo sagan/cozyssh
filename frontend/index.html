@@ -38,6 +38,19 @@
             }
             variable = vars?.[prefix + "css"] || "";
             document.getElementById("cozy_" + prefix + "css").textContent = variable;
+
+            variable = vars?.[prefix + "acss"]; // additional CSS, Record<string, string> format json
+            if (variable) {
+              try {
+                const acss = JSON.parse(variable);
+                for (const [key, value] of Object.entries(acss)) {
+                  const styleTag = document.createElement("style");
+                  styleTag.id = "cozy_" + prefix + "css_" + key;
+                  styleTag.textContent = value;
+                  document.head.appendChild(styleTag);
+                }
+              } catch {}
+            }
           } catch {}
         }
       })();
