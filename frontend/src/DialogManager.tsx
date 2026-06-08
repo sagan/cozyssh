@@ -20,6 +20,7 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import CodeMirror from "@uiw/react-codemirror";
 import { EditorView } from "@codemirror/view";
 import { javascript } from "@codemirror/lang-javascript";
+import { liquid } from "@codemirror/lang-liquid";
 
 import type { HostData, ButtonData } from "./api";
 import {
@@ -43,6 +44,8 @@ import {
   removePassFromHost,
   parseHostName,
   getCanonicalHostString,
+  getTemplateVariables,
+  liquidEngine,
 } from "./common";
 import {
   type TabData,
@@ -56,6 +59,7 @@ import {
   setInitialBtnFormData,
   setInputDialogOpen,
   setInputValue,
+  setInputLiquid,
   setNewTabDialogOpen,
   setSendScope,
   setToasts,
@@ -84,11 +88,11 @@ export interface DialogManagerProps {
   handleDeleteButton: (id: string, name: string) => void;
   handleCloseBtnDialog: (e: unknown, reason: string) => void;
   handleSaveButton: () => void;
-  sendParsedString: (s: string) => void;
+  sendParsedString: (s: string, isLiquid?: boolean, userVars?: Record<string, string>) => void;
   handleAttach: (id: string, host: string, title: string, isLocked: boolean) => void;
   handleRefresh: () => void;
   handleSelectHost: (h: string) => void;
-  handleButtonClick: (btn: Pick<ButtonData, "id" | "name" | "type" | "payload">) => Promise<void>;
+  handleButtonClick: (btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">) => Promise<void>;
 }
 
 const PluginManagerUrl =
@@ -144,10 +148,81 @@ export default function DialogManager({
   const inputDialogOpen = useStore((state) => state.inputDialogOpen);
   const inputValue = useStore((state) => state.inputValue);
   const sendScope = useStore((state) => state.sendScope);
+  const inputLiquid = useStore((state) => state.inputLiquid);
+  const activePaneId = useStore((state) => state.activePaneId);
+  const shellIntegrations = useStore((state) => state.shellIntegrations);
 
   const [appendNewLine, setAppendNewLine] = useState(true);
   const [titleMenuAnchor, setTitleMenuAnchor] = useState<null | HTMLElement>(null);
   const [importTip, setImportTip] = useState<ToastData | null>(null);
+
+  const [userVars, setUserVars] = useState<Record<string, string>>({});
+  const [renderedPreview, setRenderedPreview] = useState("");
+
+  const varsList = useMemo(() => {
+    if (!inputLiquid) return [];
+    return getTemplateVariables(inputValue);
+  }, [inputValue, inputLiquid]);
+
+  const editButtonVars = useMemo(() => {
+    if (buttonFormData.type !== "send_string" || !buttonFormData.liquidjs) {
+      return [];
+    }
+    return getTemplateVariables(buttonFormData.payload);
+  }, [buttonFormData.payload, buttonFormData.type, buttonFormData.liquidjs]);
+
+  useEffect(() => {
+    if (!inputLiquid) return;
+    Promise.resolve().then(() => {
+      setUserVars((prev) => {
+        const next = { ...prev };
+        // remove keys not in varsList
+        for (const key of Object.keys(next)) {
+          if (!varsList.includes(key)) {
+            delete next[key];
+          }
+        }
+        // add keys in varsList not in prev
+        for (const key of varsList) {
+          if (!(key in next)) {
+            next[key] = "";
+          }
+        }
+        return next;
+      });
+    });
+  }, [varsList, inputLiquid]);
+
+  useEffect(() => {
+    if (!inputLiquid) {
+      Promise.resolve().then(() => {
+        setRenderedPreview("");
+      });
+      return;
+    }
+    let active = true;
+    const renderTemplate = async () => {
+      try {
+        const { vars, localVars } = getStore();
+        const context = {
+          shellIntegration: shellIntegrations[activePaneId] || {},
+          vars: vars || {},
+          localVars: localVars || {},
+          ...userVars,
+        };
+        const rendered = await liquidEngine.parseAndRender(inputValue, context);
+        if (active) {
+          setRenderedPreview(rendered);
+        }
+      } catch {
+        // Keep last successful or ignore
+      }
+    };
+    renderTemplate();
+    return () => {
+      active = false;
+    };
+  }, [inputValue, userVars, inputLiquid, activePaneId, shellIntegrations]);
 
   const handleCloseInputDialog = useCallback(() => {
     setInputDialogOpen(false);
@@ -451,6 +526,7 @@ export default function DialogManager({
               autorun: btnMenuAnchor.btn.autorun || 0,
               order: btnMenuAnchor.btn.order || 0,
               shortcut: btnMenuAnchor.btn.shortcut || "",
+              liquidjs: btnMenuAnchor.btn.liquidjs || 0,
             };
             setEditButton(btnMenuAnchor.btn);
             setButtonFormData(data);
@@ -465,6 +541,22 @@ export default function DialogManager({
           onClick={() => {
             if (btnMenuAnchor) {
               setInputValue(btnMenuAnchor.btn.payload);
+              setInputLiquid(btnMenuAnchor.btn.liquidjs === 1 || btnMenuAnchor.btn.liquidjs === 2);
+              setSendScope(0);
+              setAppendNewLine(false);
+              setInputDialogOpen(true);
+              setBtnMenuAnchor(null);
+            }
+          }}
+          sx={{ display: lastMenuBtn?.type === "send_string" ? "flex" : "none" }}
+        >
+          Send
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            if (btnMenuAnchor) {
+              setInputValue(btnMenuAnchor.btn.payload);
+              setInputLiquid(btnMenuAnchor.btn.liquidjs === 1 || btnMenuAnchor.btn.liquidjs === 2);
               setSendScope(2);
               setAppendNewLine(false);
               setInputDialogOpen(true);
@@ -649,19 +741,91 @@ export default function DialogManager({
                 label={<Typography variant="body2">Autorun</Typography>}
               />
             )}
+            {buttonFormData.type === "send_string" && (
+              <FormControlLabel
+                title="Treat payload as LiquidJS template and enable Liquid highlight extension"
+                sx={{ flexShrink: 0, mr: 0, ml: 0, whiteSpace: "nowrap" }}
+                control={
+                  <Checkbox
+                    checked={buttonFormData.liquidjs === 1 || buttonFormData.liquidjs === 2}
+                    onChange={(e) => setButtonFormData({ ...buttonFormData, liquidjs: e.target.checked ? 1 : 0 })}
+                    size="small"
+                  />
+                }
+                label={<Typography variant="body2">LiquidJS</Typography>}
+              />
+            )}
           </Box>
 
           {buttonFormData.type === "send_string" ? (
-            <TextField
-              fullWidth
-              label="Command / String"
-              size="small"
-              multiline
-              rows={3}
-              value={buttonFormData.payload}
-              onChange={(e) => setButtonFormData({ ...buttonFormData, payload: e.target.value })}
-              placeholder="String to send to terminal, <ctrl-x> style syntax supported"
-            />
+            buttonFormData.liquidjs === 1 || buttonFormData.liquidjs === 2 ? (
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                <Box
+                  sx={{
+                    border: "1px solid",
+                    borderColor: "divider",
+                    borderRadius: 1,
+                    overflow: "hidden",
+                    flexShrink: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                  }}
+                >
+                  <CodeMirror
+                    value={buttonFormData.payload}
+                    height="200px"
+                    theme="light"
+                    extensions={[liquid(), EditorView.lineWrapping]}
+                    onChange={(value) => setButtonFormData({ ...buttonFormData, payload: value })}
+                    style={{ fontSize: "12px" }}
+                  />
+                </Box>
+                {editButtonVars.length > 0 && (
+                  <Box sx={{ mt: 0.5 }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: "block", mb: 0.5, fontWeight: "bold" }}
+                    >
+                      Detected Variables:
+                    </Typography>
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.8 }}>
+                      {editButtonVars.map((v) => (
+                        <Box
+                          key={v}
+                          sx={{
+                            px: 1.2,
+                            py: 0.4,
+                            borderRadius: 1,
+                            bgcolor: "primary.light",
+                            color: "primary.contrastText",
+                            fontSize: "0.75rem",
+                            fontWeight: 600,
+                            border: "1px solid",
+                            borderColor: "primary.main",
+                            display: "inline-flex",
+                            alignItems: "center",
+                          }}
+                        >
+                          {v}
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
+                )}
+              </Box>
+            ) : (
+              <TextField
+                fullWidth
+                label="Command / String"
+                size="small"
+                multiline
+                rows={3}
+                value={buttonFormData.payload}
+                onChange={(e) => setButtonFormData({ ...buttonFormData, payload: e.target.value })}
+                placeholder="String to send to terminal, <ctrl-x> style syntax supported"
+              />
+            )
           ) : buttonFormData.type === "terminal_function" ? (
             <TextField
               select
@@ -802,31 +966,153 @@ export default function DialogManager({
         onClose={handleCloseInputDialog}
         disableRestoreFocus
         fullWidth
-        maxWidth="sm"
+        maxWidth={inputLiquid ? "md" : "sm"}
       >
         <DialogTitle>Terminal Input</DialogTitle>
         <DialogContent sx={{ pt: 1 }}>
-          <TextField
-            fullWidth
-            multiline
-            rows={6}
-            variant="outlined"
-            placeholder="Type input to send to terminal. Press Enter to send, Shift + Enter for new line. <ctrl-x> style syntax supported."
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                if (inputValue) {
-                  const data = appendNewLine ? inputValue + "\n" : inputValue;
-                  sendParsedString(data);
+          {!inputLiquid ? (
+            <TextField
+              fullWidth
+              multiline
+              rows={6}
+              variant="outlined"
+              placeholder="Type input to send to terminal. Press Enter to send, Shift + Enter for new line. <ctrl-x> style syntax supported."
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  if (inputValue) {
+                    const data = appendNewLine ? inputValue + "\n" : inputValue;
+                    sendParsedString(data);
+                  }
+                  handleCloseInputDialog();
                 }
-                handleCloseInputDialog();
-              }
-            }}
-            autoFocus
-          />
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mt: 1 }}>
+              }}
+              autoFocus
+            />
+          ) : (
+            <Box sx={{ display: "flex", flexDirection: { xs: "column", md: "row" }, gap: 3 }}>
+              <Box sx={{ flex: 1, display: "flex", flexDirection: "column", gap: 1.5 }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Template
+                  </Typography>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    sx={{ py: 0, px: 1, minWidth: 0, fontSize: "0.75rem", textTransform: "none" }}
+                    onClick={() => navigator.clipboard.writeText(inputValue)}
+                  >
+                    Copy
+                  </Button>
+                </Box>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={6}
+                  variant="outlined"
+                  placeholder="Type template/input to send to terminal. Ctrl + Enter to send"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && e.ctrlKey) {
+                      e.preventDefault();
+                      if (inputValue) {
+                        const data = appendNewLine ? inputValue + "\n" : inputValue;
+                        sendParsedString(data, true, userVars);
+                      }
+                      handleCloseInputDialog();
+                    }
+                  }}
+                  autoFocus
+                  slotProps={{ input: { sx: { fontFamily: "monospace", fontSize: "0.85rem" } } }}
+                />
+              </Box>
+              <Box sx={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Variables
+                </Typography>
+                <Box
+                  sx={{
+                    flexGrow: 1,
+                    minHeight: "100px",
+                    maxHeight: "180px",
+                    overflowY: "auto",
+                    border: "1px solid",
+                    borderColor: "divider",
+                    borderRadius: 1,
+                    p: 1.5,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 1.5,
+                    bgcolor: "background.paper",
+                  }}
+                >
+                  {varsList.length > 0 ? (
+                    varsList.map((vname) => (
+                      <TextField
+                        key={vname}
+                        fullWidth
+                        label={vname}
+                        size="small"
+                        value={userVars[vname] || ""}
+                        onChange={(e) => setUserVars((prev) => ({ ...prev, [vname]: e.target.value }))}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (inputValue) {
+                              const data = appendNewLine ? inputValue + "\n" : inputValue;
+                              sendParsedString(data, true, userVars);
+                            }
+                            handleCloseInputDialog();
+                          }
+                        }}
+                      />
+                    ))
+                  ) : (
+                    <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic", m: "auto" }}>
+                      No variables to display
+                    </Typography>
+                  )}
+                </Box>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Rendered Preview
+                    </Typography>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      sx={{ py: 0, px: 1, minWidth: 0, fontSize: "0.75rem", textTransform: "none" }}
+                      onClick={() => {
+                        if (renderedPreview) {
+                          navigator.clipboard.writeText(renderedPreview);
+                        }
+                      }}
+                    >
+                      Copy
+                    </Button>
+                  </Box>
+                  <TextField
+                    fullWidth
+                    multiline
+                    rows={6}
+                    variant="outlined"
+                    slotProps={{
+                      input: {
+                        readOnly: true,
+                        sx: { fontFamily: "monospace", fontSize: "0.85rem" },
+                      },
+                    }}
+                    value={renderedPreview}
+                    sx={{ bgcolor: "action.hover" }}
+                  />
+                </Box>
+              </Box>
+            </Box>
+          )}
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mt: 1.5 }}>
             <FormControlLabel
               control={
                 <Checkbox checked={appendNewLine} onChange={(e) => setAppendNewLine(e.target.checked)} size="small" />
@@ -855,6 +1141,12 @@ export default function DialogManager({
               }
               label={<Typography variant="body2">Send to all</Typography>}
             />
+            <FormControlLabel
+              control={
+                <Checkbox checked={inputLiquid} onChange={(e) => setInputLiquid(e.target.checked)} size="small" />
+              }
+              label={<Typography variant="body2">LiquidJS</Typography>}
+            />
           </Box>
         </DialogContent>
         <DialogActions>
@@ -864,7 +1156,7 @@ export default function DialogManager({
             onClick={() => {
               if (inputValue) {
                 const data = appendNewLine ? inputValue + "\n" : inputValue;
-                sendParsedString(data);
+                sendParsedString(data, inputLiquid, userVars);
               }
               handleCloseInputDialog();
             }}

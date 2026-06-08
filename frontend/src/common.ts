@@ -3,6 +3,8 @@ import { z } from "zod";
 import type { ButtonData, HostData } from "./api";
 import type { Terminal } from "@xterm/xterm";
 import { DEFAULT_BUTTON_GROUP } from "./constants";
+import { Liquid } from "liquidjs";
+
 
 export type Expect<T extends true> = T;
 export type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2 ? true : false;
@@ -48,6 +50,7 @@ export const ButtonDataSchema = z.object({
   autorun: z.number().int().min(0).max(1).optional().default(0),
   order: z.number().int().optional().default(0),
   shortcut: z.string().optional().default(""),
+  liquidjs: z.number().int().min(0).max(2).optional(),
 });
 
 // check client defined button schema type match with server side button type
@@ -719,3 +722,42 @@ export function getCanonicalHostString(
     return `${host.hostname}:${host.port || "22"}`;
   }
 }
+
+export const liquidEngine = new Liquid();
+
+export function getTemplateVariables(templateStr: string): string[] {
+  try {
+    const template = liquidEngine.parse(templateStr);
+    const allVars = liquidEngine.variablesSync(template);
+
+    // Find variables defined inside the template
+    const internalVars = new Set<string>();
+
+    const assignRegex = /{%\s*assign\s+([a-zA-Z_][a-zA-Z0-9_]*)/g;
+    const captureRegex = /{%\s*capture\s+([a-zA-Z_][a-zA-Z0-9_]*)/g;
+    const forRegex = /{%\s*for\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+in/g;
+    const tablerowRegex = /{%\s*tablerow\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+in/g;
+
+    let match;
+    while ((match = assignRegex.exec(templateStr)) !== null) {
+      internalVars.add(match[1]);
+    }
+    while ((match = captureRegex.exec(templateStr)) !== null) {
+      internalVars.add(match[1]);
+    }
+    while ((match = forRegex.exec(templateStr)) !== null) {
+      internalVars.add(match[1]);
+    }
+    while ((match = tablerowRegex.exec(templateStr)) !== null) {
+      internalVars.add(match[1]);
+    }
+
+    const excluded = new Set(["vars", "localVars", "shellIntegration"]);
+
+    return allVars.filter((v) => !excluded.has(v) && !internalVars.has(v));
+  } catch (e) {
+    console.error("Failed to parse liquid template: ", e);
+    return [];
+  }
+}
+

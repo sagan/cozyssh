@@ -31,9 +31,27 @@ const buttonStyleBgColorHover: Record<ButtonData["type"], string> = {
   misc: "primary.light",
 };
 
+const getButtonStyle = (btn: Pick<ButtonData, "type" | "liquidjs">) => {
+  let border = buttonStyleBorder[btn.type];
+  let borderColor = buttonStyleBorderColor[btn.type];
+  let hoverBgColor = buttonStyleBgColorHover[btn.type];
+
+  if (btn.type === "send_string") {
+    if (btn.liquidjs) {
+      border = "3px double";
+      if (btn.liquidjs === 2) {
+        borderColor = "secondary.main";
+        hoverBgColor = "secondary.light";
+      }
+    }
+  }
+
+  return { border, borderColor, hoverBgColor };
+};
+
 export interface ButtonBarProps {
   groups: string[];
-  handleButtonClick: (btn: Pick<ButtonData, "id" | "name" | "type" | "payload">) => void;
+  handleButtonClick: (btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">) => void;
   onNewButtonClick: () => void;
 }
 
@@ -99,43 +117,48 @@ export default function ButtonBar({ groups, handleButtonClick, onNewButtonClick 
           "& .MuiTabs-indicator": { display: "none" },
         }}
       >
-        {filteredButtons.map((btn) => (
-          <Tab
-            key={btn.id}
-            label={btn.name}
-            className="button"
-            data-name={btn.name}
-            data-id={btn.id}
-            title={`${btn.type} (${btn.order || 0})${btn.autorun ? " (autorun)" : ""}${
-              btn.shortcut ? " (" + btn.shortcut.toUpperCase() + ")" : ""
-            }${btn.type !== "run_script" ? ": " + btn.payload : ""}`}
-            component="div"
-            onClick={() => handleButtonClick(btn)}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              setBtnMenuAnchor({ anchor: e.currentTarget, btn });
-              setLastMenuBtn(btn);
-            }}
-            sx={{
-              minHeight: 28,
-              minWidth: "auto",
-              p: "2px 12px",
-              textTransform: "none",
-              fontSize: "0.8rem",
-              borderRadius: 1.5,
-              border: buttonStyleBorder[btn.type],
-              borderColor: buttonStyleBorderColor[btn.type],
-              bgcolor: "background.paper",
-              color: "text.primary",
-              margin: "6px 4px",
-              cursor: "pointer",
-              "&:hover": {
-                bgcolor: buttonStyleBgColorHover[btn.type],
-                color: "white",
-              },
-            }}
-          />
-        ))}
+        {filteredButtons.map((btn) => {
+          const style = getButtonStyle(btn);
+          return (
+            <Tab
+              key={btn.id}
+              label={btn.name}
+              className="button"
+              data-name={btn.name}
+              data-id={btn.id}
+              title={`${btn.type}${
+                btn.type === "send_string" && btn.liquidjs ? ` (liquidjs)` : ""
+              } (${btn.order || 0})${btn.autorun ? " (autorun)" : ""}${
+                btn.shortcut ? " (" + btn.shortcut.toUpperCase() + ")" : ""
+              }${btn.type !== "run_script" ? ": " + btn.payload : ""}`}
+              component="div"
+              onClick={() => handleButtonClick(btn)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setBtnMenuAnchor({ anchor: e.currentTarget, btn });
+                setLastMenuBtn(btn);
+              }}
+              sx={{
+                minHeight: 28,
+                minWidth: "auto",
+                p: "2px 12px",
+                textTransform: "none",
+                fontSize: "0.8rem",
+                borderRadius: 1.5,
+                border: style.border,
+                borderColor: style.borderColor,
+                bgcolor: "background.paper",
+                color: "text.primary",
+                margin: "6px 4px",
+                cursor: "pointer",
+                "&:hover": {
+                  bgcolor: style.hoverBgColor,
+                  color: "white",
+                },
+              }}
+            />
+          );
+        })}
       </Tabs>
       <Box sx={{ flexShrink: 0, px: 1, borderLeft: 1, borderColor: "divider" }}>
         <IconButton size="small" title="New Button" onClick={onNewButtonClick} sx={{ p: 0.5 }}>

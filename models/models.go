@@ -70,6 +70,7 @@ type ButtonData struct {
 	AutoRun  int    `yaml:"autorun" json:"autorun"`
 	Order    int    `yaml:"order" json:"order"`
 	Shortcut string `yaml:"shortcut" json:"shortcut"`
+	LiquidJS int    `yaml:"liquidjs,omitempty" json:"liquidjs,omitempty"`
 }
 
 type ButtonsMoveRequest struct {

@@ -67,6 +67,8 @@ import {
   removePassFromHost,
   parseHostName,
   getCanonicalHostString,
+  getTemplateVariables,
+  liquidEngine,
 } from "./common";
 import {
   type TabData,
@@ -90,6 +92,7 @@ import {
   setEditButton,
   setInputDialogOpen,
   setInputValue,
+  setInputLiquid,
   setBtnMenuAnchor,
   setMobileOpen,
   setMobileAppletsOpen,
@@ -404,7 +407,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     }
   }, []);
 
-  const sendParsedString = useCallback(async (input: string) => {
+  const sendParsedString = useCallback(async (input: string, isLiquid?: boolean, userVars?: Record<string, string>) => {
     const scope = getStore().sendScope;
     const { tabs: currentTabs, activeTabId, activePaneId } = getStore();
     let targetPaneIds: string[] = [];
@@ -417,25 +420,86 @@ export default function Dashboard({ initialData }: DashboardProps) {
       targetPaneIds = [activePaneId];
     }
 
-    // <ctrl-x> syntax. x ranges from ! ( 0b00100001 ) to ~ ( 0b01111110 ).
-    // we mask them with 0x1f ( 0b00011111 ) to clear high 3 bits.
-    const parts = input.split(/(<ctrl-[!-~]>)/g);
-    for (const part of parts) {
-      if (!part) {
-        continue;
+    let hasShellIntegration = false;
+    if (isLiquid) {
+      try {
+        const parsedTemplate = liquidEngine.parse(input);
+        const allVars = liquidEngine.variablesSync(parsedTemplate);
+        hasShellIntegration = allVars.includes("shellIntegration");
+      } catch (e) {
+        console.error("Failed to parse liquid template: ", e);
       }
-      const ctrlMatch = part.match(/<ctrl-([!-~])>/);
-      const dataToSend = ctrlMatch ? String.fromCharCode(ctrlMatch[1].charCodeAt(0) & 0x1f) : part;
+    }
 
+    if (isLiquid && hasShellIntegration) {
+      // Execute template independently for each terminal pane
       for (const pid of targetPaneIds) {
-        if (pid && terminalRefs.current[pid]) {
-          const term = terminalRefs.current[pid];
-          if (term && "getXterm" in term) {
-            term.sendData(dataToSend);
+        if (!pid) continue;
+        try {
+          const { vars, localVars, shellIntegrations } = getStore();
+          const context = {
+            shellIntegration: shellIntegrations[pid] || {},
+            vars: vars || {},
+            localVars: localVars || {},
+            ...(userVars || {}),
+          };
+          const rendered = await liquidEngine.parseAndRender(input, context);
+
+          // send this rendered string to pid
+          const parts = rendered.split(/(<ctrl-[!-~]>)/g);
+          for (const part of parts) {
+            if (!part) continue;
+            const ctrlMatch = part.match(/<ctrl-([!-~])>/);
+            const dataToSend = ctrlMatch ? String.fromCharCode(ctrlMatch[1].charCodeAt(0) & 0x1f) : part;
+
+            if (terminalRefs.current[pid]) {
+              const term = terminalRefs.current[pid];
+              if (term && "getXterm" in term) {
+                term.sendData(dataToSend);
+              }
+            }
+            await new Promise((r) => setTimeout(r, ctrlMatch ? 50 : 10));
           }
+        } catch (e) {
+          console.error(`Failed to render liquid template for pane ${pid}:`, e);
         }
       }
-      await new Promise((r) => setTimeout(r, ctrlMatch ? 50 : 10));
+    } else {
+      // Normal execution flow (rendered once or not liquid)
+      let renderedInput = input;
+      if (isLiquid) {
+        try {
+          const { vars, localVars, shellIntegrations, activePaneId } = getStore();
+          const context = {
+            shellIntegration: shellIntegrations[activePaneId] || {},
+            vars: vars || {},
+            localVars: localVars || {},
+            ...(userVars || {}),
+          };
+          renderedInput = await liquidEngine.parseAndRender(input, context);
+        } catch (e) {
+          console.error("Failed to render liquid template:", e);
+        }
+      }
+
+      const parts = renderedInput.split(/(<ctrl-[!-~]>)/g);
+      for (const part of parts) {
+        if (!part) {
+          continue;
+        }
+        const ctrlMatch = part.match(/<ctrl-([!-~])>/);
+        const dataToSend = ctrlMatch ? String.fromCharCode(ctrlMatch[1].charCodeAt(0) & 0x1f) : part;
+
+        for (const pid of targetPaneIds) {
+          if (pid && terminalRefs.current[pid]) {
+            const term = terminalRefs.current[pid];
+            if (term && "getXterm" in term) {
+              term.sendData(dataToSend);
+            }
+          }
+        }
+        await new Promise((r) => setTimeout(r, ctrlMatch ? 50 : 10));
+      }
     }
   }, []);
 
@@ -789,11 +853,23 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, []);
 
   const handleButtonClick = useCallback(
-    async (btn: Pick<ButtonData, "id" | "name" | "type" | "payload">) => {
+    async (btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">) => {
       window.navigator.vibrate?.(VIBRATE_PATTERN);
       switch (btn.type) {
         case "send_string":
-          await sendParsedString(btn.payload);
+          if (btn.liquidjs === 1 || btn.liquidjs === 2) {
+            const varsList = getTemplateVariables(btn.payload);
+            if (varsList.length === 0) {
+              await sendParsedString(btn.payload, true);
+            } else {
+              setInputValue(btn.payload);
+              setInputLiquid(true);
+              setSendScope(0);
+              setInputDialogOpen(true);
+            }
+          } else {
+            await sendParsedString(btn.payload);
+          }
           triggerFocus();
           break;
 
@@ -899,6 +975,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             case "INPUT":
               setInputValue("");
               setSendScope(0);
+              setInputLiquid(false);
               setInputDialogOpen(true);
               break;
 
@@ -1570,7 +1647,21 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   const handleSaveButton = useCallback(async () => {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    const { editButton } = getStore();
+    const { editButton, buttonFormData } = getStore();
+
+    // Auto-update liquidjs value based on detected user variables
+    const finalButtonFormData = { ...buttonFormData };
+    if (finalButtonFormData.type === "send_string") {
+      if (finalButtonFormData.liquidjs !== 0) {
+        const varsList = getTemplateVariables(finalButtonFormData.payload);
+        finalButtonFormData.liquidjs = varsList.length > 0 ? 2 : 1;
+      } else {
+        finalButtonFormData.liquidjs = 0;
+      }
+    } else {
+      finalButtonFormData.liquidjs = 0;
+    }
+
     const method = editButton ? METHOD_PUT : METHOD_POST;
     const url = editButton ? `/api/buttons/${editButton.id}` : "/api/buttons";
     if (editButton) {
@@ -1582,7 +1673,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
         [HEADER_CONTENT_TYPE]: MIME_JSON,
       },
-      body: JSON.stringify(getStore().buttonFormData),
+      body: JSON.stringify(finalButtonFormData),
     });
     setInitialBtnFormData(null);
     setEditButtonDialogOpen(false);

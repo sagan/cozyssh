@@ -1708,6 +1708,7 @@ export interface ButtonData {
 	autorun: number;
 	order: number;
 	shortcut: string;
+	liquidjs?: number;
 }
 export interface Recent {
 	host: string;
@@ -22327,6 +22328,7 @@ export interface Store {
 	editHostDialogOpen: boolean;
 	inputDialogOpen: boolean;
 	inputValue: string;
+	inputLiquid: boolean;
 	newTabDialogOpen: boolean;
 	newTabDialogInitialViewMode: ViewMode;
 	sysHostname: string;

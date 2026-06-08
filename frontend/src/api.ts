@@ -56,6 +56,7 @@ export interface ButtonData {
     autorun: number;
     order: number;
     shortcut: string;
+    liquidjs?: number;
 }
 export interface ButtonsMoveRequest {
     id: string;

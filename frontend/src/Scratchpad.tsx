@@ -52,8 +52,8 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
   const dataRef = useRef(data);
   const dirtyRef = useRef<Set<string>>(new Set());
   const lastSyncDataRef = useRef<string>(""); // To store JSON of what we last sent
-  const wsTimerRef = useRef<number | undefined>(undefined);
-  const debounceTimerRef = useRef<number | undefined>(undefined);
+  const wsTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const cmRef = useRef<ReactCodeMirrorRef>(null);
 
   const focusEditor = useCallback(() => {

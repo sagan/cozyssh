@@ -1143,7 +1143,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
         }
       });
 
-      let selectionTimeout: number;
+      let selectionTimeout: ReturnType<typeof setTimeout>;
 
       term.onSelectionChange(() => {
         if (isTouch) {

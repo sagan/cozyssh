@@ -68,6 +68,7 @@ interface Store {
   editHostDialogOpen: boolean;
   inputDialogOpen: boolean;
   inputValue: string;
+  inputLiquid: boolean;
   newTabDialogOpen: boolean;
   newTabDialogInitialViewMode: ViewMode;
   sysHostname: string;
@@ -141,6 +142,7 @@ export const useStore = create<Store>(() => ({
   newTabDialogOpen: false,
   inputDialogOpen: false,
   inputValue: "",
+  inputLiquid: false,
   newTabDialogInitialViewMode: "servers",
   sysHostname: "",
   unreadTabIds: new Set<string>(),
@@ -233,6 +235,7 @@ export const setEditHostDialogOpen = (editHostDialogOpen: boolean) => useStore.s
 export const setNewTabDialogOpen = (newTabDialogOpen: boolean) => useStore.setState({ newTabDialogOpen });
 export const setInputDialogOpen = (inputDialogOpen: boolean) => useStore.setState({ inputDialogOpen });
 export const setInputValue = (inputValue: string) => useStore.setState({ inputValue });
+export const setInputLiquid = (inputLiquid: boolean) => useStore.setState({ inputLiquid });
 
 export const setNewTabDialogInitialViewMode = (newTabDialogInitialViewMode: ViewMode) =>
   useStore.setState({ newTabDialogInitialViewMode });

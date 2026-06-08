@@ -43,7 +43,7 @@ interface NewTabDialogProps {
   onSelect: (host: string) => void;
   onSelectTab: (tabId: string) => void;
   onAttachPinned: (id: string, host: string, title: string, isLocked: boolean) => void;
-  onExecuteButton: (btn: Pick<ButtonData, "id" | "name" | "type" | "payload">) => void;
+  onExecuteButton: (btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">) => void;
 }
 
 export default function NewTabDialog({
@@ -220,7 +220,7 @@ export default function NewTabDialog({
       id?: string;
       host?: string;
       isLocked?: boolean;
-      btn?: Pick<ButtonData, "id" | "name" | "type" | "payload">;
+      btn?: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">;
       tags?: string[];
     }[] = [];
 
