@@ -285,14 +285,14 @@ const virtualModulesImportRegex = (() => {
   );
 })();
 
-export async function runScript(btn: Pick<ButtonData, "id" | "name" | "type" | "payload">) {
+export async function runScript({ button, background }: CsRunScriptPayload) {
   let moduleObj: CsScriptModule;
   let cached = false;
 
-  __CS_RUNNING_SCRIPT__ = btn;
+  __CS_RUNNING_SCRIPT__ = button;
 
-  if (!btn.id || !moduleCache[btn.id]) {
-    let scriptCode = btn.payload;
+  if (!button.id || !moduleCache[button.id]) {
+    let scriptCode = button.payload;
     // Do a single replace pass
     scriptCode = scriptCode.replace(virtualModulesImportRegex, (match, p1, p2, p3, p4, p5, p6) => {
       // Determine which capture group caught the module name
@@ -311,8 +311,8 @@ export async function runScript(btn: Pick<ButtonData, "id" | "name" | "type" | "
     try {
       scriptCode = transform(scriptCode, { transforms: ["typescript", "jsx"] }).code;
     } catch (e) {
-      console.error(`Script ${btn.name} Transform Error:`, e);
-      notify(`Script ${btn.name} Transform Error: ${e}`, "error");
+      console.error(`Script ${button.name} Transform Error:`, e);
+      notify(`Script ${button.name} Transform Error: ${e}`, "error");
       __CS_RUNNING_SCRIPT__ = undefined;
       return;
     }
@@ -322,32 +322,32 @@ export async function runScript(btn: Pick<ButtonData, "id" | "name" | "type" | "
     try {
       moduleObj = await import(url);
     } catch (e) {
-      console.error(`Script ${btn.name} Import Error:`, e);
-      notify(`Script ${btn.name} Import Error: ${e}`, "error");
+      console.error(`Script ${button.name} Import Error:`, e);
+      notify(`Script ${button.name} Import Error: ${e}`, "error");
       __CS_RUNNING_SCRIPT__ = undefined;
       return;
     } finally {
       // Always clean up the URL to prevent memory leaks
       URL.revokeObjectURL(url);
     }
-    if (btn.id && moduleObj.default?.cache) {
-      moduleCache[btn.id] = moduleObj;
+    if (button.id && moduleObj.default?.cache) {
+      moduleCache[button.id] = moduleObj;
     }
   } else {
-    moduleObj = moduleCache[btn.id];
+    moduleObj = moduleCache[button.id];
     cached = true;
   }
 
   if (moduleObj.default?.run) {
     try {
-      await moduleObj.default.run(btn);
+      await moduleObj.default.run({ button, background });
     } catch (e) {
-      console.error(`Script ${btn.name} run() Error:`, e);
-      notify(`Script ${btn.name} run() Error: ${e}`, "error");
+      console.error(`Script ${button.name} run() Error:`, e);
+      notify(`Script ${button.name} run() Error: ${e}`, "error");
     }
   } else if (cached) {
     notify(
-      `Script ${btn.name} is already imported & cached, and has no run function. Reload the page to clear the cache`,
+      `Script ${button.name} is already imported & cached, and has no run function. Reload the page to clear the cache`,
       "info",
     );
     __CS_RUNNING_SCRIPT__ = undefined;

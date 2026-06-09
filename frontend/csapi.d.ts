@@ -2025,6 +2025,16 @@ declare global {
 		label?: string; // The text displayed on the button (e.g., 'Save as Draft'), default to id
 		variant?: "primary" | "secondary" | "error" | "warning"; // Optional styling hint
 	}
+	interface CsRunScriptPayload {
+		/**
+		 * The script button object
+		 */
+		button: Pick<ButtonData, "id" | "type" | "name" | "payload">;
+		/**
+		 * If true, the script is executed in the backgrund (without user explicitly clicking the button)
+		 */
+		background?: boolean;
+	}
 	/**
 	 * The optional default export type of custom script
 	 */
@@ -2033,7 +2043,7 @@ declare global {
 		 * The entrypoint of the script. If set, it will be executed after the script is imported.
 		 * It will always be executed each time the button is clicked, even if the script is cached (see `cache`)
 		 */
-		run?: (selfBtn: Pick<ButtonData, "id" | "type" | "name" | "payload">) => void | Promise<void>;
+		run?: (payload: CsRunScriptPayload) => void | Promise<void>;
 		/**
 		 * Optional cleanup function for the script. If set, it will be executed when the script is unloaded.
 		 */
@@ -2170,7 +2180,7 @@ declare global {
 	/**
 	 * Run a script button directly
 	 */
-	function csRunScript(script: ButtonData): Promise<void>;
+	function csRunScript(payload: CsRunScriptPayload): Promise<void>;
 	/**
 	 * Send data to the terminal with the given pane id.
 	 * @param paneId defaults to active terminal pane id.

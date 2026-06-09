@@ -1111,7 +1111,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
           break;
 
         case "run_script":
-          await runScript(btn);
+          await runScript({ button: btn });
           break;
 
         default:
@@ -1181,12 +1181,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
             }
           }
         }
-        for (const btn of buttons) {
-          if (btn.type === "run_script" && btn.autorun === 1) {
+        for (const button of buttons) {
+          if (button.type === "run_script" && button.autorun === 1) {
             try {
-              await handleButtonClick(btn);
+              await runScript({ button, background: true });
             } catch (e) {
-              console.error(`Autorun script ${btn.name} error:`, e);
+              console.error(`Autorun script ${button.name} error:`, e);
             }
           }
         }

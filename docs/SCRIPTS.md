@@ -60,7 +60,7 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
 - **Awaiting Completion**: The script engine automatically waits for all top-level `await` promises to resolve before finishing execution.
 - **Auto-focus**: By default, scripts will re-focus the terminal after execution.
 - **Module Default Export**: Optionally, the script may provide a default export object with the following optional fields to control the behavior of the scripting engine:
-  - `run`: `(selfBtn: ButtonData) => void | Promise<void>` - The entrypoint of the script. If provided, it will be executed after the script is imported. It will always be executed each time the button is clicked, even if the script is cached (see `cache` below).
+  - `run`: `(payload: {button: ButtonData, background?: boolean}) => void | Promise<void>` - The entrypoint of the script. If provided, it will be executed after the script is imported. It will always be executed each time the button is clicked, even if the script is cached (see `cache` below).
   - `cache`: `boolean` - If provided and `true`, the script will be cached when it's first imported. You may want to also provide a `run` function in this case otherwise clicking the script's button will have no effect after the first time it's imported. The cache is cleared when the browser page is reloaded.
   - `noFocus`: `boolean` - If provided and `true`, the script will not focus the terminal after execution.
 
@@ -103,15 +103,15 @@ CozySSH sets some global variables in the browser's window object.
 
 Opens a custom context menu. `anchorId` can be an HTML element id, or a DOM element. `options` is a list of strings which will be displayed as menu items. If the returned value `null` then it means the menu was closed without any selection. Otherwise the selected menu item will be returned.
 
-The current button has `button-<id>` as its id where `id` is the internal id of the button, which can be accessed in `run(selfBtn)` as `selfBtn.id`.
+The current button has `button-<id>` as its id where `id` is the internal id of the button, which can be accessed in `run(payload)` argument `payload.button.id`.
 
 Example: display a menu above your button bar button when user clicks it.
 
 ```javascript
 export default {
-  run: async function (selfBtn) {
+  run: async function ({ button }) {
     const options = ["Option 1", "Option 2", "Option 3"];
-    const anchorId = "button-" + selfBtn.id;
+    const anchorId = "button-" + button.id;
     const selectedOption = await csOpenMenu(anchorId, options);
     csNotify(`User clicks ${selectedOption}`);
   },
