@@ -37,6 +37,10 @@ declare global {
      */
     run?: () => void | Promise<void>;
     /**
+     * Optional cleanup function for the script. If set, it will be executed when the script is unloaded.
+     */
+    unload?: () => void | Promise<void>;
+    /**
      * If `true`, the script engine will not focus the terminal after executing the script.
      */
     noFocus?: boolean;

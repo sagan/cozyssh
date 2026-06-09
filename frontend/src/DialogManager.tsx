@@ -160,6 +160,7 @@ export default function DialogManager({
 
   const [userVars, setUserVars] = useState<Record<string, string>>({});
   const [renderedPreview, setRenderedPreview] = useState("");
+  const [inputDialogDirty, setInputDialogDirty] = useState(false);
 
   const varsList = useMemo(() => {
     if (!inputLiquid) return [];
@@ -226,10 +227,15 @@ export default function DialogManager({
     };
   }, [inputValue, userVars, inputLiquid, activePaneId, shellIntegrations]);
 
-  const handleCloseInputDialog = useCallback(() => {
-    setInputDialogOpen(false);
-    triggerFocus();
-  }, []);
+  const handleCloseInputDialog = useCallback(
+    (allowCloseDirty?: boolean) => {
+      if (!inputDialogDirty || allowCloseDirty) {
+        setInputDialogDirty(false);
+        setInputDialogOpen(false);
+      }
+    },
+    [inputDialogDirty],
+  );
 
   const activeTab: TabData | undefined = useMemo(() => {
     return tabs.find((t) => t.id === activeTabId);
@@ -947,7 +953,7 @@ export default function DialogManager({
       <Dialog
         id="input-dialog"
         open={inputDialogOpen}
-        onClose={handleCloseInputDialog}
+        onClose={() => handleCloseInputDialog(false)}
         disableRestoreFocus
         fullWidth
         maxWidth={inputLiquid ? "md" : "sm"}
@@ -962,7 +968,10 @@ export default function DialogManager({
               variant="outlined"
               placeholder="Type input to send to terminal. Press Enter to send, Shift + Enter for new line. <ctrl-x> style syntax supported."
               value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
+              onChange={(e) => {
+                setInputValue(e.target.value);
+                setInputDialogDirty(true);
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
@@ -970,7 +979,7 @@ export default function DialogManager({
                     const data = appendNewLine ? inputValue + "\n" : inputValue;
                     sendParsedString(data);
                   }
-                  handleCloseInputDialog();
+                  handleCloseInputDialog(true);
                 }
               }}
               autoFocus
@@ -998,7 +1007,10 @@ export default function DialogManager({
                   variant="outlined"
                   placeholder="Type template/input to send to terminal. Ctrl + Enter to send"
                   value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
+                  onChange={(e) => {
+                    setInputValue(e.target.value);
+                    setInputDialogDirty(true);
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && e.ctrlKey) {
                       e.preventDefault();
@@ -1006,7 +1018,7 @@ export default function DialogManager({
                         const data = appendNewLine ? inputValue + "\n" : inputValue;
                         sendParsedString(data, true, userVars);
                       }
-                      handleCloseInputDialog();
+                      handleCloseInputDialog(true);
                     }
                   }}
                   autoFocus={varsList.length === 0}
@@ -1042,7 +1054,10 @@ export default function DialogManager({
                         autoFocus={i === 0}
                         size="small"
                         value={userVars[vname] || ""}
-                        onChange={(e) => setUserVars((prev) => ({ ...prev, [vname]: e.target.value }))}
+                        onChange={(e) => {
+                          setUserVars((prev) => ({ ...prev, [vname]: e.target.value }));
+                          setInputDialogDirty(true);
+                        }}
                         placeholder="Ctrl + Enter to send"
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && e.ctrlKey) {
@@ -1051,7 +1066,7 @@ export default function DialogManager({
                               const data = appendNewLine ? inputValue + "\n" : inputValue;
                               sendParsedString(data, true, userVars);
                             }
-                            handleCloseInputDialog();
+                            handleCloseInputDialog(true);
                           }
                         }}
                       />
@@ -1136,7 +1151,7 @@ export default function DialogManager({
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseInputDialog}>Cancel</Button>
+          <Button onClick={() => handleCloseInputDialog(true)}>Cancel</Button>
           <Button
             variant="contained"
             onClick={() => {
@@ -1144,7 +1159,7 @@ export default function DialogManager({
                 const data = appendNewLine ? inputValue + "\n" : inputValue;
                 sendParsedString(data, inputLiquid, userVars);
               }
-              handleCloseInputDialog();
+              handleCloseInputDialog(true);
             }}
           >
             Send
@@ -1157,7 +1172,6 @@ export default function DialogManager({
         open={newTabDialogOpen}
         onClose={() => {
           setNewTabDialogOpen(false);
-          triggerFocus();
         }}
         onExecuteButton={(btn) => {
           handleButtonClick(btn);

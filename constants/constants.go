@@ -23,4 +23,5 @@ const (
 	DEFAULT_BUTTON_TYPE                     = "send_string"
 	IDENTITY_PREFIX                         = "$identity:"
 	DEFAULT_PASSWORD_LENGTH                 = 32 // [a-zA-Z0-9]{length}, each char is 5.9 bits. 128 bits requires >= 22
+	ID_DELETE_PREFIX                        = "__$$delete$$__"
 )

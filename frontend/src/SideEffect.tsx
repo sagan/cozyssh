@@ -7,13 +7,24 @@ import {
   VAR_CS_TERMINAL_FONT_SIZE,
 } from "./constants";
 import { CS_EVENT_VARS, getIntVar, type CSEventDetailVars } from "./common";
-import { useStore, type TerminalRefMap } from "./store";
+import { triggerFocus, useStore, type TerminalRefMap } from "./store";
 import { useWakeLock } from "./useWakeLock";
 
 export default function SideEffect({ terminalRefs }: { terminalRefs: React.MutableRefObject<TerminalRefMap> }) {
   const tabsNotEmpty = useStore((state) => state.tabs.length > 0);
   const vars = useStore((state) => state.vars);
   const localVars = useStore((state) => state.localVars);
+
+  const anyDialogOpen = useStore(
+    (state) =>
+      state.editButtonDialogOpen || state.newTabDialogOpen || state.inputDialogOpen || state.editHostDialogOpen,
+  );
+
+  useEffect(() => {
+    if (!anyDialogOpen) {
+      triggerFocus();
+    }
+  }, [anyDialogOpen]);
 
   useWakeLock(tabsNotEmpty && getIntVar(vars, localVars, VAR_CS_NOWAKELOCK) !== 1);
 

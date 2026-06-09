@@ -1668,7 +1668,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const method = editButton ? METHOD_PUT : METHOD_POST;
     const url = editButton ? `/api/buttons/${editButton.id}` : "/api/buttons";
     if (editButton) {
-      delete moduleCache[editButton.id];
+      const id = editButton.id;
+      if (moduleCache[id]?.default?.unload) {
+        await moduleCache[id].default.unload();
+      }
+      delete moduleCache[id];
     }
     await fetch(url, {
       method,
@@ -1740,7 +1744,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
       return;
     }
     setEditButtonDialogOpen(false);
-    triggerFocus();
   }, []);
 
   const [lastKeyboardHeight, setLastKeyboardHeight] = useState(0);

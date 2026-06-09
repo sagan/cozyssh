@@ -1017,7 +1017,6 @@ export default function Sidebar({
       return;
     }
     setEditHostDialogOpen(false);
-    triggerFocus();
   }, []);
 
   const filteredHosts = useMemo(() => {

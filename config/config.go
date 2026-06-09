@@ -11,6 +11,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -24,10 +25,10 @@ type Config struct {
 	SiteName              string               `yaml:"sitename"`
 	AppPasswordHash       string               `yaml:"app_password_hash"`
 	SSHDir                string               `yaml:"sshdir"` // openssh config dir, defaults to ~/.ssh
-	Buttons               []*models.ButtonData `yaml:"buttons" json:"buttons"`
+	Buttons               []*models.ButtonData `yaml:"buttons"`
 	ConfigPath            string               `yaml:"-"` // internal use
 	ConfigDir             string               `yaml:"-"` // internal use
-	Vars                  map[string]string    `yaml:"vars" json:"vars"`
+	Vars                  map[string]string    `yaml:"vars"`
 	InsecureIgnoreHostKey bool                 `yaml:"insecure_ignore_host_key"`
 	SavePassword          string               `yaml:"save_password"`
 	SessionSecret         string               `yaml:"session_secret"`
@@ -234,6 +235,14 @@ func (c *Config) UpsertButtons(btns []*models.ButtonData) error {
 	}
 
 	for _, btn := range btns {
+		if strings.HasPrefix(btn.Id, constants.ID_DELETE_PREFIX) {
+			// delete button
+			id := btn.Id[len(constants.ID_DELETE_PREFIX):]
+			c.Buttons = slices.DeleteFunc(c.Buttons, func(b *models.ButtonData) bool {
+				return b.Id == id
+			})
+			continue
+		}
 		if btn.Id == "" {
 			btn.Id = RandString(12, false)
 		}
