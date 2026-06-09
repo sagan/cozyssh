@@ -27,6 +27,11 @@ import type { ShellIntegration, TerminalHandle } from "./Terminal";
 import type { Liquid } from "liquidjs";
 
 declare global {
+  interface CsChooseAction {
+    id: string; // The unique value returned when clicked (e.g., 'discard')
+    label?: string; // The text displayed on the button (e.g., 'Save as Draft'), default to id
+    variant?: "primary" | "secondary" | "error" | "warning"; // Optional styling hint
+  }
   /**
    * The optional default export type of custom script
    */
@@ -35,7 +40,7 @@ declare global {
      * The entrypoint of the script. If set, it will be executed after the script is imported.
      * It will always be executed each time the button is clicked, even if the script is cached (see `cache`)
      */
-    run?: () => void | Promise<void>;
+    run?: (selfBtn: Pick<ButtonData, "id" | "type" | "name" | "payload">) => void | Promise<void>;
     /**
      * Optional cleanup function for the script. If set, it will be executed when the script is unloaded.
      */
@@ -95,6 +100,14 @@ declare global {
    * The LiquidJs Engine instannce that CozySSH uses for send_string buttons & Terminal Input dialog.
    */
   var __CS_LIQUID_ENGINE__: Liquid;
+  /**
+   * The button data of the script that is currently being executed.
+   * Note script is executed in async manner. If multiple scripts are executed at the same time,
+   * this variable can hold any of them or undefined. It's guaranteed that it will be set to
+   * undefined when no script is running.
+   * It's recommended to use the `selfBtn` argument of `run(selfBtn)` in the plugin API instead.
+   */
+  var __CS_RUNNING_SCRIPT__: Pick<ButtonData, "id" | "name" | "type" | "payload"> | undefined;
   /**
    * Focus the terminal with the given pane id.
    * @param tabOrPaneId defaults to active terminal pane id.
@@ -267,6 +280,14 @@ declare global {
     options?: Partial<Omit<AppletData, "name" | "node">>,
   ): void;
   /**
+   * Open a menu.
+   * @param anchorId The id or the element itself to open the menu from. A button in button bar has `button-<id>` id
+   *                where `<id>` is the button id which can be fetched from `run(selfBtn)` argument.
+   * @param options The options to display in the menu.
+   * @returns The selected option, or null if the menu was closed without selecting an option.
+   */
+  function csOpenMenu(anchorId: string | HTMLElement, options: string[]): Promise<string | null>;
+  /**
    * Close a custom UI applet.
    */
   function csCloseApplet(name: string): void;
@@ -324,6 +345,10 @@ declare global {
    * Similar to csPrompt but diplay input box as password type
    */
   function csPromptPassword(message?: string, defaultValue?: string): Promise<string | null>;
+  /**
+   * Display an async choose dialog.
+   */
+  function csChoose(title: string, message: string, actions: (string | CsChooseAction)[]): Promise<string | null>;
   /**
    * Set the sidebar filter value
    */

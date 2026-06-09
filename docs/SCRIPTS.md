@@ -8,6 +8,7 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
 - [Available modules](#available-modules)
 - [Available global variables](#available-global-variables)
 - [Available global functions](#available-global-functions)
+  - [`csOpenMenu(anchorId: string | HTMLElement, options: string[]): Promise<string | null>`](#csopenmenuanchorid-string--htmlelement-options-string-promisestring--null)
   - [`csOpenApplet(name: string, node: Node | React.ComponentType, options?: { position?: 'widget' | 'sidebar' | 'dialog', width?: number, height?: number }): void`](#csopenappletname-string-node-node--reactcomponenttype-options--position-widget--sidebar--dialog-width-number-height-number--void)
   - [`csCloseApplet(name: string): void`](#cscloseappletname-string-void)
   - [`csGetApplet(name: string): AppletData | undefined`, `csGetApplet(): AppletData[]`](#csgetappletname-string-appletdata--undefined-csgetapplet-appletdata)
@@ -31,7 +32,7 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
   - [`csDeleteButton(id: string): Promise<void>`](#csdeletebuttonid-string-promisevoid)
   - [`csUpdateHost(host: Host): Promise<void>`](#csupdatehosthost-host-promisevoid)
   - [`csDeleteHost(name: string): Promise<void>`](#csdeletehostname-string-promisevoid)
-  - [csAlert, csConfirm, csPrompt](#csalert-csconfirm-csprompt)
+  - [csAlert, csConfirm, csPrompt and more](#csalert-csconfirm-csprompt-and-more)
 - [Client-side Events](#client-side-events)
   - [`cs:terminal-new`](#csterminal-new)
   - [`cs:terminal-change`](#csterminal-change)
@@ -59,7 +60,7 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
 - **Awaiting Completion**: The script engine automatically waits for all top-level `await` promises to resolve before finishing execution.
 - **Auto-focus**: By default, scripts will re-focus the terminal after execution.
 - **Module Default Export**: Optionally, the script may provide a default export object with the following optional fields to control the behavior of the scripting engine:
-  - `run`: `() => void | Promise<void>` - The entrypoint of the script. If provided, it will be executed after the script is imported. It will always be executed each time the button is clicked, even if the script is cached (see `cache` below).
+  - `run`: `(selfBtn: ButtonData) => void | Promise<void>` - The entrypoint of the script. If provided, it will be executed after the script is imported. It will always be executed each time the button is clicked, even if the script is cached (see `cache` below).
   - `cache`: `boolean` - If provided and `true`, the script will be cached when it's first imported. You may want to also provide a `run` function in this case otherwise clicking the script's button will have no effect after the first time it's imported. The cache is cleared when the browser page is reloaded.
   - `noFocus`: `boolean` - If provided and `true`, the script will not focus the terminal after execution.
 
@@ -97,6 +98,27 @@ CozySSH sets some global variables in the browser's window object.
 - `window.__CS_LIQUID_ENGINE__` : `Liquid` - The LiquidJs Engine instannce that CozySSH uses for send_string buttons & Terminal Input dialog.
 
 ## Available global functions
+
+### `csOpenMenu(anchorId: string | HTMLElement, options: string[]): Promise<string | null>`
+
+Opens a custom context menu. `anchorId` can be an HTML element id, or a DOM element. `options` is a list of strings which will be displayed as menu items. If the returned value `null` then it means the menu was closed without any selection. Otherwise the selected menu item will be returned.
+
+The current button has `button-<id>` as its id where `id` is the internal id of the button, which can be accessed in `run(selfBtn)` as `selfBtn.id`.
+
+Example: display a menu above your button bar button when user clicks it.
+
+```javascript
+export default {
+  run: async function (selfBtn) {
+    const options = ["Option 1", "Option 2", "Option 3"];
+    const anchorId = "button-" + selfBtn.id;
+    const selectedOption = await csOpenMenu(anchorId, options);
+    csNotify(`User clicks ${selectedOption}`);
+  },
+};
+```
+
+This function does nothing when script is run as autorun script (the promise always resolves to null).
 
 ### `csOpenApplet(name: string, node: Node | React.ComponentType, options?: { position?: 'widget' | 'sidebar' | 'dialog', width?: number, height?: number }): void`
 
@@ -353,13 +375,15 @@ await csDeleteHost("staging-server");
 csNotify("Host deleted");
 ```
 
-### csAlert, csConfirm, csPrompt
+### csAlert, csConfirm, csPrompt and more
 
 - `csAlert: (message?: string, detail?: string) => Promise<void>`
-- `csConfirm: (message?: string, detail?: string) => Promise<boolean>`,
-- `csPrompt: (message?: string, defaultValue?: string, options?: {placeholder?: string; alidate?: (value: string) => string;}) => Promise<string | null>`
+- `csConfirm: (message?: string, detail?: string, verification?: boolean | string) => Promise<boolean>`,
+- `csPrompt: (message?: string, defaultValue?: string, options?: {placeholder?: string; validate?: (value: string) => string; inputType?: string;}) => Promise<string | null>`
+- `csPromptPassword(message?: string, defaultValue?: string): Promise<string | null>`
+- `csChoose(title: string, message: string, actions: (string | CsChooseAction)[]): Promise<string | null>`
 
-The async (non-blocking) version of DOM `alert, confirm, prompt` functions using MUI Dialog.
+The async (non-blocking) version of DOM `alert, confirm, prompt` functions using MUI Dialog. The additional `csPromptPassword` and `csChoose` can be used to display a password input dialog and a choice dialog, respectively.
 
 ## Client-side Events
 

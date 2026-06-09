@@ -335,6 +335,7 @@ export default function DialogManager({
           let buttonName = "";
           let buttonId = "";
           let group = "";
+          let autorun = 0;
           const jsDocMatch = text.match(/^\s*\/\*\*([\s\S]*?)\*\//);
           if (jsDocMatch) {
             const content = jsDocMatch[1];
@@ -349,6 +350,10 @@ export default function DialogManager({
             const groupMatch = content.match(/@group\s+([^\r\n]+)/);
             if (groupMatch) {
               group = groupMatch[1].trim();
+            }
+            const autorunMatch = content.match(/@autorun\s+([^\r\n]+)/);
+            if (autorunMatch && autorunMatch[1].trim() === "1") {
+              autorun = 1;
             }
           }
 
@@ -382,7 +387,7 @@ export default function DialogManager({
             type: "run_script",
             payload: text,
             group: group || getStore().buttonFormData.group || DEFAULT_BUTTON_GROUP,
-            autorun: 0,
+            autorun,
             order: getStore().buttonFormData.order || 0,
             shortcut: "",
           });

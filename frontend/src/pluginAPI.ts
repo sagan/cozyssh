@@ -37,7 +37,7 @@ import {
   LOCAL_NAME,
   LOCAL_VAR_PREFIX,
 } from "./constants";
-import { generatePassword, isMuiDialogOpen, liquidEngine, terminalKeyShortcuts } from "./common";
+import { DefaultXtermOptions, generatePassword, isMuiDialogOpen, liquidEngine, terminalKeyShortcuts } from "./common";
 import {
   type TerminalRefMap,
   activatePane,
@@ -55,6 +55,7 @@ import { dialogs } from "./Dialogs";
 import type { AppletData } from "./AppletWrapper";
 import { disableShortcuts } from "./useKeyboardManager";
 import type { ITerminalOptions } from "@xterm/xterm";
+import { openMenu } from "./DynamicMenu";
 
 /**
  * The module type of custom script
@@ -77,6 +78,7 @@ window.__CS_USE_STORE__ = useStore;
 window.__CS_PASSTHROUGH_SHORTCUTS__ = terminalKeyShortcuts;
 window.__CS_DISABLE_SHORTCUTS__ = disableShortcuts;
 window.__CS_LIQUID_ENGINE__ = liquidEngine;
+window.__CS_RUNNING_SCRIPT__ = undefined;
 
 // Use Proxy to intercept __CS_TERMINAL_OPTIONS__
 (function () {
@@ -89,7 +91,7 @@ window.__CS_LIQUID_ENGINE__ = liquidEngine;
       if (term && "getXterm" in term) {
         const xterm = term.getXterm();
         if (xterm) {
-          xterm.options = finalValue;
+          xterm.options = { ...DefaultXtermOptions, ...finalValue };
         }
       }
     }
@@ -144,8 +146,10 @@ window.csAlert = dialogs.alert;
 window.csConfirm = dialogs.confirm;
 window.csPrompt = dialogs.prompt;
 window.csPromptPassword = dialogs.promptPassword;
+window.csChoose = dialogs.choose;
 window.csRunScript = runScript;
 window.csNotify = notify;
+window.csOpenMenu = openMenu;
 
 window.csFocus = (tabOrPaneId?: string) => {
   if (isMuiDialogOpen()) {
@@ -285,6 +289,8 @@ export async function runScript(btn: Pick<ButtonData, "id" | "name" | "type" | "
   let moduleObj: CsScriptModule;
   let cached = false;
 
+  __CS_RUNNING_SCRIPT__ = btn;
+
   if (!btn.id || !moduleCache[btn.id]) {
     let scriptCode = btn.payload;
     // Do a single replace pass
@@ -307,6 +313,7 @@ export async function runScript(btn: Pick<ButtonData, "id" | "name" | "type" | "
     } catch (e) {
       console.error(`Script ${btn.name} Transform Error:`, e);
       notify(`Script ${btn.name} Transform Error: ${e}`, "error");
+      __CS_RUNNING_SCRIPT__ = undefined;
       return;
     }
     const blob = new Blob([scriptCode], { type: "application/javascript" });
@@ -317,6 +324,7 @@ export async function runScript(btn: Pick<ButtonData, "id" | "name" | "type" | "
     } catch (e) {
       console.error(`Script ${btn.name} Import Error:`, e);
       notify(`Script ${btn.name} Import Error: ${e}`, "error");
+      __CS_RUNNING_SCRIPT__ = undefined;
       return;
     } finally {
       // Always clean up the URL to prevent memory leaks
@@ -332,7 +340,7 @@ export async function runScript(btn: Pick<ButtonData, "id" | "name" | "type" | "
 
   if (moduleObj.default?.run) {
     try {
-      await moduleObj.default.run();
+      await moduleObj.default.run(btn);
     } catch (e) {
       console.error(`Script ${btn.name} run() Error:`, e);
       notify(`Script ${btn.name} run() Error: ${e}`, "error");
@@ -342,8 +350,11 @@ export async function runScript(btn: Pick<ButtonData, "id" | "name" | "type" | "
       `Script ${btn.name} is already imported & cached, and has no run function. Reload the page to clear the cache`,
       "info",
     );
+    __CS_RUNNING_SCRIPT__ = undefined;
     return;
   }
+
+  __CS_RUNNING_SCRIPT__ = undefined;
 
   if (!moduleObj.default?.noFocus) {
     triggerFocus();
@@ -478,6 +489,12 @@ window.csUpdateButton = async (btn: ButtonData | ButtonData[]): Promise<void> =>
 };
 
 window.csDeleteButton = async (id: string): Promise<void> => {
+  if (moduleCache[id]) {
+    if (moduleCache[id].default?.unload) {
+      moduleCache[id].default.unload();
+    }
+    delete moduleCache[id];
+  }
   const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
   const res = await fetch(`/api/buttons/${id}`, {
     method: METHOD_DELETE,

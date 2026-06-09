@@ -19,10 +19,11 @@ export interface DialogApi {
   confirm: typeof csConfirm;
   prompt: typeof csPrompt;
   promptPassword: typeof csPromptPassword;
+  choose: typeof csChoose;
 }
 
 interface DialogConfig {
-  type: "alert" | "confirm" | "prompt";
+  type: "alert" | "confirm" | "prompt" | "choose";
   message?: string;
   detail?: string;
   placeholder?: string;
@@ -30,8 +31,8 @@ interface DialogConfig {
   validate?: ((value: string) => string | undefined) | null;
   inputType?: string;
   verification?: boolean | string;
+  actions?: (string | CsChooseAction)[];
 }
-
 // 1. Internal registry to bridge the static export to the React provider instance
 const registry = {
   current: null as DialogApi | null,
@@ -48,6 +49,7 @@ export const dialogs: DialogApi = {
     registry.current?.prompt(message, defaultValue, options) ?? Promise.resolve(null),
   promptPassword: (message, defaultValue) =>
     registry.current?.promptPassword(message, defaultValue) ?? Promise.resolve(null),
+  choose: (title, message, actions) => registry.current?.choose(title, message, actions) ?? Promise.resolve(null),
 };
 
 export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
@@ -64,6 +66,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
     validate: null,
     inputType: "",
     verification: undefined,
+    actions: [],
   });
 
   const resolveRef = useRef<((value: string | boolean | null) => void) | null>(null);
@@ -89,24 +92,26 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
         triggerDialog({ type: "prompt", message, defaultValue, ...options })) as DialogApi["prompt"],
       promptPassword: ((message, defaultValue) =>
         triggerDialog({ type: "prompt", inputType: "password", message, defaultValue })) as DialogApi["promptPassword"],
+      choose: ((title, message, actions) =>
+        triggerDialog({ type: "choose", message: title, detail: message, actions })) as DialogApi["choose"],
     };
   }, []);
 
-  const handleClose = (confirmed: boolean) => {
+  const handleClose = (outcome: string | boolean | null) => {
     if (!resolveRef.current) {
       return;
     }
 
-    if (!confirmed) {
+    // Backdrop click / ESC press or explicitly passing cancel states
+    if (outcome === false || outcome === null) {
       setOpen(false);
-      resolveRef.current(config.type === "prompt" ? null : false);
       if (!isMuiDialogOpen()) {
         triggerFocus();
       }
+      resolveRef.current(config.type === "prompt" || config.type === "choose" ? null : false);
       return;
     }
 
-    // Safety guard for verification requirements
     if (config.type === "confirm") {
       if (config.verification === true && !checked) {
         return;
@@ -125,9 +130,15 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
     }
 
     setOpen(false);
-    resolveRef.current(config.type === "prompt" ? inputValue : true);
     if (!isMuiDialogOpen()) {
       triggerFocus();
+    }
+    if (config.type === "prompt") {
+      resolveRef.current(inputValue);
+    } else if (config.type === "choose") {
+      resolveRef.current(typeof outcome === "string" ? outcome : null);
+    } else {
+      resolveRef.current(true);
     }
   };
 
@@ -144,7 +155,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
         id="async-modal-dialog"
         data-type={config.type}
         open={open}
-        onClose={() => handleClose(false)}
+        onClose={() => handleClose(null)}
         fullWidth
         maxWidth="xs"
         sx={{ wordBreak: "break-all" }}
@@ -228,20 +239,45 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
           )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          {config.type !== "alert" && (
-            <Button onClick={() => handleClose(false)} color="inherit">
-              Cancel
-            </Button>
+          {config.type === "choose" ? (
+            (config.actions || []).map((action) => {
+              const item = typeof action === "string" ? { id: action } : action;
+              const label = item.label ?? item.id;
+
+              // Map custom style variants cleanly to MUI Button props
+              const btnVariant = item.variant === "secondary" ? "outlined" : "contained";
+              const btnColor = item.variant && item.variant !== "secondary" ? item.variant : "primary";
+
+              return (
+                <Button
+                  key={item.id}
+                  onClick={() => handleClose(item.id)}
+                  variant={btnVariant}
+                  color={btnColor}
+                  disableElevation
+                >
+                  {label}
+                </Button>
+              );
+            })
+          ) : (
+            <>
+              {config.type !== "alert" && (
+                <Button onClick={() => handleClose(false)} color="inherit">
+                  Cancel
+                </Button>
+              )}
+              <Button
+                onClick={() => handleClose(true)}
+                variant={config.type === "alert" ? "text" : "contained"}
+                disableElevation
+                autoFocus={config.type !== "prompt" && !config.verification}
+                disabled={isConfirmDisabled}
+              >
+                OK
+              </Button>
+            </>
           )}
-          <Button
-            onClick={() => handleClose(true)}
-            variant={config.type === "alert" ? "text" : "contained"}
-            disableElevation
-            autoFocus={config.type !== "prompt" && !config.verification}
-            disabled={isConfirmDisabled}
-          >
-            OK
-          </Button>
         </DialogActions>
       </Dialog>
     </>

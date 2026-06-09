@@ -121,6 +121,7 @@ export default function ButtonBar({ groups, handleButtonClick, onNewButtonClick 
           const style = getButtonStyle(btn);
           return (
             <Tab
+              id={`button-${btn.id}`}
               key={btn.id}
               label={btn.name}
               className="button"

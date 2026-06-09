@@ -1,7 +1,7 @@
 import { createTheme } from "@mui/material";
 import { z } from "zod";
 import type { ButtonData, HostData } from "./api";
-import type { Terminal } from "@xterm/xterm";
+import type { ITerminalOptions, Terminal } from "@xterm/xterm";
 import { DEFAULT_BUTTON_GROUP } from "./constants";
 import { Liquid } from "liquidjs";
 
@@ -331,6 +331,19 @@ export const nonCharKeys = new Set([
   "arrowleft",
   "arrowright",
 ]);
+
+export const DefaultXtermOptions: ITerminalOptions = {
+  allowProposedApi: true,
+  cursorBlink: true,
+  theme: {
+    background: "#ffffff",
+    foreground: "#000000",
+    cursor: "#000000",
+    cursorAccent: "#ffffff",
+    selectionBackground: "rgba(0, 0, 0, 0.2)",
+  },
+  fontFamily: 'Consolas, "Courier New", monospace',
+};
 
 /**
  * Return effective value for a variable:

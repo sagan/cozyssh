@@ -39,6 +39,7 @@ import {
   base64urlEncode,
   terminalKeyShortcuts,
   nonCharKeys,
+  DefaultXtermOptions,
 } from "./common";
 import { getStore, type PaneData } from "./store";
 
@@ -292,16 +293,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       const { vars, localVars } = getStore();
 
       const term = new Terminal({
-        allowProposedApi: true,
-        cursorBlink: true,
-        theme: {
-          background: "#ffffff",
-          foreground: "#000000",
-          cursor: "#000000",
-          cursorAccent: "#ffffff",
-          selectionBackground: "rgba(0, 0, 0, 0.2)",
-        },
-        fontFamily: 'Consolas, "Courier New", monospace',
+        ...DefaultXtermOptions,
         ...__CS_TERMINAL_OPTIONS__,
       });
       const fitAddon = new FitAddon();

@@ -1701,6 +1701,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
     if (!(await dialogs.confirm(`Delete button "${name}"?`))) {
       return;
     }
+    if (moduleCache[id]) {
+      if (moduleCache[id].default?.unload) {
+        moduleCache[id].default.unload();
+      }
+      delete moduleCache[id];
+    }
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     await fetch(`/api/buttons/${id}`, {
       method: METHOD_DELETE,

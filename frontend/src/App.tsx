@@ -7,6 +7,7 @@ import Login from "./Login";
 import Dashboard from "./Dashboard";
 import InsecureWarning from "./InsecureWarning";
 import { AsyncDialogProvider } from "./Dialogs";
+import { DynamicMenuProvider } from "./DynamicMenu";
 
 function App() {
   const [securityCheck, setSecurityCheck] = useState<PreflightResponse | undefined>(undefined);
@@ -35,15 +36,17 @@ function App() {
 
   return (
     <AsyncDialogProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route
-            path="/login"
-            element={!hasAuth ? <Login onLoginSuccess={handleLoginSuccess} /> : <Navigate to="/" />}
-          />
-          <Route path="/" element={hasAuth ? <Dashboard initialData={fullData} /> : <Navigate to="/login" />} />
-        </Routes>
-      </BrowserRouter>
+      <DynamicMenuProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route
+              path="/login"
+              element={!hasAuth ? <Login onLoginSuccess={handleLoginSuccess} /> : <Navigate to="/" />}
+            />
+            <Route path="/" element={hasAuth ? <Dashboard initialData={fullData} /> : <Navigate to="/login" />} />
+          </Routes>
+        </BrowserRouter>
+      </DynamicMenuProvider>
     </AsyncDialogProvider>
   );
 }
