@@ -27,6 +27,9 @@ import (
 	"github.com/playwright-community/playwright-go"
 )
 
+// yescrypt hash of `123456`
+const PASSWORD_HASH_123456 = "$y$j9T$jKQVBWNujTG0c1nVGLoO0.$V4sEZinfjMEcEUesyGvzDsTGcchoP1sV2A7BedR5Qn5"
+
 var (
 	pwInstance *playwright.Playwright
 	browser    playwright.Browser
@@ -152,10 +155,10 @@ func setupTestConfig(t *testing.T) string {
 	}
 	t.Cleanup(func() { os.RemoveAll(tmpDir) })
 
-	// bcrypt hashed password of "123456"
+	// yescrypt hashed password of "123456"
 	configContent := `
 addr: "127.0.0.1:0"
-app_password_hash: "$2a$10$DHgtL4m5BTrNIzAUqMF2su7E1LgHvLwwdkoHjVMiFzRnOz5M.TH32"
+app_password_hash: "` + PASSWORD_HASH_123456 + `"
 sshdir: "` + filepath.ToSlash(filepath.Join(tmpDir, ".ssh")) + `"
 insecure_ignore_host_key: true
 `

@@ -3,11 +3,10 @@ package passstore
 import (
 	"cozyssh/common"
 	"cozyssh/constants"
+	"cozyssh/yescrypt"
 	"os"
 	"path/filepath"
 	"testing"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 func TestPassStore(t *testing.T) {
@@ -18,9 +17,9 @@ func TestPassStore(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	appPassword := "master_secret_123"
-	hashBytes, err := bcrypt.GenerateFromPassword([]byte(appPassword), bcrypt.DefaultCost)
+	hashBytes, err := yescrypt.GenerateFromPassword([]byte(appPassword))
 	if err != nil {
-		t.Fatalf("failed to generate bcrypt hash: %v", err)
+		t.Fatalf("failed to generate yescrypt hash: %v", err)
 	}
 
 	Init(tempDir, string(hashBytes))
@@ -88,9 +87,9 @@ func TestPassStore(t *testing.T) {
 
 	// Test ReencryptWithInMemoryKey
 	newAppPassword := "new_secret_456"
-	newHashBytes, err := bcrypt.GenerateFromPassword([]byte(newAppPassword), bcrypt.DefaultCost)
+	newHashBytes, err := yescrypt.GenerateFromPassword([]byte(newAppPassword))
 	if err != nil {
-		t.Fatalf("failed to generate new bcrypt hash: %v", err)
+		t.Fatalf("failed to generate new yescrypt hash: %v", err)
 	}
 
 	err = ReencryptWithInMemoryKey(newAppPassword)
@@ -117,9 +116,9 @@ func TestPassStore(t *testing.T) {
 
 	// Test Reencrypt (offline/migration)
 	newAppPassword2 := "another_secret_789"
-	newHashBytes2, err := bcrypt.GenerateFromPassword([]byte(newAppPassword2), bcrypt.DefaultCost)
+	newHashBytes2, err := yescrypt.GenerateFromPassword([]byte(newAppPassword2))
 	if err != nil {
-		t.Fatalf("failed to generate new bcrypt hash: %v", err)
+		t.Fatalf("failed to generate new yescrypt hash: %v", err)
 	}
 
 	// Update hash to old one for verification

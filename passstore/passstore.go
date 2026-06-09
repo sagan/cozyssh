@@ -16,7 +16,8 @@ import (
 
 	"github.com/awnumar/memguard"
 	"golang.org/x/crypto/argon2"
-	"golang.org/x/crypto/bcrypt"
+
+	"cozyssh/yescrypt"
 )
 
 var (
@@ -62,7 +63,7 @@ func SetEncryptionKey(appPassword string) bool {
 	}
 
 	// Verify app password
-	if err := bcrypt.CompareHashAndPassword([]byte(appPasswordHash), []byte(appPassword)); err != nil {
+	if err := yescrypt.CompareHashAndPassword([]byte(appPasswordHash), []byte(appPassword)); err != nil {
 		return false
 	}
 
@@ -325,7 +326,7 @@ func Reencrypt(oldPassword string, newPassword string) error {
 
 	// Verify old app password if hash is present
 	if appPasswordHash != "" {
-		if err := bcrypt.CompareHashAndPassword([]byte(appPasswordHash), []byte(oldPassword)); err != nil {
+		if err := yescrypt.CompareHashAndPassword([]byte(appPasswordHash), []byte(oldPassword)); err != nil {
 			return errors.New("incorrect old app password")
 		}
 	}

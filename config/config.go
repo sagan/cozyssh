@@ -1,10 +1,6 @@
 package config
 
 import (
-	"cozyssh/common"
-	"cozyssh/constants"
-	"cozyssh/models"
-	"crypto/rand"
 	"fmt"
 	"io"
 	"log"
@@ -16,8 +12,13 @@ import (
 	"strings"
 	"sync"
 
-	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/yaml.v3"
+
+	"cozyssh/common"
+	"cozyssh/constants"
+	"cozyssh/models"
+	"cozyssh/yescrypt"
+	"crypto/rand"
 )
 
 type Config struct {
@@ -140,7 +141,7 @@ func generateAndSaveConfig(path string) (*Config, error) {
 	password := RandString(constants.DEFAULT_PASSWORD_LENGTH, false)
 
 	// Hash the password
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, err := yescrypt.GenerateFromPassword([]byte(password))
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +173,7 @@ func generateAndSaveConfig(path string) (*Config, error) {
 }
 
 func (c *Config) VerifyPassword(password string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(c.AppPasswordHash), []byte(password))
+	err := yescrypt.CompareHashAndPassword([]byte(c.AppPasswordHash), []byte(password))
 	return err == nil
 }
 
@@ -180,7 +181,7 @@ func (c *Config) ChangeAppPassword(newPassword string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	hash, err := yescrypt.GenerateFromPassword([]byte(newPassword))
 	if err != nil {
 		return err
 	}
@@ -207,7 +208,7 @@ func (c *Config) ResetAppPassword() (string, error) {
 	defer c.mu.Unlock()
 
 	password := RandString(constants.DEFAULT_PASSWORD_LENGTH, false)
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, err := yescrypt.GenerateFromPassword([]byte(password))
 	if err != nil {
 		return "", err
 	}

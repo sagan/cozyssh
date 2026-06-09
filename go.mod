@@ -9,6 +9,7 @@ require (
 	github.com/go-http-utils/headers v0.0.0-20181008091004-fed159eddc2a
 	github.com/gorilla/websocket v1.5.3
 	github.com/kevinburke/ssh_config v1.6.0
+	github.com/openwall/yescrypt-go v1.0.0
 	github.com/ory/dockertest/v4 v4.0.0
 	github.com/pkg/sftp v1.13.10
 	github.com/playwright-community/playwright-go v0.5700.1
