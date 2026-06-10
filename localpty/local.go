@@ -12,6 +12,7 @@ import (
 
 type LocalSession struct {
 	Pty    pty.Pty
+	cmd    *pty.Cmd
 	closed atomic.Bool
 }
 
@@ -86,6 +87,7 @@ func Start(initialCmd string) (*LocalSession, error) {
 
 	ls := &LocalSession{
 		Pty: p,
+		cmd: cmd,
 	}
 	go func() {
 		cmd.Wait()
@@ -101,7 +103,11 @@ func (s *LocalSession) Resize(rows, cols uint16) error {
 
 func (s *LocalSession) Close() error {
 	if ok := s.closed.CompareAndSwap(false, true); ok {
-		return s.Pty.Close()
+		err := s.Pty.Close()
+		if s.cmd != nil && s.cmd.Process != nil {
+			_ = s.cmd.Process.Kill()
+		}
+		return err
 	}
 	return nil
 }

@@ -23,7 +23,15 @@ import {
   VAR_CS_SCROLL_LINES,
   VAR_CS_TERMINAL_FONT_SIZE,
 } from "./constants";
-import { getIntVar, getKeyCombination, isMuiDialogOpen, nextTerminalFontSize, prevTerminalFontSize } from "./common";
+import {
+  closeDialog,
+  forceReload,
+  getIntVar,
+  getKeyCombination,
+  isMuiDialogOpen,
+  nextTerminalFontSize,
+  prevTerminalFontSize,
+} from "./common";
 import {
   type TerminalRefMap,
   activatePane,
@@ -71,8 +79,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
       const terminalRefs = getTerminalRefs();
 
       // Derive scrollLines from store vars at call-time
-      const { vars, localVars } = getStore();
-      const scrollLines = getIntVar(vars, localVars, VAR_CS_SCROLL_LINES, DEFAULT_SCROLL_LINES);
+      const scrollLines = getIntVar(VAR_CS_SCROLL_LINES, DEFAULT_SCROLL_LINES);
 
       // Derive groups / activeGroup / shortcutButtons from store at call-time
       const activeGroup = localStorage.getItem(BROWSER_STORAGE_KEY_ACTIVE_GROUP) || DEFAULT_BUTTON_GROUP;
@@ -123,20 +130,11 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
 
       // ── Named shortcuts ───────────────────────────────────────────────────
       switch (keycomb) {
-        case "alt+`": {
+        case "alt+`":
+        case "alt+shift+~": {
           // Alt + Backquote
-          const dialogs = document.querySelectorAll(".MuiDialog-root");
-          if (dialogs.length > 0) {
-            e.preventDefault();
-            dialogs[dialogs.length - 1].dispatchEvent(
-              new KeyboardEvent("keydown", {
-                key: "Escape",
-                code: "Escape",
-                bubbles: true,
-                cancelable: true,
-              }),
-            );
-          }
+          e.preventDefault();
+          closeDialog(keycomb === "alt+shift+~");
           return;
         }
         case "alt+enter": {
@@ -144,8 +142,16 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           if (document.fullscreenElement) {
             document.exitFullscreen();
           } else {
+            closeDialog(true);
             document.getElementById("main-content")?.requestFullscreen();
+            triggerFocus();
           }
+          return;
+        }
+        case "ctrl+alt+shift+r": {
+          // force clear service worker, cache and reload
+          e.preventDefault();
+          forceReload();
           return;
         }
         case "ctrl+alt+0": {
@@ -186,6 +192,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         case "alt+=": // in most keyboard layout the "+" key lowercase char is "="
         case "alt++": {
           e.preventDefault();
+          const { vars, localVars } = getStore();
           let varName: string;
           if (!vars[VAR_CS_TERMINAL_FONT_SIZE] || localVars[LOCAL_VAR_PREFIX + VAR_CS_TERMINAL_FONT_SIZE]) {
             varName = LOCAL_VAR_PREFIX + VAR_CS_TERMINAL_FONT_SIZE;
@@ -441,7 +448,6 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
     handleSelectHost,
     handleOpenScratchpad,
     handleCloseTabOrPane,
-    setSearchOpen,
     getTerminalRefs,
     handleCloneSession,
   ]);

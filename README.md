@@ -103,7 +103,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   ```
 
 - **Full keyboard Shortcuts**: It supports a complete set of keyboard shortcuts.
-  - `Alt + O` : Open new tab dialog, then use `← →` to switch view, `↑ ↓` to select, `Enter` to open
+  - `Alt + O` : Open new tab dialog, use `← →` (or `Alt + H/L`) to switch view, `↓ ↑` (or `Alt + J/K`) to select, `Enter` to open. Use `Alt + ↓↑` (or `Alt + Shift + J/K`) to jump through items quickly
   - `Alt + A` : Open new tab dialog - tabs view
   - `Alt + E` : Open new tab dialog - buttons view
   - `Alt + N` : Open new local shell tab
@@ -125,12 +125,14 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - `Alt + Shift + J / Alt + Shift + K` : Scroll terminal down / up by a page
   - `Alt + Enter` : Toggle fullscreen of main terminal area
   - `Alt + Backquote` : Close any dialog (Similar to Esc but works even if terminal is in fullscreen mode)
+  - `Alt + Shift + Backquote` : Close all dialogs
   - `Alt + - / Alt + +` : Decrease / increase terminal font size
   - `Ctrl + Alt + 0` : Reset to default terminal font size (15px)
   - `Ctrl + Shift + F` : Open terminal search box
   - `Ctrl + Shift + R` : Reconnect current terminal
   - `Ctrl + Shift + C` : Copy selected text in terminal
   - `Ctrl + Shift + V (Windows) / Cmd + V (Mac)` : Paste into terminal
+  - `Ctrl + Alt + Shift + R` : Force clear service worker, cache and reload
   - `Mouse Select` in terminal to copy
   - `Mouse Right Click` in terminal to paste
   - `Alt + Mouse Wheel` in terminal to fast scroll up / down

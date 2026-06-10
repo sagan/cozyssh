@@ -978,8 +978,9 @@ export default function DialogManager({
                 setInputDialogDirty(true);
               }}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
+                if (e.key === "Enter" && !e.shiftKey && !e.altKey) {
                   e.preventDefault();
+                  e.stopPropagation();
                   if (inputValue) {
                     const data = appendNewLine ? inputValue + "\n" : inputValue;
                     sendParsedString(data);
@@ -1019,6 +1020,7 @@ export default function DialogManager({
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && e.ctrlKey) {
                       e.preventDefault();
+                      e.stopPropagation();
                       if (inputValue) {
                         const data = appendNewLine ? inputValue + "\n" : inputValue;
                         sendParsedString(data, true, userVars);
@@ -1067,6 +1069,7 @@ export default function DialogManager({
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && e.ctrlKey) {
                             e.preventDefault();
+                            e.stopPropagation();
                             if (inputValue) {
                               const data = appendNewLine ? inputValue + "\n" : inputValue;
                               sendParsedString(data, true, userVars);

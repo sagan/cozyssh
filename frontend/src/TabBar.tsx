@@ -262,8 +262,9 @@ export default function TabBar({
                   }
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") {
+                  if (e.key === "Enter" && !e.altKey) {
                     e.preventDefault();
+                    e.stopPropagation();
                     const term = terminalRefs.current[activePaneId];
                     if (term && "getXterm" in term) {
                       if (e.shiftKey) {

@@ -2,11 +2,8 @@ package yescrypt
 
 import (
 	"crypto/rand"
-
 	"crypto/subtle"
-
 	"errors"
-
 	"fmt"
 
 	"github.com/openwall/yescrypt-go"

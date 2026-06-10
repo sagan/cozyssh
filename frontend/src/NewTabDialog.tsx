@@ -32,9 +32,11 @@ import {
   DEFAULT_BUTTON_GROUP,
   HEADER_AUTHORIZATION,
   HEADER_AUTHORIZATION_BEARER_PREFIX,
+  DEFAULT_SCROLL_ITEMS,
   LOCAL_NAME,
+  VAR_CS_SCROLL_ITEMS,
 } from "./constants";
-import { type ViewMode, filterHosts, searchString } from "./common";
+import { type ViewMode, filterHosts, getIntVar, searchString } from "./common";
 import { getStore, useStore } from "./store";
 
 interface NewTabDialogProps {
@@ -408,28 +410,32 @@ export default function NewTabDialog({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === "ArrowDown" || (e.altKey && e.key === "j")) {
+      const key = e.key.toLowerCase();
+      if (key === "arrowdown" || (e.altKey && key === "j")) {
+        const step = (key === "j" ? e.shiftKey : e.altKey) ? getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS) : 1;
         e.preventDefault();
         e.stopPropagation();
-        setSelectedIndex((prev) => Math.min(prev + 1, items.length - 1));
-      } else if (e.key === "ArrowUp" || (e.altKey && e.key === "k")) {
+        setSelectedIndex((prev) => Math.min(prev + step, items.length - 1));
+      } else if (key === "arrowup" || (e.altKey && key === "k")) {
+        const step = (key === "k" ? e.shiftKey : e.altKey) ? getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS) : 1;
         e.preventDefault();
         e.stopPropagation();
-        setSelectedIndex((prev) => Math.max(prev - 1, 0));
-      } else if ((e.key === "ArrowLeft" && !filter) || (e.altKey && e.key === "h")) {
+        setSelectedIndex((prev) => Math.max(prev - step, 0));
+      } else if ((key === "arrowleft" && !filter) || (e.altKey && key === "h")) {
         e.stopPropagation();
         e.preventDefault();
         cycleViewMode("prev");
-      } else if ((e.key === "ArrowRight" && !filter) || (e.altKey && e.key === "l")) {
+      } else if ((key === "arrowright" && !filter) || (e.altKey && key === "l")) {
         e.stopPropagation();
         e.preventDefault();
         cycleViewMode("next");
-      } else if (e.key === "Enter") {
+      } else if (key === "enter" && !e.altKey) {
         e.preventDefault();
+        e.stopPropagation();
         if (items[selectedIndex]) {
           handleSelect(items[selectedIndex]);
         }
-      } else if (e.key === "Escape") {
+      } else if (key === "escape") {
         onClose();
       }
     },
@@ -557,7 +563,7 @@ export default function NewTabDialog({
             setFilter(e.target.value);
             setSelectedIndex(0);
           }}
-          onKeyDown={handleKeyDown}
+          onKeyDownCapture={handleKeyDown}
           inputRef={inputRef}
           size="small"
           autoComplete="off"

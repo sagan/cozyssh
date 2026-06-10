@@ -4,7 +4,7 @@ import { Box, Button, TextField, Typography, Paper, ThemeProvider, CssBaseline }
 import { version as PACKAGE_JSON_VERSION } from "../package.json";
 import type { FullData, LoginRequest, LoginResponse, Manifest } from "./api";
 import { APP_NAME, BROWSER_STORAGE_KEY_TOKEN, HEADER_CONTENT_TYPE, METHOD_POST, MIME_JSON } from "./constants";
-import { loginTheme } from "./common";
+import { forceReload, loginTheme } from "./common";
 import { dialogs } from "./Dialogs";
 
 export default function Login({ onLoginSuccess }: { onLoginSuccess: (data: FullData) => void }) {
@@ -59,19 +59,7 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess: (data: FullD
     if (!(await dialogs.confirm("This will unregister the Service Worker, clear all caches and reload. Proceed?"))) {
       return;
     }
-    if ("serviceWorker" in navigator) {
-      const registrations = await navigator.serviceWorker.getRegistrations();
-      for (const registration of registrations) {
-        await registration.unregister();
-      }
-      if (window.caches) {
-        const cacheNames = await caches.keys();
-        for (const cacheName of cacheNames) {
-          await caches.delete(cacheName);
-        }
-      }
-      window.location.reload();
-    }
+    forceReload();
   }, []);
 
   return (

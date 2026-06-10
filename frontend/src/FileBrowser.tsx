@@ -677,7 +677,9 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
             value={filterValue}
             onChange={(e) => setFilterValue(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
+              if (e.key === "Enter" && !e.altKey) {
+                e.preventDefault();
+                e.stopPropagation();
                 handleGoTo();
               }
             }}

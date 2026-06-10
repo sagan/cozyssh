@@ -168,6 +168,7 @@ func (s *Session) RemoveListener(ch chan []byte) {
 	for i, l := range s.listeners {
 		if l == ch {
 			s.listeners = append(s.listeners[:i], s.listeners[i+1:]...)
+			close(ch) // unblock the ws write goroutine so it can exit
 			break
 		}
 	}

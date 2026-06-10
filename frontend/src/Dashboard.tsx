@@ -1017,24 +1017,14 @@ export default function Dashboard({ initialData }: DashboardProps) {
               break;
 
             case "SCROLL_UP": {
-              const scrollLines = getIntVar(
-                getStore().vars,
-                getStore().localVars,
-                VAR_CS_SCROLL_LINES,
-                DEFAULT_SCROLL_LINES,
-              );
+              const scrollLines = getIntVar(VAR_CS_SCROLL_LINES, DEFAULT_SCROLL_LINES);
               term.scrollLines(-scrollLines);
               term.focus();
               break;
             }
 
             case "SCROLL_DOWN": {
-              const scrollLines = getIntVar(
-                getStore().vars,
-                getStore().localVars,
-                VAR_CS_SCROLL_LINES,
-                DEFAULT_SCROLL_LINES,
-              );
+              const scrollLines = getIntVar(VAR_CS_SCROLL_LINES, DEFAULT_SCROLL_LINES);
               term.scrollLines(scrollLines);
               term.focus();
               break;
@@ -1122,8 +1112,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   );
 
   useEffect(() => {
-    const { vars, localVars } = getStore();
-    const autorun = getIntVar(vars, localVars, VAR_CS_NOAUTORUN) !== 1 && startupParams.get(VAR_NOAUTORUN) !== "1";
+    const autorun = getIntVar(VAR_CS_NOAUTORUN) !== 1 && startupParams.get(VAR_NOAUTORUN) !== "1";
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     const hash = window.location.hash.substring(1);
     if (hash) {
@@ -1197,9 +1186,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       const pinnedElsewhere = pinnedTabsData.some((p) => p.listenerCount > 0);
 
       const autoload =
-        getIntVar(vars, localVars, VAR_CS_NOAUTOLOAD) !== 1 &&
-        startupParams.get(VAR_NOAUTOLOAD) !== "1" &&
-        getStore().tabs.length === 0;
+        getIntVar(VAR_CS_NOAUTOLOAD) !== 1 && startupParams.get(VAR_NOAUTOLOAD) !== "1" && getStore().tabs.length === 0;
 
       if (hash) {
         const hostsData = data.hosts || [];
@@ -1931,6 +1918,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                     <AppletWrapper
                       key={applet.name}
                       applet={applet}
+                      invisible={isMobile && !mobileAppletsOpen}
                       index={idx}
                       onClose={() => setApplets((prev) => prev.filter((a) => a.name !== applet.name))}
                       onSwitchPosition={(pos) =>
@@ -2089,7 +2077,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         handleRefresh={handleRefresh}
         handleSelectHost={handleSelectHost}
       />
-      <SideEffect terminalRefs={terminalRefs} />
+      <SideEffect />
     </ThemeProvider>
   );
 }

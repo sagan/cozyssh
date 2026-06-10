@@ -4,6 +4,7 @@ import type { ButtonData, HostData } from "./api";
 import type { ITerminalOptions, Terminal } from "@xterm/xterm";
 import { DEFAULT_BUTTON_GROUP } from "./constants";
 import { Liquid } from "liquidjs";
+import { getStore } from "./store";
 
 export type Expect<T extends true> = T;
 export type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2 ? true : false;
@@ -189,18 +190,25 @@ export const remoteCommandOptions = [
   "tmux attach -t cozy_%i -or (tmux new -s cozy_%i)", // Windows PowerShell 5.1+
 ] as const;
 
+const getMuiDialogContainer: () => Element = () => {
+  // 1. Check if the browser is currently in fullscreen mode
+  const isFullscreen = !!document.fullscreenElement;
+
+  // 2. If fullscreen, portal to #main-content so it sits in the Top Layer.
+  // Otherwise, fall back to document.body (completely avoiding the MUI bug).
+  return isFullscreen ? document.getElementById("main-content")! : document.body;
+};
 export const defaultTheme = createTheme({
   components: {
+    MuiMenu: {
+      defaultProps: {
+        // @todo: not working for dynamic menus
+        container: getMuiDialogContainer,
+      },
+    },
     MuiDialog: {
       defaultProps: {
-        container: () => {
-          // 1. Check if the browser is currently in fullscreen mode
-          const isFullscreen = !!document.fullscreenElement;
-
-          // 2. If fullscreen, portal to #main-content so it sits in the Top Layer.
-          // Otherwise, fall back to document.body (completely avoiding the MUI bug).
-          return isFullscreen ? document.getElementById("main-content") : document.body;
-        },
+        container: getMuiDialogContainer,
       },
     },
   },
@@ -350,17 +358,11 @@ export const DefaultXtermOptions: ITerminalOptions = {
  * 1. Lookup in localVars (with "local_" prefix)
  * 2. Lookup in vars
  * 3. Return defaultValue
- * @param vars variable map
- * @param localVars local variable map
  * @param name variable name
  * @param defaultValue fallback value, default is ""
  */
-export function getVar(
-  vars: Record<string, string>,
-  localVars: Record<string, string>,
-  name: string,
-  defaultValue = "",
-): string {
+export function getVar(name: string, defaultValue = ""): string {
+  const { vars, localVars } = getStore();
   if (localVars["local_" + name]) {
     return localVars["local_" + name]!;
   }
@@ -374,18 +376,11 @@ export function getVar(
  * Return integer variable value:
  * 1. Lookup in localVars (with "local_" prefix)
  * 2. Lookup in vars
- * @param vars variable map
- * @param localVars local variable map
  * @param name variable name
  * @param defaultValue fallback value, default is 0. Used if variable not found, or not a valid integer.
  */
-export function getIntVar(
-  vars: Record<string, string>,
-  localVars: Record<string, string>,
-  name: string,
-  defaultValue = 0,
-): number {
-  const value = getVar(vars, localVars, name);
+export function getIntVar(name: string, defaultValue = 0): number {
+  const value = getVar(name);
   if (value === "") {
     return defaultValue;
   }
@@ -786,5 +781,50 @@ export function getTemplateVariables(templateStr: string): string[] {
   } catch (e) {
     console.error("Failed to parse liquid template: ", e);
     return [];
+  }
+}
+
+export async function forceReload(): Promise<void> {
+  if ("serviceWorker" in navigator) {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    for (const registration of registrations) {
+      await registration.unregister();
+    }
+    if (window.caches) {
+      const cacheNames = await caches.keys();
+      for (const cacheName of cacheNames) {
+        await caches.delete(cacheName);
+      }
+    }
+  }
+  window.location.reload();
+}
+
+/**
+ * Close MUI dialogs.
+ * If closeAll is true, close all dialogs. Otherwise, close only the top-most dialog.
+ * It works by sending key events to the dialogs.
+ * Note: some dialogs will ignore this event when there are dirty form fields.
+ */
+export async function closeDialog(closeAll?: boolean) {
+  const dialogs = document.querySelectorAll(".MuiDialog-root");
+  if (dialogs.length > 0) {
+    const targetDialogs = closeAll ? Array.from(dialogs).reverse() : [dialogs[dialogs.length - 1]];
+
+    for (const dialog of targetDialogs) {
+      dialog.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          code: "Escape",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      if (closeAll) {
+        // Yield control to the event loop so MUI can update its stack
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    }
   }
 }

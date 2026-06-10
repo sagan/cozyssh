@@ -29,6 +29,7 @@ export const BROWSER_STORAGE_KEY_SCRATCHPAD_CACHE = "cozy_scratchpad_cache";
 
 export const LOCAL_VAR_PREFIX = "local_";
 export const VAR_CS_SCROLL_LINES = "cs_scroll_lines";
+export const VAR_CS_SCROLL_ITEMS = "cs_scroll_items";
 export const VAR_CS_NOAUTOLOAD = "cs_noautoload";
 export const VAR_CS_NOAUTORUN = "cs_noautorun";
 export const VAR_CS_NOWAKELOCK = "cs_nowakelock";
@@ -129,3 +130,5 @@ export const ID_SIDEBAR_FILTER = "sidebar-filter";
 export const CACHE_API_DATA = "api-data-cache";
 
 export const CACHE_MANIFEST = "manifest-cache";
+
+export const DEFAULT_SCROLL_ITEMS = 10;

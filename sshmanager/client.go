@@ -953,9 +953,20 @@ func getSSHClient(name string, term TerminalUI, identity string,
 		// Try password fallback
 		pass, perr := term.PromptMasked(fmt.Sprintf("%s@%s's password: ", user, host))
 		if perr == nil {
-			sshConfig.Auth = append(sshConfig.Auth, ssh.Password(pass))
+			sshConfig.Auth = []ssh.AuthMethod{
+				ssh.Password(pass),
+				ssh.KeyboardInteractive(func(user, instruction string, questions []string, echos []bool) ([]string, error) {
+					answers := make([]string, len(questions))
+					for i, q := range questions {
+						if !echos[i] && (strings.Contains(strings.ToLower(q), "password") || strings.Contains(strings.ToLower(q), "passphrase")) {
+							answers[i] = pass
+						}
+					}
+					return answers, nil
+				}),
+			}
 			client, err = dialFunc(sshConfig)
-			if err == nil && !passstore.HasPassword(canonicalAddr) {
+			if err == nil {
 				promptOption := "ask"
 				if globalConfig != nil && globalConfig.SavePassword != "" {
 					promptOption = globalConfig.SavePassword

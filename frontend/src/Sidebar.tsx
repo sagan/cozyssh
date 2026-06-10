@@ -76,8 +76,18 @@ import {
   APP_NAME,
   LOCAL_NAME,
   ID_SIDEBAR_FILTER,
+  DEFAULT_SCROLL_ITEMS,
+  VAR_CS_SCROLL_ITEMS,
 } from "./constants";
-import { type HostForm, type ServiceWorkerStatus, filterHosts, remoteCommandOptions, searchString } from "./common";
+import {
+  type HostForm,
+  type ServiceWorkerStatus,
+  filterHosts,
+  forceReload,
+  getIntVar,
+  remoteCommandOptions,
+  searchString,
+} from "./common";
 import { dialogs } from "./Dialogs";
 import {
   getStore,
@@ -594,19 +604,7 @@ export default function Sidebar({
     if (!(await dialogs.confirm("This will unregister the Service Worker, clear all caches and reload. Proceed?"))) {
       return;
     }
-    if ("serviceWorker" in navigator) {
-      const registrations = await navigator.serviceWorker.getRegistrations();
-      for (const registration of registrations) {
-        await registration.unregister();
-      }
-      if (window.caches) {
-        const cacheNames = await caches.keys();
-        for (const cacheName of cacheNames) {
-          await caches.delete(cacheName);
-        }
-      }
-      window.location.reload();
-    }
+    forceReload();
   }, []);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, host: HostData) => {
@@ -1056,15 +1054,20 @@ export default function Sidebar({
 
   const handleFilterKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === "ArrowDown" || (e.altKey && e.key === "j")) {
+      const key = e.key.toLowerCase();
+      if (key === "arrowdown" || (e.altKey && key === "j")) {
+        const step = (key === "j" ? e.shiftKey : e.altKey) ? getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS) : 1;
         e.preventDefault();
         e.stopPropagation();
-        setSelectedIndex((prev) => Math.min(prev + 1, flatFilteredHosts.length - 1));
-      } else if (e.key === "ArrowUp" || (e.altKey && e.key === "k")) {
+        setSelectedIndex((prev) => Math.min(prev + step, flatFilteredHosts.length - 1));
+      } else if (key === "arrowup" || (e.altKey && key === "k")) {
+        const step = (key === "k" ? e.shiftKey : e.altKey) ? getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS) : 1;
         e.preventDefault();
         e.stopPropagation();
-        setSelectedIndex((prev) => Math.max(prev - 1, 0));
-      } else if (e.key === "Enter") {
+        setSelectedIndex((prev) => Math.max(prev - step, 0));
+      } else if (key === "enter" && !e.altKey) {
+        e.preventDefault();
+        e.stopPropagation();
         if (selectedIndex >= 0 && selectedIndex < flatFilteredHosts.length) {
           onSelect(flatFilteredHosts[selectedIndex].name);
           setFilterStr("");
@@ -1177,7 +1180,7 @@ export default function Sidebar({
             title="<Alt + I>"
             value={filterStr}
             onChange={(e) => setFilterStr(e.target.value)}
-            onKeyDown={handleFilterKeyDown}
+            onKeyDownCapture={handleFilterKeyDown}
             sx={{ flexGrow: 1 }}
           />
           <IconButton
@@ -1710,7 +1713,9 @@ export default function Sidebar({
                   Keyboard Shortcuts
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
-                  <b>Alt + O</b> : Open new tab dialog, use ← → to switch view, ↑ ↓ to select, Enter to open
+                  <b>Alt + O</b> : Open new tab dialog, use <b>← →</b> (or <b>Alt + H/L</b>) to switch view,&nbsp;
+                  <b>↓ ↑</b> (or <b>Alt + J/K</b>) to select, <b>Enter</b> to open. Use <b>Alt + ↓↑</b> (or&nbsp;
+                  <b>Alt + Shift + J/K</b>) to jump through items quickly
                   <br />
                   <b>Alt + A</b> : Open new tab dialog - tabs view
                   <br />
@@ -1734,7 +1739,7 @@ export default function Sidebar({
                   <br />
                   <b>Alt + Shift + W</b> : Close active tab
                   <br />
-                  <b>Alt + I</b> : Focus sidebar search filter, use ↑ ↓ to select, Enter to open
+                  <b>Alt + I</b> : Focus sidebar search filter, use <b>↑ ↓</b> to select, <b>Enter</b> to open
                   <br />
                   <b>Alt + Shift + I</b> : Focus sidebar search filter and clear current value
                   <br />
@@ -1755,6 +1760,8 @@ export default function Sidebar({
                   <b>Alt + Backquote</b> : Close any dialog (Similar to Esc but works even if terminal is in fullscreen
                   mode)
                   <br />
+                  <b>Alt + Shift + Backquote</b> : Close all dialogs
+                  <br />
                   <b>Alt + - / Alt + +</b> : Decrease / increase terminal font size
                   <br />
                   <b>Ctrl + Alt + 0</b> : Reset to default terminal font size (15px)
@@ -1766,6 +1773,8 @@ export default function Sidebar({
                   <b>Ctrl + Shift + C</b> : Copy selected text in terminal
                   <br />
                   <b>Ctrl + Shift + V (Windows) / Cmd + V (Mac)</b> : Paste into terminal
+                  <br />
+                  <b>Ctrl + Alt + Shift + R</b> : Force clear service worker, cache and reload
                   <br />
                   <b>Mouse Select</b> in terminal to copy
                   <br />

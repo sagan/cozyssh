@@ -161,13 +161,13 @@ func generateAndSaveConfig(path string) (*Config, error) {
 		return nil, err
 	}
 
-	// Print password to console
-	fmt.Println("=====================================================")
-	fmt.Println("  Welcome to CozySSH!                                ")
-	fmt.Println("  A new app password has been generated for you:     ")
-	fmt.Printf("  ->  %s  <-                                     \n", password)
-	fmt.Println("  Store this safely or you'll have to delete your config to reset it.")
-	fmt.Println("=====================================================")
+	// Print password to stderr
+	fmt.Fprintf(os.Stderr, "\n=====================================================\n")
+	fmt.Fprintf(os.Stderr, "  Welcome to CozySSH!                                \n")
+	fmt.Fprintf(os.Stderr, "  A new app password has been generated for you:     \n")
+	fmt.Fprintf(os.Stderr, "  ->  %s  <-                                     \n", password)
+	fmt.Fprintf(os.Stderr, "  Store this safely. If you forget the password, you can reset it by running cozyssh with -do-reset-password flag.\n")
+	fmt.Fprintf(os.Stderr, "=====================================================\n")
 
 	return cfg, nil
 }

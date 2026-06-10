@@ -10,6 +10,7 @@ export type AppletPosition = "widget" | "sidebar" | "dialog";
 
 interface AppletWrapperProps {
   applet: AppletData;
+  invisible?: boolean;
   index: number;
   onClose: () => void;
   onSwitchPosition: (pos: AppletPosition) => void;
@@ -26,7 +27,11 @@ export interface AppletData {
   fullScreen?: boolean;
 }
 
-export default function AppletWrapper({ applet, onClose, onSwitchPosition, onFocus }: AppletWrapperProps) {
+interface AppletProps {
+  invisible?: boolean;
+}
+
+export default function AppletWrapper({ applet, invisible, onClose, onSwitchPosition, onFocus }: AppletWrapperProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -40,6 +45,8 @@ export default function AppletWrapper({ applet, onClose, onSwitchPosition, onFoc
     y: Math.max(0, window.innerHeight - ((applet.height as number) || 250) - 20),
   }));
   const dragStartRef = useRef({ x: 0, y: 0, pos: { x: 0, y: 0 } });
+
+  const appletProps: AppletProps = { invisible };
 
   useEffect(() => {
     if (applet.width !== undefined || applet.height !== undefined) {
@@ -204,7 +211,7 @@ export default function AppletWrapper({ applet, onClose, onSwitchPosition, onFoc
             React.isValidElement(applet.node) ? (
               applet.node
             ) : (
-              React.createElement(applet.node as React.ComponentType, {})
+              React.createElement(applet.node as React.ComponentType<AppletProps>, appletProps)
             )
           ) : (
             <div ref={containerRef} style={{ width: "100%", minHeight: "150px" }} />
@@ -227,7 +234,7 @@ export default function AppletWrapper({ applet, onClose, onSwitchPosition, onFoc
           React.isValidElement(applet.node) ? (
             applet.node
           ) : (
-            React.createElement(applet.node as React.ComponentType, {})
+            React.createElement(applet.node as React.ComponentType<AppletProps>, appletProps)
           )
         ) : (
           <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
@@ -301,7 +308,7 @@ export default function AppletWrapper({ applet, onClose, onSwitchPosition, onFoc
           React.isValidElement(applet.node) ? (
             applet.node
           ) : (
-            React.createElement(applet.node as React.ComponentType, {})
+            React.createElement(applet.node as React.ComponentType<AppletProps>, appletProps)
           )
         ) : (
           <div ref={containerRef} style={{ width: "100%", height: "100%" }} />

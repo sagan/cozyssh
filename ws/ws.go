@@ -10,9 +10,11 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-http-utils/headers"
 	"github.com/gorilla/websocket"
+	"golang.org/x/crypto/ssh"
 
 	"cozyssh/auth"
 	"cozyssh/common"
@@ -22,8 +24,6 @@ import (
 	"cozyssh/models"
 	"cozyssh/session"
 	"cozyssh/sshmanager"
-
-	"golang.org/x/crypto/ssh"
 )
 
 var globalConfig *config.Config
@@ -319,6 +319,29 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	conn.WriteMessage(websocket.TextMessage, models.GetWsTabStateMsg(s.IsPinned, s.IsLocked))
+
+	// Keepalive: send a WebSocket ping every 30 s and require a pong within
+	// 10 s. Without this, silently-dead TCP connections (browser crash, mobile
+	// sleep, network cut) keep conn.ReadMessage() blocked forever, preventing
+	// the deferred RemoveListener from firing and leaving bash/SSH processes
+	// alive indefinitely.
+	const wsPingInterval = 30 * time.Second
+	const wsPongTimeout = 10 * time.Second
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(wsPingInterval + wsPongTimeout))
+		return nil
+	})
+	// Set an initial deadline so the first ping has a window to be answered.
+	conn.SetReadDeadline(time.Now().Add(wsPingInterval + wsPongTimeout))
+	go func() {
+		ticker := time.NewTicker(wsPingInterval)
+		defer ticker.Stop()
+		for range ticker.C {
+			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
+		}
+	}()
 
 	// Session internal read loop handles writing to listeners
 	go func() {

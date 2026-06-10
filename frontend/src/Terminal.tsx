@@ -41,7 +41,7 @@ import {
   nonCharKeys,
   DefaultXtermOptions,
 } from "./common";
-import { getStore, type PaneData } from "./store";
+import { type PaneData } from "./store";
 
 export interface TerminalHandle {
   sendData: (data: string) => void;
@@ -290,8 +290,6 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       // Track the webgl addon
       let webglAddon: WebglAddon | null = null;
 
-      const { vars, localVars } = getStore();
-
       const term = new Terminal({
         ...DefaultXtermOptions,
         ...__CS_TERMINAL_OPTIONS__,
@@ -310,7 +308,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       const textarea = term.textarea;
       if (textarea) {
         // Still a problem. See https://github.com/xtermjs/xterm.js/issues/3600
-        if (getIntVar(vars, localVars, VAR_CS_NOMODTEXTAREA) !== 1) {
+        if (getIntVar(VAR_CS_NOMODTEXTAREA) !== 1) {
           textarea.setAttribute("autocomplete", "off");
           textarea.setAttribute("autocorrect", "off");
           textarea.setAttribute("autocapitalize", "off");
@@ -325,16 +323,16 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
         });
       }
 
-      if (getIntVar(vars, localVars, VAR_CS_NOIMAGE) !== 1) {
+      if (getIntVar(VAR_CS_NOIMAGE) !== 1) {
         const imageAddon = new ImageAddon();
         term.loadAddon(imageAddon);
       }
-      if (getIntVar(vars, localVars, VAR_CS_NOWEBLINKS) !== 1) {
+      if (getIntVar(VAR_CS_NOWEBLINKS) !== 1) {
         term.loadAddon(new WebLinksAddon());
       }
 
       // Load WebGL Addon
-      if (getIntVar(vars, localVars, VAR_CS_NOWEBGL) !== 1) {
+      if (getIntVar(VAR_CS_NOWEBGL) !== 1) {
         try {
           webglAddon = new WebglAddon();
           webglAddon.onContextLoss(() => {
@@ -914,9 +912,8 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
                 onStateChange?.(msg.state);
                 return;
               }
-              // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            } catch (e) {
-              // ignore
+            } catch {
+              /* empty */
             }
             if (!isRestoringHistory) {
               onDataRef.current?.();
