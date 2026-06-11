@@ -61,6 +61,7 @@ export const ButtonDataSchema = z.object({
   order: z.number().int().optional().default(0),
   shortcut: z.string().optional().default(""),
   liquidjs: z.number().int().min(0).max(2).optional(),
+  mtime: z.number().int().optional().default(0),
 });
 
 // check client defined button schema type match with server side button type

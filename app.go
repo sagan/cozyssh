@@ -652,7 +652,8 @@ func Run(ctx context.Context, args []string) error {
 				data, _ := io.ReadAll(r.Body)
 				var btns []*models.ButtonData
 				if err := json.Unmarshal(data, &btns); err == nil {
-					cfg.UpsertButtons(btns)
+					force := r.URL.Query().Get("force") == "1"
+					cfg.UpsertButtons(btns, force)
 					w.WriteHeader(http.StatusNoContent)
 					return
 				}

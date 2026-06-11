@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -250,7 +251,11 @@ func (c *Config) ResetAppPassword() (string, error) {
 // If a button with a new ID is provided, it will be added.
 // If the button has empty Id field, assign a new one (update the slice element with new ID).
 // Buttons not present in the input slice will remain in the config.
-func (c *Config) UpsertButtons(btns []*models.ButtonData) error {
+// Mtime is used to determine if the button should be updated. If Mtime is 0, it will be set to the current time.
+// If Mtime is greater than the Mtime of the button in the config, it will be updated.
+// If Mtime is less than the Mtime of the button in the config, it will be ignored.
+// If force is true, the button will be updated regardless of the Mtime.
+func (c *Config) UpsertButtons(btns []*models.ButtonData, force bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -261,12 +266,17 @@ func (c *Config) UpsertButtons(btns []*models.ButtonData) error {
 		}
 	}
 
+	now := time.Now().UnixMilli()
+main:
 	for _, btn := range btns {
+		if btn.Mtime == 0 {
+			btn.Mtime = now
+		}
 		if strings.HasPrefix(btn.Id, constants.ID_DELETE_PREFIX) {
 			// delete button
 			id := btn.Id[len(constants.ID_DELETE_PREFIX):]
 			c.Buttons = slices.DeleteFunc(c.Buttons, func(b *models.ButtonData) bool {
-				return b.Id == id
+				return b.Id == id && (force || btn.Mtime >= b.Mtime)
 			})
 			continue
 		}
@@ -283,6 +293,9 @@ func (c *Config) UpsertButtons(btns []*models.ButtonData) error {
 		found := false
 		for i, b := range c.Buttons {
 			if b.Id == btn.Id {
+				if !force && btn.Mtime < b.Mtime {
+					continue main
+				}
 				c.Buttons[i] = btn
 				found = true
 				if btn.Order > maxOrder {
@@ -317,6 +330,9 @@ func (c *Config) UpsertButton(btn *models.ButtonData) error {
 	}
 	if btn.Type == "" {
 		btn.Type = constants.DEFAULT_BUTTON_TYPE
+	}
+	if btn.Mtime == 0 {
+		btn.Mtime = time.Now().UnixMilli()
 	}
 
 	for i, b := range c.Buttons {

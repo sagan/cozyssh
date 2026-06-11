@@ -139,6 +139,7 @@ export const useStore = create<Store>(() => ({
     group: DEFAULT_BUTTON_GROUP,
     autorun: 0,
     order: 0,
+    mtime: 0,
     shortcut: "",
   },
   initialBtnFormData: null,

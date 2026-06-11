@@ -71,6 +71,7 @@ type ButtonData struct {
 	Order    int    `yaml:"order" json:"order"`
 	Shortcut string `yaml:"shortcut" json:"shortcut"`
 	LiquidJS int    `yaml:"liquidjs,omitempty" json:"liquidjs,omitempty"`
+	Mtime    int64  `yaml:"mtime" json:"mtime"` // button modified unix timestamp in milliseconds
 }
 
 type ButtonsMoveRequest struct {
@@ -291,4 +292,3 @@ type PasswordsDeleteRequest struct {
 
 // current it's not converted to TS automatically
 const WS_MSG_PREFIX_STATE = "STATE:"
-
