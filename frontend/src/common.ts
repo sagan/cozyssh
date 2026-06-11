@@ -9,6 +9,16 @@ import { getStore } from "./store";
 export type Expect<T extends true> = T;
 export type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2 ? true : false;
 
+export type OpenHostFunction = (
+  host: string,
+  options?: {
+    title?: string;
+    target?: string;
+    options?: Record<string, string>;
+    noUpdateRecent?: boolean;
+  },
+) => Promise<void>;
+
 export type ContextMenu = {
   mouseX: number;
   mouseY: number;
@@ -661,10 +671,10 @@ export function nextTerminalFontSize(fontSize: number): number {
 }
 
 /**
- * Return true if there is any MUI modal dialog open (except async alert / confirm / prompt dialogs).
+ * Return true if there is any MUI modal open (except async alert / confirm / prompt dialogs).
  */
-export function isMuiDialogOpen(): boolean {
-  return !!document.querySelector(".MuiDialog-root:not(#async-modal-dialog)");
+export function isMuiModalOpen(): boolean {
+  return !!document.querySelector(".MuiModal-root:not(#async-modal-dialog)");
 }
 
 /**
@@ -801,18 +811,18 @@ export async function forceReload(): Promise<void> {
 }
 
 /**
- * Close MUI dialogs.
- * If closeAll is true, close all dialogs. Otherwise, close only the top-most dialog.
- * It works by sending key events to the dialogs.
- * Note: some dialogs will ignore this event when there are dirty form fields.
+ * Close MUI modal (Dialog / Menu / Popover).
+ * If closeAll is true, close all modals. Otherwise, close only the top-most modal.
+ * It works by sending Escape key events to the modals.
+ * Note: some dialog modals will ignore this event when there are dirty form fields, it's by design.
  */
-export async function closeDialog(closeAll?: boolean) {
-  const dialogs = document.querySelectorAll(".MuiDialog-root");
-  if (dialogs.length > 0) {
-    const targetDialogs = closeAll ? Array.from(dialogs).reverse() : [dialogs[dialogs.length - 1]];
+export async function closeModal(closeAll?: boolean) {
+  const modals = document.querySelectorAll(".MuiModal-root");
+  if (modals.length > 0) {
+    const targetModals = closeAll ? Array.from(modals).reverse() : [modals[modals.length - 1]];
 
-    for (const dialog of targetDialogs) {
-      dialog.dispatchEvent(
+    for (const modal of targetModals) {
+      modal.dispatchEvent(
         new KeyboardEvent("keydown", {
           key: "Escape",
           code: "Escape",

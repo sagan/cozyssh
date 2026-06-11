@@ -46,7 +46,7 @@ export default function AppletWrapper({ applet, invisible, onClose, onSwitchPosi
   }));
   const dragStartRef = useRef({ x: 0, y: 0, pos: { x: 0, y: 0 } });
 
-  const appletProps: AppletProps = { invisible };
+  const appletProps: AppletProps = { invisible: invisible || (applet.position === "sidebar" && !expanded) };
 
   useEffect(() => {
     if (applet.width !== undefined || applet.height !== undefined) {

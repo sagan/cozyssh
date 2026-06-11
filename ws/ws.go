@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-http-utils/headers"
 	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/ssh"
 
@@ -33,11 +32,7 @@ func SetConfig(cfg *config.Config) {
 }
 
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		origin := r.Header.Get(headers.Origin)
-		host := r.Host
-		return origin == "" || strings.HasSuffix(origin, host)
-	},
+	CheckOrigin: common.IsSameOrigin,
 }
 
 type WsMsg struct {

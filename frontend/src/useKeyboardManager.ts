@@ -24,11 +24,11 @@ import {
   VAR_CS_TERMINAL_FONT_SIZE,
 } from "./constants";
 import {
-  closeDialog,
+  closeModal,
   forceReload,
   getIntVar,
   getKeyCombination,
-  isMuiDialogOpen,
+  isMuiModalOpen,
   nextTerminalFontSize,
   prevTerminalFontSize,
 } from "./common";
@@ -134,7 +134,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         case "alt+shift+~": {
           // Alt + Backquote
           e.preventDefault();
-          closeDialog(keycomb === "alt+shift+~");
+          closeModal(keycomb === "alt+shift+~");
           return;
         }
         case "alt+enter": {
@@ -142,7 +142,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           if (document.fullscreenElement) {
             document.exitFullscreen();
           } else {
-            closeDialog(true);
+            closeModal(true);
             document.getElementById("main-content")?.requestFullscreen();
             triggerFocus();
           }
@@ -250,7 +250,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
 
         case "alt+i":
         case "alt+shift+i":
-          if (!isMuiDialogOpen()) {
+          if (!isMuiModalOpen()) {
             e.preventDefault();
             if (keycomb === "alt+shift+i") {
               csSetSidebarFilter("");
@@ -381,7 +381,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         }
 
         case "ctrl+shift+f":
-          if (!isMuiDialogOpen() && terminalRefs[activePaneId] && "clear" in terminalRefs[activePaneId]!) {
+          if (!isMuiModalOpen() && terminalRefs[activePaneId] && "clear" in terminalRefs[activePaneId]!) {
             e.preventDefault();
             setSearchOpen(true);
             triggerFocusSearchInput();

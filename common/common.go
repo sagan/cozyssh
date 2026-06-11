@@ -3,11 +3,13 @@ package common
 import (
 	"bytes"
 	"io"
+	"net/http"
 	"os"
 	"os/user"
 	"strings"
 
 	"codeberg.org/sdassow/atomic"
+	"github.com/go-http-utils/headers"
 )
 
 var (
@@ -60,4 +62,9 @@ func AtomicWriteFile(path string, writeContent func(writer io.Writer) error) err
 
 func AtomicWriteFileContents(path string, data []byte) error {
 	return atomic.WriteFile(path, bytes.NewReader(data), atomic.FileMode(0600))
+}
+
+func IsSameOrigin(r *http.Request) bool {
+	origin := r.Header.Get(headers.Origin)
+	return origin == "" || strings.HasSuffix(origin, "://"+r.Host)
 }

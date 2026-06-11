@@ -58,6 +58,7 @@ import {
 import {
   type ContextMenu,
   type ScratchpadSyncState,
+  type OpenHostFunction,
   defaultTheme,
   genTabId,
   getIntVar,
@@ -182,16 +183,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   const hasSidebarApplet = useMemo(() => !!applets.find((a) => a.position === "sidebar"), [applets]);
 
-  const handleSelectHost = useCallback(
-    async (
-      host: string,
-      {
-        title,
-        target,
-        options,
-        noUpdateRecent,
-      }: { title?: string; target?: string; options?: Record<string, string>; noUpdateRecent?: boolean } = {},
-    ) => {
+  const handleSelectHost: OpenHostFunction = useCallback(
+    async (host, { title, target, options, noUpdateRecent } = {}) => {
       const i = host.lastIndexOf("?");
       if (i !== -1) {
         options = { ...Object.fromEntries(new URLSearchParams(host.slice(i))), ...options };
@@ -225,8 +218,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
       if (target) {
         targetTab = getStore().tabs.find((t) => t.id === target);
         if (targetTab && targetTab.panes.length >= 4) {
-          target = "";
-          targetTab = undefined;
+          // target = "";
+          // targetTab = undefined;
+          return; // do nothing
         }
       }
       if (targetTab) {
@@ -1789,13 +1783,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
       <Box id="main-ui" sx={{ display: "flex", height: viewportHeight, overflow: "hidden" }}>
         <CssBaseline />
         <Sidebar
-          onSelect={(host) => {
-            handleSelectHost(host);
+          onSelect={async (host, options) => {
             setMobileOpen(false);
+            await handleSelectHost(host, options);
           }}
           onSelectTagAsSplit={(tag, hosts) => {
-            handleSelectTagAsSplit(tag, hosts);
             setMobileOpen(false);
+            handleSelectTagAsSplit(tag, hosts);
           }}
           onLogout={handleLogout}
           onLogoutAll={handleLogoutAll}

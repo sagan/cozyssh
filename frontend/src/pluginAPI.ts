@@ -37,7 +37,7 @@ import {
   LOCAL_NAME,
   LOCAL_VAR_PREFIX,
 } from "./constants";
-import { DefaultXtermOptions, generatePassword, isMuiDialogOpen, liquidEngine, terminalKeyShortcuts } from "./common";
+import { DefaultXtermOptions, generatePassword, isMuiModalOpen, liquidEngine, terminalKeyShortcuts } from "./common";
 import {
   type TerminalRefMap,
   activatePane,
@@ -152,7 +152,7 @@ window.csNotify = notify;
 window.csOpenMenu = openMenu;
 
 window.csFocus = (tabOrPaneId?: string) => {
-  if (isMuiDialogOpen()) {
+  if (isMuiModalOpen()) {
     return;
   }
   if (tabOrPaneId) {

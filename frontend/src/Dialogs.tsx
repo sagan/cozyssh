@@ -12,7 +12,7 @@ import {
   Checkbox,
 } from "@mui/material";
 import { triggerFocus } from "./store";
-import { isMuiDialogOpen } from "./common";
+import { isMuiModalOpen } from "./common";
 
 export interface DialogApi {
   alert: typeof csAlert;
@@ -105,7 +105,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
     // Backdrop click / ESC press or explicitly passing cancel states
     if (outcome === false || outcome === null) {
       setOpen(false);
-      if (!isMuiDialogOpen()) {
+      if (!isMuiModalOpen()) {
         triggerFocus();
       }
       resolveRef.current(config.type === "prompt" || config.type === "choose" ? null : false);
@@ -130,7 +130,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
     }
 
     setOpen(false);
-    if (!isMuiDialogOpen()) {
+    if (!isMuiModalOpen()) {
       triggerFocus();
     }
     if (config.type === "prompt") {

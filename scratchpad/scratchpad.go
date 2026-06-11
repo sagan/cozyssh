@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-http-utils/headers"
 	"github.com/gorilla/websocket"
 
 	"cozyssh/auth"
@@ -30,11 +29,7 @@ var (
 )
 
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		origin := r.Header.Get(headers.Origin)
-		host := r.Host
-		return origin == "" || strings.HasSuffix(origin, host)
-	},
+	CheckOrigin: common.IsSameOrigin,
 }
 
 // Init loads the scratchpad data from the config directory

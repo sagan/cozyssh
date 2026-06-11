@@ -81,6 +81,7 @@ import {
 } from "./constants";
 import {
   type HostForm,
+  type OpenHostFunction,
   type ServiceWorkerStatus,
   filterHosts,
   forceReload,
@@ -121,7 +122,7 @@ export default function Sidebar({
   appVersion: string;
   savePassword: string;
   onSavePasswordChange: (val: string) => void;
-  onSelect: (host: string) => void;
+  onSelect: OpenHostFunction;
   onSelectTagAsSplit: (tag: string, hosts: string[]) => void;
   onLogout: () => void;
   onLogoutAll: () => void;
@@ -1345,10 +1346,24 @@ export default function Sidebar({
             if (!contextMenu) {
               return;
             }
-            window.open(`${window.location.origin}/#${contextMenu?.target.name}`, "_blank", "noopener");
+            const target = contextMenu.target;
+            setContextMenuOpen(false);
+            window.open(`${window.location.origin}/#${target.name}`, "_blank", "noopener");
           }}
         >
           Open (New Window)
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            if (!contextMenu) {
+              return;
+            }
+            const target = contextMenu.target;
+            setContextMenuOpen(false);
+            onSelect(target.name, { target: "_self" });
+          }}
+        >
+          Open (In Current Tab)
         </MenuItem>
         <MenuItem
           onClick={() => {
@@ -1757,10 +1772,10 @@ export default function Sidebar({
                   <br />
                   <b>Alt + Enter</b> : Toggle fullscreen of main terminal area
                   <br />
-                  <b>Alt + Backquote</b> : Close any dialog (Similar to Esc but works even if terminal is in fullscreen
-                  mode)
+                  <b>Alt + Backquote</b> : Close any modal (Dialog / Menu / Popover). Similar to <b>Escape</b> but works
+                  even if terminal is in fullscreen mode
                   <br />
-                  <b>Alt + Shift + Backquote</b> : Close all dialogs
+                  <b>Alt + Shift + Backquote</b> : Close all modals
                   <br />
                   <b>Alt + - / Alt + +</b> : Decrease / increase terminal font size
                   <br />
