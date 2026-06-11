@@ -25,6 +25,18 @@ export interface Sysinfo {
     insecureAllowed: boolean;
     isSecure: boolean;
     savePassword: string;
+    webdavUrl: string;
+    webdavUser: string;
+    webdavEnabled: boolean;
+    syncStatus: string;
+    syncError: string;
+    syncTime: number;
+}
+export interface SaveWebdavSettingsRequest {
+    url: string;
+    user: string;
+    password: string;
+    enabled: boolean;
 }
 export interface HostData {
     name: string;
@@ -57,7 +69,7 @@ export interface ButtonData {
     order: number;
     shortcut: string;
     liquidjs?: number;
-    mtime: number;
+    mtime?: number;
 }
 export interface ButtonsMoveRequest {
     id: string;

@@ -1711,7 +1711,7 @@ export interface ButtonData {
 	order: number;
 	shortcut: string;
 	liquidjs?: number;
-	mtime: number;
+	mtime?: number;
 }
 export interface Recent {
 	host: string;

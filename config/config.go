@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -32,18 +33,28 @@ var writePasswordToFile bool
 // the config directory rather than being printed to stderr.
 func SetWritePasswordToFile(v bool) { writePasswordToFile = v }
 
+var (
+	OnButtonDelete func(id string, timestamp int64)
+	OnButtonUpdate func()
+)
+
 type Config struct {
 	Addr                  string               `yaml:"addr"`
 	SiteName              string               `yaml:"sitename"`
 	AppPasswordHash       string               `yaml:"app_password_hash"`
 	SSHDir                string               `yaml:"sshdir"` // openssh config dir, defaults to ~/.ssh
-	Buttons               []*models.ButtonData `yaml:"buttons"`
+	Buttons               []*models.ButtonData `yaml:"-"`      // Moved to buttons.json
 	ConfigPath            string               `yaml:"-"` // internal use
 	ConfigDir             string               `yaml:"-"` // internal use
 	Vars                  map[string]string    `yaml:"vars"`
 	InsecureIgnoreHostKey bool                 `yaml:"insecure_ignore_host_key"`
 	SavePassword          string               `yaml:"save_password"`
 	SessionSecret         string               `yaml:"session_secret"`
+	// WebDAV Settings
+	WebdavUrl             string               `yaml:"webdav_url"`
+	WebdavUser            string               `yaml:"webdav_user"`
+	WebdavPassword        string               `yaml:"webdav_password"`
+	WebdavEnabled         bool                 `yaml:"webdav_enabled"`
 	mu                    sync.Mutex
 }
 
@@ -69,13 +80,31 @@ func LoadConfig(customDir string) (*Config, error) {
 		if os.IsNotExist(err) {
 			// Generate new config
 			log.Println("No config found, generating initial app password...")
-			return generateAndSaveConfig(configPath)
+			cfgPtr, err := generateAndSaveConfig(configPath)
+			if err != nil {
+				return nil, err
+			}
+			cfgPtr.ConfigPath = configPath
+			cfgPtr.ConfigDir = configDir
+			if err := cfgPtr.loadButtons(); err != nil {
+				return nil, fmt.Errorf("failed to load buttons: %w", err)
+			}
+			return cfgPtr, nil
 		}
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	cfg.sortButtons()
+
+	cfg.ConfigPath = configPath
+	cfg.ConfigDir = configDir
+
+	if err := cfg.loadButtons(); err != nil {
+		return nil, fmt.Errorf("failed to load buttons: %w", err)
 	}
 
 	cfg.sortButtons()
@@ -93,8 +122,6 @@ func LoadConfig(customDir string) (*Config, error) {
 	if cfg.SavePassword == "" {
 		cfg.SavePassword = "ask"
 	}
-	cfg.ConfigPath = configPath
-	cfg.ConfigDir = configDir
 
 	if cfg.SessionSecret == "" {
 		cfg.SessionSecret = RandString(32, false)
@@ -222,6 +249,62 @@ func (c *Config) save() error {
 	})
 }
 
+func (c *Config) saveButtons() error {
+	buttonsPath := filepath.Join(c.ConfigDir, "buttons.json")
+	var btnWrap struct {
+		Buttons []*models.ButtonData `json:"buttons"`
+	}
+	btnWrap.Buttons = c.Buttons
+	return common.AtomicWriteFile(buttonsPath, func(writer io.Writer) error {
+		return json.NewEncoder(writer).Encode(btnWrap)
+	})
+}
+
+func (c *Config) loadButtons() error {
+	buttonsPath := filepath.Join(c.ConfigDir, "buttons.json")
+	data, err := os.ReadFile(buttonsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			c.Buttons = []*models.ButtonData{}
+			return c.saveButtons()
+		}
+		return err
+	}
+	var btnWrap struct {
+		Buttons []*models.ButtonData `json:"buttons"`
+	}
+	if err := json.Unmarshal(data, &btnWrap); err != nil {
+		return err
+	}
+	c.Buttons = btnWrap.Buttons
+	if c.Buttons == nil {
+		c.Buttons = []*models.ButtonData{}
+	}
+	return nil
+}
+
+func (c *Config) GetButtons() []*models.ButtonData {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	copied := make([]*models.ButtonData, len(c.Buttons))
+	for i, b := range c.Buttons {
+		copied[i] = &models.ButtonData{
+			Id:       b.Id,
+			Name:     b.Name,
+			Type:     b.Type,
+			Payload:  b.Payload,
+			Group:    b.Group,
+			AutoRun:  b.AutoRun,
+			Order:    b.Order,
+			Shortcut: b.Shortcut,
+			LiquidJS: b.LiquidJS,
+			Mtime:    b.Mtime,
+		}
+	}
+	return copied
+}
+
 func (c *Config) ResetSessionSecret() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -276,7 +359,13 @@ main:
 			// delete button
 			id := btn.Id[len(constants.ID_DELETE_PREFIX):]
 			c.Buttons = slices.DeleteFunc(c.Buttons, func(b *models.ButtonData) bool {
-				return b.Id == id && (force || btn.Mtime >= b.Mtime)
+				if b.Id == id && (force || btn.Mtime >= b.Mtime) {
+					if OnButtonDelete != nil {
+						OnButtonDelete(id, btn.Mtime)
+					}
+					return true
+				}
+				return false
 			})
 			continue
 		}
@@ -315,7 +404,13 @@ main:
 	}
 
 	c.sortButtons()
-	return c.save()
+	if err := c.saveButtons(); err != nil {
+		return err
+	}
+	if OnButtonUpdate != nil {
+		OnButtonUpdate()
+	}
+	return nil
 }
 
 func (c *Config) UpsertButton(btn *models.ButtonData) error {
@@ -339,7 +434,13 @@ func (c *Config) UpsertButton(btn *models.ButtonData) error {
 		if b.Id == btn.Id {
 			c.Buttons[i] = btn
 			c.sortButtons()
-			return c.save()
+			if err := c.saveButtons(); err != nil {
+				return err
+			}
+			if OnButtonUpdate != nil {
+				OnButtonUpdate()
+			}
+			return nil
 		}
 	}
 
@@ -358,7 +459,13 @@ func (c *Config) UpsertButton(btn *models.ButtonData) error {
 	}
 	c.Buttons = append(c.Buttons, btn)
 	c.sortButtons()
-	return c.save()
+	if err := c.saveButtons(); err != nil {
+		return err
+	}
+	if OnButtonUpdate != nil {
+		OnButtonUpdate()
+	}
+	return nil
 }
 
 func (c *Config) RemoveButton(id string) error {
@@ -368,7 +475,16 @@ func (c *Config) RemoveButton(id string) error {
 	for i, b := range c.Buttons {
 		if b.Id == id {
 			c.Buttons = append(c.Buttons[:i], c.Buttons[i+1:]...)
-			return c.save()
+			if err := c.saveButtons(); err != nil {
+				return err
+			}
+			if OnButtonDelete != nil {
+				OnButtonDelete(id, time.Now().UnixMilli())
+			}
+			if OnButtonUpdate != nil {
+				OnButtonUpdate()
+			}
+			return nil
 		}
 	}
 	return nil
@@ -462,6 +578,7 @@ func (c *Config) MoveButton(id string, direction int) error {
 		}
 	}
 	c.Buttons[movedIdx].Order = newOrder
+	c.Buttons[movedIdx].Mtime = time.Now().UnixMilli()
 
 	// Check if we have any duplicate orders now
 	hasDuplicates := false
@@ -480,7 +597,13 @@ func (c *Config) MoveButton(id string, direction int) error {
 		c.sortButtons()
 	}
 
-	return c.save()
+	if err := c.saveButtons(); err != nil {
+		return err
+	}
+	if OnButtonUpdate != nil {
+		OnButtonUpdate()
+	}
+	return nil
 }
 
 func (c *Config) sortButtons() {
@@ -493,8 +616,10 @@ func (c *Config) sortButtons() {
 }
 
 func (c *Config) ResequenceButtons() {
+	now := time.Now().UnixMilli()
 	for i := range c.Buttons {
 		c.Buttons[i].Order = (i + 1) * 10
+		c.Buttons[i].Mtime = now
 	}
 }
 
@@ -522,5 +647,19 @@ func (c *Config) UpdateSavePassword(value string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.SavePassword = value
+	return c.save()
+}
+
+func (c *Config) UpdateWebdavSettings(urlVal, userVal, passwordVal string, enabledVal bool) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.WebdavUrl = urlVal
+	c.WebdavUser = userVal
+	if passwordVal != "" {
+		c.WebdavPassword = passwordVal
+	}
+	c.WebdavEnabled = enabledVal
+
 	return c.save()
 }

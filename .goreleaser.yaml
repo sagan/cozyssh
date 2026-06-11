@@ -1,4 +1,4 @@
-version: 1
+version: 2
 project_name: cozyssh
 
 before:
@@ -7,7 +7,8 @@ before:
     - npm --prefix frontend run build
 
 builds:
-  - env:
+  - id: cozyssh
+    env:
       - CGO_ENABLED=0
     goos:
       - linux
@@ -36,10 +37,21 @@ builds:
       - -trimpath
     ldflags:
       - -s -w -H windowsgui -X cozyssh.version={{.Version}} -X cozyssh.commit={{.Commit}} -X cozyssh.date={{.Date}}
+
 archives:
-  - format: zip
+  - id: cozyssh
+    builds:
+      - cozyssh
+    format: zip
     name_template: >-
       {{ .ProjectName }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}
+
+  - id: cozyssh-app
+    builds:
+      - cozyssh-app
+    format: zip
+    name_template: >-
+      {{ .ProjectName }}-app-v{{ .Version }}-{{ .Os }}-{{ .Arch }}
 
 checksum:
   name_template: 'checksums.txt'

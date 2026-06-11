@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -26,6 +27,9 @@ var (
 	conns      = make(map[*websocket.Conn]bool)
 	connsMu    sync.Mutex
 	configDir  string
+
+	OnPageDelete func(id string, timestamp int64)
+	OnPageUpdate func()
 )
 
 var upgrader = websocket.Upgrader{
@@ -184,6 +188,9 @@ func HandleWS(w http.ResponseWriter, r *http.Request) {
 						Type: "sync", Data: models.ScratchpadData{Pages: updatedPages},
 					})
 					broadcast(syncBytes, nil)
+					if OnPageUpdate != nil {
+						OnPageUpdate()
+					}
 				} else {
 					// Even if nothing changed, acknowledge the sync so the client stops "syncing" state
 					syncBytes, _ := json.Marshal(models.ScratchpadSyncMsg{
@@ -213,6 +220,12 @@ func HandleWS(w http.ResponseWriter, r *http.Request) {
 					save()
 					// Broadcast the deletion to everyone
 					broadcast(msg, nil)
+					if OnPageDelete != nil {
+						OnPageDelete(dm.Id, time.Now().UnixMilli())
+					}
+					if OnPageUpdate != nil {
+						OnPageUpdate()
+					}
 				} else {
 					// Acknowledge anyway
 					ack, _ := json.Marshal(models.ScratchpadDeleteMsg{Type: "delete", Id: dm.Id})
@@ -254,5 +267,64 @@ func DisconnectAll() {
 	defer connsMu.Unlock()
 	for c := range conns {
 		c.Close()
+	}
+}
+
+func GetPages() []*models.ScratchpadPage {
+	dataMu.RLock()
+	defer dataMu.RUnlock()
+
+	copied := make([]*models.ScratchpadPage, len(globalData.Pages))
+	for i, p := range globalData.Pages {
+		copied[i] = &models.ScratchpadPage{
+			Id:          p.Id,
+			Title:       p.Title,
+			Content:     p.Content,
+			Locked:      p.Locked,
+			LastUpdated: p.LastUpdated,
+		}
+	}
+	return copied
+}
+
+func UpsertPages(pages []*models.ScratchpadPage, force bool) {
+	dataMu.Lock()
+	defer dataMu.Unlock()
+
+	changed := false
+	for _, p := range pages {
+		if strings.HasPrefix(p.Id, constants.ID_DELETE_PREFIX) {
+			id := p.Id[len(constants.ID_DELETE_PREFIX):]
+			globalData.Pages = slices.DeleteFunc(globalData.Pages, func(sp *models.ScratchpadPage) bool {
+				if sp.Id == id && (force || p.LastUpdated >= sp.LastUpdated) {
+					if OnPageDelete != nil {
+						OnPageDelete(id, p.LastUpdated)
+					}
+					return true
+				}
+				return false
+			})
+			changed = true
+			continue
+		}
+		found := false
+		for i, sp := range globalData.Pages {
+			if sp.Id == p.Id {
+				if force || p.LastUpdated > sp.LastUpdated {
+					globalData.Pages[i] = p
+					changed = true
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			globalData.Pages = append(globalData.Pages, p)
+			changed = true
+		}
+	}
+
+	if changed {
+		save()
 	}
 }

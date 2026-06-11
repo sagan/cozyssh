@@ -32,6 +32,19 @@ type Sysinfo struct {
 	InsecureAllowed bool   `json:"insecureAllowed"`
 	IsSecure        bool   `json:"isSecure"`
 	SavePassword    string `json:"savePassword"`
+	WebdavUrl       string `json:"webdavUrl"`
+	WebdavUser      string `json:"webdavUser"`
+	WebdavEnabled   bool   `json:"webdavEnabled"`
+	SyncStatus      string `json:"syncStatus"`
+	SyncError       string `json:"syncError"`
+	SyncTime        int64  `json:"syncTime"`
+}
+
+type SaveWebdavSettingsRequest struct {
+	Url      string `json:"url"`
+	User     string `json:"user"`
+	Password string `json:"password"`
+	Enabled  bool   `json:"enabled"`
 }
 
 type HostData struct {
@@ -71,7 +84,7 @@ type ButtonData struct {
 	Order    int    `yaml:"order" json:"order"`
 	Shortcut string `yaml:"shortcut" json:"shortcut"`
 	LiquidJS int    `yaml:"liquidjs,omitempty" json:"liquidjs,omitempty"`
-	Mtime    int64  `yaml:"mtime" json:"mtime"` // button modified unix timestamp in milliseconds
+	Mtime    int64  `yaml:"mtime" json:"mtime,omitempty"` // button modified unix timestamp in milliseconds
 }
 
 type ButtonsMoveRequest struct {

@@ -25,6 +25,7 @@ import (
 	"cozyssh/auth"
 	"cozyssh/config"
 	"cozyssh/constants"
+	"cozyssh/datasync"
 	"cozyssh/fsapi"
 	"cozyssh/localpty"
 	"cozyssh/models"
@@ -130,12 +131,14 @@ func Run(ctx context.Context, args []string) error {
 	sshmanager.SetConfig(cfg)
 	scratchpad.Init(cfg.ConfigDir)
 	recents.Init(cfg.ConfigDir)
+	datasync.Init(cfg)
 
 	// 2. Set up HTTP router
 	mux := http.NewServeMux()
 
 	getFullData := func(r *http.Request) *models.FullData {
 		scratchpad.Reload()
+		status, errMsg, lastTime := datasync.GetStatus()
 		displayHostname := cfg.SiteName
 		if displayHostname == "" {
 			if hostname, _ := os.Hostname(); hostname == "" {
@@ -156,9 +159,15 @@ func Run(ctx context.Context, args []string) error {
 				InsecureAllowed: *allowInsecure,
 				IsSecure:        isSecureRequest(r),
 				SavePassword:    cfg.SavePassword,
+				WebdavUrl:       cfg.WebdavUrl,
+				WebdavUser:      cfg.WebdavUser,
+				WebdavEnabled:   cfg.WebdavEnabled,
+				SyncStatus:      status,
+				SyncError:       errMsg,
+				SyncTime:        lastTime,
 			},
 			Hosts:   hosts,
-			Buttons: cfg.Buttons,
+			Buttons: cfg.GetButtons(), // Use thread-safe GetButtons()
 			Vars:    cfg.Vars,
 			Pinned:  pinned,
 			Recents: recents.Get(),
@@ -502,6 +511,37 @@ func Run(ctx context.Context, args []string) error {
 			w.WriteHeader(http.StatusNoContent)
 		}))))
 
+	mux.Handle("/api/settings/webdav", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var req models.SaveWebdavSettingsRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+			if err := cfg.UpdateWebdavSettings(req.Url, req.User, req.Password, req.Enabled); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if req.Enabled {
+				datasync.TriggerSync()
+			}
+			w.WriteHeader(http.StatusNoContent)
+		}))))
+
+	mux.Handle("/api/settings/webdav/sync", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			go datasync.SyncNow()
+			w.WriteHeader(http.StatusNoContent)
+		}))))
+
 	mux.Handle("/api/tabs/pinned", securityMiddleware(auth.Middleware(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set(headers.ContentType, constants.MIME_JSON)
@@ -647,7 +687,7 @@ func Run(ctx context.Context, args []string) error {
 			switch r.Method {
 			case http.MethodGet:
 				w.Header().Set(headers.ContentType, constants.MIME_JSON)
-				json.NewEncoder(w).Encode(cfg.Buttons)
+				json.NewEncoder(w).Encode(cfg.GetButtons())
 			case http.MethodPost, http.MethodPut:
 				data, _ := io.ReadAll(r.Body)
 				var btns []*models.ButtonData
