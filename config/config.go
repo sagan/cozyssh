@@ -21,6 +21,16 @@ import (
 	"crypto/rand"
 )
 
+// writePasswordToFile controls whether the initial generated password is
+// written to <configDir>/initial_password.txt instead of stderr.
+// Desktop (windowsgui) builds have no terminal, so they set this to true.
+var writePasswordToFile bool
+
+// SetWritePasswordToFile must be called before LoadConfig. When v is true,
+// the first-run generated app password is saved to initial_password.txt in
+// the config directory rather than being printed to stderr.
+func SetWritePasswordToFile(v bool) { writePasswordToFile = v }
+
 type Config struct {
 	Addr                  string               `yaml:"addr"`
 	SiteName              string               `yaml:"sitename"`
@@ -161,13 +171,29 @@ func generateAndSaveConfig(path string) (*Config, error) {
 		return nil, err
 	}
 
-	// Print password to stderr
-	fmt.Fprintf(os.Stderr, "\n=====================================================\n")
-	fmt.Fprintf(os.Stderr, "  Welcome to CozySSH!                                \n")
-	fmt.Fprintf(os.Stderr, "  A new app password has been generated for you:     \n")
-	fmt.Fprintf(os.Stderr, "  ->  %s  <-                                     \n", password)
-	fmt.Fprintf(os.Stderr, "  Store this safely. If you forget the password, you can reset it by running cozyssh with -do-reset-password flag.\n")
-	fmt.Fprintf(os.Stderr, "=====================================================\n")
+	if writePasswordToFile {
+		// Desktop (windowsgui) mode: no terminal available, write to a file.
+		pwdFile := filepath.Join(filepath.Dir(path), "initial_password.txt")
+		content := fmt.Sprintf(
+			"Welcome to CozySSH!\n"+
+				"A new app password has been generated for you:\n\n"+
+				"  %s\n\n"+
+				"Store this safely.\n"+
+				"If you forget the password, you can reset it by running cozyssh.exe with the -do-reset-password flag.\n",
+			password,
+		)
+		if err := os.WriteFile(pwdFile, []byte(content), 0600); err != nil {
+			log.Printf("WARNING: could not write initial_password.txt: %v", err)
+		}
+	} else {
+		// CLI mode: print to stderr as usual.
+		fmt.Fprintf(os.Stderr, "\n=====================================================\n")
+		fmt.Fprintf(os.Stderr, "  Welcome to CozySSH!                                \n")
+		fmt.Fprintf(os.Stderr, "  A new app password has been generated for you:     \n")
+		fmt.Fprintf(os.Stderr, "  ->  %s  <-                                     \n", password)
+		fmt.Fprintf(os.Stderr, "  Store this safely. If you forget the password, you can reset it by running cozyssh with -do-reset-password flag.\n")
+		fmt.Fprintf(os.Stderr, "=====================================================\n")
+	}
 
 	return cfg, nil
 }

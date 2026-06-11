@@ -22,6 +22,20 @@ builds:
       - -trimpath
     ldflags:
       - -s -w -X cozyssh.version={{.Version}} -X cozyssh.commit={{.Commit}} -X cozyssh.date={{.Date}}
+
+  - id: cozyssh-app
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - windows
+    goarch:
+      - amd64
+    main: ./cmd/cozyssh_windows_app
+    binary: cozyssh-app
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -H windowsgui -X cozyssh.version={{.Version}} -X cozyssh.commit={{.Commit}} -X cozyssh.date={{.Date}}
 archives:
   - format: zip
     name_template: >-
