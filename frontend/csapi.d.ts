@@ -2359,6 +2359,8 @@ declare global {
 		[CS_EVENT_SHELL_INTEGRATION]: CustomEvent<CSEventDetailShellIntegration>;
 		[CS_EVENT_VARS]: CustomEvent<CSEventDetailVars>;
 	}
+	// Window Desktop app bindings. All are unset (undefined) in web app
+	var appToggleFullscreen: () => void | undefined;
 }
 
 export {};

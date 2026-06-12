@@ -40,6 +40,15 @@ var (
 	procGetSystemMetrics = user32dll.NewProc("GetSystemMetrics")
 	procIsIconic         = user32dll.NewProc("IsIconic")
 	procIsWindowVisible  = user32dll.NewProc("IsWindowVisible")
+
+	procGetWindowLong     = user32dll.NewProc("GetWindowLongW")
+	procSetWindowLong     = user32dll.NewProc("SetWindowLongW")
+	procSetWindowPos      = user32dll.NewProc("SetWindowPos")
+	procGetMonitorInfo    = user32dll.NewProc("GetMonitorInfoW")
+	procMonitorFromWindow = user32dll.NewProc("MonitorFromWindow")
+
+	// Defining this as a variable bypasses compile-time unsigned constant checks
+	gwlStyle = -16
 )
 
 type winRect struct{ Left, Top, Right, Bottom int32 }
@@ -57,7 +66,20 @@ const (
 
 	smCxScreen = 0
 	smCyScreen = 1
+
+	wsOverlappedWindow      uint32 = 0x00CF0000
+	wsPopup                 uint32 = 0x80000000
+	swpFrameChanged                = 0x0020
+	swpShowWindow                  = 0x0040
+	monitorDefaultToNearest        = 2
 )
+
+type monitorInfo struct {
+	CbSize    uint32
+	RcMonitor winRect
+	RcWork    winRect
+	DwFlags   uint32
+}
 
 func isMinimized(hwnd uintptr) bool {
 	ret, _, _ := procIsIconic.Call(hwnd)
@@ -159,8 +181,10 @@ func main() {
 	}
 
 	w := webview2.NewWithOptions(webview2.WebViewOptions{
-		Debug:     false,
+		Debug:     true, // allow F12 DevTools
 		AutoFocus: true,
+		// the default data path is volatile that some data like page zoom level doesn't persist across restarts.
+		DataPath: filepath.Join(cfg.ConfigDir, "webview2_data"),
 		WindowOptions: webview2.WindowOptions{
 			Title:     "CozySSH",
 			Width:     initWidth,
@@ -178,6 +202,52 @@ func main() {
 	defer w.Destroy()
 
 	hwnd := uintptr(w.Window())
+
+	var isFullscreen bool
+	var savedWindowRect winRect
+	var savedWindowStyle uint32 // FIX: Changed from int32 to uint32
+
+	w.Bind("appToggleFullscreen", func() {
+		w.Dispatch(func() {
+			if !isFullscreen {
+				// 1. Save current window placement and style flags
+				style, _, _ := procGetWindowLong.Call(hwnd, uintptr(gwlStyle))
+				savedWindowStyle = uint32(style) // Safely cast the uintptr return value to uint32
+				procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&savedWindowRect)))
+
+				// 2. Identify the current monitor's dimensions
+				monitor, _, _ := procMonitorFromWindow.Call(hwnd, monitorDefaultToNearest)
+				var mi monitorInfo
+				mi.CbSize = uint32(unsafe.Sizeof(mi))
+				procGetMonitorInfo.Call(monitor, uintptr(unsafe.Pointer(&mi)))
+
+				// 3. Strip window borders and title bars (convert to popup style) using uint32 calculations
+				newStyle := uintptr(savedWindowStyle & ^wsOverlappedWindow | wsPopup)
+				procSetWindowLong.Call(hwnd, uintptr(gwlStyle), newStyle)
+
+				// 4. Stretch window across the absolute monitor bounds
+				width := mi.RcMonitor.Right - mi.RcMonitor.Left
+				height := mi.RcMonitor.Bottom - mi.RcMonitor.Top
+				procSetWindowPos.Call(hwnd, 0,
+					uintptr(mi.RcMonitor.Left), uintptr(mi.RcMonitor.Top),
+					uintptr(width), uintptr(height),
+					swpFrameChanged|swpShowWindow,
+				)
+				isFullscreen = true
+			} else {
+				// 5. Revert back to original window decorations and bounds
+				procSetWindowLong.Call(hwnd, uintptr(gwlStyle), uintptr(savedWindowStyle))
+				width := savedWindowRect.Right - savedWindowRect.Left
+				height := savedWindowRect.Bottom - savedWindowRect.Top
+				procSetWindowPos.Call(hwnd, 0,
+					uintptr(savedWindowRect.Left), uintptr(savedWindowRect.Top),
+					uintptr(width), uintptr(height),
+					swpFrameChanged|swpShowWindow,
+				)
+				isFullscreen = false
+			}
+		})
+	})
 
 	w.Navigate(serverURL + "/")
 

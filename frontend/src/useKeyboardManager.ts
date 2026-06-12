@@ -130,6 +130,13 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
 
       // ── Named shortcuts ───────────────────────────────────────────────────
       switch (keycomb) {
+        case "f11": {
+          if (window.appToggleFullscreen) {
+            e.preventDefault();
+            window.appToggleFullscreen();
+          }
+          return;
+        }
         case "alt+`":
         case "alt+shift+~": {
           // Alt + Backquote
