@@ -43,19 +43,19 @@ type Config struct {
 	AppPasswordHash       string               `json:"app_password_hash"`
 	SSHDir                string               `json:"sshdir"` // openssh config dir, defaults to ~/.ssh
 	Buttons               []*models.ButtonData `json:"-"`      // Moved to buttons.json
-	ConfigPath            string               `json:"-"` // internal use
-	ConfigDir             string               `json:"-"` // internal use
+	ConfigPath            string               `json:"-"`      // internal use
+	ConfigDir             string               `json:"-"`      // internal use
 	Vars                  map[string]string    `json:"-"`      // Moved to vars.json
 	VarsMtime             int64                `json:"-"`      // Last modified timestamp of vars
 	InsecureIgnoreHostKey bool                 `json:"insecure_ignore_host_key"`
 	SavePassword          string               `json:"save_password"`
 	SessionSecret         string               `json:"session_secret"`
 	// WebDAV Settings
-	WebdavUrl             string               `json:"webdav_url"`
-	WebdavUser            string               `json:"webdav_user"`
-	WebdavPassword        string               `json:"webdav_password"`
-	WebdavEnabled         bool                 `json:"webdav_enabled"`
-	mu                    sync.Mutex
+	WebdavUrl      string `json:"webdav_url"`
+	WebdavUser     string `json:"webdav_user"`
+	WebdavPassword string `json:"webdav_password"`
+	WebdavEnabled  bool   `json:"webdav_enabled"`
+	mu             sync.Mutex
 }
 
 func LoadConfig(customDir string) (*Config, error) {
@@ -72,7 +72,7 @@ func LoadConfig(customDir string) (*Config, error) {
 		return nil, fmt.Errorf("failed to create config dir: %w", err)
 	}
 
-	configPath := filepath.Join(configDir, "config.json")
+	configPath := filepath.Join(configDir, constants.CONFIG_FILE)
 
 	var cfg Config
 	data, err := os.ReadFile(configPath)
@@ -215,10 +215,10 @@ func generateAndSaveConfig(path string) (*Config, error) {
 				"A new app password has been generated for you:\n\n"+
 				"  %s\n\n"+
 				"Store this safely.\n"+
-				"If you forget the password, you can reset it by running cozyssh.exe with the -do-reset-password flag.\n",
+				"If you forget the password, you can reset it by running cozyssh with -do-reset-password flag.\n",
 			password,
 		)
-		if err := os.WriteFile(pwdFile, []byte(content), 0600); err != nil {
+		if err := common.AtomicWriteFileContents(pwdFile, []byte(content)); err != nil {
 			log.Printf("WARNING: could not write initial_password.txt: %v", err)
 		}
 	} else {

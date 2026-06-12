@@ -18,16 +18,17 @@ import (
 	"sync"
 	"time"
 
+	"cozyssh/common"
 	"cozyssh/config"
 	"cozyssh/constants"
 	"cozyssh/models"
 	"cozyssh/scratchpad"
 )
 
-var syncDebounceTime = 10 * time.Second
-var deleteMarkerFileMaxAge = 30 * 24 * time.Hour
-
 var (
+	syncDebounceTime       = 10 * time.Second
+	deleteMarkerFileMaxAge = 30 * 24 * time.Hour
+
 	gCfg     *config.Config
 	meta     syncMetadata
 	metaMu   sync.Mutex
@@ -41,7 +42,7 @@ var (
 
 	syncTimer   *time.Timer
 	syncTimerMu sync.Mutex
-	syncNowHook func()
+	syncHook    func()
 	hrefRegex   = regexp.MustCompile(`(?i)<[A-Za-z0-9:]*href>([^<]+)</[A-Za-z0-9:]*href>`)
 )
 
@@ -79,7 +80,7 @@ func Init(cfg *config.Config) {
 		ticker := time.NewTicker(5 * time.Minute)
 		for range ticker.C {
 			if gCfg.WebdavEnabled {
-				SyncNow()
+				Sync(false)
 			}
 		}
 	}()
@@ -93,15 +94,23 @@ func TriggerSync() {
 		syncTimer.Stop()
 	}
 	syncTimer = time.AfterFunc(syncDebounceTime, func() {
-		SyncNow()
+		Sync(false)
 	})
 }
 
-func SyncNow() error {
-	if syncNowHook != nil {
-		syncNowHook()
+// Sync data to/from WebDAV. It returns with an error immediately if sync is already in process,
+// unless force is true, in which case it will wait for the current sync to complete and then do another sync.
+func Sync(force bool) error {
+	if syncHook != nil {
+		syncHook()
 	}
-	syncMu.Lock()
+	if force {
+		syncMu.Lock()
+	} else {
+		if !syncMu.TryLock() {
+			return fmt.Errorf("sync already in progress")
+		}
+	}
 	defer syncMu.Unlock()
 
 	if gCfg == nil || !gCfg.WebdavEnabled || gCfg.WebdavUrl == "" {
@@ -140,7 +149,7 @@ func loadMetadata() {
 	if gCfg == nil {
 		return
 	}
-	path := filepath.Join(gCfg.ConfigDir, "sync-metadata.json")
+	path := filepath.Join(gCfg.ConfigDir, constants.SYNC_METADATA_FILE)
 	data, err := os.ReadFile(path)
 	if err == nil {
 		json.Unmarshal(data, &meta)
@@ -157,11 +166,10 @@ func saveMetadata() {
 	if gCfg == nil {
 		return
 	}
-	path := filepath.Join(gCfg.ConfigDir, "sync-metadata.json")
-	data, err := json.MarshalIndent(meta, "", "  ")
-	if err == nil {
-		os.WriteFile(path, data, 0600)
-	}
+	path := filepath.Join(gCfg.ConfigDir, constants.SYNC_METADATA_FILE)
+	common.AtomicWriteFile(path, func(writer io.Writer) error {
+		return json.NewEncoder(writer).Encode(meta)
+	})
 }
 
 func OnButtonDelete(id string, timestamp int64) {

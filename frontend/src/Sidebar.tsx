@@ -86,6 +86,7 @@ import {
   filterHosts,
   forceReload,
   getIntVar,
+  openHostInNewWindow,
   remoteCommandOptions,
   searchString,
 } from "./common";
@@ -803,7 +804,7 @@ export default function Sidebar({
     }
     const tag = tagContextMenu.tag;
     setTagContextMenuOpen(false);
-    window.open(`${window.location.origin}/##${tag}`, "_blank", "noopener");
+    openHostInNewWindow(`#${tag}`);
   }, [tagContextMenu]);
 
   const handleOpenAllServers = useCallback(() => {
@@ -1448,7 +1449,15 @@ export default function Sidebar({
         ) : null}
         <List>
           <ListItem className="sidebar-host" disablePadding data-name={LOCAL_NAME}>
-            <ListItemButton onClick={() => onSelect(LOCAL_NAME)}>
+            <ListItemButton
+              onClick={(e) => {
+                if (e.ctrlKey) {
+                  openHostInNewWindow(LOCAL_NAME);
+                } else {
+                  onSelect(LOCAL_NAME);
+                }
+              }}
+            >
               <ListItemIcon>
                 <ComputerIcon />
               </ListItemIcon>
@@ -1525,7 +1534,7 @@ export default function Sidebar({
             }
             const target = contextMenu.target;
             setContextMenuOpen(false);
-            window.open(`${window.location.origin}/#${target.name}`, "_blank", "noopener");
+            openHostInNewWindow(target.name);
           }}
         >
           Open (New Window)
@@ -2402,7 +2411,17 @@ function HostListItem({
         borderRadius: 1,
       }}
     >
-      <ListItemButton title={host.comment || ""} onClick={() => onSelect(host.name)} sx={{ py: 0.5 }}>
+      <ListItemButton
+        title={host.comment || ""}
+        onClick={(e) => {
+          if (e.ctrlKey) {
+            openHostInNewWindow(host.name);
+          } else {
+            onSelect(host.name);
+          }
+        }}
+        sx={{ py: 0.5 }}
+      >
         <ListItemIcon sx={{ minWidth: 32 }}>
           {isFavourite ? (
             <StarIcon

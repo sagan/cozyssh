@@ -89,7 +89,7 @@ func startTestApp(t *testing.T, args []string) string {
 	args = append(args, "-addr", addr)
 
 	go func() {
-		if err := cozyssh.Run(ctx, args); err != nil && err != context.Canceled {
+		if err := cozyssh.Run(ctx, args, nil); err != nil && err != context.Canceled {
 			fmt.Printf("App failed: %v\n", err)
 		}
 	}()
@@ -162,7 +162,7 @@ func setupTestConfig(t *testing.T) string {
   "sshdir": "` + filepath.ToSlash(filepath.Join(tmpDir, ".ssh")) + `",
   "insecure_ignore_host_key": true
 }`
-	err = common.AtomicWriteFileContents(filepath.Join(tmpDir, "config.json"), []byte(configContent))
+	err = common.AtomicWriteFileContents(filepath.Join(tmpDir, constants.CONFIG_FILE), []byte(configContent))
 	if err != nil {
 		t.Fatal(err)
 	}

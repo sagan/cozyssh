@@ -38,7 +38,7 @@ import (
 )
 
 //go:embed all:frontend/dist
-var frontendFS embed.FS
+var FrontendFS embed.FS
 
 // injected by GoReleaser during build
 var (
@@ -47,7 +47,7 @@ var (
 	date    = "unknown"
 )
 
-func Run(ctx context.Context, args []string) error {
+func Run(ctx context.Context, args []string, ready chan<- string) error {
 	flags := flag.NewFlagSet("cozyssh", flag.ContinueOnError)
 	configDir := flags.String("config", "", "Custom configuration directory (defaults to ~/.config/cozyssh)")
 	listenAddr := flags.String("addr", "", "Listen address (overrides config file)")
@@ -225,6 +225,17 @@ func Run(ctx context.Context, args []string) error {
 			if r.Method != http.MethodGet {
 				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 				return
+			}
+			syncFlag := r.URL.Query().Get("sync")
+			if syncFlag != "" {
+				switch syncFlag {
+				case "1":
+					datasync.TriggerSync()
+				case "2":
+					datasync.Sync(false)
+				case "3":
+					datasync.Sync(true)
+				}
 			}
 			w.Header().Set(headers.ContentType, constants.MIME_JSON)
 			json.NewEncoder(w).Encode(getFullData(r))
@@ -558,7 +569,7 @@ func Run(ctx context.Context, args []string) error {
 				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 				return
 			}
-			go datasync.SyncNow()
+			go datasync.Sync(false)
 			w.WriteHeader(http.StatusNoContent)
 		}))))
 
@@ -928,7 +939,7 @@ func Run(ctx context.Context, args []string) error {
 		}))))
 
 	// 4. Serve embedded frontend
-	distFS, err := fs.Sub(frontendFS, "frontend/dist")
+	distFS, err := fs.Sub(FrontendFS, "frontend/dist")
 	if err != nil {
 		return fmt.Errorf("failed to resolve frontend/dist inside embedded FS")
 	}
@@ -1007,10 +1018,22 @@ func Run(ctx context.Context, args []string) error {
 		server.Shutdown(context.Background())
 	}()
 
-	log.Printf("Starting cozyssh on http://%s", addr)
-	if err := server.ListenAndServe(); err != http.ErrServerClosed {
+	// CHANGE: Replace server.ListenAndServe() with split Listen and Serve steps
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
 		return err
 	}
+
+	// Signal back to main.go instantly that the port is open and bound in the kernel
+	if ready != nil {
+		ready <- ln.Addr().String()
+	}
+
+	log.Printf("Starting cozyssh on http://%s", addr)
+	if err := server.Serve(ln); err != http.ErrServerClosed {
+		return err
+	}
+
 	return context.Cause(ctx)
 }
 

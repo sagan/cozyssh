@@ -85,6 +85,16 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess: (data: FullD
               Sign In
             </Button>
           </Box>
+          {__CS_ENV__ === 1 && (
+            <Typography variant="body2" sx={{ fontSize: "0.7rem", mt: 1, textAlign: "left" }}>
+              The initial password can be found in <code>initial_password.txt</code> in the CozySSH data directory. The
+              default data dir path:
+              <br />
+              <b>%USERPROFILE%\.config\cozyssh</b> (Windows)
+              <br />
+              <b>~/.config/cozyssh</b> (Linux)
+            </Typography>
+          )}
           <Button
             variant="text"
             size="small"

@@ -79,6 +79,7 @@ window.__CS_PASSTHROUGH_SHORTCUTS__ = terminalKeyShortcuts;
 window.__CS_DISABLE_SHORTCUTS__ = disableShortcuts;
 window.__CS_LIQUID_ENGINE__ = liquidEngine;
 window.__CS_RUNNING_SCRIPT__ = undefined;
+window.__CS_ENV__ = "appToggleFullscreen" in window ? 1 : 0;
 
 // Use Proxy to intercept __CS_TERMINAL_OPTIONS__
 (function () {
@@ -381,7 +382,7 @@ export interface PluginAPICallbacks {
   /** Attach to an existing backend session */
   handleAttach: (id: string, host: string, title: string, isLocked?: boolean) => Promise<void>;
   /** Refresh all data from the server */
-  handleRefresh: () => Promise<void>;
+  handleRefresh: (syncFlag?: number) => Promise<void>;
   /** React state setter for applets */
   setApplets: React.Dispatch<React.SetStateAction<AppletData[]>>;
   /** Whether we're in mobile layout */

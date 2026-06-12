@@ -24,4 +24,12 @@ const (
 	IDENTITY_PREFIX                         = "$identity:"
 	DEFAULT_PASSWORD_LENGTH                 = 32 // [a-zA-Z0-9]{length}, each char is 5.9 bits. 128 bits requires >= 22
 	ID_DELETE_PREFIX                        = "__$$delete$$__"
+	CONFIG_FILE                             = "config.json"
+	SYNC_METADATA_FILE                      = "sync-metadata.json"
+	APP_CONFIG_FILE                         = "app-config.json"
+	WEBVIEW2_DATA_DIR                       = "webview2_data"
+	APP_DEFAULT_WIDTH                       = 1024
+	APP_DEFAULT_HEIGHT                      = 768
+	APP_MIN_WIDTH                           = 400
+	APP_MIN_HEIGHT                          = 300
 )

@@ -7,6 +7,7 @@ require (
 	github.com/awnumar/memguard v0.23.0
 	github.com/aymanbagabas/go-pty v0.2.3
 	github.com/go-http-utils/headers v0.0.0-20181008091004-fed159eddc2a
+	github.com/gogpu/systray v0.1.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/jchv/go-webview2 v0.0.0-20260205173254-56598839c808
 	github.com/kevinburke/ssh_config v1.6.0
@@ -38,6 +39,8 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-stack/stack v1.8.1 // indirect
+	github.com/go-webgpu/goffi v0.5.0 // indirect
+	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/jchv/go-winloader v0.0.0-20250406163304-c1995be93bd1 // indirect
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect

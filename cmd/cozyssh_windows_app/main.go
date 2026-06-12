@@ -6,18 +6,23 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
-	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
+	"syscall"
 	"time"
 	"unsafe"
 
+	"github.com/gogpu/systray"
 	webview2 "github.com/jchv/go-webview2"
 	"golang.org/x/sys/windows"
 
 	"cozyssh"
+	"cozyssh/common"
 	"cozyssh/config"
+	"cozyssh/constants"
 )
 
 // AppConfig holds desktop-specific window settings, saved to app-config.json.
@@ -47,6 +52,20 @@ var (
 	procGetMonitorInfo    = user32dll.NewProc("GetMonitorInfoW")
 	procMonitorFromWindow = user32dll.NewProc("MonitorFromWindow")
 
+	procSetWindowLongPtr = user32dll.NewProc("SetWindowLongPtrW")
+	procCallWindowProc   = user32dll.NewProc("CallWindowProcW")
+
+	procPeekMessage      = user32dll.NewProc("PeekMessageW")
+	procTranslateMessage = user32dll.NewProc("TranslateMessage")
+	procDispatchMessage  = user32dll.NewProc("DispatchMessageW")
+
+	ole32dll           = windows.NewLazySystemDLL("ole32.dll")
+	procCoInitialize   = ole32dll.NewProc("CoInitializeEx")
+	procCoUninitialize = ole32dll.NewProc("CoUninitialize")
+
+	// Index for overriding the window message function
+	gwlpWndProc = -4
+
 	// Defining this as a variable bypasses compile-time unsigned constant checks
 	gwlStyle = -16
 )
@@ -72,7 +91,17 @@ const (
 	swpFrameChanged                = 0x0020
 	swpShowWindow                  = 0x0040
 	monitorDefaultToNearest        = 2
+
+	swHide    = 0
+	swShow    = 5
+	wmClose   = 0x0010
+	wmDestroy = 0x0002
+
+	pmRemove = 0x0001
 )
+
+// A global reference to track the original window processing loop
+var originalWndProc uintptr
 
 type monitorInfo struct {
 	CbSize    uint32
@@ -106,7 +135,7 @@ func windowState(hwnd uintptr) (width, height int, maximized bool) {
 // ---- App config persistence -----------------------------------------------
 
 func loadAppConfig(cfgDir string) *AppConfig {
-	data, err := os.ReadFile(filepath.Join(cfgDir, "app-config.json"))
+	data, err := os.ReadFile(filepath.Join(cfgDir, constants.APP_CONFIG_FILE))
 	if err != nil {
 		return nil
 	}
@@ -115,15 +144,16 @@ func loadAppConfig(cfgDir string) *AppConfig {
 		return nil
 	}
 	// Discard configurations with unreasonably small dimensions (e.g. from previous bugs)
-	if ac.Width < 400 || ac.Height < 300 {
+	if ac.Width < constants.APP_MIN_WIDTH || ac.Height < constants.APP_MIN_HEIGHT {
 		return nil
 	}
 	return &ac
 }
 
-func saveAppConfig(cfgDir string, ac AppConfig) {
-	data, _ := json.MarshalIndent(ac, "", "  ")
-	_ = os.WriteFile(filepath.Join(cfgDir, "app-config.json"), data, 0600)
+func saveAppConfig(cfgDir string, ac *AppConfig) {
+	common.AtomicWriteFile(filepath.Join(cfgDir, constants.APP_CONFIG_FILE), func(writer io.Writer) error {
+		return json.NewEncoder(writer).Encode(ac)
+	})
 }
 
 // ---- Main -----------------------------------------------------------------
@@ -140,53 +170,51 @@ func main() {
 		os.Exit(1)
 	}
 
-	// cfg.Addr may be "0.0.0.0:<port>": valid for binding, but browsers can't
-	// reach that address. Normalise to 127.0.0.1.
+	// FAST ZERO-DELAY DETECTION
+	// Try connecting to the local address. A local network dial takes virtually 0ms.
+	isServerRunning := false
+	dialer := net.Dialer{Timeout: 15 * time.Millisecond}
+	if conn, err := dialer.Dial("tcp", cfg.Addr); err == nil {
+		conn.Close()
+		isServerRunning = true
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	serverErr := make(chan error, 1)
+
+	if !isServerRunning {
+		// First instance: Start background engine routines normally
+		readyChan := make(chan string, 1)
+		go func() { serverErr <- cozyssh.Run(ctx, os.Args[1:], readyChan) }()
+
+		select {
+		case err := <-serverErr:
+			showFatalDialog("CozySSH startup error", fmt.Sprintf("Server exited early: %v", err))
+			os.Exit(1)
+		case <-readyChan:
+			// Port successfully opened by our core system loop
+		}
+	}
+
+	// Normalize the address
 	host, port, err := net.SplitHostPort(cfg.Addr)
 	if err != nil {
 		host, port = "127.0.0.1", "8022"
-	}
-	if host == "0.0.0.0" || host == "::" || host == "" {
+	} else if host == "0.0.0.0" || host == "::" || host == "" {
 		host = "127.0.0.1"
 	}
 	serverURL := "http://" + net.JoinHostPort(host, port)
 
-	// Start the HTTP server in the background.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	serverErr := make(chan error, 1)
-	go func() { serverErr <- cozyssh.Run(ctx, os.Args[1:]) }()
-
-	if err := waitForServer(serverURL+"/api/preflight", 10*time.Second, serverErr); err != nil {
-		showFatalDialog("CozySSH startup error", fmt.Sprintf("Server did not start in time: %v", err))
-		os.Exit(1)
-	}
-
-	// Resolve window dimensions from saved config, or use defaults.
-	appCfg := loadAppConfig(cfg.ConfigDir)
-	firstRun := appCfg == nil
-
-	defaultWidth := int(1280)
-	defaultHeight := int(800)
-	if !firstRun {
-		defaultWidth = appCfg.Width
-		defaultHeight = appCfg.Height
-	}
-
-	initWidth := uint(defaultWidth)
-	initHeight := uint(defaultHeight)
-	startMaximized := true // always maximized on first run
-	if !firstRun {
-		startMaximized = appCfg.Maximized
-	}
+	initWidth, initHeight, startMaximized, _ := GetWindowSize(cfg)
 
 	w := webview2.NewWithOptions(webview2.WebViewOptions{
 		Debug:     true, // allow F12 DevTools
 		AutoFocus: true,
 		// the default data path is volatile that some data like page zoom level doesn't persist across restarts.
-		DataPath: filepath.Join(cfg.ConfigDir, "webview2_data"),
+		DataPath: filepath.Join(cfg.ConfigDir, constants.WEBVIEW2_DATA_DIR),
 		WindowOptions: webview2.WindowOptions{
-			Title:     "CozySSH",
+			Title:     constants.APP_NAME,
 			Width:     initWidth,
 			Height:    initHeight,
 			IconId:    1,
@@ -249,12 +277,107 @@ func main() {
 		})
 	})
 
+	w.Bind("appOpenNewWindow", func(targetURL string) {
+		go func() {
+			runtime.LockOSThread()
+			defer runtime.UnlockOSThread()
+
+			// 1. Explicitly bind this thread to a Win32 Single-Threaded Apartment (STA)
+			// 0x2 = COINIT_APARTMENTTHREADED, 0x4 = COINIT_DISABLE_OLE1DDE
+			procCoInitialize.Call(0, 0x2|0x4)
+			defer procCoUninitialize.Call()
+
+			width, height, maximized, _ := GetWindowSize(cfg)
+			subW := webview2.NewWithOptions(webview2.WebViewOptions{
+				AutoFocus: true,
+				DataPath:  filepath.Join(cfg.ConfigDir, constants.WEBVIEW2_DATA_DIR),
+				WindowOptions: webview2.WindowOptions{
+					Title:     constants.APP_NAME,
+					Width:     width,
+					Height:    height,
+					IconId:    1,
+					Maximized: maximized,
+					Center:    true,
+				},
+			})
+			if subW == nil {
+				return
+			}
+
+			subW.Navigate(targetURL)
+
+			// Blocks here while the secondary window is open
+			subW.Run()
+
+			// 2. The window loop ended, cleanly destroy the local webview controller structures
+			subW.Destroy()
+
+			// 3. LINGERING MESSAGE PUMP
+			// Run a short, dedicated loop to drain any remaining detachment messages
+			// sent by the Edge browser process before letting the thread die completely.
+			var msg struct {
+				Hwnd    uintptr
+				Message uint32
+				WParam  uintptr
+				LParam  uintptr
+				Time    uint32
+				Pt      struct{ X, Y int32 }
+			}
+
+			endTime := time.Now().Add(150 * time.Millisecond)
+			for time.Now().Before(endTime) {
+				// PeekMessageW(&msg, hwnd=0, msgMin=0, msgMax=0, PM_REMOVE)
+				ret, _, _ := procPeekMessage.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0, pmRemove)
+				if ret != 0 {
+					procTranslateMessage.Call(uintptr(unsafe.Pointer(&msg)))
+					procDispatchMessage.Call(uintptr(unsafe.Pointer(&msg)))
+				} else {
+					// Queue is empty, yield to the OS briefly
+					time.Sleep(2 * time.Millisecond)
+				}
+			}
+		}()
+	})
+
+	var tray *systray.SystemTray
+	if !isServerRunning {
+		// SETUP THE SYSTEM TRAY
+		// We instantiate the tray on the main thread, but DO NOT call tray.Run().
+		// WebView2's native window event loop will automatically pump messages for the tray.
+		tray = systray.New()
+
+		// Note: Replace with your actual embedded icon bytes
+		iconBytes, _ := cozyssh.FrontendFS.ReadFile("frontend/dist/favicon.png")
+		tray.SetIcon(iconBytes).SetTooltip(constants.APP_NAME + " Background Service").Show()
+
+		// Build the tray menu interactions
+		menu := systray.NewMenu()
+		onClick := func() {
+			w.Dispatch(func() {
+				procShowWindow.Call(hwnd, uintptr(swShow))
+			})
+		}
+		menu.Add("Open "+constants.APP_NAME, onClick)
+		menu.AddSeparator()
+		menu.Add("Quit", func() {
+			w.Terminate()
+		})
+		tray.SetMenu(menu)
+		tray.OnClick(onClick)
+
+		// INJECT THE WIN32 WINDOW CLOSE HOOK
+		// Swap the native window handler with our interceptor logic
+		newCallback := syscall.NewCallback(windowProc)
+		oldProc, _, _ := procSetWindowLongPtr.Call(hwnd, uintptr(gwlpWndProc), newCallback)
+		originalWndProc = oldProc
+	}
+
 	w.Navigate(serverURL + "/")
 
 	// Poll window state every second and persist changes.
 	// We track the last *non-maximized* dimensions separately so that when
 	// the user maximizes the window, we don't overwrite the restore size.
-	lastNonMaxW, lastNonMaxH := defaultWidth, defaultHeight
+	lastNonMaxW, lastNonMaxH := constants.APP_DEFAULT_WIDTH, constants.APP_DEFAULT_HEIGHT
 
 	stopPoll := make(chan struct{})
 	go func() {
@@ -282,7 +405,7 @@ func main() {
 				if !cmax {
 					lastNonMaxW, lastNonMaxH = cw, ch
 				}
-				saveAppConfig(cfg.ConfigDir, AppConfig{
+				saveAppConfig(cfg.ConfigDir, &AppConfig{
 					Width:     lastNonMaxW,
 					Height:    lastNonMaxH,
 					Maximized: cmax,
@@ -294,6 +417,9 @@ func main() {
 	// Blocking message loop — returns when the window is closed.
 	w.Run()
 	close(stopPoll)
+	if tray != nil {
+		tray.Remove() // Remove icon from the taskbar notification area
+	}
 
 	cancel()
 	select {
@@ -303,26 +429,6 @@ func main() {
 		}
 	case <-time.After(3 * time.Second):
 	}
-}
-
-// waitForServer polls url until it gets a response or the deadline is reached.
-// It also returns immediately if the server goroutine exits with an error.
-func waitForServer(url string, timeout time.Duration, serverErr <-chan error) error {
-	deadline := time.Now().Add(timeout)
-	client := &http.Client{Timeout: 500 * time.Millisecond}
-	for time.Now().Before(deadline) {
-		select {
-		case err := <-serverErr:
-			return fmt.Errorf("server exited early: %w", err)
-		default:
-		}
-		if resp, err := client.Get(url); err == nil {
-			resp.Body.Close()
-			return nil
-		}
-		time.Sleep(200 * time.Millisecond)
-	}
-	return fmt.Errorf("timed out after %s", timeout)
 }
 
 // showFatalDialog displays an error in a small WebView2 window.
@@ -344,4 +450,23 @@ func showFatalDialog(title, message string) {
 <h3 style="color:#c00">%s</h3><p>%s</p>
 <button onclick="window.close()">Close</button></body></html>`, title, message))
 	w.Run()
+}
+
+func windowProc(hwnd uintptr, msg uint32, wparam uintptr, lparam uintptr) uintptr {
+	if msg == wmClose {
+		// User clicked "X"! Intercept the signal and hide the window instead of closing it
+		procShowWindow.Call(hwnd, uintptr(swHide))
+		return 0
+	}
+	// Route all other UI window messages (resize, paint, drag) back to WebView2
+	ret, _, _ := procCallWindowProc.Call(originalWndProc, hwnd, uintptr(msg), wparam, lparam)
+	return ret
+}
+
+func GetWindowSize(cfg *config.Config) (width uint, height uint, maximized bool, firstRun bool) {
+	appCfg := loadAppConfig(cfg.ConfigDir)
+	if appCfg == nil {
+		return constants.APP_DEFAULT_WIDTH, constants.APP_DEFAULT_HEIGHT, true, true
+	}
+	return uint(appCfg.Width), uint(appCfg.Height), appCfg.Maximized, false
 }

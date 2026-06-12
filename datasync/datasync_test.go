@@ -20,11 +20,11 @@ func TestTriggerSyncDebounce(t *testing.T) {
 	}()
 
 	var callCount int32
-	syncNowHook = func() {
+	syncHook = func() {
 		atomic.AddInt32(&callCount, 1)
 	}
 	defer func() {
-		syncNowHook = nil
+		syncHook = nil
 	}()
 
 	// Trigger multiple times rapidly (within 50ms total)

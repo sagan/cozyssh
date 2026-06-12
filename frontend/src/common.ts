@@ -839,3 +839,16 @@ export async function closeModal(closeAll?: boolean) {
     }
   }
 }
+
+/**
+ * Open host (or all hosts of a tag) in a new window.
+ * @param hostOrTag - name of the host to open, it can be a tag (e.g. "#work").
+ */
+export function openHostInNewWindow(hostOrTag: string) {
+  const url = `${window.location.origin}/#${hostOrTag}`;
+  if (window.appOpenNewWindow) {
+    window.appOpenNewWindow(url);
+  } else {
+    window.open(url, "_blank", "noopener");
+  }
+}

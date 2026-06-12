@@ -119,6 +119,11 @@ declare global {
    */
   var __CS_RUNNING_SCRIPT__: Pick<ButtonData, "id" | "name" | "type" | "payload"> | undefined;
   /**
+   * `0` - CozySSH is running as web app
+   * `1` - CozySSH is running as Windows Desktop app (webview2)
+   */
+  var __CS_ENV__: number;
+  /**
    * Focus the terminal with the given pane id.
    * @param tabOrPaneId defaults to active terminal pane id.
    */
@@ -313,7 +318,7 @@ declare global {
   /**
    * Refresh the data from backend.
    */
-  function csRefresh(): Promise<void>;
+  function csRefresh(syncFlag?: number): Promise<void>;
   /**
    * Set the theme of the application. It accepts the same arguments as MUI `createTheme`,
    * see [Material UI document](https://mui.com/material-ui/customization/theming/).
@@ -375,6 +380,7 @@ declare global {
   }
 
   // Window Desktop app bindings. All are unset (undefined) in web app
+  var appOpenNewWindow: (targetURL: string) => void | undefined;
   var appToggleFullscreen: () => void | undefined;
 }
 

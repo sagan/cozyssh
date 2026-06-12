@@ -363,25 +363,28 @@ export default function Dashboard({ initialData }: DashboardProps) {
     }
   }, []);
 
-  const handleRefresh = useCallback(async () => {
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    try {
-      const r = await fetch("/api/fulldata", {
-        headers: {
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        },
-      });
-      if (r.status === 401) {
-        localStorage.removeItem(BROWSER_STORAGE_KEY_TOKEN);
-        window.location.href = "/login";
-        return;
+  const handleRefresh = useCallback(
+    async (syncFlag = 0) => {
+      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+      try {
+        const r = await fetch(`/api/fulldata?sync=${syncFlag}`, {
+          headers: {
+            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+          },
+        });
+        if (r.status === 401) {
+          localStorage.removeItem(BROWSER_STORAGE_KEY_TOKEN);
+          window.location.href = "/login";
+          return;
+        }
+        const data: FullData = await r.json();
+        loadFullData(data);
+      } catch (e) {
+        console.error(e);
       }
-      const data: FullData = await r.json();
-      loadFullData(data);
-    } catch (e) {
-      console.error(e);
-    }
-  }, [loadFullData]);
+    },
+    [loadFullData],
+  );
 
   const [muiTheme, setMuiTheme] = useState(defaultTheme);
 
