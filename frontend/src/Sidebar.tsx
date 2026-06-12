@@ -204,6 +204,7 @@ export default function Sidebar({
   const [syncStatus, setSyncStatus] = useState("idle");
   const [syncError, setSyncError] = useState("");
   const [syncTime, setSyncTime] = useState<number | null>(null);
+  const [isTestingWebdav, setIsTestingWebdav] = useState(false);
 
   const fetchWebdavStatus = useCallback((onlyStatus = false) => {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
@@ -242,9 +243,38 @@ export default function Sidebar({
     }
   }, [settingsOpen, dialogTab, fetchWebdavStatus]);
 
-  const handleSaveWebdav = () => {
+  const handleToggleWebdavEnabled = () => {
+    const nextEnabled = !webdavEnabled;
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     fetch("/api/settings/webdav", {
+      method: METHOD_POST,
+      headers: {
+        [HEADER_CONTENT_TYPE]: MIME_JSON,
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      },
+      body: JSON.stringify({
+        url: webdavUrl,
+        user: webdavUser,
+        password: webdavPassword,
+        enabled: nextEnabled,
+      }),
+    })
+      .then((res) => {
+        if (res.ok) {
+          notify(nextEnabled ? "Sync enabled" : "Sync disabled", "success");
+          setWebdavEnabled(nextEnabled);
+          fetchWebdavStatus(false);
+        } else {
+          res.text().then((t) => notify("Failed to toggle sync: " + t, "error"));
+        }
+      })
+      .catch((e) => notify("Failed to toggle sync: " + e.message, "error"));
+  };
+
+  const handleSaveWebdav = () => {
+    setIsTestingWebdav(true);
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+    fetch("/api/settings/webdav/detect", {
       method: METHOD_POST,
       headers: {
         [HEADER_CONTENT_TYPE]: MIME_JSON,
@@ -258,14 +288,68 @@ export default function Sidebar({
       }),
     })
       .then((res) => {
-        if (res.ok) {
-          notify("WebDAV settings saved successfully", "success");
-          fetchWebdavStatus(false);
-        } else {
-          res.text().then((t) => notify("Failed to save WebDAV settings: " + t, "error"));
+        if (!res.ok) {
+          return res.text().then((text) => {
+            throw new Error(text || "Failed to verify WebDAV connection");
+          });
         }
+        return res.json();
       })
-      .catch((e) => notify("Failed to save WebDAV settings: " + e.message, "error"));
+      .then(
+        async (data: {
+          brandNew: boolean;
+          uploadCount: number;
+          downloadCount: number;
+          deleteLocalCount: number;
+          deleteRemoteCount: number;
+        }) => {
+          let msg = "";
+          let detail = "";
+          if (data.brandNew) {
+            msg = "WebDAV server connection successful!";
+            detail =
+              "The server is brand-new and contains no CozySSH data. Your local data (buttons, vars, scratchpad) will be uploaded to it when synchronization is triggered.";
+          } else {
+            msg = "WebDAV server connection successful!";
+            detail =
+              `The server contains existing CozySSH data. If sync is enabled, the following changes will be applied during sync:\n` +
+              `• ${data.uploadCount} local changes will be uploaded to the server\n` +
+              `• ${data.downloadCount} remote changes will be downloaded and applied locally\n` +
+              `• ${data.deleteLocalCount} local items will be deleted\n` +
+              `• ${data.deleteRemoteCount} remote items will be deleted from the server`;
+          }
+
+          const confirmed = await dialogs.confirm(msg, detail + "\n\nDo you want to save these WebDAV settings?");
+          if (confirmed) {
+            return fetch("/api/settings/webdav", {
+              method: METHOD_POST,
+              headers: {
+                [HEADER_CONTENT_TYPE]: MIME_JSON,
+                [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+              },
+              body: JSON.stringify({
+                url: webdavUrl,
+                user: webdavUser,
+                password: webdavPassword,
+                enabled: webdavEnabled,
+              }),
+            }).then((res) => {
+              if (res.ok) {
+                notify("WebDAV settings saved successfully", "success");
+                fetchWebdavStatus(false);
+              } else {
+                res.text().then((t) => notify("Failed to save WebDAV settings: " + t, "error"));
+              }
+            });
+          }
+        },
+      )
+      .catch((e) => {
+        notify("WebDAV verification failed: " + e.message, "error");
+      })
+      .finally(() => {
+        setIsTestingWebdav(false);
+      });
   };
 
   const handleSyncNow = () => {
@@ -1758,7 +1842,7 @@ export default function Sidebar({
                 <Button variant="outlined" color="error" size="small" onClick={handleClearCache} sx={{ mt: 1 }}>
                   Force Clear Cache & Unregister SW
                 </Button>
-                <Divider sx={{ my: 2 }} />
+                <Divider sx={{ my: 1 }} />
                 <Typography variant="subtitle2" gutterBottom>
                   Save Password Setting
                 </Typography>
@@ -1782,7 +1866,7 @@ export default function Sidebar({
                     never
                   </Button>
                 </ButtonGroup>
-                <Divider sx={{ my: 2 }} />
+                <Divider sx={{ my: 1 }} />
                 <Typography variant="subtitle2" gutterBottom>
                   Change App Password
                 </Typography>
@@ -1819,33 +1903,74 @@ export default function Sidebar({
             {dialogTab === 3 && (
               <>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1, mt: -1 }}>
-                  <b>WebDAV Synchronization</b>: Sync CozySSH buttons and scratchpad pages with a custom WebDAV
+                  <b>WebDAV Synchronization</b>: Sync CozySSH data (buttons, vars, scratchpad) with a custom WebDAV
                   directory.
                 </Typography>
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mt: 1 }}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Sync Status:
-                    </Typography>
-                    <Chip
-                      label={syncStatus.toUpperCase()}
-                      size="small"
-                      color={
-                        syncStatus === "success"
-                          ? "success"
-                          : syncStatus === "syncing"
-                            ? "info"
-                            : syncStatus === "error"
-                              ? "error"
-                              : "default"
-                      }
-                      sx={{ fontWeight: "bold" }}
-                    />
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 1.5,
+                    mt: 1,
+                    p: 2,
+                    bgcolor: "action.hover",
+                    borderRadius: 1,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      flexWrap: "wrap",
+                      gap: 1.5,
+                    }}
+                  >
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ fontWeight: "bold" }}>
+                        Sync Status:
+                      </Typography>
+                      <Chip
+                        label={(!webdavEnabled ? "disabled" : syncStatus).toUpperCase()}
+                        size="small"
+                        color={
+                          !webdavEnabled
+                            ? "default"
+                            : syncStatus === "success"
+                              ? "success"
+                              : syncStatus === "syncing"
+                                ? "info"
+                                : syncStatus === "error"
+                                  ? "error"
+                                  : "default"
+                        }
+                        sx={{ fontWeight: "bold" }}
+                      />
+                    </Box>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Button
+                        variant={webdavEnabled ? "contained" : "outlined"}
+                        color={webdavEnabled ? "success" : "primary"}
+                        size="small"
+                        onClick={handleToggleWebdavEnabled}
+                        sx={{ textTransform: "none" }}
+                      >
+                        {webdavEnabled ? "Disable Sync" : "Enable Sync"}
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        onClick={handleSyncNow}
+                        disabled={!webdavEnabled || syncStatus === "syncing"}
+                        size="small"
+                        sx={{ textTransform: "none" }}
+                      >
+                        {syncStatus === "syncing" ? "Syncing..." : "Sync Now"}
+                      </Button>
+                    </Box>
                   </Box>
-                  {syncError && (
+                  {syncError && webdavEnabled && (
                     <Box
                       sx={{
-                        mt: 1,
                         p: 1.5,
                         bgcolor: "error.light",
                         borderRadius: 1,
@@ -1861,30 +1986,11 @@ export default function Sidebar({
                   <Typography variant="body2" color="text.secondary">
                     Last Synced: {syncTime ? new Date(syncTime).toLocaleString() : "Never"}
                   </Typography>
-                  <Button
-                    variant="outlined"
-                    onClick={handleSyncNow}
-                    disabled={!webdavEnabled || syncStatus === "syncing"}
-                    sx={{ mt: 1, alignSelf: "flex-start" }}
-                    size="small"
-                  >
-                    {syncStatus === "syncing" ? "Syncing..." : "Sync Now"}
-                  </Button>
                 </Box>
                 <Divider sx={{ my: 1 }} />
-                <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                  <Typography variant="body2">Enable Sync</Typography>
-                  <Button
-                    variant={webdavEnabled ? "contained" : "outlined"}
-                    color={webdavEnabled ? "success" : "primary"}
-                    size="small"
-                    onClick={() => {
-                      setWebdavEnabled(!webdavEnabled);
-                    }}
-                  >
-                    {webdavEnabled ? "Enabled" : "Disabled"}
-                  </Button>
-                </Box>
+                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: "bold" }}>
+                  WebDAV Server Configuration
+                </Typography>
                 <TextField
                   fullWidth
                   label="WebDAV Server URL"
@@ -1893,6 +1999,7 @@ export default function Sidebar({
                   placeholder="https://example.com/dav/"
                   value={webdavUrl}
                   onChange={(e) => setWebdavUrl(e.target.value)}
+                  disabled={isTestingWebdav}
                 />
                 <TextField
                   fullWidth
@@ -1901,6 +2008,7 @@ export default function Sidebar({
                   margin="dense"
                   value={webdavUser}
                   onChange={(e) => setWebdavUser(e.target.value)}
+                  disabled={isTestingWebdav}
                 />
                 <TextField
                   fullWidth
@@ -1911,9 +2019,16 @@ export default function Sidebar({
                   placeholder={webdavEnabled ? "••••••••" : "Enter password"}
                   value={webdavPassword}
                   onChange={(e) => setWebdavPassword(e.target.value)}
+                  disabled={isTestingWebdav}
                 />
-                <Button variant="contained" onClick={handleSaveWebdav} sx={{ mt: 1, mb: 3 }} disableElevation>
-                  Save Sync Settings
+                <Button
+                  variant="contained"
+                  onClick={handleSaveWebdav}
+                  disabled={isTestingWebdav}
+                  sx={{ mt: 1, textTransform: "none" }}
+                  disableElevation
+                >
+                  {isTestingWebdav ? "Verifying & Saving..." : "Save Sync Settings"}
                 </Button>
               </>
             )}

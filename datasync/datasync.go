@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -23,6 +24,9 @@ import (
 	"cozyssh/scratchpad"
 )
 
+var syncDebounceTime = 10 * time.Second
+var deleteMarkerFileMaxAge = 30 * 24 * time.Hour
+
 var (
 	gCfg     *config.Config
 	meta     syncMetadata
@@ -35,8 +39,10 @@ var (
 	syncError  = ""
 	syncTime   int64
 
-	syncTriggerChan = make(chan struct{}, 1)
-	hrefRegex       = regexp.MustCompile(`(?i)<[A-Za-z0-9:]*href>([^<]+)</[A-Za-z0-9:]*href>`)
+	syncTimer   *time.Timer
+	syncTimerMu sync.Mutex
+	syncNowHook func()
+	hrefRegex   = regexp.MustCompile(`(?i)<[A-Za-z0-9:]*href>([^<]+)</[A-Za-z0-9:]*href>`)
 )
 
 type syncMetadata struct {
@@ -59,6 +65,7 @@ func Init(cfg *config.Config) {
 	// Register callbacks
 	config.OnButtonDelete = OnButtonDelete
 	config.OnButtonUpdate = TriggerSync
+	config.OnVarsUpdate = TriggerSync
 	scratchpad.OnPageDelete = OnPageDelete
 	scratchpad.OnPageUpdate = TriggerSync
 
@@ -78,24 +85,22 @@ func Init(cfg *config.Config) {
 	}()
 }
 
-func init() {
-	go func() {
-		for range syncTriggerChan {
-			// Debounce multiple rapid updates
-			time.Sleep(1 * time.Second)
-			SyncNow()
-		}
-	}()
-}
-
 func TriggerSync() {
-	select {
-	case syncTriggerChan <- struct{}{}:
-	default:
+	syncTimerMu.Lock()
+	defer syncTimerMu.Unlock()
+
+	if syncTimer != nil {
+		syncTimer.Stop()
 	}
+	syncTimer = time.AfterFunc(syncDebounceTime, func() {
+		SyncNow()
+	})
 }
 
 func SyncNow() error {
+	if syncNowHook != nil {
+		syncNowHook()
+	}
 	syncMu.Lock()
 	defer syncMu.Unlock()
 
@@ -178,21 +183,29 @@ func cleanDeletedMaps() {
 	defer metaMu.Unlock()
 
 	changed := false
+	nowMs := time.Now().UnixMilli()
+	maxAgeMs := deleteMarkerFileMaxAge.Milliseconds()
 
-	// Clean active buttons from deleted list
-	activeBtns := gCfg.GetButtons()
-	for _, b := range activeBtns {
-		if _, exists := meta.DeletedButtons[b.Id]; exists {
-			delete(meta.DeletedButtons, b.Id)
+	// Clean active buttons from deleted list, and also clean old deletions (>30 days)
+	activeBtns := make(map[string]bool)
+	for _, b := range gCfg.GetButtons() {
+		activeBtns[b.Id] = true
+	}
+	for id, ts := range meta.DeletedButtons {
+		if activeBtns[id] || (nowMs-ts) > maxAgeMs {
+			delete(meta.DeletedButtons, id)
 			changed = true
 		}
 	}
 
-	// Clean active pages from deleted list
-	activePages := scratchpad.GetPages()
-	for _, p := range activePages {
-		if _, exists := meta.DeletedPages[p.Id]; exists {
-			delete(meta.DeletedPages, p.Id)
+	// Clean active pages from deleted list, and also clean old deletions (>30 days)
+	activePages := make(map[string]bool)
+	for _, p := range scratchpad.GetPages() {
+		activePages[p.Id] = true
+	}
+	for id, ts := range meta.DeletedPages {
+		if activePages[id] || (nowMs-ts) > maxAgeMs {
+			delete(meta.DeletedPages, id)
 			changed = true
 		}
 	}
@@ -269,6 +282,9 @@ func listRemoteFiles(cfg *config.Config) ([]remoteFileInfo, error) {
 		} else if strings.HasPrefix(filename, "scratchpad_") {
 			itemType = "scratchpad"
 			rawName = filename[len("scratchpad_"):]
+		} else if strings.HasPrefix(filename, "vars_") {
+			itemType = "vars"
+			rawName = filename[len("vars_"):]
 		} else {
 			continue
 		}
@@ -280,16 +296,27 @@ func listRemoteFiles(cfg *config.Config) ([]remoteFileInfo, error) {
 			nameWithoutExt = nameWithoutExt[:len(nameWithoutExt)-2]
 		}
 
-		lastUnderscore := strings.LastIndex(nameWithoutExt, "_")
-		if lastUnderscore == -1 {
-			continue
-		}
-
-		id := nameWithoutExt[:lastUnderscore]
-		tsStr := nameWithoutExt[lastUnderscore+1:]
-		timestamp, err := strconv.ParseInt(tsStr, 10, 64)
-		if err != nil {
-			continue
+		var id string
+		var timestamp int64
+		if itemType == "vars" {
+			id = "global"
+			ts, err := strconv.ParseInt(nameWithoutExt, 10, 64)
+			if err != nil {
+				continue
+			}
+			timestamp = ts
+		} else {
+			lastUnderscore := strings.LastIndex(nameWithoutExt, "_")
+			if lastUnderscore == -1 {
+				continue
+			}
+			id = nameWithoutExt[:lastUnderscore]
+			tsStr := nameWithoutExt[lastUnderscore+1:]
+			ts, err := strconv.ParseInt(tsStr, 10, 64)
+			if err != nil {
+				continue
+			}
+			timestamp = ts
 		}
 
 		files = append(files, remoteFileInfo{
@@ -316,13 +343,25 @@ func performSync() error {
 		return fmt.Errorf("failed to list WebDAV files: %w", err)
 	}
 
+	var remoteFilesToDelete []string
+	nowMs := time.Now().UnixMilli()
+	maxAgeMs := (30 * 24 * time.Hour).Milliseconds()
+
 	remoteButtons := make(map[string][]remoteFileInfo)
 	remotePages := make(map[string][]remoteFileInfo)
+	var remoteVars []remoteFileInfo
 	for _, f := range remoteFiles {
-		if f.itemType == "button" {
+		if f.isDeleted && (nowMs-f.timestamp) > maxAgeMs {
+			remoteFilesToDelete = append(remoteFilesToDelete, f.filename)
+			continue
+		}
+		switch f.itemType {
+		case "button":
 			remoteButtons[f.id] = append(remoteButtons[f.id], f)
-		} else if f.itemType == "scratchpad" {
+		case "scratchpad":
 			remotePages[f.id] = append(remotePages[f.id], f)
+		case "vars":
+			remoteVars = append(remoteVars, f)
 		}
 	}
 
@@ -342,14 +381,11 @@ func performSync() error {
 		deletedButtons[k] = v
 	}
 	deletedPages := make(map[string]int64)
-	for k, v := range meta.DeletedPages {
-		deletedPages[k] = v
-	}
+	maps.Copy(deletedPages, meta.DeletedPages)
 	metaMu.Unlock()
 
 	var buttonsToUpsert []*models.ButtonData
 	var pagesToUpsert []*models.ScratchpadPage
-	var remoteFilesToDelete []string
 
 	davBaseUrl := strings.TrimRight(gCfg.WebdavUrl, "/") + "/cozyssh/"
 
@@ -535,6 +571,62 @@ func performSync() error {
 		}
 	}
 
+	// Sync Vars
+	{
+		localTS := gCfg.VarsMtime
+		var remoteTS int64 = -1
+		var remoteWinner remoteFileInfo
+		for _, rf := range remoteVars {
+			if rf.timestamp > remoteTS {
+				remoteTS = rf.timestamp
+				remoteWinner = rf
+			}
+			remoteFilesToDelete = append(remoteFilesToDelete, rf.filename)
+		}
+
+		if localTS > remoteTS {
+			if localTS > 0 {
+				var varsWrap struct {
+					Mtime int64             `json:"mtime"`
+					Vars  map[string]string `json:"vars"`
+				}
+				varsWrap.Mtime = localTS
+				varsWrap.Vars = gCfg.GetVars()
+				data, err := json.Marshal(varsWrap)
+				if err != nil {
+					return err
+				}
+				filename := fmt.Sprintf("vars_%d.json", localTS)
+				resp, err := makeRequest("PUT", davBaseUrl+filename, bytes.NewReader(data), gCfg)
+				if err != nil {
+					return err
+				}
+				resp.Body.Close()
+			}
+		} else if remoteTS > localTS {
+			resp, err := makeRequest("GET", davBaseUrl+remoteWinner.filename, nil, gCfg)
+			if err != nil {
+				return err
+			}
+			var varsWrap struct {
+				Mtime int64             `json:"mtime"`
+				Vars  map[string]string `json:"vars"`
+			}
+			err = json.NewDecoder(resp.Body).Decode(&varsWrap)
+			resp.Body.Close()
+			if err == nil {
+				if err := gCfg.SetVars(varsWrap.Vars, varsWrap.Mtime); err != nil {
+					log.Printf("sync set vars err: %v", err)
+				}
+			}
+			remoteFilesToDelete = removeFromStringSlice(remoteFilesToDelete, remoteWinner.filename)
+		} else {
+			if remoteTS >= 0 {
+				remoteFilesToDelete = removeFromStringSlice(remoteFilesToDelete, remoteWinner.filename)
+			}
+		}
+	}
+
 	if len(buttonsToUpsert) > 0 {
 		err := gCfg.UpsertButtons(buttonsToUpsert, true)
 		if err != nil {
@@ -565,4 +657,219 @@ func removeFromStringSlice(slice []string, val string) []string {
 		}
 	}
 	return result
+}
+
+func DetectChanges(urlVal, userVal, passwordVal string) (*models.SyncDetectionResult, error) {
+	if gCfg == nil {
+		return nil, fmt.Errorf("config not initialized")
+	}
+
+	tempCfg := &config.Config{
+		WebdavUrl:      urlVal,
+		WebdavUser:     userVal,
+		WebdavPassword: passwordVal,
+		ConfigDir:      gCfg.ConfigDir,
+	}
+	if tempCfg.WebdavPassword == "" {
+		tempCfg.WebdavPassword = gCfg.WebdavPassword
+	}
+
+	if err := ensureWebdavDir(tempCfg); err != nil {
+		return nil, fmt.Errorf("failed to connect or create folder on WebDAV: %w", err)
+	}
+
+	remoteFiles, err := listRemoteFiles(tempCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list WebDAV files: %w", err)
+	}
+
+	if len(remoteFiles) == 0 {
+		return &models.SyncDetectionResult{
+			BrandNew: true,
+		}, nil
+	}
+
+	var uploadCount int
+	var downloadCount int
+	var deleteLocalCount int
+	var deleteRemoteCount int
+
+	var remoteFilesToDelete []string
+	nowMs := time.Now().UnixMilli()
+	maxAgeMs := (30 * 24 * time.Hour).Milliseconds()
+
+	remoteButtons := make(map[string][]remoteFileInfo)
+	remotePages := make(map[string][]remoteFileInfo)
+	var remoteVars []remoteFileInfo
+	for _, f := range remoteFiles {
+		if f.isDeleted && (nowMs-f.timestamp) > maxAgeMs {
+			remoteFilesToDelete = append(remoteFilesToDelete, f.filename)
+			continue
+		}
+		switch f.itemType {
+		case "button":
+			remoteButtons[f.id] = append(remoteButtons[f.id], f)
+		case "scratchpad":
+			remotePages[f.id] = append(remotePages[f.id], f)
+		case "vars":
+			remoteVars = append(remoteVars, f)
+		}
+	}
+
+	localButtons := make(map[string]*models.ButtonData)
+	for _, b := range gCfg.GetButtons() {
+		localButtons[b.Id] = b
+	}
+
+	localPages := make(map[string]*models.ScratchpadPage)
+	for _, p := range scratchpad.GetPages() {
+		localPages[p.Id] = p
+	}
+
+	metaMu.Lock()
+	deletedButtons := make(map[string]int64)
+	for k, v := range meta.DeletedButtons {
+		deletedButtons[k] = v
+	}
+	deletedPages := make(map[string]int64)
+	maps.Copy(deletedPages, meta.DeletedPages)
+	metaMu.Unlock()
+
+	buttonIDs := make(map[string]bool)
+	for id := range localButtons {
+		buttonIDs[id] = true
+	}
+	for id := range deletedButtons {
+		buttonIDs[id] = true
+	}
+	for id := range remoteButtons {
+		buttonIDs[id] = true
+	}
+
+	for id := range buttonIDs {
+		var localTS int64 = -1
+		if b, ok := localButtons[id]; ok {
+			localTS = b.Mtime
+		} else if ts, ok := deletedButtons[id]; ok {
+			localTS = ts
+		}
+
+		var remoteTS int64 = -1
+		remoteActive := false
+		remoteDeleted := false
+		var remoteWinner remoteFileInfo
+		if rFiles, ok := remoteButtons[id]; ok {
+			for _, rf := range rFiles {
+				if rf.timestamp > remoteTS {
+					remoteTS = rf.timestamp
+					remoteActive = !rf.isDeleted
+					remoteDeleted = rf.isDeleted
+					remoteWinner = rf
+				}
+				remoteFilesToDelete = append(remoteFilesToDelete, rf.filename)
+			}
+		}
+
+		if localTS > remoteTS {
+			uploadCount++
+		} else if remoteTS > localTS {
+			if remoteActive {
+				downloadCount++
+			} else if remoteDeleted {
+				deleteLocalCount++
+			}
+			remoteFilesToDelete = removeFromStringSlice(remoteFilesToDelete, remoteWinner.filename)
+		} else {
+			if remoteTS >= 0 {
+				remoteFilesToDelete = removeFromStringSlice(remoteFilesToDelete, remoteWinner.filename)
+			}
+		}
+	}
+
+	pageIDs := make(map[string]bool)
+	for id := range localPages {
+		pageIDs[id] = true
+	}
+	for id := range deletedPages {
+		pageIDs[id] = true
+	}
+	for id := range remotePages {
+		pageIDs[id] = true
+	}
+
+	for id := range pageIDs {
+		var localTS int64 = -1
+		if p, ok := localPages[id]; ok {
+			localTS = p.LastUpdated
+		} else if ts, ok := deletedPages[id]; ok {
+			localTS = ts
+		}
+
+		var remoteTS int64 = -1
+		remoteActive := false
+		remoteDeleted := false
+		var remoteWinner remoteFileInfo
+		if rFiles, ok := remotePages[id]; ok {
+			for _, rf := range rFiles {
+				if rf.timestamp > remoteTS {
+					remoteTS = rf.timestamp
+					remoteActive = !rf.isDeleted
+					remoteDeleted = rf.isDeleted
+					remoteWinner = rf
+				}
+				remoteFilesToDelete = append(remoteFilesToDelete, rf.filename)
+			}
+		}
+
+		if localTS > remoteTS {
+			uploadCount++
+		} else if remoteTS > localTS {
+			if remoteActive {
+				downloadCount++
+			} else if remoteDeleted {
+				deleteLocalCount++
+			}
+			remoteFilesToDelete = removeFromStringSlice(remoteFilesToDelete, remoteWinner.filename)
+		} else {
+			if remoteTS >= 0 {
+				remoteFilesToDelete = removeFromStringSlice(remoteFilesToDelete, remoteWinner.filename)
+			}
+		}
+	}
+
+	{
+		localTS := gCfg.VarsMtime
+		var remoteTS int64 = -1
+		var remoteWinner remoteFileInfo
+		for _, rf := range remoteVars {
+			if rf.timestamp > remoteTS {
+				remoteTS = rf.timestamp
+				remoteWinner = rf
+			}
+			remoteFilesToDelete = append(remoteFilesToDelete, rf.filename)
+		}
+
+		if localTS > remoteTS {
+			if localTS > 0 {
+				uploadCount++
+			}
+		} else if remoteTS > localTS {
+			downloadCount++
+			remoteFilesToDelete = removeFromStringSlice(remoteFilesToDelete, remoteWinner.filename)
+		} else {
+			if remoteTS >= 0 {
+				remoteFilesToDelete = removeFromStringSlice(remoteFilesToDelete, remoteWinner.filename)
+			}
+		}
+	}
+
+	deleteRemoteCount = len(remoteFilesToDelete)
+
+	return &models.SyncDetectionResult{
+		BrandNew:          false,
+		UploadCount:       uploadCount,
+		DownloadCount:     downloadCount,
+		DeleteLocalCount:  deleteLocalCount,
+		DeleteRemoteCount: deleteRemoteCount,
+	}, nil
 }

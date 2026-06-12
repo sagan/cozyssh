@@ -47,6 +47,14 @@ type SaveWebdavSettingsRequest struct {
 	Enabled  bool   `json:"enabled"`
 }
 
+type SyncDetectionResult struct {
+	BrandNew          bool `json:"brandNew"`
+	UploadCount       int  `json:"uploadCount"`
+	DownloadCount     int  `json:"downloadCount"`
+	DeleteLocalCount  int  `json:"deleteLocalCount"`
+	DeleteRemoteCount int  `json:"deleteRemoteCount"`
+}
+
 type HostData struct {
 	Name          string   `json:"name"`
 	HostName      string   `json:"hostname"`
@@ -75,16 +83,16 @@ type HostData struct {
 }
 
 type ButtonData struct {
-	Id       string `yaml:"id" json:"id"`
-	Name     string `yaml:"name" json:"name"`
-	Type     string `yaml:"type" json:"type" ts_type:"\"send_string\" | \"terminal_function\" | \"misc\" | \"open_terminal\" | \"run_script\""`
-	Payload  string `yaml:"payload" json:"payload"`
-	Group    string `yaml:"group" json:"group"`
-	AutoRun  int    `yaml:"autorun" json:"autorun"`
-	Order    int    `yaml:"order" json:"order"`
-	Shortcut string `yaml:"shortcut" json:"shortcut"`
-	LiquidJS int    `yaml:"liquidjs,omitempty" json:"liquidjs,omitempty"`
-	Mtime    int64  `yaml:"mtime" json:"mtime,omitempty"` // button modified unix timestamp in milliseconds
+	Id       string `json:"id"`
+	Name     string `json:"name"`
+	Type     string `json:"type" ts_type:"\"send_string\" | \"terminal_function\" | \"misc\" | \"open_terminal\" | \"run_script\""`
+	Payload  string `json:"payload"`
+	Group    string `json:"group"`
+	AutoRun  int    `json:"autorun"`
+	Order    int    `json:"order"`
+	Shortcut string `json:"shortcut"`
+	LiquidJS int    `json:"liquidjs,omitempty"`
+	Mtime    int64  `json:"mtime,omitempty"` // button modified unix timestamp in milliseconds
 }
 
 type ButtonsMoveRequest struct {

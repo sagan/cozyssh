@@ -7,7 +7,7 @@ import (
 )
 
 func TestButtonSorting(t *testing.T) {
-	tmp, _ := os.CreateTemp("", "config*.yaml")
+	tmp, _ := os.CreateTemp("", "config*.json")
 	tmp.Close()
 	defer os.Remove(tmp.Name())
 
@@ -31,7 +31,7 @@ func TestButtonSorting(t *testing.T) {
 }
 
 func TestMoveButton(t *testing.T) {
-	tmp, _ := os.CreateTemp("", "config*.yaml")
+	tmp, _ := os.CreateTemp("", "config*.json")
 	tmp.Close()
 	defer os.Remove(tmp.Name())
 
@@ -108,7 +108,7 @@ func TestMoveButton(t *testing.T) {
 }
 
 func TestAddButtonDefaultOrder(t *testing.T) {
-	tmp, _ := os.CreateTemp("", "config*.yaml")
+	tmp, _ := os.CreateTemp("", "config*.json")
 	tmp.Close()
 	defer os.Remove(tmp.Name())
 

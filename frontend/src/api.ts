@@ -38,6 +38,13 @@ export interface SaveWebdavSettingsRequest {
     password: string;
     enabled: boolean;
 }
+export interface SyncDetectionResult {
+    brandNew: boolean;
+    uploadCount: number;
+    downloadCount: number;
+    deleteLocalCount: number;
+    deleteRemoteCount: number;
+}
 export interface HostData {
     name: string;
     hostname: string;

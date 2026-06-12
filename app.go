@@ -168,7 +168,7 @@ func Run(ctx context.Context, args []string) error {
 			},
 			Hosts:   hosts,
 			Buttons: cfg.GetButtons(), // Use thread-safe GetButtons()
-			Vars:    cfg.Vars,
+			Vars:    cfg.GetVars(),
 			Pinned:  pinned,
 			Recents: recents.Get(),
 		}
@@ -530,6 +530,26 @@ func Run(ctx context.Context, args []string) error {
 				datasync.TriggerSync()
 			}
 			w.WriteHeader(http.StatusNoContent)
+		}))))
+
+	mux.Handle("/api/settings/webdav/detect", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var req models.SaveWebdavSettingsRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+			res, err := datasync.DetectChanges(req.Url, req.User, req.Password)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(res)
 		}))))
 
 	mux.Handle("/api/settings/webdav/sync", securityMiddleware(auth.Middleware(http.HandlerFunc(

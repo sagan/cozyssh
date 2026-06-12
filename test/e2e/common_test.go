@@ -156,13 +156,13 @@ func setupTestConfig(t *testing.T) string {
 	t.Cleanup(func() { os.RemoveAll(tmpDir) })
 
 	// yescrypt hashed password of "123456"
-	configContent := `
-addr: "127.0.0.1:0"
-app_password_hash: "` + PASSWORD_HASH_123456 + `"
-sshdir: "` + filepath.ToSlash(filepath.Join(tmpDir, ".ssh")) + `"
-insecure_ignore_host_key: true
-`
-	err = common.AtomicWriteFileContents(filepath.Join(tmpDir, "config.yaml"), []byte(configContent))
+	configContent := `{
+  "addr": "127.0.0.1:0",
+  "app_password_hash": "` + PASSWORD_HASH_123456 + `",
+  "sshdir": "` + filepath.ToSlash(filepath.Join(tmpDir, ".ssh")) + `",
+  "insecure_ignore_host_key": true
+}`
+	err = common.AtomicWriteFileContents(filepath.Join(tmpDir, "config.json"), []byte(configContent))
 	if err != nil {
 		t.Fatal(err)
 	}

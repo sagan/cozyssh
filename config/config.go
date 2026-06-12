@@ -14,8 +14,6 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
 	"cozyssh/common"
 	"cozyssh/constants"
 	"cozyssh/models"
@@ -36,25 +34,27 @@ func SetWritePasswordToFile(v bool) { writePasswordToFile = v }
 var (
 	OnButtonDelete func(id string, timestamp int64)
 	OnButtonUpdate func()
+	OnVarsUpdate   func()
 )
 
 type Config struct {
-	Addr                  string               `yaml:"addr"`
-	SiteName              string               `yaml:"sitename"`
-	AppPasswordHash       string               `yaml:"app_password_hash"`
-	SSHDir                string               `yaml:"sshdir"` // openssh config dir, defaults to ~/.ssh
-	Buttons               []*models.ButtonData `yaml:"-"`      // Moved to buttons.json
-	ConfigPath            string               `yaml:"-"` // internal use
-	ConfigDir             string               `yaml:"-"` // internal use
-	Vars                  map[string]string    `yaml:"vars"`
-	InsecureIgnoreHostKey bool                 `yaml:"insecure_ignore_host_key"`
-	SavePassword          string               `yaml:"save_password"`
-	SessionSecret         string               `yaml:"session_secret"`
+	Addr                  string               `json:"addr"`
+	SiteName              string               `json:"sitename"`
+	AppPasswordHash       string               `json:"app_password_hash"`
+	SSHDir                string               `json:"sshdir"` // openssh config dir, defaults to ~/.ssh
+	Buttons               []*models.ButtonData `json:"-"`      // Moved to buttons.json
+	ConfigPath            string               `json:"-"` // internal use
+	ConfigDir             string               `json:"-"` // internal use
+	Vars                  map[string]string    `json:"-"`      // Moved to vars.json
+	VarsMtime             int64                `json:"-"`      // Last modified timestamp of vars
+	InsecureIgnoreHostKey bool                 `json:"insecure_ignore_host_key"`
+	SavePassword          string               `json:"save_password"`
+	SessionSecret         string               `json:"session_secret"`
 	// WebDAV Settings
-	WebdavUrl             string               `yaml:"webdav_url"`
-	WebdavUser            string               `yaml:"webdav_user"`
-	WebdavPassword        string               `yaml:"webdav_password"`
-	WebdavEnabled         bool                 `yaml:"webdav_enabled"`
+	WebdavUrl             string               `json:"webdav_url"`
+	WebdavUser            string               `json:"webdav_user"`
+	WebdavPassword        string               `json:"webdav_password"`
+	WebdavEnabled         bool                 `json:"webdav_enabled"`
 	mu                    sync.Mutex
 }
 
@@ -72,7 +72,7 @@ func LoadConfig(customDir string) (*Config, error) {
 		return nil, fmt.Errorf("failed to create config dir: %w", err)
 	}
 
-	configPath := filepath.Join(configDir, "config.yaml")
+	configPath := filepath.Join(configDir, "config.json")
 
 	var cfg Config
 	data, err := os.ReadFile(configPath)
@@ -89,12 +89,15 @@ func LoadConfig(customDir string) (*Config, error) {
 			if err := cfgPtr.loadButtons(); err != nil {
 				return nil, fmt.Errorf("failed to load buttons: %w", err)
 			}
+			if err := cfgPtr.loadVars(); err != nil {
+				return nil, fmt.Errorf("failed to load vars: %w", err)
+			}
 			return cfgPtr, nil
 		}
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
+	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
@@ -105,6 +108,9 @@ func LoadConfig(customDir string) (*Config, error) {
 
 	if err := cfg.loadButtons(); err != nil {
 		return nil, fmt.Errorf("failed to load buttons: %w", err)
+	}
+	if err := cfg.loadVars(); err != nil {
+		return nil, fmt.Errorf("failed to load vars: %w", err)
 	}
 
 	cfg.sortButtons()
@@ -193,7 +199,9 @@ func generateAndSaveConfig(path string) (*Config, error) {
 	}
 
 	err = common.AtomicWriteFile(path, func(writer io.Writer) error {
-		return yaml.NewEncoder(writer).Encode(cfg)
+		enc := json.NewEncoder(writer)
+		enc.SetIndent("", "  ")
+		return enc.Encode(cfg)
 	})
 	if err != nil {
 		return nil, err
@@ -245,7 +253,9 @@ func (c *Config) ChangeAppPassword(newPassword string) error {
 
 func (c *Config) save() error {
 	return common.AtomicWriteFile(c.ConfigPath, func(writer io.Writer) error {
-		return yaml.NewEncoder(writer).Encode(c)
+		enc := json.NewEncoder(writer)
+		enc.SetIndent("", "  ")
+		return enc.Encode(c)
 	})
 }
 
@@ -281,6 +291,72 @@ func (c *Config) loadButtons() error {
 		c.Buttons = []*models.ButtonData{}
 	}
 	return nil
+}
+
+func (c *Config) saveVars() error {
+	varsPath := filepath.Join(c.ConfigDir, "vars.json")
+	var varsWrap struct {
+		Mtime int64             `json:"mtime"`
+		Vars  map[string]string `json:"vars"`
+	}
+	varsWrap.Mtime = c.VarsMtime
+	varsWrap.Vars = c.Vars
+	return common.AtomicWriteFile(varsPath, func(writer io.Writer) error {
+		return json.NewEncoder(writer).Encode(varsWrap)
+	})
+}
+
+func (c *Config) loadVars() error {
+	varsPath := filepath.Join(c.ConfigDir, "vars.json")
+	data, err := os.ReadFile(varsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Migrate from config.yaml if any exist, otherwise initialize empty
+			if c.Vars == nil {
+				c.Vars = make(map[string]string)
+			}
+			if len(c.Vars) > 0 {
+				c.VarsMtime = time.Now().UnixMilli()
+			} else {
+				c.VarsMtime = 0
+			}
+			return c.saveVars()
+		}
+		return err
+	}
+	var varsWrap struct {
+		Mtime int64             `json:"mtime"`
+		Vars  map[string]string `json:"vars"`
+	}
+	if err := json.Unmarshal(data, &varsWrap); err != nil {
+		return err
+	}
+	c.Vars = varsWrap.Vars
+	c.VarsMtime = varsWrap.Mtime
+	if c.Vars == nil {
+		c.Vars = make(map[string]string)
+	}
+	return nil
+}
+
+func (c *Config) SetVars(vars map[string]string, mtime int64) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.Vars = vars
+	c.VarsMtime = mtime
+	return c.saveVars()
+}
+
+func (c *Config) GetVars() map[string]string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	copied := make(map[string]string, len(c.Vars))
+	for k, v := range c.Vars {
+		copied[k] = v
+	}
+	return copied
 }
 
 func (c *Config) GetButtons() []*models.ButtonData {
@@ -639,8 +715,16 @@ func (c *Config) UpdateVars(updates map[string]*string) error {
 			c.Vars[k] = *v
 		}
 	}
+	c.VarsMtime = time.Now().UnixMilli()
 
-	return c.save()
+	if err := c.saveVars(); err != nil {
+		return err
+	}
+
+	if OnVarsUpdate != nil {
+		OnVarsUpdate()
+	}
+	return nil
 }
 
 func (c *Config) UpdateSavePassword(value string) error {
