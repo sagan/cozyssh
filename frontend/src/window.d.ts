@@ -380,8 +380,12 @@ declare global {
   }
 
   // Window Desktop app bindings. All are unset (undefined) in web app
-  var appOpenNewWindow: (targetURL: string) => void | undefined;
-  var appToggleFullscreen: () => void | undefined;
+  var appOpenNewWindow: ((targetURL: string) => Promise<void>) | undefined;
+  var appToggleFullscreen: (() => Promise<void>) | undefined;
+  /**
+   * Get auth token (only valid for desktop app).
+   */
+  var appAuth: (() => Promise<string>) | undefined;
 }
 
 export {};

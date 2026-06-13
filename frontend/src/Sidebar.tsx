@@ -1377,30 +1377,34 @@ export default function Sidebar({
           >
             Open Scratchpad
           </MenuItem>
-          <MenuItem
-            onClick={async () => {
-              setAnchorEl(null);
-              if (await dialogs.confirm("Log out of current device?")) {
-                onLogout();
-              }
-            }}
-          >
-            Logout
-          </MenuItem>
-          <MenuItem
-            onClick={async () => {
-              setAnchorEl(null);
-              if (
-                await dialogs.confirm(
-                  "Are you sure you want to log out of all browser sessions? This will invalidate all active sessions and require you to sign in again on all devices.",
-                )
-              ) {
-                onLogoutAll();
-              }
-            }}
-          >
-            Logout All
-          </MenuItem>
+          {__CS_ENV__ === 0 && (
+            <>
+              <MenuItem
+                onClick={async () => {
+                  setAnchorEl(null);
+                  if (await dialogs.confirm("Log out of current device?")) {
+                    onLogout();
+                  }
+                }}
+              >
+                Logout
+              </MenuItem>
+              <MenuItem
+                onClick={async () => {
+                  setAnchorEl(null);
+                  if (
+                    await dialogs.confirm(
+                      "Are you sure you want to log out of all browser sessions? This will invalidate all active sessions and require you to sign in again on all devices.",
+                    )
+                  ) {
+                    onLogoutAll();
+                  }
+                }}
+              >
+                Logout All
+              </MenuItem>
+            </>
+          )}
         </Menu>
       </Toolbar>
 

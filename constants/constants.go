@@ -28,6 +28,7 @@ const (
 	SYNC_METADATA_FILE                      = "sync-metadata.json"
 	APP_CONFIG_FILE                         = "app-config.json"
 	WEBVIEW2_DATA_DIR                       = "webview2_data"
+	INITIAL_PASSWORD_FILE                   = "initial_password.txt"
 	APP_DEFAULT_WIDTH                       = 1024
 	APP_DEFAULT_HEIGHT                      = 768
 	APP_MIN_WIDTH                           = 400

@@ -2,6 +2,7 @@ package common
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -67,4 +68,13 @@ func AtomicWriteFileContents(path string, data []byte) error {
 func IsSameOrigin(r *http.Request) bool {
 	origin := r.Header.Get(headers.Origin)
 	return origin == "" || strings.HasSuffix(origin, "://"+r.Host)
+}
+
+func ReadStdinLine() string {
+	var line string
+	_, err := fmt.Scanln(&line)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(line)
 }

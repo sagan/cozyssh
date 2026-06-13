@@ -17,8 +17,9 @@ type LocalSession struct {
 }
 
 var (
-	DefaultShell                   string // Default system shell full path, e.g. "/bin/bash"
-	DefaultShellIsLegacyPowershell bool   // True if default shell is legacy Windows "powershell.exe"
+	DefaultShell                    string // Default system shell full path, e.g. "/bin/bash"
+	DefaultShellArguments           []string
+	DefaultShellRunCmdlineArguments []string
 )
 
 func init() {
@@ -33,7 +34,7 @@ func init() {
 		var shells []string
 		// try common shells
 		if os.PathSeparator == '\\' {
-			shells = []string{"pwsh", "powershell"}
+			shells = []string{"pwsh", "powershell", "cmd"}
 		} else {
 			shells = []string{"zsh", "bash", "sh"}
 		}
@@ -46,23 +47,28 @@ func init() {
 	})()
 
 	shellBasename := strings.TrimSuffix(strings.ToLower(filepath.Base(DefaultShell)), ".exe")
-	if shellBasename == "powershell" {
-		DefaultShellIsLegacyPowershell = true
+	switch shellBasename {
+	case "pwsh":
+		DefaultShellRunCmdlineArguments = []string{"-NoLogo", "-l", "-c"}
+		DefaultShellArguments = []string{"-NoLogo", "-l"}
+	case "powershell":
+		DefaultShellRunCmdlineArguments = []string{"-NoLogo", "-Command"}
+	case "cmd":
+		DefaultShellRunCmdlineArguments = []string{"/c"}
+	default:
+		DefaultShellRunCmdlineArguments = []string{"-l", "-c"}
+		DefaultShellArguments = []string{"-l"}
 	}
 }
 
 func Start(initialCmd string) (*LocalSession, error) {
 	args := []string{}
-	if !DefaultShellIsLegacyPowershell {
-		args = append(args, "-l") // linux shell / pwsh has -l flag to set up a login shell
-	}
 
 	if initialCmd != "" {
-		if DefaultShellIsLegacyPowershell {
-			args = append(args, "-Command", initialCmd)
-		} else {
-			args = append(args, "-c", initialCmd)
-		}
+		args = append(args, DefaultShellRunCmdlineArguments...)
+		args = append(args, initialCmd)
+	} else {
+		args = append(args, DefaultShellArguments...)
 	}
 
 	p, err := pty.New()

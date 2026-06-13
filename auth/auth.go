@@ -48,7 +48,7 @@ func AddAuthRoutes(mux *http.ServeMux, getFullData func(r *http.Request) *models
 		passstore.SetEncryptionKey(req.Password)
 
 		res := &models.LoginResponse{
-			Token:    generateToken(),
+			Token:    GenerateToken(),
 			Fulldata: getFullData(r),
 		}
 		w.Header().Set(headers.ContentType, constants.MIME_JSON)
@@ -63,7 +63,7 @@ func AddAuthRoutes(mux *http.ServeMux, getFullData func(r *http.Request) *models
 	})
 }
 
-func generateToken() string {
+func GenerateToken() string {
 	mac := hmac.New(sha256.New, []byte(globalConfig.AppPasswordHash))
 	// Adding a random salt/signature intent parameter
 	mac.Write([]byte(globalConfig.SessionSecret))
@@ -98,7 +98,7 @@ func isValidToken(token string) bool {
 		return false
 	}
 
-	expected := generateToken()
+	expected := GenerateToken()
 	// Using ConstantTimeCompare neutralizes timing-attacks
 	return subtle.ConstantTimeCompare([]byte(token), []byte(expected)) == 1
 }

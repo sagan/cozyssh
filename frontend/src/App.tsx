@@ -29,7 +29,7 @@ function App() {
     return <InsecureWarning />;
   }
 
-  const handleLoginSuccess = (data: FullData) => {
+  const handleLoginSuccess = (data?: FullData) => {
     setFullData(data);
     setHasAuth(true);
   };

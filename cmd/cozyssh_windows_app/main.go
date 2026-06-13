@@ -5,12 +5,15 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 	"unsafe"
@@ -20,6 +23,7 @@ import (
 	"golang.org/x/sys/windows"
 
 	"cozyssh"
+	"cozyssh/auth"
 	"cozyssh/common"
 	"cozyssh/config"
 	"cozyssh/constants"
@@ -100,14 +104,22 @@ const (
 	pmRemove = 0x0001
 )
 
-// A global reference to track the original window processing loop
-var originalWndProc uintptr
+// Global state sync orchestration references
+var (
+	originalWndProc uintptr
+	trayInstance    *systray.SystemTray
+)
 
 type monitorInfo struct {
 	CbSize    uint32
 	RcMonitor winRect
 	RcWork    winRect
 	DwFlags   uint32
+}
+
+type uiReferences struct {
+	w    webview2.WebView
+	hwnd uintptr
 }
 
 func isMinimized(hwnd uintptr) bool {
@@ -159,41 +171,118 @@ func saveAppConfig(cfgDir string, ac *AppConfig) {
 // ---- Main -----------------------------------------------------------------
 
 func main() {
+	flags := cozyssh.ParseFlags(os.Args[1:])
+	if flags.DoResetPassword || flags.Err == flag.ErrHelp {
+		// CLI mode
+		attachToParentConsole()
+		flags = cozyssh.ParseFlags(os.Args[1:]) // parse again since stdout changed so it can output help
+		err := cozyssh.RunWithFlags(context.Background(), flags, nil)
+
+		// Force flush to make sure everything hits the terminal screen
+		os.Stdout.Sync()
+		// Send the mock keystroke to force a fresh prompt line down below
+		releaseConsoleCleanly()
+
+		if err != nil && err != context.Canceled {
+			os.Exit(1)
+		} else {
+			os.Exit(0)
+		}
+	}
+
 	// Desktop (windowsgui) build has no console; write initial password to file.
 	config.SetWritePasswordToFile(true)
 
 	// Load config to discover the server address and data directory.
-	// cozyssh.Run loads it again internally — harmless.
 	cfg, err := config.LoadConfig("")
 	if err != nil {
-		showFatalDialog("CozySSH startup error", fmt.Sprintf("Failed to load config: %v", err))
+		messageBox("CozySSH startup error", fmt.Sprintf("Failed to load config: %v", err))
 		os.Exit(1)
 	}
 
-	// FAST ZERO-DELAY DETECTION
-	// Try connecting to the local address. A local network dial takes virtually 0ms.
-	isServerRunning := false
-	dialer := net.Dialer{Timeout: 15 * time.Millisecond}
-	if conn, err := dialer.Dial("tcp", cfg.Addr); err == nil {
-		conn.Close()
-		isServerRunning = true
+	// 1. Initialize Leader Election Mutex
+	mutexName, err := windows.UTF16PtrFromString("Local\\CozySSH_Mutex_" + strings.ReplaceAll(cfg.ConfigDir, "\\", "_"))
+	if err != nil {
+		fmt.Printf("Error creating mutex name: %v\n", err)
+		os.Exit(1)
 	}
+	mutexHandle, err := windows.CreateMutex(nil, false, mutexName)
+	// FIX: Explicitly bypass the ERROR_ALREADY_EXISTS error since it means the object exists successfully
+	if err != nil && !errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
+		fmt.Printf("Failed to create mutex: %v\n", err)
+		os.Exit(1)
+	}
+	defer windows.CloseHandle(mutexHandle)
+
+	// 2. Initialize Readiness Cross-Process Event (Manual Reset, Unsignaled initially)
+	eventName, err := windows.UTF16PtrFromString("Local\\CozySSH_Event_" + strings.ReplaceAll(cfg.ConfigDir, "\\", "_"))
+	if err != nil {
+		fmt.Printf("Error creating event name: %v\n", err)
+		os.Exit(1)
+	}
+	eventHandle, err := windows.CreateEvent(nil, 1, 0, eventName)
+	// FIX: Explicitly bypass the ERROR_ALREADY_EXISTS error since it means the object exists successfully
+	if err != nil && !errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
+		fmt.Printf("Failed to create event: %v\n", err)
+		os.Exit(1)
+	}
+	defer windows.CloseHandle(eventHandle)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	serverErr := make(chan error, 1)
 
-	if !isServerRunning {
-		// First instance: Start background engine routines normally
-		readyChan := make(chan string, 1)
-		go func() { serverErr <- cozyssh.Run(ctx, os.Args[1:], readyChan) }()
+	// Channel to safely pass UI window pointers to the background failover thread
+	uiReady := make(chan uiReferences, 1)
 
-		select {
-		case err := <-serverErr:
-			showFatalDialog("CozySSH startup error", fmt.Sprintf("Server exited early: %v", err))
-			os.Exit(1)
-		case <-readyChan:
-			// Port successfully opened by our core system loop
+	// 3. Launch pure kernel-level background manager handling failovers (0% CPU idle overhead)
+	go func() {
+		// This blocks entirely in the OS kernel until the mutex becomes free
+		event, err := windows.WaitForSingleObject(mutexHandle, windows.INFINITE)
+		if err != nil {
+			return
+		}
+
+		if event == windows.WAIT_OBJECT_0 || event == windows.WAIT_ABANDONED {
+			serverCtx, serverCancel := context.WithCancel(ctx)
+			defer serverCancel()
+
+			readyChan := make(chan string, 1)
+			go func() { serverErr <- cozyssh.RunWithFlags(serverCtx, flags, readyChan) }()
+
+			select {
+			case <-ctx.Done():
+				return
+			case err := <-serverErr:
+				messageBox("CozySSH startup error", fmt.Sprintf("Server exited early: %v", err))
+				os.Exit(1)
+			case <-readyChan:
+				// Engine server port opened successfully
+			}
+
+			// Latch cross-process event open to unblock any future or launching UIs
+			windows.SetEvent(eventHandle)
+
+			// Wait until local WebView2 parameters are safely generated on the main thread
+			ui := <-uiReady
+
+			// Inject tray and window handler interceptions onto running UI window thread
+			ui.w.Dispatch(func() {
+				setupSystemTrayAndHook(ui.w, ui.hwnd)
+			})
+
+			// Keep this background thread alive to maintain ownership of the Win32 Mutex
+			<-ctx.Done()
+			windows.ResetEvent(eventHandle)
+			windows.ReleaseMutex(mutexHandle)
+		}
+	}()
+
+	// 4. Block UI initialization completely until SOME instance has the engine ready
+	for {
+		state, _ := windows.WaitForSingleObject(eventHandle, 100)
+		if state == windows.WAIT_OBJECT_0 {
+			break
 		}
 	}
 
@@ -211,8 +300,7 @@ func main() {
 	w := webview2.NewWithOptions(webview2.WebViewOptions{
 		Debug:     true, // allow F12 DevTools
 		AutoFocus: true,
-		// the default data path is volatile that some data like page zoom level doesn't persist across restarts.
-		DataPath: filepath.Join(cfg.ConfigDir, constants.WEBVIEW2_DATA_DIR),
+		DataPath:  filepath.Join(cfg.ConfigDir, constants.WEBVIEW2_DATA_DIR),
 		WindowOptions: webview2.WindowOptions{
 			Title:     constants.APP_NAME,
 			Width:     initWidth,
@@ -223,7 +311,7 @@ func main() {
 		},
 	})
 	if w == nil {
-		showFatalDialog("CozySSH startup error",
+		messageBox("CozySSH startup error",
 			"Failed to create WebView2 window.\nMake sure the Microsoft Edge WebView2 Runtime is installed.")
 		os.Exit(1)
 	}
@@ -231,29 +319,32 @@ func main() {
 
 	hwnd := uintptr(w.Window())
 
+	// Push UI references into the buffered channel for the background manager
+	uiReady <- uiReferences{w: w, hwnd: hwnd}
+
 	var isFullscreen bool
 	var savedWindowRect winRect
-	var savedWindowStyle uint32 // FIX: Changed from int32 to uint32
+	var savedWindowStyle uint32
 
+	w.Bind("appAuth", func() (string, error) {
+		token := auth.GenerateToken()
+		return token, nil
+	})
 	w.Bind("appToggleFullscreen", func() {
 		w.Dispatch(func() {
 			if !isFullscreen {
-				// 1. Save current window placement and style flags
 				style, _, _ := procGetWindowLong.Call(hwnd, uintptr(gwlStyle))
-				savedWindowStyle = uint32(style) // Safely cast the uintptr return value to uint32
+				savedWindowStyle = uint32(style)
 				procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&savedWindowRect)))
 
-				// 2. Identify the current monitor's dimensions
 				monitor, _, _ := procMonitorFromWindow.Call(hwnd, monitorDefaultToNearest)
 				var mi monitorInfo
 				mi.CbSize = uint32(unsafe.Sizeof(mi))
 				procGetMonitorInfo.Call(monitor, uintptr(unsafe.Pointer(&mi)))
 
-				// 3. Strip window borders and title bars (convert to popup style) using uint32 calculations
 				newStyle := uintptr(savedWindowStyle & ^wsOverlappedWindow | wsPopup)
 				procSetWindowLong.Call(hwnd, uintptr(gwlStyle), newStyle)
 
-				// 4. Stretch window across the absolute monitor bounds
 				width := mi.RcMonitor.Right - mi.RcMonitor.Left
 				height := mi.RcMonitor.Bottom - mi.RcMonitor.Top
 				procSetWindowPos.Call(hwnd, 0,
@@ -263,7 +354,6 @@ func main() {
 				)
 				isFullscreen = true
 			} else {
-				// 5. Revert back to original window decorations and bounds
 				procSetWindowLong.Call(hwnd, uintptr(gwlStyle), uintptr(savedWindowStyle))
 				width := savedWindowRect.Right - savedWindowRect.Left
 				height := savedWindowRect.Bottom - savedWindowRect.Top
@@ -282,8 +372,6 @@ func main() {
 			runtime.LockOSThread()
 			defer runtime.UnlockOSThread()
 
-			// 1. Explicitly bind this thread to a Win32 Single-Threaded Apartment (STA)
-			// 0x2 = COINIT_APARTMENTTHREADED, 0x4 = COINIT_DISABLE_OLE1DDE
 			procCoInitialize.Call(0, 0x2|0x4)
 			defer procCoUninitialize.Call()
 
@@ -305,16 +393,9 @@ func main() {
 			}
 
 			subW.Navigate(targetURL)
-
-			// Blocks here while the secondary window is open
 			subW.Run()
-
-			// 2. The window loop ended, cleanly destroy the local webview controller structures
 			subW.Destroy()
 
-			// 3. LINGERING MESSAGE PUMP
-			// Run a short, dedicated loop to drain any remaining detachment messages
-			// sent by the Edge browser process before letting the thread die completely.
 			var msg struct {
 				Hwnd    uintptr
 				Message uint32
@@ -326,57 +407,19 @@ func main() {
 
 			endTime := time.Now().Add(150 * time.Millisecond)
 			for time.Now().Before(endTime) {
-				// PeekMessageW(&msg, hwnd=0, msgMin=0, msgMax=0, PM_REMOVE)
 				ret, _, _ := procPeekMessage.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0, pmRemove)
 				if ret != 0 {
 					procTranslateMessage.Call(uintptr(unsafe.Pointer(&msg)))
 					procDispatchMessage.Call(uintptr(unsafe.Pointer(&msg)))
 				} else {
-					// Queue is empty, yield to the OS briefly
 					time.Sleep(2 * time.Millisecond)
 				}
 			}
 		}()
 	})
 
-	var tray *systray.SystemTray
-	if !isServerRunning {
-		// SETUP THE SYSTEM TRAY
-		// We instantiate the tray on the main thread, but DO NOT call tray.Run().
-		// WebView2's native window event loop will automatically pump messages for the tray.
-		tray = systray.New()
-
-		// Note: Replace with your actual embedded icon bytes
-		iconBytes, _ := cozyssh.FrontendFS.ReadFile("frontend/dist/favicon.png")
-		tray.SetIcon(iconBytes).SetTooltip(constants.APP_NAME + " Background Service").Show()
-
-		// Build the tray menu interactions
-		menu := systray.NewMenu()
-		onClick := func() {
-			w.Dispatch(func() {
-				procShowWindow.Call(hwnd, uintptr(swShow))
-			})
-		}
-		menu.Add("Open "+constants.APP_NAME, onClick)
-		menu.AddSeparator()
-		menu.Add("Quit", func() {
-			w.Terminate()
-		})
-		tray.SetMenu(menu)
-		tray.OnClick(onClick)
-
-		// INJECT THE WIN32 WINDOW CLOSE HOOK
-		// Swap the native window handler with our interceptor logic
-		newCallback := syscall.NewCallback(windowProc)
-		oldProc, _, _ := procSetWindowLongPtr.Call(hwnd, uintptr(gwlpWndProc), newCallback)
-		originalWndProc = oldProc
-	}
-
 	w.Navigate(serverURL + "/")
 
-	// Poll window state every second and persist changes.
-	// We track the last *non-maximized* dimensions separately so that when
-	// the user maximizes the window, we don't overwrite the restore size.
 	lastNonMaxW, lastNonMaxH := constants.APP_DEFAULT_WIDTH, constants.APP_DEFAULT_HEIGHT
 
 	stopPoll := make(chan struct{})
@@ -394,7 +437,6 @@ func main() {
 					continue
 				}
 				cw, ch, cmax := windowState(hwnd)
-				// Prevent saving if the window rect is invalid or too small
 				if cw < 400 || ch < 300 {
 					continue
 				}
@@ -414,11 +456,11 @@ func main() {
 		}
 	}()
 
-	// Blocking message loop — returns when the window is closed.
 	w.Run()
 	close(stopPoll)
-	if tray != nil {
-		tray.Remove() // Remove icon from the taskbar notification area
+
+	if trayInstance != nil {
+		trayInstance.Remove()
 	}
 
 	cancel()
@@ -431,34 +473,48 @@ func main() {
 	}
 }
 
-// showFatalDialog displays an error in a small WebView2 window.
-// Used because this binary has no console (-H windowsgui).
-func showFatalDialog(title, message string) {
-	w := webview2.NewWithOptions(webview2.WebViewOptions{
-		WindowOptions: webview2.WindowOptions{
-			Title:  title,
-			Width:  480,
-			Height: 200,
-			Center: true,
-		},
-	})
-	if w == nil {
-		return
+// setupSystemTrayAndHook builds the tray interface and window procedures on the active leader.
+func setupSystemTrayAndHook(w webview2.WebView, hwnd uintptr) {
+	trayInstance = systray.New()
+
+	iconBytes, _ := cozyssh.FrontendFS.ReadFile("frontend/dist/favicon.png")
+	trayInstance.SetIcon(iconBytes).SetTooltip(constants.APP_NAME + " Background Service").Show()
+
+	menu := systray.NewMenu()
+	onClick := func() {
+		w.Dispatch(func() {
+			procShowWindow.Call(hwnd, uintptr(swShow))
+		})
 	}
-	defer w.Destroy()
-	w.SetHtml(fmt.Sprintf(`<!DOCTYPE html><html><body style="font-family:sans-serif;padding:20px">
-<h3 style="color:#c00">%s</h3><p>%s</p>
-<button onclick="window.close()">Close</button></body></html>`, title, message))
-	w.Run()
+	menu.Add("Open "+constants.APP_NAME, onClick)
+	menu.AddSeparator()
+	menu.Add("Quit", func() {
+		w.Terminate()
+	})
+	trayInstance.SetMenu(menu)
+	trayInstance.OnClick(onClick)
+
+	newCallback := syscall.NewCallback(windowProc)
+	oldProc, _, _ := procSetWindowLongPtr.Call(hwnd, uintptr(gwlpWndProc), newCallback)
+	originalWndProc = oldProc
+}
+
+func messageBox(title, message string) {
+	textPtr, _ := windows.UTF16PtrFromString(message)
+	titlePtr, _ := windows.UTF16PtrFromString(title)
+	// Define the style flags (Combine buttons and icons using the bitwise OR '|' operator)
+	// You can customize buttons (e.g., MB_YESNO) and icons (e.g., MB_ICONWARNING)
+	boxType := windows.MB_OK | windows.MB_ICONINFORMATION
+	// Trigger the native Windows Message Box
+	// The first argument is the handle to the owner window. Passing 0 means no owner.
+	windows.MessageBox(windows.HWND(0), textPtr, titlePtr, uint32(boxType))
 }
 
 func windowProc(hwnd uintptr, msg uint32, wparam uintptr, lparam uintptr) uintptr {
 	if msg == wmClose {
-		// User clicked "X"! Intercept the signal and hide the window instead of closing it
 		procShowWindow.Call(hwnd, uintptr(swHide))
 		return 0
 	}
-	// Route all other UI window messages (resize, paint, drag) back to WebView2
 	ret, _, _ := procCallWindowProc.Call(originalWndProc, hwnd, uintptr(msg), wparam, lparam)
 	return ret
 }

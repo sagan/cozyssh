@@ -212,17 +212,9 @@ func generateAndSaveConfig(path string) (*Config, error) {
 
 	if writePasswordToFile {
 		// Desktop (windowsgui) mode: no terminal available, write to a file.
-		pwdFile := filepath.Join(filepath.Dir(path), "initial_password.txt")
-		content := fmt.Sprintf(
-			"Welcome to CozySSH!\n"+
-				"A new app password has been generated for you:\n\n"+
-				"  %s\n\n"+
-				"Store this safely.\n"+
-				"If you forget the password, you can reset it by running cozyssh with -do-reset-password flag.\n",
-			password,
-		)
-		if err := common.AtomicWriteFileContents(pwdFile, []byte(content)); err != nil {
-			log.Printf("WARNING: could not write initial_password.txt: %v", err)
+		pwdFile := filepath.Join(filepath.Dir(path), constants.INITIAL_PASSWORD_FILE)
+		if err := common.AtomicWriteFileContents(pwdFile, []byte(password)); err != nil {
+			log.Printf("WARNING: could not write %s: %v", constants.INITIAL_PASSWORD_FILE, err)
 		}
 	} else {
 		// CLI mode: print to stderr as usual.

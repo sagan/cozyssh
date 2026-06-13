@@ -4,12 +4,34 @@ import { Box, Button, TextField, Typography, Paper, ThemeProvider, CssBaseline }
 import { version as PACKAGE_JSON_VERSION } from "../package.json";
 import type { FullData, LoginRequest, LoginResponse, Manifest } from "./api";
 import { APP_NAME, BROWSER_STORAGE_KEY_TOKEN, HEADER_CONTENT_TYPE, METHOD_POST, MIME_JSON } from "./constants";
-import { forceReload, loginTheme } from "./common";
+import { forceReload, getKeyCombination, loginTheme } from "./common";
 import { dialogs } from "./Dialogs";
 
-export default function Login({ onLoginSuccess }: { onLoginSuccess: (data: FullData) => void }) {
+export default function Login({ onLoginSuccess }: { onLoginSuccess: (data?: FullData) => void }) {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const keycomb = getKeyCombination(e);
+
+      if (e.key === "Alt" && !e.ctrlKey && !e.shiftKey && !e.metaKey) {
+        e.preventDefault();
+        return;
+      }
+
+      switch (keycomb) {
+        case "ctrl+alt+shift+r": {
+          e.preventDefault();
+          forceReload();
+          return;
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   useEffect(() => {
     fetch("/manifest.json")
@@ -62,6 +84,31 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess: (data: FullD
     forceReload();
   }, []);
 
+  useEffect(() => {
+    (async function () {
+      if (!window.appAuth) {
+        return;
+      }
+      const token = await window.appAuth();
+      await dialogs.alert(
+        `Welcome to CozySSH Desktop App`,
+        `Please check the initial app password in "initial_password.txt" file of CozySSH data directory.
+
+The default data dir path:
+
+  %USERPROFILE%\\.config\\cozyssh(Windows)
+  ~/.config/cozyssh</b> (Linux)
+
+The app password can be changed from Dashboard menu - Settings. You can safely delete the initial_password.txt file after you remember or change the app password.
+
+Please remember the app password. You will need it to access your saved SSH passwords.`,
+      );
+      localStorage.setItem(BROWSER_STORAGE_KEY_TOKEN, token);
+      onLoginSuccess();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <ThemeProvider theme={loginTheme}>
       <CssBaseline />
@@ -85,16 +132,6 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess: (data: FullD
               Sign In
             </Button>
           </Box>
-          {__CS_ENV__ === 1 && (
-            <Typography variant="body2" sx={{ fontSize: "0.7rem", mt: 1, textAlign: "left" }}>
-              The initial password can be found in <code>initial_password.txt</code> in the CozySSH data directory. The
-              default data dir path:
-              <br />
-              <b>%USERPROFILE%\.config\cozyssh</b> (Windows)
-              <br />
-              <b>~/.config/cozyssh</b> (Linux)
-            </Typography>
-          )}
           <Button
             variant="text"
             size="small"

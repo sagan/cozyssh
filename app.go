@@ -1,7 +1,6 @@
 package cozyssh
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"embed"
@@ -17,6 +16,7 @@ import (
 	"net/http/pprof"
 	"os"
 	os_exec "os/exec"
+	"slices"
 	"strings"
 	"time"
 
@@ -24,6 +24,7 @@ import (
 	"golang.org/x/term"
 
 	"cozyssh/auth"
+	"cozyssh/common"
 	"cozyssh/config"
 	"cozyssh/constants"
 	"cozyssh/datasync"
@@ -48,19 +49,39 @@ var (
 	date    = "unknown"
 )
 
+type CozysshFlags struct {
+	ConfigDir       string
+	ListenAddr      string
+	AllowInsecure   bool
+	Debug           bool
+	DoResetPassword bool
+	Err             error
+}
+
+func ParseFlags(args []string) *CozysshFlags {
+	flags := &CozysshFlags{}
+	fs := flag.NewFlagSet("cozyssh", flag.ContinueOnError)
+	fs.StringVar(&flags.ConfigDir, "config", "", "Custom configuration directory (defaults to ~/.config/cozyssh)")
+	fs.StringVar(&flags.ListenAddr, "addr", "", "Listen address (overrides config file)")
+	fs.BoolVar(&flags.AllowInsecure, "allow-insecure-http", false, "Lift the security restriction for non-local HTTP environments")
+	fs.BoolVar(&flags.Debug, "debug", false, "Enable debug mode")
+	fs.BoolVar(&flags.DoResetPassword, "do-reset-password", false, "Reset the app password to a random one and exit")
+	flags.Err = fs.Parse(args)
+	return flags
+}
+
 func Run(ctx context.Context, args []string, ready chan<- string) error {
-	flags := flag.NewFlagSet("cozyssh", flag.ContinueOnError)
-	configDir := flags.String("config", "", "Custom configuration directory (defaults to ~/.config/cozyssh)")
-	listenAddr := flags.String("addr", "", "Listen address (overrides config file)")
-	allowInsecure := flags.Bool("allow-insecure-http", false, "Lift the security restriction for non-local HTTP environments")
-	debug := flags.Bool("debug", false, "Enable debug mode")
-	resetPwd := flags.Bool("do-reset-password", false, "Reset the app password to a random one and exit")
-	if err := flags.Parse(args); err != nil {
-		return err
+	flags := ParseFlags(args)
+	return RunWithFlags(ctx, flags, ready)
+}
+
+func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string) error {
+	if flags.Err != nil {
+		return flags.Err
 	}
 
-	if *resetPwd {
-		cfg, err := config.LoadConfig(*configDir)
+	if flags.DoResetPassword {
+		cfg, err := config.LoadConfig(flags.ConfigDir)
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}
@@ -79,11 +100,7 @@ func Run(ctx context.Context, args []string, ready chan<- string) error {
 			if oldPwdVal == "" {
 				fmt.Fprintln(os.Stderr, "WARNING: Resetting the app password without providing the old password will result in losing all saved SSH passwords!")
 				fmt.Fprint(os.Stderr, "Are you sure you want to continue (y/n) [n]? ")
-				line, err := bufio.NewReader(os.Stdin).ReadString('\n')
-				if err != nil {
-					return fmt.Errorf("failed to read confirmation: %w", err)
-				}
-				answer := strings.ToLower(strings.TrimSpace(line))
+				answer := strings.ToLower(common.ReadStdinLine())
 				if answer != "yes" && answer != "y" {
 					fmt.Fprintln(os.Stderr, "Aborted.")
 					return nil
@@ -117,12 +134,12 @@ func Run(ctx context.Context, args []string, ready chan<- string) error {
 	}
 
 	// 1. Load config and ensure App Password is created
-	cfg, err := config.LoadConfig(*configDir)
+	cfg, err := config.LoadConfig(flags.ConfigDir)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
-	if *listenAddr != "" {
-		cfg.Addr = *listenAddr
+	if flags.ListenAddr != "" {
+		cfg.Addr = flags.ListenAddr
 	}
 	cfg.ApplyConfig()
 	log.Printf("CozySSH %s; Config file: %s", version, cfg.ConfigPath)
@@ -157,7 +174,7 @@ func Run(ctx context.Context, args []string, ready chan<- string) error {
 			Sysinfo: models.Sysinfo{
 				Hostname:        displayHostname,
 				Version:         version,
-				InsecureAllowed: *allowInsecure,
+				InsecureAllowed: flags.AllowInsecure,
 				IsSecure:        isSecureRequest(r),
 				SavePassword:    cfg.SavePassword,
 			},
@@ -174,7 +191,7 @@ func Run(ctx context.Context, args []string, ready chan<- string) error {
 
 	securityMiddleware := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if *allowInsecure || isSecureRequest(r) {
+			if flags.AllowInsecure || isSecureRequest(r) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -210,7 +227,7 @@ func Run(ctx context.Context, args []string, ready chan<- string) error {
 	mux.HandleFunc("/api/preflight", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(headers.ContentType, constants.MIME_JSON)
 		json.NewEncoder(w).Encode(&models.PreflightResponse{
-			InsecureAllowed: *allowInsecure,
+			InsecureAllowed: flags.AllowInsecure,
 			IsSecure:        isSecureRequest(r),
 		})
 	})
@@ -519,7 +536,7 @@ func Run(ctx context.Context, args []string, ready chan<- string) error {
 
 	mux.Handle("/api/settings/webdav/status", securityMiddleware(auth.Middleware(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
-			cfg, err := config.LoadConfig(*configDir)
+			cfg, err := config.LoadConfig(flags.ConfigDir)
 			if err != nil {
 				http.Error(w, "failed to load config", http.StatusInternalServerError)
 			}
@@ -873,12 +890,9 @@ func Run(ctx context.Context, args []string, ready chan<- string) error {
 				return
 			}
 
-			var cmd *os_exec.Cmd
-			if !localpty.DefaultShellIsLegacyPowershell {
-				cmd = os_exec.Command(localpty.DefaultShell, "-l", "-c", req.Cmdline)
-			} else {
-				cmd = os_exec.Command(localpty.DefaultShell, "-Command", req.Cmdline)
-			}
+			args := slices.Clone(localpty.DefaultShellRunCmdlineArguments)
+			args = append(args, req.Cmdline)
+			cmd := os_exec.Command(localpty.DefaultShell, args...)
 			if home, err := os.UserHomeDir(); err == nil {
 				cmd.Dir = home
 			}
@@ -927,12 +941,9 @@ func Run(ctx context.Context, args []string, ready chan<- string) error {
 
 			if s == nil {
 				// Local fallback (same behaviour as /api/exec).
-				var cmd *os_exec.Cmd
-				if !localpty.DefaultShellIsLegacyPowershell {
-					cmd = os_exec.Command(localpty.DefaultShell, "-l", "-c", req.Cmdline)
-				} else {
-					cmd = os_exec.Command(localpty.DefaultShell, "-Command", req.Cmdline)
-				}
+				args := slices.Clone(localpty.DefaultShellRunCmdlineArguments)
+				args = append(args, req.Cmdline)
+				cmd := os_exec.Command(localpty.DefaultShell, args...)
 				if home, err := os.UserHomeDir(); err == nil {
 					cmd.Dir = home
 				}
@@ -1044,7 +1055,7 @@ func Run(ctx context.Context, args []string, ready chan<- string) error {
 	}
 
 	// debug endpoints are not protected by auth so only enable them when addr is local only
-	if *debug && (strings.HasPrefix(addr, "127.0.0.1:") || strings.HasPrefix(addr, "[::1]:")) {
+	if flags.Debug && (strings.HasPrefix(addr, "127.0.0.1:") || strings.HasPrefix(addr, "[::1]:")) {
 		mux.HandleFunc("/debug/pprof/", pprof.Index)
 		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
 		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
