@@ -138,6 +138,9 @@ func setStatus(status, errMsg string) {
 }
 
 func GetStatus() (string, string, int64) {
+	if gCfg == nil || !gCfg.WebdavEnabled {
+		return "disabled", "", 0
+	}
 	statusMu.Lock()
 	defer statusMu.Unlock()
 	return syncStatus, syncError, syncTime
@@ -293,6 +296,9 @@ func listRemoteFiles(cfg *config.Config) ([]remoteFileInfo, error) {
 		} else if strings.HasPrefix(filename, "vars_") {
 			itemType = "vars"
 			rawName = filename[len("vars_"):]
+		} else if strings.HasPrefix(filename, "config_") {
+			itemType = "vars"
+			rawName = filename[len("config_"):]
 		} else {
 			continue
 		}
@@ -357,7 +363,7 @@ func performSync() error {
 
 	remoteButtons := make(map[string][]remoteFileInfo)
 	remotePages := make(map[string][]remoteFileInfo)
-	var remoteVars []remoteFileInfo
+	var remoteVarsFiles []remoteFileInfo
 	for _, f := range remoteFiles {
 		if f.isDeleted && (nowMs-f.timestamp) > maxAgeMs {
 			remoteFilesToDelete = append(remoteFilesToDelete, f.filename)
@@ -369,7 +375,7 @@ func performSync() error {
 		case "scratchpad":
 			remotePages[f.id] = append(remotePages[f.id], f)
 		case "vars":
-			remoteVars = append(remoteVars, f)
+			remoteVarsFiles = append(remoteVarsFiles, f)
 		}
 	}
 
@@ -581,56 +587,193 @@ func performSync() error {
 
 	// Sync Vars
 	{
-		localTS := gCfg.VarsMtime
-		var remoteTS int64 = -1
+		localVars := gCfg.GetVars()
+		localMtime := gCfg.GetVarsMtime()
+
+		var remoteVars map[string]string
+		var remoteMtime map[string]int64
 		var remoteWinner remoteFileInfo
-		for _, rf := range remoteVars {
+		remoteWinnerLoaded := false
+
+		var remoteTS int64 = -1
+		for _, rf := range remoteVarsFiles {
 			if rf.timestamp > remoteTS {
 				remoteTS = rf.timestamp
 				remoteWinner = rf
 			}
-			remoteFilesToDelete = append(remoteFilesToDelete, rf.filename)
 		}
 
-		if localTS > remoteTS {
-			if localTS > 0 {
-				var varsWrap struct {
-					Mtime int64             `json:"mtime"`
-					Vars  map[string]string `json:"vars"`
-				}
-				varsWrap.Mtime = localTS
-				varsWrap.Vars = gCfg.GetVars()
-				data, err := json.Marshal(varsWrap)
-				if err != nil {
-					return err
-				}
-				filename := fmt.Sprintf("vars_%d.json", localTS)
-				resp, err := makeRequest("PUT", davBaseUrl+filename, bytes.NewReader(data), gCfg)
-				if err != nil {
-					return err
-				}
-				resp.Body.Close()
-			}
-		} else if remoteTS > localTS {
+		if remoteTS > 0 {
 			resp, err := makeRequest("GET", davBaseUrl+remoteWinner.filename, nil, gCfg)
+			if err == nil {
+				defer resp.Body.Close()
+				bodyBytes, readErr := io.ReadAll(resp.Body)
+				if readErr == nil {
+					var raw struct {
+						Mtime json.RawMessage   `json:"mtime"`
+						Vars  map[string]string `json:"vars"`
+					}
+					if json.Unmarshal(bodyBytes, &raw) == nil {
+						remoteVars = raw.Vars
+						remoteMtime = make(map[string]int64)
+						if len(raw.Mtime) > 0 {
+							var mtimeMap map[string]int64
+							if json.Unmarshal(raw.Mtime, &mtimeMap) == nil {
+								remoteMtime = mtimeMap
+							} else {
+								var mtimeVal int64
+								if json.Unmarshal(raw.Mtime, &mtimeVal) == nil {
+									for k := range remoteVars {
+										remoteMtime[k] = mtimeVal
+									}
+								}
+							}
+						}
+						remoteWinnerLoaded = true
+					}
+				}
+			}
+		}
+
+		if remoteVars == nil {
+			remoteVars = make(map[string]string)
+		}
+		if remoteMtime == nil {
+			remoteMtime = make(map[string]int64)
+		}
+
+		// Merge local and remote
+		mergedVars := make(map[string]string)
+		mergedMtime := make(map[string]int64)
+
+		allKeys := make(map[string]bool)
+		for k := range localMtime {
+			allKeys[k] = true
+		}
+		for k := range remoteMtime {
+			allKeys[k] = true
+		}
+
+		for k := range allKeys {
+			lTS := localMtime[k]
+			rTS := remoteMtime[k]
+
+			if rTS > lTS {
+				mergedMtime[k] = rTS
+				if val, exists := remoteVars[k]; exists {
+					mergedVars[k] = val
+				}
+			} else {
+				mergedMtime[k] = lTS
+				if val, exists := localVars[k]; exists {
+					mergedVars[k] = val
+				}
+			}
+		}
+
+		// Clean up old deletion markers from mergedMtime
+		now := time.Now().UnixMilli()
+		maxAgeMs := (30 * 24 * time.Hour).Milliseconds()
+		for k, ts := range mergedMtime {
+			if _, exists := mergedVars[k]; !exists {
+				if (now - ts) > maxAgeMs {
+					delete(mergedMtime, k)
+				}
+			}
+		}
+
+		// Update local vars if local is different from merged
+		localDiffers := false
+		if len(localVars) != len(mergedVars) || len(localMtime) != len(mergedMtime) {
+			localDiffers = true
+		} else {
+			for k, v := range mergedVars {
+				if lv, ok := localVars[k]; !ok || lv != v {
+					localDiffers = true
+					break
+				}
+			}
+			if !localDiffers {
+				for k, ts := range mergedMtime {
+					if lts, ok := localMtime[k]; !ok || lts != ts {
+						localDiffers = true
+						break
+					}
+				}
+			}
+		}
+
+		if localDiffers {
+			if err := gCfg.SetVars(mergedVars, mergedMtime); err != nil {
+				log.Printf("sync set vars err: %v", err)
+			}
+		}
+
+		// Check if merged is different from remote winner, and upload if needed
+		remoteDiffers := false
+		if !remoteWinnerLoaded {
+			if len(mergedMtime) > 0 {
+				remoteDiffers = true
+			}
+		} else {
+			if len(remoteVars) != len(mergedVars) || len(remoteMtime) != len(mergedMtime) {
+				remoteDiffers = true
+			} else {
+				for k, v := range mergedVars {
+					if rv, ok := remoteVars[k]; !ok || rv != v {
+						remoteDiffers = true
+						break
+					}
+				}
+				if !remoteDiffers {
+					for k, ts := range mergedMtime {
+						if rts, ok := remoteMtime[k]; !ok || rts != ts {
+							remoteDiffers = true
+							break
+						}
+					}
+				}
+			}
+		}
+
+		if remoteDiffers {
+			var maxTS int64 = -1
+			for _, ts := range mergedMtime {
+				if ts > maxTS {
+					maxTS = ts
+				}
+			}
+			if maxTS <= 0 {
+				maxTS = now
+			}
+
+			var varsWrap struct {
+				Mtime map[string]int64  `json:"mtime"`
+				Vars  map[string]string `json:"vars"`
+			}
+			varsWrap.Mtime = mergedMtime
+			varsWrap.Vars = mergedVars
+
+			data, err := json.Marshal(varsWrap)
 			if err != nil {
 				return err
 			}
-			var varsWrap struct {
-				Mtime int64             `json:"mtime"`
-				Vars  map[string]string `json:"vars"`
+
+			filename := fmt.Sprintf("config_%d.json", maxTS)
+			resp, err := makeRequest("PUT", davBaseUrl+filename, bytes.NewReader(data), gCfg)
+			if err != nil {
+				return err
 			}
-			err = json.NewDecoder(resp.Body).Decode(&varsWrap)
 			resp.Body.Close()
-			if err == nil {
-				if err := gCfg.SetVars(varsWrap.Vars, varsWrap.Mtime); err != nil {
-					log.Printf("sync set vars err: %v", err)
-				}
+
+			for _, rf := range remoteVarsFiles {
+				remoteFilesToDelete = append(remoteFilesToDelete, rf.filename)
 			}
-			remoteFilesToDelete = removeFromStringSlice(remoteFilesToDelete, remoteWinner.filename)
 		} else {
-			if remoteTS >= 0 {
-				remoteFilesToDelete = removeFromStringSlice(remoteFilesToDelete, remoteWinner.filename)
+			for _, rf := range remoteVarsFiles {
+				if !remoteWinnerLoaded || rf.filename != remoteWinner.filename {
+					remoteFilesToDelete = append(remoteFilesToDelete, rf.filename)
+				}
 			}
 		}
 	}
@@ -708,7 +851,7 @@ func DetectChanges(urlVal, userVal, passwordVal string) (*models.SyncDetectionRe
 
 	remoteButtons := make(map[string][]remoteFileInfo)
 	remotePages := make(map[string][]remoteFileInfo)
-	var remoteVars []remoteFileInfo
+	var remoteVarsFiles []remoteFileInfo
 	for _, f := range remoteFiles {
 		if f.isDeleted && (nowMs-f.timestamp) > maxAgeMs {
 			remoteFilesToDelete = append(remoteFilesToDelete, f.filename)
@@ -720,7 +863,7 @@ func DetectChanges(urlVal, userVal, passwordVal string) (*models.SyncDetectionRe
 		case "scratchpad":
 			remotePages[f.id] = append(remotePages[f.id], f)
 		case "vars":
-			remoteVars = append(remoteVars, f)
+			remoteVarsFiles = append(remoteVarsFiles, f)
 		}
 	}
 
@@ -845,28 +988,165 @@ func DetectChanges(urlVal, userVal, passwordVal string) (*models.SyncDetectionRe
 		}
 	}
 
+	// Detect Changes for Vars
 	{
-		localTS := gCfg.VarsMtime
-		var remoteTS int64 = -1
+		localVars := gCfg.GetVars()
+		localMtime := gCfg.GetVarsMtime()
+
+		var remoteVars map[string]string
+		var remoteMtime map[string]int64
 		var remoteWinner remoteFileInfo
-		for _, rf := range remoteVars {
+		remoteWinnerLoaded := false
+
+		var remoteTS int64 = -1
+		for _, rf := range remoteVarsFiles {
 			if rf.timestamp > remoteTS {
 				remoteTS = rf.timestamp
 				remoteWinner = rf
 			}
-			remoteFilesToDelete = append(remoteFilesToDelete, rf.filename)
 		}
 
-		if localTS > remoteTS {
-			if localTS > 0 {
-				uploadCount++
+		if remoteTS > 0 {
+			resp, err := makeRequest("GET", tempCfg.WebdavUrl+"/cozyssh/"+remoteWinner.filename, nil, tempCfg)
+			if err == nil {
+				defer resp.Body.Close()
+				bodyBytes, readErr := io.ReadAll(resp.Body)
+				if readErr == nil {
+					var raw struct {
+						Mtime json.RawMessage   `json:"mtime"`
+						Vars  map[string]string `json:"vars"`
+					}
+					if json.Unmarshal(bodyBytes, &raw) == nil {
+						remoteVars = raw.Vars
+						remoteMtime = make(map[string]int64)
+						if len(raw.Mtime) > 0 {
+							var mtimeMap map[string]int64
+							if json.Unmarshal(raw.Mtime, &mtimeMap) == nil {
+								remoteMtime = mtimeMap
+							} else {
+								var mtimeVal int64
+								if json.Unmarshal(raw.Mtime, &mtimeVal) == nil {
+									for k := range remoteVars {
+										remoteMtime[k] = mtimeVal
+									}
+								}
+							}
+						}
+						remoteWinnerLoaded = true
+					}
+				}
 			}
-		} else if remoteTS > localTS {
-			downloadCount++
-			remoteFilesToDelete = removeFromStringSlice(remoteFilesToDelete, remoteWinner.filename)
+		}
+
+		if remoteVars == nil {
+			remoteVars = make(map[string]string)
+		}
+		if remoteMtime == nil {
+			remoteMtime = make(map[string]int64)
+		}
+
+		// Merge local and remote
+		mergedVars := make(map[string]string)
+		mergedMtime := make(map[string]int64)
+
+		allKeys := make(map[string]bool)
+		for k := range localMtime {
+			allKeys[k] = true
+		}
+		for k := range remoteMtime {
+			allKeys[k] = true
+		}
+
+		for k := range allKeys {
+			lTS := localMtime[k]
+			rTS := remoteMtime[k]
+
+			if rTS > lTS {
+				mergedMtime[k] = rTS
+				if val, exists := remoteVars[k]; exists {
+					mergedVars[k] = val
+				}
+			} else {
+				mergedMtime[k] = lTS
+				if val, exists := localVars[k]; exists {
+					mergedVars[k] = val
+				}
+			}
+		}
+
+		// Clean up old deletion markers from mergedMtime
+		now := time.Now().UnixMilli()
+		maxAgeMs := (30 * 24 * time.Hour).Milliseconds()
+		for k, ts := range mergedMtime {
+			if _, exists := mergedVars[k]; !exists {
+				if (now - ts) > maxAgeMs {
+					delete(mergedMtime, k)
+				}
+			}
+		}
+
+		// Check if local differs from merged (download count)
+		localDiffers := false
+		if len(localVars) != len(mergedVars) || len(localMtime) != len(mergedMtime) {
+			localDiffers = true
 		} else {
-			if remoteTS >= 0 {
-				remoteFilesToDelete = removeFromStringSlice(remoteFilesToDelete, remoteWinner.filename)
+			for k, v := range mergedVars {
+				if lv, ok := localVars[k]; !ok || lv != v {
+					localDiffers = true
+					break
+				}
+			}
+			if !localDiffers {
+				for k, ts := range mergedMtime {
+					if lts, ok := localMtime[k]; !ok || lts != ts {
+						localDiffers = true
+						break
+					}
+				}
+			}
+		}
+
+		if localDiffers {
+			downloadCount++
+		}
+
+		// Check if remote differs from merged (upload count)
+		remoteDiffers := false
+		if !remoteWinnerLoaded {
+			if len(mergedMtime) > 0 {
+				remoteDiffers = true
+			}
+		} else {
+			if len(remoteVars) != len(mergedVars) || len(remoteMtime) != len(mergedMtime) {
+				remoteDiffers = true
+			} else {
+				for k, v := range mergedVars {
+					if rv, ok := remoteVars[k]; !ok || rv != v {
+						remoteDiffers = true
+						break
+					}
+				}
+				if !remoteDiffers {
+					for k, ts := range mergedMtime {
+						if rts, ok := remoteMtime[k]; !ok || rts != ts {
+							remoteDiffers = true
+							break
+						}
+					}
+				}
+			}
+		}
+
+		if remoteDiffers {
+			uploadCount++
+			for _, rf := range remoteVarsFiles {
+				remoteFilesToDelete = append(remoteFilesToDelete, rf.filename)
+			}
+		} else {
+			for _, rf := range remoteVarsFiles {
+				if !remoteWinnerLoaded || rf.filename != remoteWinner.filename {
+					remoteFilesToDelete = append(remoteFilesToDelete, rf.filename)
+				}
 			}
 		}
 	}

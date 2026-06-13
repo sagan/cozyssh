@@ -34,10 +34,10 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         cleanupOutdatedCaches: true,
-        globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
+        globPatterns: ["**/*.{js,css,html,md,json,ico,png,svg}"],
         navigateFallback: "index.html",
-        // Only apply navigateFallback to page navigation requests, not API/WS endpoints
-        navigateFallbackAllowlist: [/^\/(?!api\/|ws\/|manifest\.json)/],
+        // Only apply navigateFallback to page navigation requests, not API/debug endpoints
+        navigateFallbackAllowlist: [/^\/(?!api\/|debug\/|manifest\.json)/],
         // Ignore all query parameters when matching precached entries.
         // Without this, /?noautoload=1 fails to match the cached "/" entry → ERR_FAILED.
         ignoreURLParametersMatching: [/.*/],

@@ -19,18 +19,20 @@ export interface Manifest {
     handle_links?: string;
     icons: ManifestIcon[];
 }
+export interface WebdavStatus {
+    webdavUrl: string;
+    webdavUser: string;
+    webdavEnabled: boolean;
+    syncStatus: "idle" | "syncing" | "error" | "success" | "disabled";
+    syncError: string;
+    syncTime: number;
+}
 export interface Sysinfo {
     hostname: string;
     version: string;
     insecureAllowed: boolean;
     isSecure: boolean;
     savePassword: string;
-    webdavUrl: string;
-    webdavUser: string;
-    webdavEnabled: boolean;
-    syncStatus: string;
-    syncError: string;
-    syncTime: number;
 }
 export interface SaveWebdavSettingsRequest {
     url: string;

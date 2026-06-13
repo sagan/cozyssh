@@ -173,7 +173,7 @@ export default function TerminalGrid({
       >
         {tabs.map((tab) => (
           <Box
-            className="terminal-wrap"
+            className={`terminal-wrap ${tab.id === activeTabId ? "active" : ""}`}
             key={tab.id}
             data-id={tab.id}
             sx={{
@@ -196,7 +196,7 @@ export default function TerminalGrid({
               {(() => {
                 const renderPaneInner = (pane: PaneData) => (
                   <Box
-                    className="terminal-pane-wrap"
+                    className={`terminal-pane-wrap ${pane.id === activePaneId ? "active" : ""}`}
                     data-id={pane.id}
                     data-session-id={pane.sessionId || ""}
                     data-name={pane.host}

@@ -26,18 +26,21 @@ type Manifest struct {
 	Icons           []*ManifestIcon `json:"icons"`
 }
 
+type WebdavStatus struct {
+	WebdavUrl     string `json:"webdavUrl"`
+	WebdavUser    string `json:"webdavUser"`
+	WebdavEnabled bool   `json:"webdavEnabled"`
+	SyncStatus    string `json:"syncStatus" ts_type:"\"idle\" | \"syncing\" | \"error\" | \"success\" | \"disabled\""`
+	SyncError     string `json:"syncError"`
+	SyncTime      int64  `json:"syncTime"`
+}
+
 type Sysinfo struct {
 	Hostname        string `json:"hostname"`
 	Version         string `json:"version"`
 	InsecureAllowed bool   `json:"insecureAllowed"`
 	IsSecure        bool   `json:"isSecure"`
 	SavePassword    string `json:"savePassword"`
-	WebdavUrl       string `json:"webdavUrl"`
-	WebdavUser      string `json:"webdavUser"`
-	WebdavEnabled   bool   `json:"webdavEnabled"`
-	SyncStatus      string `json:"syncStatus"`
-	SyncError       string `json:"syncError"`
-	SyncTime        int64  `json:"syncTime"`
 }
 
 type SaveWebdavSettingsRequest struct {

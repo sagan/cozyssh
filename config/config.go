@@ -46,7 +46,7 @@ type Config struct {
 	ConfigPath            string               `json:"-"`      // internal use
 	ConfigDir             string               `json:"-"`      // internal use
 	Vars                  map[string]string    `json:"-"`      // Moved to vars.json
-	VarsMtime             int64                `json:"-"`      // Last modified timestamp of vars
+	VarsMtime             map[string]int64     `json:"-"`      // Last modified timestamp of vars
 	InsecureIgnoreHostKey bool                 `json:"insecure_ignore_host_key"`
 	SavePassword          string               `json:"save_password"`
 	SessionSecret         string               `json:"session_secret"`
@@ -124,6 +124,9 @@ func LoadConfig(customDir string) (*Config, error) {
 	}
 	if cfg.Vars == nil {
 		cfg.Vars = make(map[string]string)
+	}
+	if cfg.VarsMtime == nil {
+		cfg.VarsMtime = make(map[string]int64)
 	}
 	if cfg.SavePassword == "" {
 		cfg.SavePassword = "ask"
@@ -296,7 +299,7 @@ func (c *Config) loadButtons() error {
 func (c *Config) saveVars() error {
 	varsPath := filepath.Join(c.ConfigDir, "vars.json")
 	var varsWrap struct {
-		Mtime int64             `json:"mtime"`
+		Mtime map[string]int64  `json:"mtime"`
 		Vars  map[string]string `json:"vars"`
 	}
 	varsWrap.Mtime = c.VarsMtime
@@ -315,37 +318,61 @@ func (c *Config) loadVars() error {
 			if c.Vars == nil {
 				c.Vars = make(map[string]string)
 			}
-			if len(c.Vars) > 0 {
-				c.VarsMtime = time.Now().UnixMilli()
-			} else {
-				c.VarsMtime = 0
+			c.VarsMtime = make(map[string]int64)
+			now := time.Now().UnixMilli()
+			for k := range c.Vars {
+				c.VarsMtime[k] = now
 			}
 			return c.saveVars()
 		}
 		return err
 	}
-	var varsWrap struct {
-		Mtime int64             `json:"mtime"`
+	var raw struct {
+		Mtime json.RawMessage   `json:"mtime"`
 		Vars  map[string]string `json:"vars"`
 	}
-	if err := json.Unmarshal(data, &varsWrap); err != nil {
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
-	c.Vars = varsWrap.Vars
-	c.VarsMtime = varsWrap.Mtime
+	c.Vars = raw.Vars
 	if c.Vars == nil {
 		c.Vars = make(map[string]string)
+	}
+	c.VarsMtime = make(map[string]int64)
+	if len(raw.Mtime) > 0 {
+		var mtimeMap map[string]int64
+		if err := json.Unmarshal(raw.Mtime, &mtimeMap); err == nil {
+			c.VarsMtime = mtimeMap
+		} else {
+			var mtimeVal int64
+			if err := json.Unmarshal(raw.Mtime, &mtimeVal); err == nil {
+				for k := range c.Vars {
+					c.VarsMtime[k] = mtimeVal
+				}
+			}
+		}
 	}
 	return nil
 }
 
-func (c *Config) SetVars(vars map[string]string, mtime int64) error {
+func (c *Config) SetVars(vars map[string]string, mtime map[string]int64) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	c.Vars = vars
 	c.VarsMtime = mtime
 	return c.saveVars()
+}
+
+func (c *Config) GetVarsMtime() map[string]int64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	copied := make(map[string]int64, len(c.VarsMtime))
+	for k, v := range c.VarsMtime {
+		copied[k] = v
+	}
+	return copied
 }
 
 func (c *Config) GetVars() map[string]string {
@@ -708,14 +735,29 @@ func (c *Config) UpdateVars(updates map[string]*string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	now := time.Now().UnixMilli()
+	if c.VarsMtime == nil {
+		c.VarsMtime = make(map[string]int64)
+	}
+
 	for k, v := range updates {
 		if v == nil {
 			delete(c.Vars, k)
 		} else {
 			c.Vars[k] = *v
 		}
+		c.VarsMtime[k] = now
 	}
-	c.VarsMtime = time.Now().UnixMilli()
+
+	// Clean up old deletion markers from c.VarsMtime
+	maxAgeMs := (30 * 24 * time.Hour).Milliseconds()
+	for k, ts := range c.VarsMtime {
+		if _, exists := c.Vars[k]; !exists {
+			if (now - ts) > maxAgeMs {
+				delete(c.VarsMtime, k)
+			}
+		}
+	}
 
 	if err := c.saveVars(); err != nil {
 		return err
@@ -740,7 +782,9 @@ func (c *Config) UpdateWebdavSettings(urlVal, userVal, passwordVal string, enabl
 
 	c.WebdavUrl = urlVal
 	c.WebdavUser = userVal
-	if passwordVal != "" {
+	if urlVal == "" && userVal == "" && passwordVal == "" {
+		c.WebdavPassword = ""
+	} else if passwordVal != "" {
 		c.WebdavPassword = passwordVal
 	}
 	c.WebdavEnabled = enabledVal

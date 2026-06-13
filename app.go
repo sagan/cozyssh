@@ -14,6 +14,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	os_exec "os/exec"
 	"strings"
@@ -52,6 +53,7 @@ func Run(ctx context.Context, args []string, ready chan<- string) error {
 	configDir := flags.String("config", "", "Custom configuration directory (defaults to ~/.config/cozyssh)")
 	listenAddr := flags.String("addr", "", "Listen address (overrides config file)")
 	allowInsecure := flags.Bool("allow-insecure-http", false, "Lift the security restriction for non-local HTTP environments")
+	debug := flags.Bool("debug", false, "Enable debug mode")
 	resetPwd := flags.Bool("do-reset-password", false, "Reset the app password to a random one and exit")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -138,7 +140,6 @@ func Run(ctx context.Context, args []string, ready chan<- string) error {
 
 	getFullData := func(r *http.Request) *models.FullData {
 		scratchpad.Reload()
-		status, errMsg, lastTime := datasync.GetStatus()
 		displayHostname := cfg.SiteName
 		if displayHostname == "" {
 			if hostname, _ := os.Hostname(); hostname == "" {
@@ -159,12 +160,6 @@ func Run(ctx context.Context, args []string, ready chan<- string) error {
 				InsecureAllowed: *allowInsecure,
 				IsSecure:        isSecureRequest(r),
 				SavePassword:    cfg.SavePassword,
-				WebdavUrl:       cfg.WebdavUrl,
-				WebdavUser:      cfg.WebdavUser,
-				WebdavEnabled:   cfg.WebdavEnabled,
-				SyncStatus:      status,
-				SyncError:       errMsg,
-				SyncTime:        lastTime,
 			},
 			Hosts:   hosts,
 			Buttons: cfg.GetButtons(), // Use thread-safe GetButtons()
@@ -520,6 +515,25 @@ func Run(ctx context.Context, args []string, ready chan<- string) error {
 				return
 			}
 			w.WriteHeader(http.StatusNoContent)
+		}))))
+
+	mux.Handle("/api/settings/webdav/status", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			cfg, err := config.LoadConfig(*configDir)
+			if err != nil {
+				http.Error(w, "failed to load config", http.StatusInternalServerError)
+			}
+			status, errMsg, lastTime := datasync.GetStatus()
+			res := &models.WebdavStatus{
+				WebdavUrl:     cfg.WebdavUrl,
+				WebdavUser:    cfg.WebdavUser,
+				WebdavEnabled: cfg.WebdavEnabled,
+				SyncStatus:    status,
+				SyncError:     errMsg,
+				SyncTime:      lastTime,
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(res)
 		}))))
 
 	mux.Handle("/api/settings/webdav", securityMiddleware(auth.Middleware(http.HandlerFunc(
@@ -1027,6 +1041,15 @@ func Run(ctx context.Context, args []string, ready chan<- string) error {
 	// Signal back to main.go instantly that the port is open and bound in the kernel
 	if ready != nil {
 		ready <- ln.Addr().String()
+	}
+
+	// debug endpoints are not protected by auth so only enable them when addr is local only
+	if *debug && (strings.HasPrefix(addr, "127.0.0.1:") || strings.HasPrefix(addr, "[::1]:")) {
+		mux.HandleFunc("/debug/pprof/", pprof.Index)
+		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 	}
 
 	log.Printf("Starting cozyssh on http://%s", addr)

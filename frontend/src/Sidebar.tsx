@@ -63,6 +63,9 @@ import type {
   PasswordsRevealResponse,
   PasswordsChangeRequest,
   PasswordsDeleteRequest,
+  SaveWebdavSettingsRequest,
+  SyncDetectionResult,
+  WebdavStatus,
 } from "./api";
 import {
   METHOD_PUT,
@@ -198,41 +201,49 @@ export default function Sidebar({
   }, [settingsOpen]);
 
   // WebDAV settings state
+  const [currentWebdavUrl, setCurrentWebdavUrl] = useState("");
+  const [currentWebdavUser, setCurrentWebdavUser] = useState("");
   const [webdavUrl, setWebdavUrl] = useState("");
   const [webdavUser, setWebdavUser] = useState("");
   const [webdavPassword, setWebdavPassword] = useState("");
   const [webdavEnabled, setWebdavEnabled] = useState(false);
-  const [syncStatus, setSyncStatus] = useState("idle");
+  const [syncStatus, setSyncStatus] = useState<WebdavStatus["syncStatus"]>("idle");
   const [syncError, setSyncError] = useState("");
   const [syncTime, setSyncTime] = useState<number | null>(null);
   const [isTestingWebdav, setIsTestingWebdav] = useState(false);
 
-  const fetchWebdavStatus = useCallback((onlyStatus = false) => {
+  const fetchWebdavStatus = useCallback(async (onlyStatus = false) => {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    fetch("/api/fulldata", {
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      },
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (data && data.sysinfo) {
-          if (!onlyStatus) {
-            setWebdavUrl(data.sysinfo.webdavUrl || "");
-            setWebdavUser(data.sysinfo.webdavUser || "");
-            setWebdavEnabled(!!data.sysinfo.webdavEnabled);
-            setWebdavPassword("");
-          }
-          setSyncStatus(data.sysinfo.syncStatus || "idle");
-          setSyncError(data.sysinfo.syncError || "");
-          setSyncTime(data.sysinfo.syncTime || null);
+    try {
+      const r = await fetch("/api/settings/webdav/status", {
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        },
+      });
+
+      const data = (await r.json()) as WebdavStatus;
+
+      if (data) {
+        if (!onlyStatus) {
+          setWebdavUrl(data.webdavUrl);
+          setCurrentWebdavUrl(data.webdavUrl);
+          setWebdavUser(data.webdavUser);
+          setCurrentWebdavUser(data.webdavUser);
+          setWebdavEnabled(!!data.webdavEnabled);
+          setWebdavPassword("");
         }
-      })
-      .catch((e) => console.error("failed to fetch sync status", e));
+        setSyncStatus(data.syncStatus);
+        setSyncError(data.syncError);
+        setSyncTime(data.syncTime);
+      }
+    } catch (e) {
+      console.error("failed to fetch sync status", e);
+    }
   }, []);
 
   useEffect(() => {
     if (settingsOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchWebdavStatus(false);
     }
   }, [settingsOpen, fetchWebdavStatus]);
@@ -244,133 +255,177 @@ export default function Sidebar({
     }
   }, [settingsOpen, dialogTab, fetchWebdavStatus]);
 
-  const handleToggleWebdavEnabled = () => {
+  const handleToggleWebdavEnabled = async () => {
     const nextEnabled = !webdavEnabled;
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    fetch("/api/settings/webdav", {
-      method: METHOD_POST,
-      headers: {
-        [HEADER_CONTENT_TYPE]: MIME_JSON,
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      },
-      body: JSON.stringify({
-        url: webdavUrl,
-        user: webdavUser,
-        password: webdavPassword,
-        enabled: nextEnabled,
-      }),
-    })
-      .then((res) => {
-        if (res.ok) {
-          notify(nextEnabled ? "Sync enabled" : "Sync disabled", "success");
-          setWebdavEnabled(nextEnabled);
-          fetchWebdavStatus(false);
-        } else {
-          res.text().then((t) => notify("Failed to toggle sync: " + t, "error"));
-        }
-      })
-      .catch((e) => notify("Failed to toggle sync: " + e.message, "error"));
+
+    try {
+      const res = await fetch("/api/settings/webdav", {
+        method: METHOD_POST,
+        headers: {
+          [HEADER_CONTENT_TYPE]: MIME_JSON,
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        },
+        body: JSON.stringify({
+          url: currentWebdavUrl,
+          user: currentWebdavUser,
+          password: "",
+          enabled: nextEnabled,
+        }),
+      });
+
+      if (res.ok) {
+        notify(nextEnabled ? "Sync enabled" : "Sync disabled", "success");
+        setWebdavEnabled(nextEnabled);
+        fetchWebdavStatus(false);
+      } else {
+        const t = await res.text();
+        notify("Failed to toggle sync: " + t, "error");
+      }
+    } catch (e: unknown) {
+      notify(`Failed to toggle sync: ${e}`, "error");
+    }
   };
 
-  const handleSaveWebdav = () => {
+  const urlChanged = webdavUrl.trim() !== currentWebdavUrl;
+  const isCleared = !webdavUrl.trim() && !webdavUser.trim() && !webdavPassword.trim();
+
+  const handleSaveWebdav = async () => {
     setIsTestingWebdav(true);
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    fetch("/api/settings/webdav/detect", {
-      method: METHOD_POST,
-      headers: {
-        [HEADER_CONTENT_TYPE]: MIME_JSON,
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      },
-      body: JSON.stringify({
-        url: webdavUrl,
-        user: webdavUser,
-        password: webdavPassword,
-        enabled: webdavEnabled,
-      }),
-    })
-      .then((res) => {
-        if (!res.ok) {
-          return res.text().then((text) => {
-            throw new Error(text || "Failed to verify WebDAV connection");
-          });
-        }
-        return res.json();
-      })
-      .then(
-        async (data: {
-          brandNew: boolean;
-          uploadCount: number;
-          downloadCount: number;
-          deleteLocalCount: number;
-          deleteRemoteCount: number;
-        }) => {
-          let msg = "";
-          let detail = "";
-          if (data.brandNew) {
-            msg = "WebDAV server connection successful!";
-            detail =
-              "The server is brand-new and contains no CozySSH data. Your local data (buttons, vars, scratchpad) will be uploaded to it when synchronization is triggered.";
-          } else {
-            msg = "WebDAV server connection successful!";
-            detail =
-              `The server contains existing CozySSH data. If sync is enabled, the following changes will be applied during sync:\n` +
-              `• ${data.uploadCount} local changes will be uploaded to the server\n` +
-              `• ${data.downloadCount} remote changes will be downloaded and applied locally\n` +
-              `• ${data.deleteLocalCount} local items will be deleted\n` +
-              `• ${data.deleteRemoteCount} remote items will be deleted from the server`;
-          }
 
-          const confirmed = await dialogs.confirm(msg, detail + "\n\nDo you want to save these WebDAV settings?");
-          if (confirmed) {
-            return fetch("/api/settings/webdav", {
-              method: METHOD_POST,
-              headers: {
-                [HEADER_CONTENT_TYPE]: MIME_JSON,
-                [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-              },
-              body: JSON.stringify({
-                url: webdavUrl,
-                user: webdavUser,
-                password: webdavPassword,
-                enabled: webdavEnabled,
-              }),
-            }).then((res) => {
-              if (res.ok) {
-                notify("WebDAV settings saved successfully", "success");
-                fetchWebdavStatus(false);
-              } else {
-                res.text().then((t) => notify("Failed to save WebDAV settings: " + t, "error"));
-              }
-            });
-          }
+    try {
+      if (isCleared) {
+        const res = await fetch("/api/settings/webdav", {
+          method: METHOD_POST,
+          headers: {
+            [HEADER_CONTENT_TYPE]: MIME_JSON,
+            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+          },
+          body: JSON.stringify({
+            url: "",
+            user: "",
+            password: "",
+            enabled: false,
+          } satisfies SaveWebdavSettingsRequest),
+        });
+
+        if (res.ok) {
+          notify("WebDAV settings cleared successfully", "success");
+          setWebdavUrl("");
+          setCurrentWebdavUrl("");
+          setWebdavUser("");
+          setCurrentWebdavUser("");
+          setWebdavPassword("");
+          setWebdavEnabled(false);
+          fetchWebdavStatus(false);
+        } else {
+          const text = await res.text();
+          notify("Failed to clear WebDAV settings: " + text, "error");
+        }
+        return;
+      }
+
+      if (urlChanged) {
+        const detectRes = await fetch("/api/settings/webdav/detect", {
+          method: METHOD_POST,
+          headers: {
+            [HEADER_CONTENT_TYPE]: MIME_JSON,
+            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+          },
+          body: JSON.stringify({
+            url: webdavUrl,
+            user: webdavUser,
+            password: webdavPassword,
+            enabled: webdavEnabled,
+          } satisfies SaveWebdavSettingsRequest),
+        });
+
+        if (!detectRes.ok) {
+          const text = await detectRes.text();
+          throw new Error(text || "Failed to verify WebDAV connection");
+        }
+
+        const data = (await detectRes.json()) as SyncDetectionResult;
+
+        let msg = "";
+        let detail = "";
+        if (data.brandNew) {
+          msg = "WebDAV server connection ready";
+          detail =
+            `The server ${webdavUrl} is brand-new and contains no CozySSH data. ` +
+            `Your local data (buttons, vars, scratchpad) will be uploaded to it when synchronization is triggered.`;
+        } else {
+          msg = "WebDAV server connection successful!";
+          detail =
+            `The server ${webdavUrl} contains existing CozySSH data. ` +
+            `If sync is enabled, the following changes will be applied during sync:\n` +
+            `• ${data.uploadCount} local changes will be uploaded to the server\n` +
+            `• ${data.downloadCount} remote changes will be downloaded and applied locally\n` +
+            `• ${data.deleteLocalCount} local items will be deleted\n` +
+            `• ${data.deleteRemoteCount} remote items will be deleted from the server`;
+        }
+
+        const confirmed = await dialogs.confirm(
+          msg,
+          detail + "\n\nDo you want to save these settings and enable WebDAV sync?",
+        );
+        if (!confirmed) {
+          return;
+        }
+      }
+
+      const saveRes = await fetch("/api/settings/webdav", {
+        method: METHOD_POST,
+        headers: {
+          [HEADER_CONTENT_TYPE]: MIME_JSON,
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
         },
-      )
-      .catch((e) => {
-        notify("WebDAV verification failed: " + e.message, "error");
-      })
-      .finally(() => {
-        setIsTestingWebdav(false);
+        body: JSON.stringify({
+          url: webdavUrl,
+          user: webdavUser,
+          password: webdavPassword,
+          enabled: urlChanged ? true : webdavEnabled,
+        } satisfies SaveWebdavSettingsRequest),
       });
+
+      if (saveRes.ok) {
+        notify("WebDAV settings saved successfully", "success");
+        setCurrentWebdavUrl(webdavUrl.trim());
+        setCurrentWebdavUser(webdavUser);
+        fetchWebdavStatus(false);
+      } else {
+        const text = await saveRes.text();
+        notify("Failed to save WebDAV settings: " + text, "error");
+      }
+    } catch (e: unknown) {
+      notify(`WebDAV verification failed: ${e}`, "error");
+    } finally {
+      setIsTestingWebdav(false);
+    }
   };
 
-  const handleSyncNow = () => {
+  const handleSyncNow = async () => {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     setSyncStatus("syncing");
-    fetch("/api/settings/webdav/sync", {
-      method: METHOD_POST,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      },
-    })
-      .then((res) => {
-        if (res.ok) {
-          notify("Sync triggered", "success");
-          setTimeout(() => fetchWebdavStatus(true), 500);
-        } else {
-          notify("Failed to trigger sync", "error");
-        }
-      })
-      .catch((e) => notify("Failed to trigger sync: " + e.message, "error"));
+
+    try {
+      const res = await fetch("/api/settings/webdav/sync", {
+        method: METHOD_POST,
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        },
+      });
+
+      if (res.ok) {
+        notify("Sync triggered", "success");
+        setTimeout(() => fetchWebdavStatus(true), 500);
+      } else {
+        notify("Failed to trigger sync", "error");
+      }
+    } catch (e: unknown) {
+      notify(`Failed to trigger sync: ${e}`, "error");
+    }
   };
 
   const [startupParams] = useSearchParams();
@@ -1940,7 +1995,7 @@ export default function Sidebar({
                         Sync Status:
                       </Typography>
                       <Chip
-                        label={(!webdavEnabled ? "disabled" : syncStatus).toUpperCase()}
+                        label={syncStatus.toUpperCase()}
                         size="small"
                         color={
                           !webdavEnabled
@@ -1962,6 +2017,7 @@ export default function Sidebar({
                         color={webdavEnabled ? "success" : "primary"}
                         size="small"
                         onClick={handleToggleWebdavEnabled}
+                        disabled={!currentWebdavUrl}
                         sx={{ textTransform: "none" }}
                       >
                         {webdavEnabled ? "Disable Sync" : "Enable Sync"}
@@ -2002,6 +2058,15 @@ export default function Sidebar({
                 </Typography>
                 <TextField
                   fullWidth
+                  label="Current Server URL"
+                  size="small"
+                  margin="dense"
+                  value={currentWebdavUrl || "(Not configured)"}
+                  slotProps={{ input: { readOnly: true } }}
+                  disabled
+                />
+                <TextField
+                  fullWidth
                   label="WebDAV Server URL"
                   size="small"
                   margin="dense"
@@ -2033,11 +2098,20 @@ export default function Sidebar({
                 <Button
                   variant="contained"
                   onClick={handleSaveWebdav}
-                  disabled={isTestingWebdav}
+                  disabled={
+                    isTestingWebdav ||
+                    (webdavUrl === currentWebdavUrl && webdavUser === currentWebdavUser && !webdavPassword)
+                  }
                   sx={{ mt: 1, textTransform: "none" }}
                   disableElevation
                 >
-                  {isTestingWebdav ? "Verifying & Saving..." : "Save Sync Settings"}
+                  {isTestingWebdav
+                    ? "Verifying & Saving..."
+                    : isCleared
+                      ? "Clear Sync Settings"
+                      : urlChanged
+                        ? "Verify & Save Sync Settings"
+                        : "Save Sync Settings"}
                 </Button>
               </>
             )}
