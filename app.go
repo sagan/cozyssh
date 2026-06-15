@@ -183,6 +183,7 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 			Vars:    cfg.GetVars(),
 			Pinned:  pinned,
 			Recents: recents.Get(),
+			Shells:  localpty.GetShells(),
 		}
 	}
 
@@ -238,7 +239,12 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 				return
 			}
-			syncFlag := r.URL.Query().Get("sync")
+			query := r.URL.Query()
+			refresh := query.Get("refresh") == "1"
+			if refresh {
+				localpty.Refresh()
+			}
+			syncFlag := query.Get("sync")
 			if syncFlag != "" {
 				switch syncFlag {
 				case "1":
@@ -515,19 +521,16 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 				return
 			}
-			var req struct {
-				SavePassword string `json:"save_password"`
-			}
+			var req *models.ConfigRequest
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 				http.Error(w, "Bad Request", http.StatusBadRequest)
 				return
 			}
-			p := strings.ToLower(req.SavePassword)
-			if p != "always" && p != "never" && p != "ask" {
+			if req.SavePassword != "always" && req.SavePassword != "never" && req.SavePassword != "ask" {
 				http.Error(w, "Invalid option. Must be always, never, or ask", http.StatusBadRequest)
 				return
 			}
-			if err := cfg.UpdateSavePassword(p); err != nil {
+			if err := cfg.UpdateSavePassword(req.SavePassword); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -890,9 +893,10 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				return
 			}
 
-			args := slices.Clone(localpty.DefaultShellRunCmdlineArguments)
+			shells := localpty.GetShells()
+			args := slices.Clone(shells[0].RunCmdlineArgs)
 			args = append(args, req.Cmdline)
-			cmd := os_exec.Command(localpty.DefaultShell, args...)
+			cmd := os_exec.Command(shells[0].Path, args...)
 			if home, err := os.UserHomeDir(); err == nil {
 				cmd.Dir = home
 			}
@@ -941,9 +945,10 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 
 			if s == nil {
 				// Local fallback (same behaviour as /api/exec).
-				args := slices.Clone(localpty.DefaultShellRunCmdlineArguments)
+				shells := localpty.GetShells()
+				args := slices.Clone(shells[0].RunCmdlineArgs)
 				args = append(args, req.Cmdline)
-				cmd := os_exec.Command(localpty.DefaultShell, args...)
+				cmd := os_exec.Command(shells[0].Path, args...)
 				if home, err := os.UserHomeDir(); err == nil {
 					cmd.Dir = home
 				}

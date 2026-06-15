@@ -10,7 +10,7 @@
 
 import { create } from "zustand";
 
-import type { HostData, ButtonData, WsTerminalMessage, Recent } from "./api";
+import type { HostData, ButtonData, WsTerminalMessage, Recent, LocalShell } from "./api";
 import type { HostForm, ViewMode, Severity, ShellIntegration, Toast } from "./common";
 import type { TerminalHandle } from "./Terminal";
 import type { ScratchpadHandle } from "./Scratchpad";
@@ -83,6 +83,7 @@ interface Store {
   activeTabId: string;
   activePaneId: string;
   hosts: HostData[];
+  shells: LocalShell[];
   buttons: ButtonData[];
   vars: Record<string, string>;
   /** Local (browser-only) vars. All names have a "local_" (case-insensitive) prefix. */
@@ -158,6 +159,7 @@ export const useStore = create<Store>(() => ({
   activeTabId: "",
   activePaneId: "",
   hosts: [],
+  shells: [],
   buttons: [],
   vars: loadFromStorage(BROWSER_STORAGE_KEY_VARS, {}),
   localVars: loadFromStorage(BROWSER_STORAGE_KEY_LOCAL_VARS, {}),
@@ -311,6 +313,7 @@ export const activatePane = (paneId: string, tabId?: string) => {
 };
 
 export const setHosts = (hosts: HostData[]) => useStore.setState({ hosts });
+export const setShells = (shells: LocalShell[]) => useStore.setState({ shells });
 
 export const setButtons = (buttons: ButtonData[]) => useStore.setState({ buttons });
 

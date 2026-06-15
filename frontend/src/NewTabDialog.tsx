@@ -25,7 +25,7 @@ import TabIcon from "@mui/icons-material/Tab";
 import PushPinIcon from "@mui/icons-material/PushPin";
 import SmartButtonIcon from "@mui/icons-material/SmartButton";
 
-import type { SessionPinned, ButtonData } from "./api";
+import type { SessionPinned, ButtonData, HostData } from "./api";
 import {
   BROWSER_STORAGE_KEY_TOKEN,
   BUILTIN_BUTTONS,
@@ -36,8 +36,28 @@ import {
   LOCAL_NAME,
   VAR_CS_SCROLL_ITEMS,
 } from "./constants";
-import { type ViewMode, filterHosts, getIntVar, searchString } from "./common";
+import { type ViewMode, filterHosts, getIntVar, localShellHost, searchString } from "./common";
 import { getStore, useStore } from "./store";
+
+interface DialogItem {
+  type: "recent" | "host" | "direct" | "local" | "tab" | "pinned_tab" | "button" | "other_button" | "builtin_button";
+  value: string;
+  label: string;
+  subtitle?: string;
+  tooltip?: string;
+  isFav?: boolean;
+  id?: string;
+  host?: string;
+  isLocked?: boolean;
+  btn?: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">;
+  tags?: string[];
+  flatIndex: number;
+}
+
+interface DialogSection {
+  title: string;
+  items: DialogItem[];
+}
 
 interface NewTabDialogProps {
   open: boolean;
@@ -59,9 +79,12 @@ export default function NewTabDialog({
   const tabs = useStore((state) => state.tabs);
   const hosts = useStore((state) => state.hosts);
   const buttons = useStore((state) => state.buttons);
+  const shells = useStore((state) => state.shells);
   const activeGroup = useStore((state) => state.activeGroup);
   const newTabDialogInitialViewMode = useStore((state) => state.newTabDialogInitialViewMode);
 
+  const defaultShell = shells[0];
+  const alternativeShell = shells[1];
   const [filter, setFilter] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>(newTabDialogInitialViewMode);
@@ -107,22 +130,40 @@ export default function NewTabDialog({
 
   const filteredHosts = useMemo(() => {
     if (viewMode !== "servers") {
-      return [];
+      return { favourite: [], normal: [], auto: [] };
     }
     const f = filter.trim();
-    if (!f) {
-      return hosts.filter((h) => h.is_favourite).sort((a, b) => a.name.localeCompare(b.name));
-    }
-    return filterHosts(hosts, f).sort((a, b) => {
-      if (a.is_favourite && !b.is_favourite) {
-        return -1;
+    const filtered = filterHosts(hosts, f);
+
+    const favs = filtered.filter((h) => h.is_favourite);
+    const normals = filtered.filter((h) => !h.is_favourite && !h.is_auto);
+    const autos = filtered.filter((h) => !h.is_favourite && h.is_auto);
+
+    const nameSorter = (a: HostData, b: HostData) => a.name.localeCompare(b.name);
+    const hostNameSorter = (a: HostData, b: HostData) => {
+      if (a.hostname === b.hostname) {
+        return a.name.localeCompare(b.name);
       }
-      if (!a.is_favourite && b.is_favourite) {
-        return 1;
-      }
-      return a.name.localeCompare(b.name);
-    });
+      return a.hostname.localeCompare(b.hostname);
+    };
+
+    return {
+      favourite: favs.sort(nameSorter),
+      normal: normals.sort(nameSorter),
+      auto: autos.sort(hostNameSorter),
+    };
   }, [hosts, filter, viewMode]);
+
+  const filteredShells = useMemo(() => {
+    if (viewMode !== "servers") {
+      return [];
+    }
+    const f = filter.toLowerCase().trim();
+    if (!f) {
+      return shells;
+    }
+    return shells.filter((s) => s.name.toLowerCase().includes(f));
+  }, [shells, filter, viewMode]);
 
   const directConnect = useMemo(() => {
     if (viewMode !== "servers") {
@@ -202,34 +243,27 @@ export default function NewTabDialog({
     return allFilteredButtons.matchedBuiltin;
   }, [allFilteredButtons, viewMode]);
 
-  const items = useMemo(() => {
-    const res: {
-      type:
-        | "recent"
-        | "host"
-        | "direct"
-        | "local"
-        | "tab"
-        | "pinned_tab"
-        | "button"
-        | "other_button"
-        | "builtin_button";
-      value: string;
-      label: string;
-      subtitle?: string;
-      tooltip?: string;
-      isFav?: boolean;
-      id?: string;
-      host?: string;
-      isLocked?: boolean;
-      btn?: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">;
-      tags?: string[];
-    }[] = [];
+  const { sections, items } = useMemo(() => {
+    const sections: DialogSection[] = [];
+    const items: DialogItem[] = [];
+    let flatIndex = 0;
+
+    const addSection = (title: string, rawItems: Omit<DialogItem, "flatIndex">[]) => {
+      if (rawItems.length === 0) return;
+      const sectionItems = rawItems.map((item) => {
+        const dialogItem = { ...item, flatIndex: flatIndex++ };
+        items.push(dialogItem);
+        return dialogItem;
+      });
+      sections.push({ title, items: sectionItems });
+    };
 
     if (viewMode === "servers") {
+      // 1. Recents
+      const recentList: Omit<DialogItem, "flatIndex">[] = [];
       filteredRecents.forEach((r) => {
         const knownHost = hosts.find((h) => h.name === r.host);
-        res.push({
+        recentList.push({
           type: "recent",
           value: r.host,
           label: r.host,
@@ -238,17 +272,11 @@ export default function NewTabDialog({
           tags: knownHost?.tags,
         });
       });
+      addSection("Recents", recentList);
 
-      if (LOCAL_NAME.includes(filter.toLowerCase())) {
-        res.push({
-          type: "local",
-          value: LOCAL_NAME,
-          label: "Local Shell",
-          subtitle: "Run commands on this machine",
-        });
-      }
-
-      filteredHosts.forEach((h) => {
+      // 2. Favourite servers
+      const favList: Omit<DialogItem, "flatIndex">[] = [];
+      filteredHosts.favourite.forEach((h) => {
         let subtitle = `${h.user || "root"}@${h.hostname}`;
         if (filter && h.comment) {
           const matchedComment = searchString(h.comment, filter);
@@ -256,7 +284,7 @@ export default function NewTabDialog({
             subtitle += ` // ${matchedComment}`;
           }
         }
-        res.push({
+        favList.push({
           type: "host",
           value: h.name,
           label: h.name,
@@ -266,40 +294,98 @@ export default function NewTabDialog({
           tags: h.tags,
         });
       });
+      addSection("Favourite Servers", favList);
 
-      if (directConnect) {
-        res.push({
-          type: "direct",
-          value: directConnect,
-          label: `Connect to ${directConnect} (SSH)`,
+      // 3. Local shells
+      const localList: Omit<DialogItem, "flatIndex">[] = [];
+      filteredShells.forEach((shell) => {
+        localList.push({
+          type: "local",
+          value: shell !== defaultShell ? localShellHost(shell) : LOCAL_NAME,
+          label:
+            shell.name + (shell === defaultShell ? " (Default)" : shell === alternativeShell ? " (Alternative)" : ""),
+          subtitle: `Local Shell - ` + shell.path,
         });
+      });
+      addSection("Local Shells", localList);
+
+      // 4. Normal servers
+      const normalList: Omit<DialogItem, "flatIndex">[] = [];
+      filteredHosts.normal.forEach((h) => {
+        let subtitle = `${h.user || "root"}@${h.hostname}`;
+        if (filter && h.comment) {
+          const matchedComment = searchString(h.comment, filter);
+          if (matchedComment) {
+            subtitle += ` // ${matchedComment}`;
+          }
+        }
+        normalList.push({
+          type: "host",
+          value: h.name,
+          label: h.name,
+          subtitle,
+          tooltip: h.comment,
+          isFav: h.is_favourite,
+          tags: h.tags,
+        });
+      });
+      addSection("Normal Servers", normalList);
+
+      // 5. Auto servers
+      const autoList: Omit<DialogItem, "flatIndex">[] = [];
+      filteredHosts.auto.forEach((h) => {
+        let subtitle = `${h.user || "root"}@${h.hostname}`;
+        if (filter && h.comment) {
+          const matchedComment = searchString(h.comment, filter);
+          if (matchedComment) {
+            subtitle += ` // ${matchedComment}`;
+          }
+        }
+        autoList.push({
+          type: "host",
+          value: h.name,
+          label: h.name,
+          subtitle,
+          tooltip: h.comment,
+          isFav: h.is_favourite,
+          tags: h.tags,
+        });
+      });
+      addSection("Auto Servers", autoList);
+
+      // 6. Direct Connection
+      if (directConnect) {
+        addSection("Direct Connection", [
+          {
+            type: "direct",
+            value: directConnect,
+            label: `Connect to ${directConnect} (SSH)`,
+          },
+        ]);
       }
     } else if (viewMode === "tabs") {
-      activeTabsList.forEach((t) => {
-        res.push({
-          type: "tab",
-          id: t.id,
-          value: t.id,
-          label: t.title,
-          subtitle:
-            t.type === "scratchpad"
-              ? "Scratchpad"
-              : `Terminal (${t.panes.length} pane${t.panes.length > 1 ? "s" : ""})`,
-        });
-      });
+      const activeTabsItems: Omit<DialogItem, "flatIndex">[] = activeTabsList.map((t) => ({
+        type: "tab",
+        id: t.id,
+        value: t.id,
+        label: t.title,
+        subtitle:
+          t.type === "scratchpad" ? "Scratchpad" : `Terminal (${t.panes.length} pane${t.panes.length > 1 ? "s" : ""})`,
+      }));
+      addSection("Current Browser Tabs", activeTabsItems);
 
-      attachablePinnedTabs.forEach((p) => {
-        res.push({
-          type: "pinned_tab",
-          id: p.id,
-          value: p.id,
-          host: p.host,
-          label: p.title || p.host,
-          subtitle: `Attach to pinned session`,
-          isLocked: p.isLocked,
-        });
-      });
+      const pinnedTabsItems: Omit<DialogItem, "flatIndex">[] = attachablePinnedTabs.map((p) => ({
+        type: "pinned_tab",
+        id: p.id,
+        value: p.id,
+        host: p.host,
+        label: p.title || p.host,
+        subtitle: `Attach to pinned session`,
+        isLocked: p.isLocked,
+      }));
+      addSection("Attachable Pinned Tabs", pinnedTabsItems);
     } else if (viewMode === "buttons") {
+      const activeGroupList: Omit<DialogItem, "flatIndex">[] = [];
       activeGroupButtons.forEach((b) => {
         let subtitle = `Group: ${b.group || DEFAULT_BUTTON_GROUP} | Type: ${b.type}${
           b.type !== "send_string" && b.type !== "run_script" ? " | Payload: " + b.payload : ""
@@ -310,7 +396,7 @@ export default function NewTabDialog({
             subtitle += ` // ${matchedPayload}`;
           }
         }
-        res.push({
+        activeGroupList.push({
           type: "button",
           id: b.id,
           value: b.id,
@@ -320,6 +406,9 @@ export default function NewTabDialog({
           btn: b,
         });
       });
+      addSection(`Active Group (${activeGroup || DEFAULT_BUTTON_GROUP})`, activeGroupList);
+
+      const otherGroupList: Omit<DialogItem, "flatIndex">[] = [];
       otherGroupButtons.forEach((b) => {
         let subtitle = `Group: ${b.group || DEFAULT_BUTTON_GROUP} | Type: ${b.type}${
           b.type !== "send_string" && b.type !== "run_script" ? " | Payload: " + b.payload : ""
@@ -330,7 +419,7 @@ export default function NewTabDialog({
             subtitle += ` // ${matchedPayload}`;
           }
         }
-        res.push({
+        otherGroupList.push({
           type: "other_button",
           id: b.id,
           value: b.id,
@@ -340,8 +429,11 @@ export default function NewTabDialog({
           btn: b,
         });
       });
+      addSection("Other Groups", otherGroupList);
+
+      const builtinList: Omit<DialogItem, "flatIndex">[] = [];
       builtinButtons.forEach((b) => {
-        res.push({
+        builtinList.push({
           type: "builtin_button",
           id: b.id,
           value: b.id,
@@ -350,19 +442,26 @@ export default function NewTabDialog({
           btn: b,
         });
       });
+      addSection("Built-in Functions", builtinList);
     }
 
-    return res;
+    return { sections, items };
   }, [
+    viewMode,
     filteredRecents,
-    filteredHosts,
+    filteredHosts.favourite,
+    filteredHosts.normal,
+    filteredHosts.auto,
+    filteredShells,
     directConnect,
     hosts,
     filter,
-    viewMode,
+    defaultShell,
+    alternativeShell,
     activeTabsList,
     attachablePinnedTabs,
     activeGroupButtons,
+    activeGroup,
     otherGroupButtons,
     builtinButtons,
   ]);
@@ -591,152 +690,96 @@ export default function NewTabDialog({
       </DialogTitle>
       <DialogContent sx={{ p: 0 }} dividers onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
         <List sx={{ pt: 0, pb: 0 }}>
-          {items.map((item, index) => (
-            <React.Fragment key={`${item.type}-${item.value}-${index}`}>
-              {index === 0 && item.type === "recent" && (
-                <ListItem sx={{ py: 0.25, px: 2, bgcolor: "action.hover" }} title={item.tooltip}>
+          {sections.map((section) => (
+            <React.Fragment key={section.title}>
+              {section.title && (
+                <ListItem sx={{ py: 0.25, px: 2, bgcolor: "action.hover" }}>
                   <Typography variant="overline" sx={{ lineHeight: 1.5, fontWeight: "bold" }} color="text.secondary">
-                    Recent
+                    {section.title}
                   </Typography>
                 </ListItem>
               )}
-              {((index === 0 && (item.type === "host" || item.type === "local")) ||
-                (index > 0 &&
-                  (item.type === "host" || item.type === "local") &&
-                  items[index - 1].type === "recent")) && (
-                <ListItem sx={{ py: 0.25, px: 2, bgcolor: "action.hover" }} title={item.tooltip}>
-                  <Typography variant="overline" sx={{ lineHeight: 1.5, fontWeight: "bold" }} color="text.secondary">
-                    {filter === "" ? "Favorites" : "All Servers"}
-                  </Typography>
-                </ListItem>
-              )}
-              {item.type === "direct" && (
-                <ListItem sx={{ py: 0.25, px: 2, bgcolor: "action.hover" }} title={item.tooltip}>
-                  <Typography variant="overline" sx={{ lineHeight: 1.5, fontWeight: "bold" }} color="text.secondary">
-                    Direct Connection
-                  </Typography>
-                </ListItem>
-              )}
-              {index === 0 && item.type === "tab" && (
-                <ListItem sx={{ py: 0.25, px: 2, bgcolor: "action.hover" }} title={item.tooltip}>
-                  <Typography variant="overline" sx={{ lineHeight: 1.5, fontWeight: "bold" }} color="text.secondary">
-                    Current Browser Tabs
-                  </Typography>
-                </ListItem>
-              )}
-              {((index === 0 && item.type === "pinned_tab") ||
-                (index > 0 && item.type === "pinned_tab" && items[index - 1].type === "tab")) && (
-                <ListItem sx={{ py: 0.25, px: 2, bgcolor: "action.hover" }} title={item.tooltip}>
-                  <Typography variant="overline" sx={{ lineHeight: 1.5, fontWeight: "bold" }} color="text.secondary">
-                    Attachable Pinned Tabs
-                  </Typography>
-                </ListItem>
-              )}
-              {index === 0 && item.type === "button" && (
-                <ListItem sx={{ py: 0.25, px: 2, bgcolor: "action.hover" }} title={item.tooltip}>
-                  <Typography variant="overline" sx={{ lineHeight: 1.5, fontWeight: "bold" }} color="text.secondary">
-                    Active Group ({activeGroup || DEFAULT_BUTTON_GROUP})
-                  </Typography>
-                </ListItem>
-              )}
-              {((index === 0 && item.type === "other_button") ||
-                (index > 0 && item.type === "other_button" && items[index - 1].type === "button")) && (
-                <ListItem sx={{ py: 0.25, px: 2, bgcolor: "action.hover" }} title={item.tooltip}>
-                  <Typography variant="overline" sx={{ lineHeight: 1.5, fontWeight: "bold" }} color="text.secondary">
-                    Other Groups
-                  </Typography>
-                </ListItem>
-              )}
-              {((index === 0 && item.type === "builtin_button") ||
-                (index > 0 &&
-                  item.type === "builtin_button" &&
-                  (items[index - 1].type === "button" || items[index - 1].type === "other_button"))) && (
-                <ListItem sx={{ py: 0.25, px: 2, bgcolor: "action.hover" }} title={item.tooltip}>
-                  <Typography variant="overline" sx={{ lineHeight: 1.5, fontWeight: "bold" }} color="text.secondary">
-                    Built-in Functions
-                  </Typography>
-                </ListItem>
-              )}
-
-              <ListItemButton
-                selected={selectedIndex === index}
-                ref={selectedIndex === index ? selectedItemRef : null}
-                onClick={() => handleSelect(item)}
-                title={item.tooltip}
-                data-type={item.type}
-                data-value={item.value}
-                className="new-tab-dialog-item"
-                sx={{
-                  py: 0.5,
-                  "&.Mui-selected": {
-                    bgcolor: "primary.main",
-                    color: "white",
-                    "& .MuiListItemIcon-root, & .MuiListItemText-secondary": {
-                      color: "white",
-                    },
-                    "&:hover": {
-                      bgcolor: "primary.dark",
+              {section.items.map((item) => (
+                <ListItemButton
+                  key={item.flatIndex}
+                  selected={selectedIndex === item.flatIndex}
+                  ref={selectedIndex === item.flatIndex ? selectedItemRef : null}
+                  onClick={() => handleSelect(item)}
+                  title={item.tooltip}
+                  data-type={item.type}
+                  data-value={item.value}
+                  className="new-tab-dialog-item"
+                  sx={{
+                    py: 0.5,
+                    "&.Mui-selected": {
+                      bgcolor: "primary.main",
                       color: "white",
                       "& .MuiListItemIcon-root, & .MuiListItemText-secondary": {
                         color: "white",
                       },
+                      "&:hover": {
+                        bgcolor: "primary.dark",
+                        color: "white",
+                        "& .MuiListItemIcon-root, & .MuiListItemText-secondary": {
+                          color: "white",
+                        },
+                      },
                     },
-                  },
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: 36 }}>{getItemIcon(item, index, selectedIndex)}</ListItemIcon>
-                <ListItemText
-                  primary={
-                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 0.5 }}>
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          fontWeight: item.isFav ? "bold" : "normal",
-                          lineHeight: 1.2,
-                          color: "inherit",
-                          wordBreak: "break-all",
-                        }}
-                      >
-                        {item.label}
-                      </Typography>
-                      <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 0.25 }}>
-                        {item.tags &&
-                          item.tags
-                            .filter((t) => t !== "fav")
-                            .map((tag) => (
-                              <Typography
-                                key={tag}
-                                variant="caption"
-                                sx={{
-                                  color: "inherit",
-                                  fontSize: "0.6rem",
-                                  fontWeight: 600,
-                                  opacity: 0.8,
-                                }}
-                              >
-                                #{tag}
-                              </Typography>
-                            ))}
+                  }}
+                >
+                  <ListItemIcon sx={{ minWidth: 36 }}>{getItemIcon(item, item.flatIndex, selectedIndex)}</ListItemIcon>
+                  <ListItemText
+                    primary={
+                      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 0.5 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: item.isFav ? "bold" : "normal",
+                            lineHeight: 1.2,
+                            color: "inherit",
+                          }}
+                        >
+                          {item.label}
+                        </Typography>
+                        <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 0.25 }}>
+                          {item.tags &&
+                            item.tags
+                              .filter((t) => t !== "fav")
+                              .map((tag) => (
+                                <Typography
+                                  key={tag}
+                                  variant="caption"
+                                  sx={{
+                                    color: "inherit",
+                                    fontSize: "0.6rem",
+                                    fontWeight: 600,
+                                    opacity: 0.8,
+                                  }}
+                                >
+                                  #{tag}
+                                </Typography>
+                              ))}
+                        </Box>
                       </Box>
-                    </Box>
-                  }
-                  secondary={
-                    item.subtitle ? (
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          color: "inherit",
-                          opacity: 0.8,
-                          display: "block",
-                          mt: -0.2,
-                        }}
-                      >
-                        {item.subtitle}
-                      </Typography>
-                    ) : undefined
-                  }
-                />
-              </ListItemButton>
+                    }
+                    secondary={
+                      item.subtitle ? (
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: "inherit",
+                            opacity: 0.8,
+                            display: "block",
+                            mt: -0.2,
+                          }}
+                        >
+                          {item.subtitle}
+                        </Typography>
+                      ) : undefined
+                    }
+                  />
+                </ListItemButton>
+              ))}
             </React.Fragment>
           ))}
           {items.length === 0 && (

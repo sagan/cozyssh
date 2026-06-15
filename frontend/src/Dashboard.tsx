@@ -31,6 +31,7 @@ import type {
   TabsRenameRequest,
   ButtonsMoveRequest,
   TabsLockRequest,
+  ConfigRequest,
 } from "./api";
 import {
   DEFAULT_SCROLL_LINES,
@@ -102,6 +103,7 @@ import {
   activatePane,
   clearData,
   setAppendNewLine,
+  setShells,
 } from "./store";
 import { setupPluginAPI, runScript, moduleCache } from "./pluginAPI";
 import { useKeyboardManager } from "./useKeyboardManager";
@@ -341,26 +343,17 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, []);
 
   const [appVersion, setAppVersion] = useState<string>("dev");
-  const [savePassword, setSavePassword] = useState<string>("ask");
+  const [savePassword, setSavePassword] = useState<ConfigRequest["save_password"]>("ask");
 
   const loadFullData = useCallback((data: FullData) => {
-    if (data.sysinfo) {
-      setSysHostname(data.sysinfo.hostname || "unknown");
-      setAppVersion(data.sysinfo.version || "dev");
-      setSavePassword(data.sysinfo.savePassword || "ask");
-    }
-    if (data.hosts) {
-      setHosts(data.hosts);
-    }
-    if (data.buttons) {
-      setButtons(data.buttons || []);
-    }
-    if (data.vars) {
-      setVars(data.vars || {});
-    }
-    if (data.recents) {
-      setRecents(data.recents);
-    }
+    setSysHostname(data.sysinfo.hostname || "unknown");
+    setAppVersion(data.sysinfo.version || "dev");
+    setSavePassword(data.sysinfo.savePassword);
+    setHosts(data.hosts);
+    setShells(data.shells);
+    setButtons(data.buttons);
+    setVars(data.vars);
+    setRecents(data.recents);
   }, []);
 
   const handleRefresh = useCallback(
@@ -1807,7 +1800,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                   [HEADER_CONTENT_TYPE]: MIME_JSON,
                   [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
                 },
-                body: JSON.stringify({ save_password: val }),
+                body: JSON.stringify({ save_password: val } satisfies ConfigRequest),
               });
               if (res.ok) {
                 setSavePassword(val);

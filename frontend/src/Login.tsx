@@ -114,7 +114,7 @@ Please remember the app password. You will need it to access your saved SSH pass
       <CssBaseline />
       <Box sx={{ height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <Paper elevation={3} sx={{ p: 4, width: 500, maxWidth: "80dvw", textAlign: "center" }}>
-          <Typography variant="h5" gutterBottom sx={{ textAlign: "left", fontWeight: "bold", wordBreak: "break-all" }}>
+          <Typography variant="h5" gutterBottom sx={{ textAlign: "left", fontWeight: "bold" }}>
             {APP_NAME} {name}
           </Typography>
           <Box component="form" onSubmit={handleLogin} sx={{ mt: 2 }}>

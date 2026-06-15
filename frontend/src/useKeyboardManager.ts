@@ -29,6 +29,7 @@ import {
   getIntVar,
   getKeyCombination,
   isMuiModalOpen,
+  localShellHost,
   nextTerminalFontSize,
   prevTerminalFontSize,
 } from "./common";
@@ -249,6 +250,13 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           e.preventDefault();
           handleSelectHost(LOCAL_NAME);
           return;
+
+        case "alt+shift+n": {
+          e.preventDefault();
+          const shells = getStore().shells;
+          handleSelectHost(shells[1] ? localShellHost(shells[1]) : LOCAL_NAME);
+          return;
+        }
 
         case "alt+s":
           e.preventDefault();

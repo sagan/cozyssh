@@ -158,7 +158,6 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
         onClose={() => handleClose(null)}
         fullWidth
         maxWidth="xs"
-        sx={{ wordBreak: "break-all" }}
       >
         <DialogTitle sx={{ pb: 1 }}>{config.message}</DialogTitle>
         <DialogContent>

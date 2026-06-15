@@ -1,5 +1,7 @@
 package models
 
+import "cozyssh/localpty"
+
 // go run github.com/tkrajina/typescriptify-golang-structs/tscriptify@latest -interface -package=cozyssh/models -target="frontend/src/api.ts" models/models.go
 // Generates (overwrite) frontend/src/api.ts
 
@@ -40,7 +42,7 @@ type Sysinfo struct {
 	Version         string `json:"version"`
 	InsecureAllowed bool   `json:"insecureAllowed"`
 	IsSecure        bool   `json:"isSecure"`
-	SavePassword    string `json:"savePassword"`
+	SavePassword    string `json:"savePassword" ts_type:"\"ask\" | \"always\" | \"never\""`
 }
 
 type SaveWebdavSettingsRequest struct {
@@ -160,12 +162,13 @@ type RecentUpdateRequest struct {
 }
 
 type FullData struct {
-	Sysinfo Sysinfo           `json:"sysinfo"`
-	Hosts   []*HostData       `json:"hosts"`
-	Buttons []*ButtonData     `json:"buttons"`
-	Vars    map[string]string `json:"vars"`
-	Pinned  []*SessionPinned  `json:"pinned"`
-	Recents []*Recent         `json:"recents"`
+	Sysinfo Sysinfo                `json:"sysinfo"`
+	Hosts   []*HostData            `json:"hosts"`
+	Buttons []*ButtonData          `json:"buttons"`
+	Vars    map[string]string      `json:"vars"`
+	Pinned  []*SessionPinned       `json:"pinned"`
+	Recents []*Recent              `json:"recents"`
+	Shells  []*localpty.LocalShell `json:"shells"`
 }
 
 type LoginRequest struct {
@@ -312,6 +315,11 @@ type PasswordsChangeRequest struct {
 
 type PasswordsDeleteRequest struct {
 	Key string `json:"key"`
+}
+
+// POST /api/config
+type ConfigRequest struct {
+	SavePassword string `json:"save_password" ts_type:"\"ask\" | \"always\" | \"never\""`
 }
 
 // current it's not converted to TS automatically

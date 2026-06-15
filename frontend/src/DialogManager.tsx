@@ -67,6 +67,8 @@ import {
   triggerFocus,
   useStore,
   setAppendNewLine,
+  setSearchOpen,
+  triggerFocusSearchInput,
 } from "./store";
 import NewTabDialog from "./NewTabDialog";
 import { dialogs } from "./Dialogs";
@@ -444,7 +446,7 @@ export default function DialogManager({
                           triggerFocus();
                         }}
                       >
-                        Unpin tab
+                        Unpin Tab
                       </MenuItem>
                     ) : tab.panes.length === 1 ? (
                       <MenuItem
@@ -453,7 +455,7 @@ export default function DialogManager({
                           triggerFocus();
                         }}
                       >
-                        Pin tab
+                        Pin Tab
                       </MenuItem>
                     ) : null}
                     {tab.isPinned &&
@@ -464,7 +466,7 @@ export default function DialogManager({
                             triggerFocus();
                           }}
                         >
-                          Unlock tab
+                          Unlock Tab
                         </MenuItem>
                       ) : (
                         <MenuItem
@@ -473,16 +475,26 @@ export default function DialogManager({
                             triggerFocus();
                           }}
                         >
-                          Lock tab
+                          Lock Tab
                         </MenuItem>
                       ))}
+                    <MenuItem
+                      onClick={() => {
+                        handleCloseMenu();
+                        csFocus(memoTabId);
+                        setSearchOpen(true);
+                        triggerFocusSearchInput();
+                      }}
+                    >
+                      Find
+                    </MenuItem>
                   </>
                 )}
                 {tab.panes.length === 1 && tab.type !== "scratchpad" && (
                   <>
-                    <MenuItem onClick={() => handleCloneSession(memoTabId)}>Clone session</MenuItem>
+                    <MenuItem onClick={() => handleCloneSession(memoTabId)}>Clone Session</MenuItem>
                     <MenuItem onClick={handleToggleFiles}>
-                      {tab.showFiles ? "Close files" : tab.panes[0]?.host === LOCAL_NAME ? "Open files" : "Open SFTP"}
+                      {tab.showFiles ? "Close Files" : tab.panes[0]?.host === LOCAL_NAME ? "Open Files" : "Open SFTP"}
                     </MenuItem>
                   </>
                 )}
@@ -496,11 +508,11 @@ export default function DialogManager({
                     >
                       Reconnect
                     </MenuItem>
-                    <MenuItem onClick={handleRename}>Rename tab</MenuItem>
+                    <MenuItem onClick={handleRename}>Rename Tab</MenuItem>
                   </>
                 )}
-                <MenuItem onClick={handleCloseOther}>Close other tabs</MenuItem>
-                <MenuItem onClick={handleCloseRight}>Close tabs to the right</MenuItem>
+                <MenuItem onClick={handleCloseOther}>Close Other Tabs</MenuItem>
+                <MenuItem onClick={handleCloseRight}>Close Tabs to the Right</MenuItem>
                 {tab.type === "scratchpad" && (
                   <MenuItem
                     onClick={() => {
@@ -883,7 +895,7 @@ export default function DialogManager({
                   />
                 )}
               />
-              <Typography variant="body2" color="text.secondary" sx={{ wordBreak: "break-all" }}>
+              <Typography variant="body2" color="text.secondary">
                 Server name or <b>[username[:password]@]hostname[:port]</b>. Use <b>{LOCAL_NAME}</b> for local shell.
                 <br />
                 Append <b>?id=abc&title=Local</b> style query string to set optional session-scope parameters:

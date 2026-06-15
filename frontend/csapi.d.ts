@@ -1717,6 +1717,12 @@ export interface Recent {
 	host: string;
 	last_used: number;
 }
+export interface LocalShell {
+	name: string;
+	path: string;
+	args?: string[];
+	run_cmdline_args?: string[];
+}
 export interface WsTerminalMessage {
 	type: "historyStart" | "tabState" | "state";
 	state: "stolen" | "disconnected" | "connected" | "connecting" | "exited" | "";
@@ -1991,6 +1997,7 @@ export interface Store {
 	activeTabId: string;
 	activePaneId: string;
 	hosts: HostData[];
+	shells: LocalShell[];
 	buttons: ButtonData[];
 	vars: Record<string, string>;
 	/** Local (browser-only) vars. All names have a "local_" (case-insensitive) prefix. */
@@ -2365,8 +2372,12 @@ declare global {
 		[CS_EVENT_VARS]: CustomEvent<CSEventDetailVars>;
 	}
 	// Window Desktop app bindings. All are unset (undefined) in web app
-	var appOpenNewWindow: (targetURL: string) => void | undefined;
-	var appToggleFullscreen: () => void | undefined;
+	var appOpenNewWindow: ((targetURL: string) => Promise<void>) | undefined;
+	var appToggleFullscreen: (() => Promise<void>) | undefined;
+	/**
+	 * Get auth token (only valid for desktop app).
+	 */
+	var appAuth: (() => Promise<string>) | undefined;
 }
 
 export {};

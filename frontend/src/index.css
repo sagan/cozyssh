@@ -10,6 +10,10 @@ body,
   text-align: left;
 }
 
+html {
+  word-break: break-all;
+}
+
 /* XTerm resets for scrolling and proper display */
 .xterm-viewport {
   overflow-y: auto !important;

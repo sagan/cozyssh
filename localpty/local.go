@@ -2,12 +2,10 @@ package localpty
 
 import (
 	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
 	"sync/atomic"
 
 	"github.com/aymanbagabas/go-pty"
+	"github.com/google/shlex"
 )
 
 type LocalSession struct {
@@ -16,59 +14,49 @@ type LocalSession struct {
 	closed atomic.Bool
 }
 
+type LocalShell struct {
+	Name           string   `json:"name"`                       // "Bash", "Zsh", "PowerShell", "CMD"
+	Path           string   `json:"path"`                       // "/bin/bash", "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+	Args           []string `json:"args,omitempty"`             // ["-l"]
+	RunCmdlineArgs []string `json:"run_cmdline_args,omitempty"` // ["-l", "-c"]
+}
+
 var (
-	DefaultShell                    string // Default system shell full path, e.g. "/bin/bash"
-	DefaultShellArguments           []string
-	DefaultShellRunCmdlineArguments []string
+	shells atomic.Value // Hold []*LocalShell
 )
 
 func init() {
-	DefaultShell = (func() string {
-		// Try to use user's default shell
-		if shell := os.Getenv("SHELL"); shell != "" {
-			if path, err := exec.LookPath(shell); err == nil {
-				return path
-			}
-		}
+	Refresh()
+}
 
-		var shells []string
-		// try common shells
-		if os.PathSeparator == '\\' {
-			shells = []string{"pwsh", "powershell", "cmd"}
-		} else {
-			shells = []string{"zsh", "bash", "sh"}
-		}
-		for _, shell := range shells {
-			if path, err := exec.LookPath(shell); err == nil {
-				return path
-			}
-		}
-		return "sh"
-	})()
+func Refresh() {
+	shells.Store(getShells())
+}
 
-	shellBasename := strings.TrimSuffix(strings.ToLower(filepath.Base(DefaultShell)), ".exe")
-	switch shellBasename {
-	case "pwsh":
-		DefaultShellRunCmdlineArguments = []string{"-NoLogo", "-l", "-c"}
-		DefaultShellArguments = []string{"-NoLogo", "-l"}
-	case "powershell":
-		DefaultShellRunCmdlineArguments = []string{"-NoLogo", "-Command"}
-	case "cmd":
-		DefaultShellRunCmdlineArguments = []string{"/c"}
-	default:
-		DefaultShellRunCmdlineArguments = []string{"-l", "-c"}
-		DefaultShellArguments = []string{"-l"}
-	}
+func GetShells() []*LocalShell {
+	return shells.Load().([]*LocalShell)
 }
 
 func Start(initialCmd string) (*LocalSession, error) {
-	args := []string{}
+	var program string
+	var args []string
+
+	shells := GetShells()
 
 	if initialCmd != "" {
-		args = append(args, DefaultShellRunCmdlineArguments...)
-		args = append(args, initialCmd)
+		var err error
+		args, err = shlex.Split(initialCmd)
+		if err == nil && len(args) > 0 {
+			program = args[0]
+			args = args[1:]
+		} else {
+			program = shells[0].Path
+			args = shells[0].RunCmdlineArgs
+			args = append(args, initialCmd)
+		}
 	} else {
-		args = append(args, DefaultShellArguments...)
+		program = shells[0].Path
+		args = shells[0].Args
 	}
 
 	p, err := pty.New()
@@ -76,7 +64,7 @@ func Start(initialCmd string) (*LocalSession, error) {
 		return nil, err
 	}
 
-	cmd := p.Command(DefaultShell, args...)
+	cmd := p.Command(program, args...)
 
 	// Set standard xterm env
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
@@ -116,4 +104,13 @@ func (s *LocalSession) Close() error {
 		return err
 	}
 	return nil
+}
+
+// Common helper to verify if an executable exists
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return !info.IsDir()
 }

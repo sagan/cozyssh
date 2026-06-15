@@ -8,6 +8,7 @@ require (
 	github.com/aymanbagabas/go-pty v0.2.3
 	github.com/go-http-utils/headers v0.0.0-20181008091004-fed159eddc2a
 	github.com/gogpu/systray v0.1.0
+	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/gorilla/websocket v1.5.3
 	github.com/jchv/go-webview2 v0.0.0-20260205173254-56598839c808
 	github.com/kevinburke/ssh_config v1.6.0

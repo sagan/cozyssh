@@ -48,7 +48,7 @@ type Config struct {
 	Vars                  map[string]string    `json:"-"`      // Moved to vars.json
 	VarsMtime             map[string]int64     `json:"-"`      // Last modified timestamp of vars
 	InsecureIgnoreHostKey bool                 `json:"insecure_ignore_host_key"`
-	SavePassword          string               `json:"save_password"`
+	SavePassword          string               `json:"save_password" ts_type:"\"ask\" | \"always\" | \"never\""`
 	SessionSecret         string               `json:"session_secret"`
 	// WebDAV Settings
 	WebdavUrl      string `json:"webdav_url"`

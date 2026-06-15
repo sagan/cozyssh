@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useSearchParams } from "react-router";
 import {
   Autocomplete,
@@ -66,6 +66,7 @@ import type {
   SaveWebdavSettingsRequest,
   SyncDetectionResult,
   WebdavStatus,
+  ConfigRequest,
 } from "./api";
 import {
   METHOD_PUT,
@@ -89,6 +90,8 @@ import {
   filterHosts,
   forceReload,
   getIntVar,
+  isValidHostname,
+  localShellHost,
   openHostInNewWindow,
   remoteCommandOptions,
   searchString,
@@ -125,8 +128,8 @@ export default function Sidebar({
   fetchHosts,
 }: {
   appVersion: string;
-  savePassword: string;
-  onSavePasswordChange: (val: string) => void;
+  savePassword: ConfigRequest["save_password"];
+  onSavePasswordChange: (val: ConfigRequest["save_password"]) => void;
   onSelect: OpenHostFunction;
   onSelectTagAsSplit: (tag: string, hosts: string[]) => void;
   onLogout: () => void;
@@ -145,6 +148,7 @@ export default function Sidebar({
   const hostFormData = useStore((state) => state.hostFormData);
   const sysHostname = useStore((state) => state.sysHostname);
   const hosts = useStore((state) => state.hosts);
+  const shells = useStore((state) => state.shells);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const [loading, setLoading] = useState(false);
@@ -432,7 +436,8 @@ export default function Sidebar({
   const [filterStr, setFilterStr] = useState(startupParams.get("filter") || "");
   const [tagsExpanded, setTagsExpanded] = useState(false);
   const [showTagsToggle, setShowTagsToggle] = useState(false);
-  const tagsContainerRef = useRef<HTMLDivElement>(null);
+  const tagsContainerRef = useRef<HTMLDivElement | null>(null);
+  const localShellRef = useRef<HTMLLIElement | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(-1);
 
   const editHostDialogOpen = useStore((state) => state.editHostDialogOpen);
@@ -440,9 +445,10 @@ export default function Sidebar({
 
   // Context Menu State
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number; target: HostData } | null>(null);
+  const [localShellContextMenuOpen, setLocalShellContextMenuOpen] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ element: Element; target: HostData } | null>(null);
   const [tagContextMenuOpen, setTagContextMenuOpen] = useState(false);
-  const [tagContextMenu, setTagContextMenu] = useState<{ mouseX: number; mouseY: number; tag: string } | null>(null);
+  const [tagContextMenu, setTagContextMenu] = useState<{ element: Element; tag: string } | null>(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -841,15 +847,15 @@ export default function Sidebar({
     forceReload();
   }, []);
 
-  const handleContextMenu = useCallback((e: React.MouseEvent, host: HostData) => {
+  const handleContextMenu = useCallback((e: React.MouseEvent | React.KeyboardEvent, host: HostData) => {
     e.preventDefault();
-    setContextMenu({ mouseX: e.clientX - 2, mouseY: e.clientY - 4, target: host });
+    setContextMenu({ element: e.currentTarget, target: host });
     setContextMenuOpen(true);
   }, []);
 
   const handleTagContextMenu = useCallback((e: React.MouseEvent, tag: string) => {
     e.preventDefault();
-    setTagContextMenu({ mouseX: e.clientX - 2, mouseY: e.clientY - 4, tag });
+    setTagContextMenu({ element: e.currentTarget, tag });
     setTagContextMenuOpen(true);
   }, []);
 
@@ -1174,6 +1180,11 @@ export default function Sidebar({
       clear_password: clearPassword,
     };
 
+    if (!isValidHostname(payload.name) || !isValidHostname(payload.hostname)) {
+      dialogs.alert("Invalid hostname or name");
+      return;
+    }
+
     const res = await fetch(url, {
       method,
       headers: {
@@ -1273,8 +1284,25 @@ export default function Sidebar({
     };
   }, [hosts, filterStr]);
 
-  const flatFilteredHosts = useMemo(() => {
-    return [...filteredHosts.favourite, ...filteredHosts.normal, ...filteredHosts.auto];
+  const [flatFilteredHosts, flatFilteredHostIds] = useMemo(() => {
+    const flatFilteredHosts: HostData[] = [];
+    const flatFilteredHostIds: string[] = [];
+    let idx = 0;
+    for (const host of filteredHosts.favourite) {
+      flatFilteredHosts.push(host);
+      flatFilteredHostIds.push(`sidebar-host-fav-${idx++}`);
+    }
+    idx = 0;
+    for (const host of filteredHosts.normal) {
+      flatFilteredHosts.push(host);
+      flatFilteredHostIds.push(`sidebar-host-normal-${idx++}`);
+    }
+    idx = 0;
+    for (const host of filteredHosts.auto) {
+      flatFilteredHosts.push(host);
+      flatFilteredHostIds.push(`sidebar-host-auto-${idx++}`);
+    }
+    return [flatFilteredHosts, flatFilteredHostIds];
   }, [filteredHosts]);
 
   useEffect(() => {
@@ -1299,17 +1327,24 @@ export default function Sidebar({
         e.preventDefault();
         e.stopPropagation();
         setSelectedIndex((prev) => Math.max(prev - step, 0));
-      } else if (key === "enter" && !e.altKey) {
+      } else if (key === "enter") {
         e.preventDefault();
         e.stopPropagation();
-        if (selectedIndex >= 0 && selectedIndex < flatFilteredHosts.length) {
-          onSelect(flatFilteredHosts[selectedIndex].name);
-          setFilterStr("");
-          document.getElementById(ID_SIDEBAR_FILTER)?.blur();
+        if (e.altKey) {
+          const el = document.getElementById(flatFilteredHostIds[selectedIndex]);
+          if (el) {
+            el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+          }
+        } else {
+          if (selectedIndex >= 0 && selectedIndex < flatFilteredHosts.length) {
+            onSelect(flatFilteredHosts[selectedIndex].name);
+            setFilterStr("");
+            document.getElementById(ID_SIDEBAR_FILTER)?.blur();
+          }
         }
       }
     },
-    [flatFilteredHosts, onSelect, selectedIndex],
+    [flatFilteredHostIds, flatFilteredHosts, onSelect, selectedIndex],
   );
 
   const uniqueTags = useMemo(() => {
@@ -1507,7 +1542,17 @@ export default function Sidebar({
           </Box>
         ) : null}
         <List>
-          <ListItem className="sidebar-host" disablePadding data-name={LOCAL_NAME}>
+          <ListItem
+            ref={localShellRef}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setLocalShellContextMenuOpen(true);
+            }}
+            id="sidebar-host-local"
+            className="sidebar-host"
+            disablePadding
+            data-name={LOCAL_NAME}
+          >
             <ListItemButton
               onClick={(e) => {
                 if (e.ctrlKey) {
@@ -1533,6 +1578,7 @@ export default function Sidebar({
             return (
               <HostListItem
                 key={`fav-${idx}`}
+                id={`sidebar-host-fav-${idx}`}
                 filter={filterStr}
                 host={host}
                 onSelect={onSelect}
@@ -1551,6 +1597,7 @@ export default function Sidebar({
             return (
               <HostListItem
                 key={`normal-${idx}`}
+                id={`sidebar-host-normal-${idx}`}
                 filter={filterStr}
                 host={host}
                 onSelect={onSelect}
@@ -1567,6 +1614,7 @@ export default function Sidebar({
             return (
               <HostListItem
                 key={`auto-${idx}`}
+                id={`sidebar-host-auto-${idx}`}
                 filter={filterStr}
                 host={host}
                 onSelect={onSelect}
@@ -1578,13 +1626,26 @@ export default function Sidebar({
         </List>
       </Box>
 
-      {/* Host Context Menu */}
       <Menu
-        open={contextMenuOpen}
-        onClose={() => setContextMenuOpen(false)}
-        anchorReference="anchorPosition"
-        anchorPosition={contextMenu ? { top: contextMenu.mouseY, left: contextMenu.mouseX } : undefined}
+        open={localShellContextMenuOpen}
+        onClose={() => setLocalShellContextMenuOpen(false)}
+        anchorEl={() => localShellRef.current}
       >
+        {shells.map((shell, idx) => (
+          <MenuItem
+            key={idx}
+            onClick={() => {
+              setLocalShellContextMenuOpen(false);
+              onSelect(idx > 0 ? localShellHost(shell) : LOCAL_NAME);
+            }}
+          >
+            {shell.name + (idx === 0 ? " (Default)" : idx === 1 ? " (Alternative)" : "")}
+          </MenuItem>
+        ))}
+      </Menu>
+
+      {/* Host Context Menu */}
+      <Menu open={contextMenuOpen} onClose={() => setContextMenuOpen(false)} anchorEl={contextMenu?.element}>
         <MenuItem onClick={handleEditOpen}>Edit {contextMenu?.target.name}</MenuItem>
         <MenuItem
           onClick={() => {
@@ -1708,12 +1769,7 @@ export default function Sidebar({
         )}
       </Menu>
 
-      <Menu
-        open={tagContextMenuOpen}
-        onClose={() => setTagContextMenuOpen(false)}
-        anchorReference="anchorPosition"
-        anchorPosition={tagContextMenu ? { top: tagContextMenu.mouseY, left: tagContextMenu.mouseX } : undefined}
-      >
+      <Menu open={tagContextMenuOpen} onClose={() => setTagContextMenuOpen(false)} anchorEl={tagContextMenu?.element}>
         <MenuItem onClick={handleOpenAllServers}>Open All ({tagContextMenu?.tag})</MenuItem>
         <MenuItem onClick={handleOpenSplitServers}>Open All (split screen)</MenuItem>
         <MenuItem onClick={handleOpenAllServersInNewWindow}>Open All (new window)</MenuItem>
@@ -1833,7 +1889,7 @@ export default function Sidebar({
                           const displayVal = isRevealed ? revealedPasswords[key] : PASSWORD_PLACEHOLDER;
                           return (
                             <TableRow key={key} hover>
-                              <TableCell sx={{ fontFamily: "monospace", wordBreak: "break-all" }}>{key}</TableCell>
+                              <TableCell sx={{ fontFamily: "monospace" }}>{key}</TableCell>
                               <TableCell sx={{ fontFamily: "monospace" }}>{displayVal}</TableCell>
                               <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
                                 <Tooltip title={isRevealed ? "Hide" : "Reveal"}>
@@ -2047,7 +2103,7 @@ export default function Sidebar({
                         borderColor: "error.main",
                       }}
                     >
-                      <Typography variant="body2" color="error.contrastText" sx={{ wordBreak: "break-all" }}>
+                      <Typography variant="body2" color="error.contrastText">
                         {syncError}
                       </Typography>
                     </Box>
@@ -2127,14 +2183,17 @@ export default function Sidebar({
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
                   <b>Alt + O</b> : Open new tab dialog, use <b>← →</b> (or <b>Alt + H/L</b>) to switch view,&nbsp;
-                  <b>↓ ↑</b> (or <b>Alt + J/K</b>) to select, <b>Enter</b> to open. Use <b>Alt + ↓↑</b> (or&nbsp;
+                  <b>↓ ↑</b> (or <b>Alt + J/K</b>) to select, <b>Enter</b> to open or <b>Alt + Enter</b> to open context
+                  menu. Use <b>Alt + ↓↑</b> (or&nbsp;
                   <b>Alt + Shift + J/K</b>) to jump through items quickly
                   <br />
                   <b>Alt + A</b> : Open new tab dialog - tabs view
                   <br />
                   <b>Alt + E</b> : Open new tab dialog - buttons view
                   <br />
-                  <b>Alt + N</b> : Open new local shell tab
+                  <b>Alt + N</b> : Open new default local shell tab
+                  <br />
+                  <b>Alt + Shift + N</b> : Open new alternative local shell tab
                   <br />
                   <b>Alt + S</b> : Open scratchpad
                   <br />
@@ -2441,12 +2500,14 @@ export default function Sidebar({
 }
 
 function HostListItem({
+  id,
   filter,
   host,
   onSelect,
   onContextMenu,
   isSelected,
 }: {
+  id?: string;
   filter: string;
   host: HostData;
   onSelect: (name: string) => void;
@@ -2472,6 +2533,7 @@ function HostListItem({
   }
   return (
     <ListItem
+      {...(id ? { id } : {})}
       ref={itemRef}
       disablePadding
       onContextMenu={(e) => onContextMenu(e, host)}
@@ -2521,7 +2583,6 @@ function HostListItem({
                 sx={{
                   fontWeight: isFavourite ? 700 : 500,
                   lineHeight: 1.2,
-                  wordBreak: "break-all",
                   color: isFavourite ? "primary.main" : "text.primary",
                 }}
               >

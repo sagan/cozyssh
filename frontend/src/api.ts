@@ -32,7 +32,7 @@ export interface Sysinfo {
     version: string;
     insecureAllowed: boolean;
     isSecure: boolean;
-    savePassword: string;
+    savePassword: "ask" | "always" | "never";
 }
 export interface SaveWebdavSettingsRequest {
     url: string;
@@ -125,6 +125,12 @@ export interface Recent {
 export interface RecentUpdateRequest {
     host: string;
 }
+export interface LocalShell {
+    name: string;
+    path: string;
+    args?: string[];
+    run_cmdline_args?: string[];
+}
 export interface FullData {
     sysinfo: Sysinfo;
     hosts: HostData[];
@@ -132,6 +138,7 @@ export interface FullData {
     vars: {[key: string]: string};
     pinned: SessionPinned[];
     recents: Recent[];
+    shells: LocalShell[];
 }
 export interface LoginRequest {
     password: string;
@@ -237,4 +244,7 @@ export interface PasswordsChangeRequest {
 }
 export interface PasswordsDeleteRequest {
     key: string;
+}
+export interface ConfigRequest {
+    save_password: "ask" | "always" | "never";
 }

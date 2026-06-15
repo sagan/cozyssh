@@ -1,10 +1,11 @@
 import { createTheme } from "@mui/material";
 import { z } from "zod";
-import type { ButtonData, HostData } from "./api";
+import type { ButtonData, HostData, LocalShell } from "./api";
 import type { ITerminalOptions, Terminal } from "@xterm/xterm";
-import { DEFAULT_BUTTON_GROUP } from "./constants";
+import { DEFAULT_BUTTON_GROUP, LOCAL_NAME } from "./constants";
 import { Liquid } from "liquidjs";
 import { getStore } from "./store";
+import { join } from "shlex";
 
 export type Expect<T extends true> = T;
 export type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2 ? true : false;
@@ -851,4 +852,75 @@ export function openHostInNewWindow(hostOrTag: string) {
   } else {
     window.open(url, "_blank", "noopener");
   }
+}
+
+/**
+ * Validates if a string is a valid hostname (Domain, IPv4, or IPv6).
+ * @param hostname The string to validate.
+ * @param allowLocalhost If true, single-label names like 'localhost' are considered valid.
+ */
+export function isValidHostname(hostname: string, allowLocalhost: boolean = true): boolean {
+  if (!hostname || hostname.length > 253) {
+    return false;
+  }
+
+  // 1. Validate IPv4
+  const ipv4Regex = /^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$/;
+  if (ipv4Regex.test(hostname)) {
+    return true;
+  }
+
+  // 2. Validate IPv6
+  // (Optional: Strip URL style brackets if checking hostnames extracted from URLs, e.g. "[::1]")
+  const cleanIPv6 = hostname.startsWith("[") && hostname.endsWith("]") ? hostname.slice(1, -1) : hostname;
+
+  const ipv6Regex =
+    /^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$/;
+  if (ipv6Regex.test(cleanIPv6)) {
+    return true;
+  }
+
+  // 3. Validate Domain / DNS Hostname (RFC 1123)
+  const labels = hostname.split(".");
+
+  // Reject if it's a single label (like 'localhost') and allowLocalhost is false
+  if (labels.length < 2 && !allowLocalhost) {
+    return false;
+  }
+
+  // Each label must be 1-63 chars, alphanumeric or hyphen, and cannot start/end with a hyphen
+  const labelRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/;
+
+  // The final TLD extension cannot be purely numeric (e.g., 'example.123' is invalid)
+  if (labels.length > 1) {
+    const tld = labels[labels.length - 1];
+    if (/^\d+$/.test(tld)) {
+      return false;
+    }
+  }
+
+  return labels.every((label) => labelRegex.test(label));
+}
+
+/**
+ * Similar to Go strings.Cut.
+ * @param s
+ * @param sep
+ * @returns
+ */
+export function cutString(s: string, sep: string): [before: string, after: string, found: boolean] {
+  const i = s.indexOf(sep);
+  if (i < 0) {
+    return [s, "", false];
+  }
+  return [s.slice(0, i), s.slice(i + sep.length), true];
+}
+
+/**
+ * Returns the host string for a local shell
+ */
+export function localShellHost(shell: LocalShell): string {
+  return `${LOCAL_NAME}?title=${encodeURIComponent(shell.name)}&remoteCommand=${encodeURIComponent(
+    join([shell.path, ...(shell.args ?? [])]),
+  )}`;
 }
