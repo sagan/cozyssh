@@ -318,7 +318,7 @@ declare global {
   /**
    * Refresh the data from backend.
    */
-  function csRefresh(syncFlag?: number): Promise<void>;
+  function csRefresh(options?: { sync?: number; refresh?: number }): Promise<void>;
   /**
    * Set the theme of the application. It accepts the same arguments as MUI `createTheme`,
    * see [Material UI document](https://mui.com/material-ui/customization/theming/).

@@ -357,10 +357,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, []);
 
   const handleRefresh = useCallback(
-    async (syncFlag = 0) => {
+    async ({ sync = 0, refresh = 0 } = {}) => {
       const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
       try {
-        const r = await fetch(`/api/fulldata?sync=${syncFlag}`, {
+        const r = await fetch(`/api/fulldata?sync=${sync}&refresh=${refresh}`, {
           headers: {
             [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
           },

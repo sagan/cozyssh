@@ -141,6 +141,9 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 	if flags.ListenAddr != "" {
 		cfg.Addr = flags.ListenAddr
 	}
+	localpty.Load(cfg.Shells)
+	log.Printf("local shells:")
+	json.NewEncoder(os.Stderr).Encode(localpty.GetShells())
 	cfg.ApplyConfig()
 	log.Printf("CozySSH %s; Config file: %s", version, cfg.ConfigPath)
 
@@ -242,7 +245,7 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 			query := r.URL.Query()
 			refresh := query.Get("refresh") == "1"
 			if refresh {
-				localpty.Refresh()
+				localpty.Load(cfg.Shells)
 			}
 			syncFlag := query.Get("sync")
 			if syncFlag != "" {
@@ -897,6 +900,7 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 			args := slices.Clone(shells[0].RunCmdlineArgs)
 			args = append(args, req.Cmdline)
 			cmd := os_exec.Command(shells[0].Path, args...)
+			common.PatchCmd(cmd)
 			if home, err := os.UserHomeDir(); err == nil {
 				cmd.Dir = home
 			}
@@ -949,6 +953,7 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				args := slices.Clone(shells[0].RunCmdlineArgs)
 				args = append(args, req.Cmdline)
 				cmd := os_exec.Command(shells[0].Path, args...)
+				common.PatchCmd(cmd)
 				if home, err := os.UserHomeDir(); err == nil {
 					cmd.Dir = home
 				}

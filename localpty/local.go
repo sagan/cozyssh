@@ -2,6 +2,8 @@ package localpty
 
 import (
 	"os"
+	"slices"
+	"strings"
 	"sync/atomic"
 
 	"github.com/aymanbagabas/go-pty"
@@ -25,12 +27,54 @@ var (
 	shells atomic.Value // Hold []*LocalShell
 )
 
-func init() {
-	Refresh()
-}
-
-func Refresh() {
-	shells.Store(getShells())
+func Load(configShells []string) {
+	localShells := getShells()
+	if len(configShells) > 0 {
+		var newShells []*LocalShell
+		blacklist := map[string]bool{}
+		orders := map[string]int{}
+		for i, configShell := range configShells {
+			if strings.HasPrefix(configShell, "-") {
+				blacklist[strings.TrimSpace(configShell[1:])] = true
+			} else if strings.HasPrefix(configShell, "+") {
+				if tokens, err := shlex.Split(configShell[1:]); err == nil && len(tokens) > 2 {
+					var args []string
+					var runCmdlineArgs []string
+					if len(tokens) > 2 {
+						args, _ = shlex.Split(tokens[2])
+					}
+					if len(tokens) > 3 {
+						runCmdlineArgs, _ = shlex.Split(tokens[3])
+					}
+					newShells = append(newShells, &LocalShell{
+						Name:           tokens[0],
+						Path:           tokens[1],
+						Args:           args,
+						RunCmdlineArgs: runCmdlineArgs,
+					})
+					orders[tokens[1]] = i + 1
+				}
+			} else {
+				orders[strings.TrimSpace(configShell)] = i + 1
+			}
+		}
+		for _, shell := range localShells {
+			if !blacklist[shell.Path] {
+				newShells = append(newShells, shell)
+			}
+		}
+		slices.SortStableFunc(newShells, func(a, b *LocalShell) int {
+			if orders[a.Path] > 0 && orders[b.Path] == 0 {
+				return -1
+			} else if orders[a.Path] == 0 && orders[b.Path] > 0 {
+				return 1
+			} else {
+				return orders[a.Path] - orders[b.Path]
+			}
+		})
+		localShells = newShells
+	}
+	shells.Store(localShells)
 }
 
 func GetShells() []*LocalShell {
@@ -104,13 +148,4 @@ func (s *LocalSession) Close() error {
 		return err
 	}
 	return nil
-}
-
-// Common helper to verify if an executable exists
-func fileExists(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
-	return !info.IsDir()
 }

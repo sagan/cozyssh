@@ -3,11 +3,11 @@
 package localpty
 
 import (
+	"cozyssh/common"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
-	"strings"
+	"slices"
 
 	"golang.org/x/sys/windows/registry"
 )
@@ -22,19 +22,19 @@ func getShells() []*LocalShell {
 	if sysRoot == "" {
 		sysRoot = `C:\Windows`
 	}
-
-	// 1. Modern PowerShell (pwsh.exe) - Check common path & system PATH
 	pf := os.Getenv("ProgramFiles")
 	if pf == "" {
 		pf = `C:\Program Files`
 	}
-	pwshPath := filepath.Join(pf, "PowerShell", "7", "pwsh.exe")
-	if !fileExists(pwshPath) {
-		if lookPath, err := exec.LookPath("pwsh"); err == nil {
-			pwshPath = lookPath
-		}
+
+	// Modern PowerShell (pwsh.exe) - Check system PATH & common path
+	var pwshPath string
+	if path, err := exec.LookPath("pwsh"); err == nil {
+		pwshPath = path
+	} else if path := filepath.Join(pf, "PowerShell", "7", "pwsh.exe"); common.FileExists(path) {
+		pwshPath = path
 	}
-	if fileExists(pwshPath) {
+	if pwshPath != "" {
 		shells = append(shells, &LocalShell{
 			Name:           "PowerShell 7+",
 			Path:           pwshPath,
@@ -43,23 +43,30 @@ func getShells() []*LocalShell {
 		})
 	}
 
-	// 2. Legacy Windows PowerShell
-	winPS := filepath.Join(sysRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
-	if fileExists(winPS) {
+	// Legacy Windows PowerShell
+	var powershellPath string
+	if path, err := exec.LookPath("powershell"); err == nil {
+		powershellPath = path
+	} else if path := filepath.Join(sysRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"); common.FileExists(path) {
+		powershellPath = path
+	}
+	if powershellPath != "" {
 		shells = append(shells, &LocalShell{
 			Name:           "Windows PowerShell",
-			Path:           winPS,
+			Path:           powershellPath,
 			Args:           []string{"-NoLogo"},
 			RunCmdlineArgs: []string{"-NoLogo", "-Command"},
 		})
 	}
 
-	// 3. Command Prompt (CMD)
-	cmdPath := os.Getenv("COMSPEC")
-	if cmdPath == "" {
-		cmdPath = filepath.Join(sysRoot, "System32", "cmd.exe")
+	// Command Prompt (CMD)
+	var cmdPath string
+	if path, err := exec.LookPath("cmd"); err == nil {
+		cmdPath = path
+	} else if path := filepath.Join(sysRoot, "System32", "cmd.exe"); common.FileExists(path) {
+		cmdPath = path
 	}
-	if fileExists(cmdPath) {
+	if cmdPath != "" {
 		shells = append(shells, &LocalShell{
 			Name:           "Command Prompt",
 			Path:           cmdPath,
@@ -71,10 +78,46 @@ func getShells() []*LocalShell {
 	shellArgs := []string{"-l"}
 	shellRunCmdlineArgs := []string{"-l", "-c"}
 
-	// 4. Git Bash (via Registry)
+	// WSL Distributions (via Registry)
+	var wslPath string
+	if path, err := exec.LookPath("wsl"); err == nil {
+		wslPath = path
+	} else if path := filepath.Join(sysRoot, "System32", "wsl.exe"); common.FileExists(path) {
+		wslPath = path
+	}
+	if wslPath != "" {
+		wslRegPath := `Software\Microsoft\Windows\CurrentVersion\Lxss`
+		k, err := registry.OpenKey(registry.CURRENT_USER, wslRegPath, registry.ENUMERATE_SUB_KEYS)
+		if err == nil {
+			defer k.Close()
+			if names, err := k.ReadSubKeyNames(-1); err == nil {
+				for i, subKeyName := range names {
+					sk, err := registry.OpenKey(registry.CURRENT_USER, wslRegPath+"\\"+subKeyName, registry.QUERY_VALUE)
+					if err == nil {
+						distName, _, err := sk.GetStringValue("DistributionName")
+						sk.Close()
+						if err == nil {
+							shell := &LocalShell{
+								Name: distName + " (WSL)",
+								Path: wslPath,
+								Args: []string{"-d", distName},
+							}
+							if i == 0 && len(shells) > 0 {
+								// put the first WSL in shells[1] (alternative shell)
+								shells = slices.Insert(shells, 1, shell)
+							} else {
+								shells = append(shells, shell)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Git Bash (via Registry)
 	if gitPath, err := getRegistryString(registry.LOCAL_MACHINE, `SOFTWARE\GitForWindows`, "InstallPath"); err == nil {
-		bashPath := filepath.Join(gitPath, "bin", "bash.exe")
-		if fileExists(bashPath) {
+		if bashPath := filepath.Join(gitPath, "bin", "bash.exe"); common.FileExists(bashPath) {
 			shells = append(shells, &LocalShell{
 				Name:           "Git Bash",
 				Path:           bashPath,
@@ -83,37 +126,6 @@ func getShells() []*LocalShell {
 			})
 		}
 	}
-
-	// 5. WSL Distributions (via Registry)
-	wslPath := filepath.Join(sysRoot, "System32", "wsl.exe")
-	if fileExists(wslPath) {
-		wslRegPath := `Software\Microsoft\Windows\CurrentVersion\Lxss`
-		k, err := registry.OpenKey(registry.CURRENT_USER, wslRegPath, registry.ENUMERATE_SUB_KEYS)
-		if err == nil {
-			defer k.Close()
-			if names, err := k.ReadSubKeyNames(-1); err == nil {
-				for _, subKeyName := range names {
-					sk, err := registry.OpenKey(registry.CURRENT_USER, wslRegPath+"\\"+subKeyName, registry.QUERY_VALUE)
-					if err == nil {
-						distName, _, err := sk.GetStringValue("DistributionName")
-						sk.Close()
-						if err == nil {
-							shells = append(shells, &LocalShell{
-								Name: distName + " (WSL)",
-								Path: wslPath,
-								Args: []string{"-d", distName},
-							})
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// Sort based on priority: pwsh -> powershell -> cmd -> others (Git Bash / WSL)
-	sort.Slice(shells, func(i, j int) bool {
-		return getWinPriority(shells[i].Path) < getWinPriority(shells[j].Path)
-	})
 
 	if len(shells) == 0 {
 		// fallback
@@ -126,24 +138,6 @@ func getShells() []*LocalShell {
 	}
 
 	return shells
-}
-
-func getWinPriority(path string) int {
-	base := strings.ToLower(filepath.Base(path))
-	switch base {
-	case "pwsh.exe":
-		return 0
-	case "wsl.exe":
-		return 1
-	case "powershell.exe":
-		return 2
-	case "cmd.exe":
-		return 3
-	case "bash.exe": // Git Bash
-		return 4
-	default:
-		return 5
-	}
 }
 
 func getRegistryString(root registry.Key, path, valueName string) (string, error) {

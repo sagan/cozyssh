@@ -78,3 +78,9 @@ func ReadStdinLine() string {
 	}
 	return strings.TrimSpace(line)
 }
+
+// Check if path exists and is file (not dir)
+func FileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}

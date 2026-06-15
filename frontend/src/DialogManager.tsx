@@ -69,6 +69,7 @@ import {
   setAppendNewLine,
   setSearchOpen,
   triggerFocusSearchInput,
+  activatePane,
 } from "./store";
 import NewTabDialog from "./NewTabDialog";
 import { dialogs } from "./Dialogs";
@@ -82,7 +83,7 @@ export interface DialogManagerProps {
   handlePinTab: (id: string) => void;
   handleUnlockTab: (id: string) => void;
   handleLockTab: (id: string) => void;
-  handleCloneSession: (id: string) => void;
+  handleCloneSession: (id: string, cloneInSameTab?: boolean) => void;
   handleToggleFiles: () => void;
   handleReconnectTab: (id: string) => void;
   handleRename: () => void;
@@ -481,21 +482,30 @@ export default function DialogManager({
                     <MenuItem
                       onClick={() => {
                         handleCloseMenu();
-                        csFocus(memoTabId);
                         setSearchOpen(true);
-                        triggerFocusSearchInput();
+                        if (getStore().activeTabId === tab.id) {
+                          triggerFocusSearchInput();
+                        } else {
+                          activatePane(tab.activePaneId, tab.id);
+                          setTimeout(() => triggerFocusSearchInput(), 200);
+                        }
                       }}
                     >
                       Find
                     </MenuItem>
                   </>
                 )}
-                {tab.panes.length === 1 && tab.type !== "scratchpad" && (
+                {tab.type !== "scratchpad" && (
                   <>
                     <MenuItem onClick={() => handleCloneSession(memoTabId)}>Clone Session</MenuItem>
-                    <MenuItem onClick={handleToggleFiles}>
-                      {tab.showFiles ? "Close Files" : tab.panes[0]?.host === LOCAL_NAME ? "Open Files" : "Open SFTP"}
-                    </MenuItem>
+                    {tab.panes.length < 4 && (
+                      <MenuItem onClick={() => handleCloneSession(memoTabId, true)}>Clone Session (Split)</MenuItem>
+                    )}
+                    {tab.panes.length === 1 && (
+                      <MenuItem onClick={handleToggleFiles}>
+                        {tab.showFiles ? "Close Files" : tab.panes[0]?.host === LOCAL_NAME ? "Open Files" : "Open SFTP"}
+                      </MenuItem>
+                    )}
                   </>
                 )}
                 {tab.type !== "scratchpad" && (

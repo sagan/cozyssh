@@ -4,6 +4,7 @@ package localpty
 
 import (
 	"bufio"
+	"cozyssh/common"
 	"os"
 	"path/filepath"
 	"sort"
@@ -35,7 +36,7 @@ func getShells() []*LocalShell {
 		// Bulletproof fallback if /etc/shells is broken or unreadable
 		fallbacks := []string{"/bin/zsh", "/bin/bash"}
 		for _, p := range fallbacks {
-			if fileExists(p) {
+			if common.FileExists(p) {
 				shells = append(shells, &LocalShell{
 					Name:           capitalize(filepath.Base(p)),
 					Path:           p,
@@ -71,7 +72,7 @@ func getShells() []*LocalShell {
 		}
 
 		// 3. Drop if the file doesn't actually exist or if it's a duplicate path
-		if !fileExists(canonicalPath) || seenCanonicalPaths[canonicalPath] {
+		if !common.FileExists(canonicalPath) || seenCanonicalPaths[canonicalPath] {
 			continue
 		}
 

@@ -38,23 +38,27 @@ var (
 )
 
 type Config struct {
-	Addr                  string               `json:"addr"`
-	SiteName              string               `json:"sitename"`
-	AppPasswordHash       string               `json:"app_password_hash"`
-	SSHDir                string               `json:"sshdir"` // openssh config dir, defaults to ~/.ssh
-	Buttons               []*models.ButtonData `json:"-"`      // Moved to buttons.json
-	ConfigPath            string               `json:"-"`      // internal use
-	ConfigDir             string               `json:"-"`      // internal use
-	Vars                  map[string]string    `json:"-"`      // Moved to vars.json
-	VarsMtime             map[string]int64     `json:"-"`      // Last modified timestamp of vars
-	InsecureIgnoreHostKey bool                 `json:"insecure_ignore_host_key"`
-	SavePassword          string               `json:"save_password" ts_type:"\"ask\" | \"always\" | \"never\""`
-	SessionSecret         string               `json:"session_secret"`
+	Addr                  string               `json:"addr,omitempty"`
+	SiteName              string               `json:"sitename,omitempty"`
+	AppPasswordHash       string               `json:"app_password_hash,omitempty"`
+	SSHDir                string               `json:"sshdir,omitempty"` // openssh config dir, defaults to ~/.ssh
+	Buttons               []*models.ButtonData `json:"-,omitempty"`      // Moved to buttons.json
+	ConfigPath            string               `json:"-,omitempty"`      // internal use
+	ConfigDir             string               `json:"-,omitempty"`      // internal use
+	Vars                  map[string]string    `json:"-,omitempty"`      // Moved to vars.json
+	VarsMtime             map[string]int64     `json:"-,omitempty"`      // Last modified timestamp of vars
+	InsecureIgnoreHostKey bool                 `json:"insecure_ignore_host_key,omitempty"`
+	SavePassword          string               `json:"save_password,omitempty" ts_type:"\"ask\" | \"always\" | \"never\""`
+	SessionSecret         string               `json:"session_secret,omitempty"`
+	// Control local shells order. Each item is shell path. Use "-<path>" to exclude a shell.
+	// Use "+<name> <path> [args [run_cmdline_args]]" to add a new shell.
+	// Each segment should be quoted if it contain space.
+	Shells []string `json:"shells,omitempty"`
 	// WebDAV Settings
-	WebdavUrl      string `json:"webdav_url"`
-	WebdavUser     string `json:"webdav_user"`
-	WebdavPassword string `json:"webdav_password"`
-	WebdavEnabled  bool   `json:"webdav_enabled"`
+	WebdavUrl      string `json:"webdav_url,omitempty"`
+	WebdavUser     string `json:"webdav_user,omitempty"`
+	WebdavPassword string `json:"webdav_password,omitempty"`
+	WebdavEnabled  bool   `json:"webdav_enabled,omitempty"`
 	mu             sync.Mutex
 }
 

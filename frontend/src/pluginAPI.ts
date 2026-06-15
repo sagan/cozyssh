@@ -382,7 +382,7 @@ export interface PluginAPICallbacks {
   /** Attach to an existing backend session */
   handleAttach: (id: string, host: string, title: string, isLocked?: boolean) => Promise<void>;
   /** Refresh all data from the server */
-  handleRefresh: (syncFlag?: number) => Promise<void>;
+  handleRefresh: (options?: { sync?: number; refresh?: number }) => Promise<void>;
   /** React state setter for applets */
   setApplets: React.Dispatch<React.SetStateAction<AppletData[]>>;
   /** Whether we're in mobile layout */
