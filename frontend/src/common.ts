@@ -1,4 +1,4 @@
-import { createTheme } from "@mui/material";
+import { createTheme, type ThemeOptions } from "@mui/material";
 import { z } from "zod";
 import type { ButtonData, HostData, LocalShell } from "./api";
 import type { ITerminalOptions, Terminal } from "@xterm/xterm";
@@ -211,8 +211,8 @@ const getMuiDialogContainer: () => Element = () => {
   return isFullscreen ? document.getElementById("main-content")! : document.body;
 };
 
-export function defaultTheme({ fontSize = DEFAULT_FONT_SIZE }: { fontSize?: number }) {
-  const theme = createTheme({
+export function defaultThemeOptions({ fontSize = DEFAULT_FONT_SIZE }: { fontSize?: number }): ThemeOptions {
+  return {
     typography: {
       fontSize,
     },
@@ -235,8 +235,7 @@ export function defaultTheme({ fontSize = DEFAULT_FONT_SIZE }: { fontSize?: numb
       primary: { main: "#1976d2" },
       background: { default: "#ffffff", paper: "#f4f6f8" },
     },
-  });
-  return theme;
+  };
 }
 
 export const loginTheme = createTheme({
@@ -360,6 +359,7 @@ export const nonCharKeys = new Set([
 ]);
 
 export const DefaultXtermOptions: ITerminalOptions = {
+  scrollback: 10000,
   allowProposedApi: true,
   cursorBlink: true,
   theme: {
@@ -853,7 +853,7 @@ export async function closeModal(closeAll?: boolean) {
  * @param hostOrTag - name of the host to open, it can be a tag (e.g. "#work").
  */
 export function openHostInNewWindow(hostOrTag: string) {
-  const url = `${window.location.origin}/#${hostOrTag}`;
+  const url = `${window.location.origin}/#${encodeURIComponent(hostOrTag)}`;
   if (window.appOpenNewWindow) {
     window.appOpenNewWindow(url);
   } else {

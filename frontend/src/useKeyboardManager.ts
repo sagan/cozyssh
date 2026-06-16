@@ -185,7 +185,6 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
             varName = VAR_CS_FONT_SIZE;
           }
           if (DEFAULT_FONT_SIZE !== __CS_FONT_SIZE__) {
-            __CS_FONT_SIZE__ = DEFAULT_FONT_SIZE;
             csSetVar(varName, DEFAULT_FONT_SIZE.toString());
             if (msg) {
               msg += `; `;
@@ -222,7 +221,6 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
             }
             const fontSize = Math.max(10, __CS_FONT_SIZE__ - 1);
             if (fontSize !== __CS_FONT_SIZE__) {
-              __CS_FONT_SIZE__ = fontSize;
               csSetVar(varName, fontSize.toString());
               if (msg) {
                 msg += "; ";
@@ -260,7 +258,6 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
             }
             const fontSize = Math.min(40, __CS_FONT_SIZE__ + 1);
             if (fontSize !== __CS_FONT_SIZE__) {
-              __CS_FONT_SIZE__ = fontSize;
               csSetVar(varName, fontSize.toString());
               if (msg) {
                 msg += "; ";

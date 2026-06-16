@@ -1,7 +1,9 @@
 import { useEffect } from "react";
 
 import {
+  DEFAULT_FONT_SIZE,
   DEFAULT_TERMINAL_FONT_SIZE,
+  VAR_CS_FONT_SIZE,
   VAR_CS_NOWAKELOCK,
   VAR_CS_REMAP_CTRL_L,
   VAR_CS_TERMINAL_FONT_SIZE,
@@ -33,9 +35,14 @@ export default function SideEffect() {
   useEffect(() => {
     __CS_REMAP_CTRL_L__ = getIntVar(VAR_CS_REMAP_CTRL_L);
 
-    const fontSize = Math.max(1, getIntVar(VAR_CS_TERMINAL_FONT_SIZE, DEFAULT_TERMINAL_FONT_SIZE));
-    if (fontSize !== (__CS_TERMINAL_OPTIONS__.fontSize || DEFAULT_TERMINAL_FONT_SIZE)) {
-      __CS_TERMINAL_OPTIONS__.fontSize = fontSize;
+    const terminalFontSize = Math.max(1, getIntVar(VAR_CS_TERMINAL_FONT_SIZE, DEFAULT_TERMINAL_FONT_SIZE));
+    if (terminalFontSize !== (__CS_TERMINAL_OPTIONS__.fontSize || DEFAULT_TERMINAL_FONT_SIZE)) {
+      __CS_TERMINAL_OPTIONS__.fontSize = terminalFontSize;
+    }
+
+    const fontSize = Math.max(1, getIntVar(VAR_CS_FONT_SIZE, DEFAULT_FONT_SIZE));
+    if (fontSize !== __CS_FONT_SIZE__) {
+      __CS_FONT_SIZE__ = fontSize;
     }
 
     window.dispatchEvent(

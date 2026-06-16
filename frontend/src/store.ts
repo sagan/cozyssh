@@ -11,7 +11,14 @@
 import { create } from "zustand";
 
 import type { HostData, ButtonData, WsTerminalMessage, Recent, LocalShell } from "./api";
-import type { HostForm, ViewMode, Severity, ShellIntegration, Toast } from "./common";
+import {
+  type HostForm,
+  type ViewMode,
+  type Severity,
+  type ShellIntegration,
+  type Toast,
+  isMuiModalOpen,
+} from "./common";
 import type { TerminalHandle } from "./Terminal";
 import type { ScratchpadHandle } from "./Scratchpad";
 import {
@@ -359,6 +366,16 @@ window.addEventListener("storage", (e) => {
     }
   } catch (err) {
     console.warn("Failed to sync cross-tab localStorage update:", err);
+  }
+});
+
+window.addEventListener("visibilitychange", () => {
+  if (
+    document.visibilityState === "visible" &&
+    !isMuiModalOpen() &&
+    (!document.activeElement || !["INPUT", "TEXTAREA"].includes(document.activeElement.tagName))
+  ) {
+    triggerFocus();
   }
 });
 

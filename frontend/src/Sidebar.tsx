@@ -1774,8 +1774,8 @@ export default function Sidebar({
 
       <Menu open={tagContextMenuOpen} onClose={() => setTagContextMenuOpen(false)} anchorEl={tagContextMenu?.element}>
         <MenuItem onClick={handleOpenAllServers}>Open All ({tagContextMenu?.tag})</MenuItem>
-        <MenuItem onClick={handleOpenSplitServers}>Open All (split screen)</MenuItem>
-        <MenuItem onClick={handleOpenAllServersInNewWindow}>Open All (new window)</MenuItem>
+        <MenuItem onClick={handleOpenSplitServers}>Open All (Split Screen)</MenuItem>
+        <MenuItem onClick={handleOpenAllServersInNewWindow}>Open All (New Window)</MenuItem>
         <MenuItem onClick={handleCopyTagUrl}>Copy URL</MenuItem>
       </Menu>
 
@@ -2550,6 +2550,7 @@ function HostListItem({
       disablePadding
       onContextMenu={(e) => onContextMenu(e, host)}
       data-name={host.name}
+      data-tags={host.tags?.join(" ") ?? ""}
       className="sidebar-host"
       sx={{
         bgcolor: isSelected ? "action.hover" : isFavourite ? "action.selected" : "transparent",

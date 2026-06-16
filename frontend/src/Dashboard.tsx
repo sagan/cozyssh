@@ -60,7 +60,7 @@ import {
   type ContextMenu,
   type ScratchpadSyncState,
   type OpenHostFunction,
-  defaultTheme,
+  defaultThemeOptions,
   genTabId,
   getIntVar,
   nextName,
@@ -379,7 +379,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     [loadFullData],
   );
 
-  const [muiTheme, setMuiTheme] = useState(() => defaultTheme({ fontSize: __CS_FONT_SIZE__ }));
+  const [muiTheme, setMuiTheme] = useState(() => createTheme(defaultThemeOptions({ fontSize: __CS_FONT_SIZE__ })));
 
   const handleCloseSearch = useCallback(() => {
     setSearchOpen(false);
@@ -1104,9 +1104,14 @@ export default function Dashboard({ initialData }: DashboardProps) {
   useEffect(() => {
     const autorun = getIntVar(VAR_CS_NOAUTORUN) !== 1 && startupParams.get(VAR_NOAUTORUN) !== "1";
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    const hash = window.location.hash.substring(1);
+    let hash = window.location.hash.substring(1);
     if (hash) {
       window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+    try {
+      hash = decodeURIComponent(hash);
+    } catch {
+      /* empty */
     }
 
     const initAsync = async () => {

@@ -47,6 +47,8 @@ import {
   getCanonicalHostString,
   getTemplateVariables,
   liquidEngine,
+  openHostInNewWindow,
+  type OpenHostFunction,
 } from "./common";
 import {
   type TabData,
@@ -96,7 +98,7 @@ export interface DialogManagerProps {
   sendParsedString: (s: string, isLiquid?: boolean, userVars?: Record<string, string>) => void;
   handleAttach: (id: string, host: string, title: string, isLocked: boolean) => void;
   handleRefresh: () => void;
-  handleSelectHost: (h: string) => void;
+  handleSelectHost: OpenHostFunction;
   handleButtonClick: (btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">) => Promise<void>;
 }
 
@@ -605,6 +607,47 @@ export default function DialogManager({
         <MenuItem
           onClick={() => {
             if (btnMenuAnchor) {
+              setBtnMenuAnchor(null);
+              openHostInNewWindow(btnMenuAnchor.btn.payload);
+            }
+          }}
+          sx={{
+            display: lastMenuBtn?.type === "open_terminal" ? "flex" : "none",
+          }}
+        >
+          Open (New Window)
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            if (btnMenuAnchor) {
+              setBtnMenuAnchor(null);
+              handleSelectHost(btnMenuAnchor.btn.payload, { target: "_self" });
+            }
+          }}
+          sx={{
+            display: lastMenuBtn?.type === "open_terminal" ? "flex" : "none",
+          }}
+        >
+          Open (In Current Tab)
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            if (btnMenuAnchor) {
+              setBtnMenuAnchor(null);
+              navigator.clipboard.writeText(
+                `${window.location.origin}/#${encodeURIComponent(btnMenuAnchor.btn.payload)}`,
+              );
+            }
+          }}
+          sx={{
+            display: lastMenuBtn?.type === "open_terminal" ? "flex" : "none",
+          }}
+        >
+          Copy URL
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            if (btnMenuAnchor) {
               navigator.clipboard.writeText(btnMenuAnchor.btn.payload);
               setBtnMenuAnchor(null);
             }
@@ -915,7 +958,7 @@ export default function DialogManager({
                 <br />- <b>remoteCommand</b> : Remote shell command to execute on connected
                 <br />- <b>proxyJump</b> : Proxy jump server
                 <br />- <b>target</b> : The tab id. If the same id tab exists, the new terminal will be opened in the
-                target tab
+                target tab, use <code>_self</code> for current tab
                 <br />
                 E.g. <b>local?id=local-abc&title=Local&remoteCommand=tmux attach || tmux new</b>
               </Typography>

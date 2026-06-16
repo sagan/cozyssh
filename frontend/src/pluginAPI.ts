@@ -40,7 +40,7 @@ import {
   VAR_CS_FONT_SIZE,
 } from "./constants";
 import {
-  defaultTheme,
+  defaultThemeOptions,
   DefaultXtermOptions,
   generatePassword,
   getIntVar,
@@ -171,7 +171,7 @@ Object.defineProperty(window, "__CS_FONT_SIZE__", {
       return;
     }
     csFontSize = newValue;
-    csSetTheme(defaultTheme({ fontSize: csFontSize }));
+    csSetTheme(defaultThemeOptions({ fontSize: csFontSize }));
   },
   configurable: true,
   enumerable: true,
