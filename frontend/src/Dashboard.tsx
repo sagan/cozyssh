@@ -379,7 +379,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     [loadFullData],
   );
 
-  const [muiTheme, setMuiTheme] = useState(defaultTheme);
+  const [muiTheme, setMuiTheme] = useState(() => defaultTheme({ fontSize: __CS_FONT_SIZE__ }));
 
   const handleCloseSearch = useCallback(() => {
     setSearchOpen(false);

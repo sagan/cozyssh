@@ -751,7 +751,7 @@ export default function NewTabDialog({
                                   variant="caption"
                                   sx={{
                                     color: "inherit",
-                                    fontSize: "0.6rem",
+                                    fontSize: "typography.caption.fontSize",
                                     fontWeight: 600,
                                     opacity: 0.8,
                                   }}

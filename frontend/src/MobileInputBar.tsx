@@ -170,7 +170,7 @@ const BTN_SX = (wide?: boolean) =>
     minWidth: wide ? 40 : 30,
     height: 28,
     px: 0.4,
-    fontSize: "0.7rem",
+    fontSize: "typography.caption.fontSize",
     fontFamily: "monospace",
     flexShrink: 0,
     textTransform: "none",

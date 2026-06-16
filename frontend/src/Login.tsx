@@ -137,11 +137,11 @@ Please remember the app password. You will need it to access your saved SSH pass
             size="small"
             color="error"
             onClick={handleClearCache}
-            sx={{ mt: 2, fontSize: "0.7rem", textTransform: "none" }}
+            sx={{ mt: 2, fontSize: "typography.caption.fontSize", textTransform: "none" }}
           >
             Force clear cache & unregister service worker
           </Button>
-          <Typography variant="body2" sx={{ mt: 2, fontSize: "0.7rem" }}>
+          <Typography variant="body2" sx={{ mt: 2, fontSize: "typography.caption.fontSize" }}>
             v{PACKAGE_JSON_VERSION}&nbsp;|&nbsp;
             <a rel="noopener noreferrer" style={{ color: "#1976d2" }} href="https://github.com/sagan/cozyssh">
               GitHub

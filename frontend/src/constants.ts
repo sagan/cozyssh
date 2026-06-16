@@ -42,6 +42,7 @@ export const VAR_CS_NOWEBGL = "cs_nowebgl";
  */
 export const VAR_CS_REMAP_CTRL_L = "cs_remap_ctrl_l";
 export const VAR_CS_TERMINAL_FONT_SIZE = "cs_terminal_font_size";
+export const VAR_CS_FONT_SIZE = "cs_font_size";
 
 export const VAR_NOAUTOLOAD = "noautoload";
 export const VAR_NOAUTORUN = "noautorun";
@@ -112,8 +113,7 @@ export const DEFAULT_SCROLL_LINES = 3;
  * xterm.js default fontSize
  */
 export const DEFAULT_TERMINAL_FONT_SIZE = 15;
-
-export const TOAST_KEY_TERMINAL_FONT_SIZE = "cs-terminal-font-size";
+export const TOAST_KEY_FONT_SIZE = "cs-font-size";
 
 /**
  * Used as a special flag in url hash to indicate the mobile input panel is currently open.
@@ -132,3 +132,5 @@ export const CACHE_API_DATA = "api-data-cache";
 export const CACHE_MANIFEST = "manifest-cache";
 
 export const DEFAULT_SCROLL_ITEMS = 10;
+
+export const DEFAULT_FONT_SIZE = 14; // MUI default typegraphy fontSize

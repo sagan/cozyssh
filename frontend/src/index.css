@@ -18,3 +18,11 @@ html {
 .xterm-viewport {
   overflow-y: auto !important;
 }
+
+html[data-cs-env="1"] .hide-desktop {
+  display: none;
+}
+
+html[data-cs-env="0"] .hide-web {
+  display: none;
+}

@@ -128,7 +128,8 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - `Alt + Backquote` : Close any modal (Dialog / Menu / Popover). Similar to `Escape` but works even if terminal is in fullscreen mode
   - `Alt + Shift + Backquote` : Close all models
   - `Alt + - / Alt + +` : Decrease / increase terminal font size
-  - `Ctrl + Alt + 0` : Reset to default terminal font size (15px)
+  - `Alt + Shift + - / Alt + Shift + +` : Decrease / increase global & terminal font size
+  - `Ctrl + Alt + 0` : Reset to default global / terminal font size (14 / 15px)
   - `Ctrl + Shift + F` : Open terminal search box
   - `Ctrl + Shift + R` : Reconnect current terminal
   - `Ctrl + Shift + C` : Copy selected text in terminal

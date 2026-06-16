@@ -279,7 +279,7 @@ export default function TabBar({
                 }}
                 sx={{
                   width: 200,
-                  "& .MuiInputBase-root": { height: 32, fontSize: "0.875rem" },
+                  "& .MuiInputBase-root": { height: 32, fontSize: "typography.body2.fontSize" },
                 }}
               />
               <IconButton

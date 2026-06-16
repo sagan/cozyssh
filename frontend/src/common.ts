@@ -2,7 +2,7 @@ import { createTheme } from "@mui/material";
 import { z } from "zod";
 import type { ButtonData, HostData, LocalShell } from "./api";
 import type { ITerminalOptions, Terminal } from "@xterm/xterm";
-import { DEFAULT_BUTTON_GROUP, LOCAL_NAME } from "./constants";
+import { DEFAULT_BUTTON_GROUP, DEFAULT_FONT_SIZE, LOCAL_NAME } from "./constants";
 import { Liquid } from "liquidjs";
 import { getStore } from "./store";
 import { join } from "shlex";
@@ -210,27 +210,34 @@ const getMuiDialogContainer: () => Element = () => {
   // Otherwise, fall back to document.body (completely avoiding the MUI bug).
   return isFullscreen ? document.getElementById("main-content")! : document.body;
 };
-export const defaultTheme = createTheme({
-  components: {
-    MuiMenu: {
-      defaultProps: {
-        // @todo: not working for dynamic menus
-        container: getMuiDialogContainer,
+
+export function defaultTheme({ fontSize = DEFAULT_FONT_SIZE }: { fontSize?: number }) {
+  const theme = createTheme({
+    typography: {
+      fontSize,
+    },
+    components: {
+      MuiMenu: {
+        defaultProps: {
+          // @todo: not working for dynamic menus
+          container: getMuiDialogContainer,
+        },
+      },
+      MuiDialog: {
+        defaultProps: {
+          container: getMuiDialogContainer,
+        },
       },
     },
-    MuiDialog: {
-      defaultProps: {
-        container: getMuiDialogContainer,
-      },
+    cssVariables: true,
+    palette: {
+      mode: "light",
+      primary: { main: "#1976d2" },
+      background: { default: "#ffffff", paper: "#f4f6f8" },
     },
-  },
-  cssVariables: true,
-  palette: {
-    mode: "light",
-    primary: { main: "#1976d2" },
-    background: { default: "#ffffff", paper: "#f4f6f8" },
-  },
-});
+  });
+  return theme;
+}
 
 export const loginTheme = createTheme({
   cssVariables: true,

@@ -2123,6 +2123,11 @@ declare global {
 	 */
 	var __CS_ENV__: number;
 	/**
+	 * Global font size. Default is 14 (MUI default).
+	 * It uses Object.defineProperty so the modification takes effect immediately.
+	 */
+	var __CS_FONT_SIZE__: number;
+	/**
 	 * Focus the terminal with the given pane id.
 	 * @param tabOrPaneId defaults to active terminal pane id.
 	 */

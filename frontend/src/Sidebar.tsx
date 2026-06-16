@@ -1386,6 +1386,7 @@ export default function Sidebar({
         </IconButton>
         <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
           <MenuItem
+            id="refresh-menu-item"
             onClick={() => {
               setAnchorEl(null);
               onRefresh();
@@ -1394,6 +1395,7 @@ export default function Sidebar({
             Refresh
           </MenuItem>
           <MenuItem
+            id="dashboard-menu-item"
             onClick={() => {
               setAnchorEl(null);
               setSettingsOpen(true);
@@ -1405,6 +1407,7 @@ export default function Sidebar({
             Dashboard
           </MenuItem>
           <MenuItem
+            id="open-scratchpad-menu-item"
             onClick={() => {
               setAnchorEl(null);
               onOpenScratchpad();
@@ -1412,34 +1415,34 @@ export default function Sidebar({
           >
             Open Scratchpad
           </MenuItem>
-          {__CS_ENV__ === 0 && (
-            <>
-              <MenuItem
-                onClick={async () => {
-                  setAnchorEl(null);
-                  if (await dialogs.confirm("Log out of current device?")) {
-                    onLogout();
-                  }
-                }}
-              >
-                Logout
-              </MenuItem>
-              <MenuItem
-                onClick={async () => {
-                  setAnchorEl(null);
-                  if (
-                    await dialogs.confirm(
-                      "Are you sure you want to log out of all browser sessions? This will invalidate all active sessions and require you to sign in again on all devices.",
-                    )
-                  ) {
-                    onLogoutAll();
-                  }
-                }}
-              >
-                Logout All
-              </MenuItem>
-            </>
-          )}
+          <MenuItem
+            id="logout-menu-item"
+            className="hide-desktop"
+            onClick={async () => {
+              setAnchorEl(null);
+              if (await dialogs.confirm("Log out of current device?")) {
+                onLogout();
+              }
+            }}
+          >
+            Logout
+          </MenuItem>
+          <MenuItem
+            id="logout-all-menu-item"
+            className="hide-desktop"
+            onClick={async () => {
+              setAnchorEl(null);
+              if (
+                await dialogs.confirm(
+                  "Are you sure you want to log out of all browser sessions? This will invalidate all active sessions and require you to sign in again on all devices.",
+                )
+              ) {
+                onLogoutAll();
+              }
+            }}
+          >
+            Logout All
+          </MenuItem>
         </Menu>
       </Toolbar>
 
@@ -1848,7 +1851,14 @@ export default function Sidebar({
                         variant="outlined"
                         color="warning"
                         onClick={handleLock}
-                        sx={{ py: 0.25, px: 1, minWidth: 0, textTransform: "none", fontSize: "0.75rem", height: 24 }}
+                        sx={{
+                          py: 0.25,
+                          px: 1,
+                          minWidth: 0,
+                          textTransform: "none",
+                          fontSize: "typography.caption.fontSize",
+                          height: 24,
+                        }}
                       >
                         Lock
                       </Button>
@@ -2236,7 +2246,9 @@ export default function Sidebar({
                   <br />
                   <b>Alt + - / Alt + +</b> : Decrease / increase terminal font size
                   <br />
-                  <b>Ctrl + Alt + 0</b> : Reset to default terminal font size (15px)
+                  <b>Alt + Shift + - / Alt + Shift + +</b> : Decrease / increase global & terminal font size
+                  <br />
+                  <b>Ctrl + Alt + 0</b> : Reset to default global / terminal font size (14 / 15px)
                   <br />
                   <b>Ctrl + Shift + F</b> : Open terminal search box
                   <br />
@@ -2598,7 +2610,7 @@ function HostListItem({
                         variant="caption"
                         sx={{
                           color: "primary.main",
-                          fontSize: "0.6rem",
+                          fontSize: "typography.caption.fontSize",
                           fontWeight: 600,
                           opacity: 0.8,
                         }}
@@ -2611,7 +2623,11 @@ function HostListItem({
           }
           secondary={
             (!host.is_auto || host.name !== `${host.user || "root"}@${host.hostname}`) && (
-              <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontSize: "0.7rem" }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: "block", fontSize: "typography.caption.fontSize" }}
+              >
                 {secondaryText}
               </Typography>
             )

@@ -36,8 +36,18 @@ import {
   MIME_JSON,
   LOCAL_NAME,
   LOCAL_VAR_PREFIX,
+  DEFAULT_FONT_SIZE,
+  VAR_CS_FONT_SIZE,
 } from "./constants";
-import { DefaultXtermOptions, generatePassword, isMuiModalOpen, liquidEngine, terminalKeyShortcuts } from "./common";
+import {
+  defaultTheme,
+  DefaultXtermOptions,
+  generatePassword,
+  getIntVar,
+  isMuiModalOpen,
+  liquidEngine,
+  terminalKeyShortcuts,
+} from "./common";
 import {
   type TerminalRefMap,
   activatePane,
@@ -79,7 +89,9 @@ window.__CS_PASSTHROUGH_SHORTCUTS__ = terminalKeyShortcuts;
 window.__CS_DISABLE_SHORTCUTS__ = disableShortcuts;
 window.__CS_LIQUID_ENGINE__ = liquidEngine;
 window.__CS_RUNNING_SCRIPT__ = undefined;
-window.__CS_ENV__ = "appToggleFullscreen" in window ? 1 : 0;
+window.__CS_ENV__ = window.appToggleFullscreen ? 1 : 0;
+document.documentElement.dataset.csEnv = `${window.__CS_ENV__}`;
+document.documentElement.dataset.csVersion = PACKAGE_JSON_VERSION;
 
 // Use Proxy to intercept __CS_TERMINAL_OPTIONS__
 (function () {
@@ -141,6 +153,29 @@ window.__CS_ENV__ = "appToggleFullscreen" in window ? 1 : 0;
     enumerable: true,
   });
 })();
+
+let csFontSize = getIntVar(VAR_CS_FONT_SIZE, DEFAULT_FONT_SIZE);
+
+Object.defineProperty(window, "__CS_FONT_SIZE__", {
+  get() {
+    return csFontSize;
+  },
+  set(newValue) {
+    if (
+      typeof newValue !== "number" ||
+      Number.isNaN(newValue) ||
+      newValue <= 0 ||
+      newValue >= 100 ||
+      newValue === csFontSize
+    ) {
+      return;
+    }
+    csFontSize = newValue;
+    csSetTheme(defaultTheme({ fontSize: csFontSize }));
+  },
+  configurable: true,
+  enumerable: true,
+});
 
 // window.csSetSidebarFilter = undefined; // Assigned in Sidebar useEffect
 window.csAlert = dialogs.alert;

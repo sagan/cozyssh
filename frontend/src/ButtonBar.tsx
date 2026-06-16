@@ -91,7 +91,7 @@ export default function ButtonBar({ groups, handleButtonClick, onNewButtonClick 
           slotProps={{ select: { native: true } }}
           sx={{
             minWidth: 80,
-            "& .MuiInputBase-root": { fontSize: "0.8rem", height: 26 },
+            "& .MuiInputBase-root": { fontSize: "typography.caption.fontSize", height: 26 },
             "& select": { py: 0, pr: "18px !important" },
           }}
         >
@@ -144,7 +144,7 @@ export default function ButtonBar({ groups, handleButtonClick, onNewButtonClick 
                 minWidth: "auto",
                 p: "2px 12px",
                 textTransform: "none",
-                fontSize: "0.8rem",
+                fontSize: "typography.caption.fontSize",
                 borderRadius: 1.5,
                 border: style.border,
                 borderColor: style.borderColor,

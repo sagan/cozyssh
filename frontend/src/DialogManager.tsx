@@ -1022,7 +1022,7 @@ export default function DialogManager({
                   <Button
                     size="small"
                     variant="outlined"
-                    sx={{ py: 0, px: 1, minWidth: 0, fontSize: "0.75rem", textTransform: "none" }}
+                    sx={{ py: 0, px: 1, minWidth: 0, fontSize: "typography.caption.fontSize", textTransform: "none" }}
                     onClick={() => navigator.clipboard.writeText(inputValue)}
                   >
                     Copy
@@ -1115,7 +1115,7 @@ export default function DialogManager({
                     <Button
                       size="small"
                       variant="outlined"
-                      sx={{ py: 0, px: 1, minWidth: 0, fontSize: "0.75rem", textTransform: "none" }}
+                      sx={{ py: 0, px: 1, minWidth: 0, fontSize: "typography.caption.fontSize", textTransform: "none" }}
                       onClick={() => {
                         if (renderedPreview) {
                           navigator.clipboard.writeText(renderedPreview);

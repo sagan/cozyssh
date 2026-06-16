@@ -683,7 +683,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
                 handleGoTo();
               }
             }}
-            sx={{ fontSize: "0.875rem" }}
+            sx={{ fontSize: "typography.caption.fontSize" }}
           />
           {filterValue && (
             <IconButton size="small" onClick={() => setFilterValue("")} sx={{ p: "2px", mr: 0.5 }}>
@@ -772,10 +772,12 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
                   >
                     {file.name}
                   </TableCell>
-                  <TableCell sx={{ color: "text.secondary", fontSize: "0.8rem" }}>
+                  <TableCell sx={{ color: "text.secondary", fontSize: "typography.caption.fontSize" }}>
                     {file.isDir ? "--" : formatSize(file.size)}
                   </TableCell>
-                  <TableCell sx={{ color: "text.secondary", fontSize: "0.8rem" }}>{file.modTime}</TableCell>
+                  <TableCell sx={{ color: "text.secondary", fontSize: "typography.caption.fontSize" }}>
+                    {file.modTime}
+                  </TableCell>
                   <TableCell padding="none" sx={{ pr: 1, textAlign: "right" }}>
                     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
                       {!file.isDir && (
