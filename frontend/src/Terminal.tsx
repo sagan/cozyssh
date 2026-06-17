@@ -41,7 +41,7 @@ import {
   nonCharKeys,
   DefaultXtermOptions,
 } from "./common";
-import { type PaneData } from "./store";
+import { notify, type PaneData } from "./store";
 
 export interface TerminalHandle {
   sendData: (data: string) => void;
@@ -818,7 +818,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
         try {
           await Promise.all(promises);
         } catch (error) {
-          csNotify(`Error in terminal setup: ${error}`, "error");
+          notify(`Error in terminal setup: ${error}`, "error");
           return;
         }
 

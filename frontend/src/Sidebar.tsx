@@ -2204,7 +2204,7 @@ export default function Sidebar({
                   <br />
                   <b>Alt + A</b> : Open new tab dialog - tabs view
                   <br />
-                  <b>Alt + E</b> : Open new tab dialog - buttons view
+                  <b>Alt + E / Ctrl + Shift + P</b> : Open new tab dialog - buttons view
                   <br />
                   <b>Alt + N</b> : Open new default local shell tab
                   <br />

@@ -522,6 +522,28 @@ function matchHost(host: HostData, searchText: string): boolean {
   );
 }
 
+export function filterButtons<T extends Pick<ButtonData, "name" | "type" | "payload">>(
+  buttons: readonly T[],
+  filterStr: string,
+): readonly T[] {
+  filterStr = filterStr.trim().toLowerCase();
+  if (!filterStr) {
+    return buttons;
+  }
+  const tokens = filterStr.split(/\s+/);
+  return buttons.filter((host) => {
+    return tokens.every((searchText) => matchButton(host, searchText));
+  });
+}
+
+function matchButton(btn: Pick<ButtonData, "name" | "type" | "payload">, searchText: string): boolean {
+  return (
+    btn.name.toLowerCase().includes(searchText) ||
+    (!(["run_script", "send_string"] as ButtonData["type"][]).includes(btn.type) &&
+      btn.payload.toLowerCase().includes(searchText))
+  );
+}
+
 export function searchStringAny(input: string, searchText: string): string {
   const matched = searchString(input, searchText);
   if (matched) {

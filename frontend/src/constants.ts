@@ -58,7 +58,12 @@ export const WS_PROTOCOL_QUERY_PREFIX = "query.";
 export const WS_PROTOCOL_IDENTITY_PREFIX = "identity.";
 export const WS_PROTOCOL_DUMMY = "dummy";
 
-export const TERMINAL_FUNCTIONS = [
+type ValueLabel = {
+  value: string;
+  label: string;
+};
+
+export const TERMINAL_FUNCTIONS: ValueLabel[] = [
   { value: "COPY", label: "COPY (Buffer)" },
   { value: "COPY_VISIBLE", label: "COPY (Visible)" },
   { value: "COPY_SELECTION", label: "COPY (Selection)" },
@@ -83,7 +88,16 @@ export const TERMINAL_FUNCTIONS = [
   { value: "SEARCH", label: "SEARCH (Buffer)" },
 ] as const;
 
-export const MISC_FUNCTIONS = [
+export const MISC_FUNCTIONS: ValueLabel[] = [
+  { value: "RESET_FONT_SIZE", label: "Reset Font Size" },
+  { value: "RESET_TERMINAL_FONT_SIZE", label: "Reset Terminal Font Size" },
+  { value: "RESET_GLOBAL_FONT_SIZE", label: "Reset Global Font Size" },
+  { value: "DECREASE_FONT_SIZE", label: "Decrease Font Size" },
+  { value: "DECREASE_TERMINAL_FONT_SIZE", label: "Decrease Terminal Font Size" },
+  { value: "DECREASE_GLOBAL_FONT_SIZE", label: "Decrease Global Font Size" },
+  { value: "INCREASE_FONT_SIZE", label: "Increase Font Size" },
+  { value: "INCREASE_TERMINAL_FONT_SIZE", label: "Increase Terminal Font Size" },
+  { value: "INCREASE_GLOBAL_FONT_SIZE", label: "Increase Global Font Size" },
   { value: "TABS_SCROLL_LEFT", label: "Tabs Scroll Left" },
   { value: "TABS_SCROLL_RIGHT", label: "Tabs Scroll Right" },
   { value: "BUTTONS_SCROLL_LEFT", label: "Buttons Scroll Left" },
@@ -127,6 +141,8 @@ export const HASH_MOBILE_INPUT_PANEL = "$mobile-input-panel$";
 export const ID_TERMINAL_SEARCH_INPUT = "terminal-search-input";
 
 export const ID_SIDEBAR_FILTER = "sidebar-filter";
+
+export const ID_NEW_TAB_DIALOG_INPUT = "new-tab-dialog-input";
 
 export const CACHE_API_DATA = "api-data-cache";
 

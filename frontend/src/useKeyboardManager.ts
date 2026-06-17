@@ -14,35 +14,23 @@ import { type ButtonData } from "./api";
 import {
   BROWSER_STORAGE_KEY_ACTIVE_GROUP,
   DEFAULT_BUTTON_GROUP,
-  DEFAULT_FONT_SIZE,
   DEFAULT_SCROLL_LINES,
-  DEFAULT_TERMINAL_FONT_SIZE,
   ID_SIDEBAR_FILTER,
   LOCAL_NAME,
-  LOCAL_VAR_PREFIX,
-  TOAST_KEY_FONT_SIZE,
-  VAR_CS_FONT_SIZE,
   VAR_CS_SCROLL_LINES,
-  VAR_CS_TERMINAL_FONT_SIZE,
 } from "./constants";
-import {
-  closeModal,
-  forceReload,
-  getIntVar,
-  getKeyCombination,
-  isMuiModalOpen,
-  localShellHost,
-  nextTerminalFontSize,
-  prevTerminalFontSize,
-} from "./common";
+import { closeModal, forceReload, getIntVar, getKeyCombination, isMuiModalOpen, localShellHost } from "./common";
 import {
   type TerminalRefMap,
   activatePane,
+  changeNewTabDialogViewMode,
+  decreseFontSize,
   getStore,
+  increaseFontSize,
+  resetFontSize,
   setActiveGroup,
   setActivePaneId,
   setActiveTabId,
-  setNewTabDialogFilter,
   setNewTabDialogOpen,
   setSearchOpen,
   triggerFocus,
@@ -166,108 +154,19 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         }
         case "ctrl+alt+0": {
           e.preventDefault();
-          let msg = "";
-          const { vars, localVars } = getStore();
-          let varName: string;
-          if (!vars[VAR_CS_TERMINAL_FONT_SIZE] || localVars[LOCAL_VAR_PREFIX + VAR_CS_TERMINAL_FONT_SIZE]) {
-            varName = LOCAL_VAR_PREFIX + VAR_CS_TERMINAL_FONT_SIZE;
-          } else {
-            varName = VAR_CS_TERMINAL_FONT_SIZE;
-          }
-          if (DEFAULT_TERMINAL_FONT_SIZE !== (__CS_TERMINAL_OPTIONS__.fontSize || DEFAULT_TERMINAL_FONT_SIZE)) {
-            csSetVar(varName, DEFAULT_TERMINAL_FONT_SIZE.toString());
-            msg += `Terminal font size reset to ${DEFAULT_TERMINAL_FONT_SIZE}`;
-          }
-
-          if (!vars[VAR_CS_FONT_SIZE] || localVars[LOCAL_VAR_PREFIX + VAR_CS_FONT_SIZE]) {
-            varName = LOCAL_VAR_PREFIX + VAR_CS_FONT_SIZE;
-          } else {
-            varName = VAR_CS_FONT_SIZE;
-          }
-          if (DEFAULT_FONT_SIZE !== __CS_FONT_SIZE__) {
-            csSetVar(varName, DEFAULT_FONT_SIZE.toString());
-            if (msg) {
-              msg += `; `;
-            }
-            msg += `Global font size reset to ${DEFAULT_FONT_SIZE}`;
-          }
-          if (msg) {
-            csNotify(msg, "info", TOAST_KEY_FONT_SIZE);
-          }
+          resetFontSize(true, true);
           return;
         }
         case "alt+-":
         case "alt+shift+_": {
           e.preventDefault();
-          let msg = "";
-          const { vars, localVars } = getStore();
-          let varName: string;
-          if (!vars[VAR_CS_TERMINAL_FONT_SIZE] || localVars[LOCAL_VAR_PREFIX + VAR_CS_TERMINAL_FONT_SIZE]) {
-            varName = LOCAL_VAR_PREFIX + VAR_CS_TERMINAL_FONT_SIZE;
-          } else {
-            varName = VAR_CS_TERMINAL_FONT_SIZE;
-          }
-          const fontSize = prevTerminalFontSize(__CS_TERMINAL_OPTIONS__.fontSize || DEFAULT_TERMINAL_FONT_SIZE);
-          if (fontSize !== (__CS_TERMINAL_OPTIONS__.fontSize || DEFAULT_TERMINAL_FONT_SIZE)) {
-            csSetVar(varName, fontSize.toString());
-            msg += `Terminal font size: ${fontSize.toFixed(1).padStart(4, "0")}`;
-          }
-
-          if (keycomb === "alt+shift+_") {
-            if (!vars[VAR_CS_FONT_SIZE] || localVars[LOCAL_VAR_PREFIX + VAR_CS_FONT_SIZE]) {
-              varName = LOCAL_VAR_PREFIX + VAR_CS_FONT_SIZE;
-            } else {
-              varName = VAR_CS_FONT_SIZE;
-            }
-            const fontSize = Math.max(10, __CS_FONT_SIZE__ - 1);
-            if (fontSize !== __CS_FONT_SIZE__) {
-              csSetVar(varName, fontSize.toString());
-              if (msg) {
-                msg += "; ";
-              }
-              msg += `Global font size: ${fontSize}`;
-            }
-          }
-          if (msg) {
-            csNotify(msg, "info", TOAST_KEY_FONT_SIZE);
-          }
+          decreseFontSize(true, keycomb === "alt+shift+_");
           return;
         }
         case "alt+=":
         case "alt+shift++": {
           e.preventDefault();
-          let msg = "";
-          const { vars, localVars } = getStore();
-          let varName: string;
-          if (!vars[VAR_CS_TERMINAL_FONT_SIZE] || localVars[LOCAL_VAR_PREFIX + VAR_CS_TERMINAL_FONT_SIZE]) {
-            varName = LOCAL_VAR_PREFIX + VAR_CS_TERMINAL_FONT_SIZE;
-          } else {
-            varName = VAR_CS_TERMINAL_FONT_SIZE;
-          }
-          const fontSize = nextTerminalFontSize(__CS_TERMINAL_OPTIONS__.fontSize || DEFAULT_TERMINAL_FONT_SIZE);
-          if (fontSize !== (__CS_TERMINAL_OPTIONS__.fontSize || DEFAULT_TERMINAL_FONT_SIZE)) {
-            csSetVar(varName, fontSize.toString());
-            msg += `Terminal font size: ${fontSize.toFixed(1).padStart(4, "0")}`;
-          }
-
-          if (keycomb === "alt+shift++") {
-            if (!vars[VAR_CS_FONT_SIZE] || localVars[LOCAL_VAR_PREFIX + VAR_CS_FONT_SIZE]) {
-              varName = LOCAL_VAR_PREFIX + VAR_CS_FONT_SIZE;
-            } else {
-              varName = VAR_CS_FONT_SIZE;
-            }
-            const fontSize = Math.min(40, __CS_FONT_SIZE__ + 1);
-            if (fontSize !== __CS_FONT_SIZE__) {
-              csSetVar(varName, fontSize.toString());
-              if (msg) {
-                msg += "; ";
-              }
-              msg += `Global font size: ${fontSize}`;
-            }
-          }
-          if (msg) {
-            csNotify(msg, "info", TOAST_KEY_FONT_SIZE);
-          }
+          increaseFontSize(true, keycomb === "alt+shift++");
           return;
         }
         case "alt+c":
@@ -282,19 +181,20 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
 
         case "alt+o":
           e.preventDefault();
-          setNewTabDialogFilter("");
+          changeNewTabDialogViewMode("servers");
           setNewTabDialogOpen(true);
           return;
 
         case "alt+a":
           e.preventDefault();
-          setNewTabDialogFilter("@");
+          changeNewTabDialogViewMode("tabs");
           setNewTabDialogOpen(true);
           return;
 
         case "alt+e":
+        case "ctrl+shift+p":
           e.preventDefault();
-          setNewTabDialogFilter(">");
+          changeNewTabDialogViewMode("buttons");
           setNewTabDialogOpen(true);
           return;
 

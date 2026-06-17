@@ -105,7 +105,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
 - **Full keyboard Shortcuts**: It supports a complete set of keyboard shortcuts.
   - `Alt + O` : Open new tab dialog, use `← →` (or `Alt + H/L`) to switch view, `↓ ↑` (or `Alt + J/K`) to select, `Enter` to open. `Alt + Enter` to open context menu. Use `Alt + ↓↑` (or `Alt + Shift + J/K`) to jump through items quickly
   - `Alt + A` : Open new tab dialog - tabs view
-  - `Alt + E` : Open new tab dialog - buttons view
+  - `Alt + E / Ctrl + Shift + P` : Open new tab dialog - buttons view
   - `Alt + N` : Open new default local shell tab
   - `Alt + Shift + N` : Open new alternative local shell tab
   - `Alt + S` : Open scratchpad

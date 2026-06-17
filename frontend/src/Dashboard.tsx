@@ -104,6 +104,9 @@ import {
   clearData,
   setAppendNewLine,
   setShells,
+  resetFontSize,
+  decreseFontSize,
+  increaseFontSize,
 } from "./store";
 import { setupPluginAPI, runScript, moduleCache } from "./pluginAPI";
 import { useKeyboardManager } from "./useKeyboardManager";
@@ -1051,6 +1054,33 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
         case "misc":
           switch (btn.payload) {
+            case "RESET_FONT_SIZE":
+              resetFontSize(true, true);
+              break;
+            case "RESET_TERMINAL_FONT_SIZE":
+              resetFontSize(true, false);
+              break;
+            case "RESET_GLOBAL_FONT_SIZE":
+              resetFontSize(false, true);
+              break;
+            case "DECREASE_FONT_SIZE":
+              decreseFontSize(true, true);
+              break;
+            case "DECREASE_TERMINAL_FONT_SIZE":
+              decreseFontSize(true, false);
+              break;
+            case "DECREASE_GLOBAL_FONT_SIZE":
+              decreseFontSize(false, true);
+              break;
+            case "INCREASE_FONT_SIZE":
+              increaseFontSize(true, true);
+              break;
+            case "INCREASE_TERMINAL_FONT_SIZE":
+              increaseFontSize(true, false);
+              break;
+            case "INCREASE_GLOBAL_FONT_SIZE":
+              increaseFontSize(false, true);
+              break;
             case "TABS_SCROLL_LEFT":
               (document.querySelector("#tab-bar .MuiTabScrollButton-root:first-of-type") as HTMLElement)?.click();
               break;

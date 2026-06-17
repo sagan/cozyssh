@@ -36,10 +36,12 @@ import {
   DEFAULT_SCROLL_ITEMS,
   LOCAL_NAME,
   VAR_CS_SCROLL_ITEMS,
+  ID_NEW_TAB_DIALOG_INPUT,
 } from "./constants";
 import {
   type ViewMode,
   cutString,
+  filterButtons,
   filterHosts,
   getIntVar,
   isValidHostname,
@@ -47,10 +49,20 @@ import {
   parseHostName,
   searchStringAny,
 } from "./common";
-import { cycleNewTabDialogMode, getStore, setNewTabDialogFilter, updateRecentButtonId, useStore } from "./store";
+import { changeNewTabDialogViewMode, getStore, setNewTabDialogFilter, updateRecentButtonId, useStore } from "./store";
 
 interface DialogItem {
-  type: "recent" | "host" | "direct" | "local" | "tab" | "pinned_tab" | "button" | "other_button" | "builtin_button" | "help";
+  type:
+    | "recent"
+    | "host"
+    | "direct"
+    | "local"
+    | "tab"
+    | "pinned_tab"
+    | "button"
+    | "other_button"
+    | "builtin_button"
+    | "help";
   value: string;
   label: string;
   subtitle?: string;
@@ -131,6 +143,17 @@ export default function NewTabDialog({
     }
     return "servers";
   }, [newTabDialogFilter]);
+
+  useEffect(() => {
+    const value = inputRef.current?.value;
+    if (value) {
+      if (viewMode === "servers") {
+        inputRef.current!.select();
+      } else {
+        inputRef.current!.setSelectionRange(1, value.length);
+      }
+    }
+  }, [viewMode]);
 
   useEffect(() => {
     if (open) {
@@ -237,17 +260,8 @@ export default function NewTabDialog({
     if (viewMode !== "buttons") {
       return { matchedUser: [], matchedBuiltin: [] };
     }
-
-    const matchedUser = buttons.filter(
-      (b) =>
-        b.name.toLowerCase().includes(f) ||
-        (b.type !== "run_script" && b.payload && b.payload.toLowerCase().includes(f)),
-    );
-
-    const matchedBuiltin = BUILTIN_BUTTONS.filter(
-      (b) => b.name.toLowerCase().includes(f) || b.payload.toLowerCase().includes(f),
-    );
-
+    const matchedUser = filterButtons(buttons, f);
+    const matchedBuiltin = filterButtons(BUILTIN_BUTTONS, f);
     return { matchedUser, matchedBuiltin };
   }, [buttons, f, viewMode]);
 
@@ -303,11 +317,7 @@ export default function NewTabDialog({
     if (!f) {
       return list;
     }
-    return list.filter(
-      (b) =>
-        b.name.toLowerCase().includes(f) ||
-        (b.type !== "run_script" && b.payload && b.payload.toLowerCase().includes(f)),
-    );
+    return filterButtons(list, f);
   }, [recentButtonIds, buttons, f, viewMode]);
 
   const { sections, items } = useMemo(() => {
@@ -350,6 +360,7 @@ export default function NewTabDialog({
           label:
             shell.name + (shell === defaultShell ? " (Default)" : shell === alternativeShell ? " (Alternative)" : ""),
           subtitle: `Local Shell - ` + shell.path,
+          tag: shell === defaultShell ? "alt+n" : shell === alternativeShell ? "alt+shift+n" : "",
         });
       });
       addSection("Local Shells", localList);
@@ -558,38 +569,38 @@ export default function NewTabDialog({
       });
       addSection("Built-in Functions", builtinList);
     } else if (viewMode === "help") {
-      const helpOptions = [
+      const helpOptions: Omit<DialogItem, "flatIndex">[] = [
         {
           type: "help" as const,
           value: ">",
           label: "> Buttons (Commands)",
           subtitle: "Execute custom buttons, scripts, or built-in functions",
+          tag: "alt+e / ctrl+shift+p",
         },
         {
           type: "help" as const,
           value: "@",
           label: "@ Tabs",
           subtitle: "Switch to active browser tabs or attach pinned sessions",
+          tag: "alt+a",
         },
-        {
-          type: "help" as const,
-          value: "?",
-          label: "? Help",
-          subtitle: "Show help guide for command palette prefixes",
-        },
+        // {
+        //   type: "help" as const,
+        //   value: "?",
+        //   label: "? Help",
+        //   subtitle: "Show help guide for command palette prefixes",
+        // },
         {
           type: "help" as const,
           value: "",
           label: "Servers / Connections",
           subtitle: "Connect to saved servers, local shells, or a direct SSH address",
+          tag: "alt+o",
         },
       ];
 
       const filteredHelp = helpOptions.filter(
-        (o) =>
-          o.label.toLowerCase().includes(f) ||
-          o.subtitle.toLowerCase().includes(f) ||
-          o.value.includes(f),
+        (o) => o.label.toLowerCase().includes(f) || o.subtitle?.toLowerCase().includes(f) || o.value.includes(f),
       );
 
       addSection("Command Palette Prefix Guide", filteredHelp);
@@ -652,7 +663,7 @@ export default function NewTabDialog({
         onClose();
       }
     },
-    [onAttachPinned, onClose, onExecuteButton, onSelect, onSelectTab, setNewTabDialogFilter],
+    [onAttachPinned, onClose, onExecuteButton, onSelect, onSelectTab],
   );
 
   const handleKeyDown = useCallback(
@@ -671,11 +682,11 @@ export default function NewTabDialog({
       } else if ((key === "arrowleft" && !f) || (e.altKey && key === "h")) {
         e.stopPropagation();
         e.preventDefault();
-        cycleNewTabDialogMode(true);
+        changeNewTabDialogViewMode(true);
       } else if ((key === "arrowright" && !f) || (e.altKey && key === "l")) {
         e.stopPropagation();
         e.preventDefault();
-        cycleNewTabDialogMode();
+        changeNewTabDialogViewMode();
       } else if (key === "enter" && !e.altKey) {
         e.preventDefault();
         e.stopPropagation();
@@ -726,9 +737,9 @@ export default function NewTabDialog({
 
       if (Math.abs(diffX) > 100 && Math.abs(diffX) > Math.abs(diffY) * 2 && diffTime < 500) {
         if (diffX > 0) {
-          cycleNewTabDialogMode(true);
+          changeNewTabDialogViewMode(true);
         } else {
-          cycleNewTabDialogMode();
+          changeNewTabDialogViewMode();
         }
       }
     },
@@ -805,18 +816,11 @@ export default function NewTabDialog({
     >
       <DialogTitle sx={{ p: 1.5, pb: 1 }}>
         <TextField
+          id={ID_NEW_TAB_DIALOG_INPUT}
           autoFocus
           fullWidth
           variant="outlined"
-          placeholder={
-            viewMode === "servers"
-              ? "Search for a server or type an address..."
-              : viewMode === "tabs"
-                ? "Search opened tabs..."
-                : viewMode === "buttons"
-                  ? "Search buttons..."
-                  : "Search help guide..."
-          }
+          placeholder="Search server... ? for help"
           value={newTabDialogFilter}
           onChange={(e) => {
             setNewTabDialogFilter(e.target.value);
@@ -834,7 +838,7 @@ export default function NewTabDialog({
                 <InputAdornment position="end">
                   <IconButton
                     onClick={() => {
-                      cycleNewTabDialogMode();
+                      changeNewTabDialogViewMode();
                       inputRef.current?.focus();
                     }}
                     color={viewMode !== "servers" ? "primary" : "default"}

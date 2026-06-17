@@ -18,6 +18,8 @@ import {
   type Toast,
   type ViewMode,
   isMuiModalOpen,
+  nextTerminalFontSize,
+  prevTerminalFontSize,
 } from "./common";
 import type { TerminalHandle } from "./Terminal";
 import type { ScratchpadHandle } from "./Scratchpad";
@@ -28,6 +30,12 @@ import {
   BROWSER_STORAGE_KEY_RECENTS,
   BROWSER_STORAGE_KEY_VARS,
   DEFAULT_BUTTON_GROUP,
+  DEFAULT_FONT_SIZE,
+  DEFAULT_TERMINAL_FONT_SIZE,
+  LOCAL_VAR_PREFIX,
+  TOAST_KEY_FONT_SIZE,
+  VAR_CS_FONT_SIZE,
+  VAR_CS_TERMINAL_FONT_SIZE,
 } from "./constants";
 
 export interface PaneData {
@@ -266,27 +274,40 @@ export const setEditButtonDialogOpen = (editButtonDialogOpen: boolean) => useSto
 export const setEditHostDialogOpen = (editHostDialogOpen: boolean) => useStore.setState({ editHostDialogOpen });
 export const setNewTabDialogOpen = (newTabDialogOpen: boolean) => useStore.setState({ newTabDialogOpen });
 export const setNewTabDialogFilter = (newTabDialogFilter: string) => useStore.setState({ newTabDialogFilter });
+export const closeNewTabDialog = () => useStore.setState({ newTabDialogOpen: false, newTabDialogFilter: "" });
 
-function newTabDialogViewMode(filter: string): ViewMode {
+export function parseNewTabDialogFilter(filter: string): [viewMode: ViewMode, f: string] {
   if (filter.startsWith(">")) {
-    return "buttons";
+    return ["buttons", filter.slice(1)];
   } else if (filter.startsWith("@")) {
-    return "tabs";
+    return ["tabs", filter.slice(1)];
   } else if (filter.startsWith("?")) {
-    return "help";
+    return ["help", filter.slice(1)];
   }
-  return "servers";
+  return ["servers", filter];
 }
 
-export const cycleNewTabDialogMode = (prev?: boolean) =>
+/**
+ * Change new tab dialog view mode
+ * @param target the new view mode; or undefined / false for next; true for prev;
+ */
+export const changeNewTabDialogViewMode = (target?: boolean | ViewMode) =>
   useStore.setState((state) => {
-    const modes: ViewMode[] = ["servers", "tabs", "buttons"];
-    const mode = newTabDialogViewMode(state.newTabDialogFilter);
-    const idx = modes.indexOf(mode);
-    const nextMode =
-      idx === -1 ? "servers" : prev ? modes[(idx - 1 + modes.length) % modes.length] : modes[(idx + 1) % modes.length];
+    let nextMode: ViewMode;
+    const [mode, f] = parseNewTabDialogFilter(state.newTabDialogFilter);
+    if (typeof target === "string") {
+      nextMode = target;
+    } else {
+      const modes: ViewMode[] = ["servers", "tabs", "buttons"];
+      const idx = modes.indexOf(mode);
+      if (idx === -1) {
+        nextMode = "servers";
+      } else {
+        nextMode = modes[(target ? idx - 1 + modes.length : idx + 1) % modes.length];
+      }
+    }
     const prefix = nextMode === "buttons" ? ">" : nextMode === "tabs" ? "@" : nextMode === "help" ? "?" : "";
-    return { newTabDialogFilter: prefix };
+    return { newTabDialogFilter: prefix + f };
   });
 
 export const setInputDialogOpen = (inputDialogOpen: boolean) => useStore.setState({ inputDialogOpen });
@@ -432,3 +453,113 @@ export const setShellIntegrations = (
 export const getStore = () => useStore.getState();
 
 export type UseStore = typeof useStore;
+
+export function resetFontSize(terminalFontSize: boolean, globalFontSize: boolean, noToast = false) {
+  let msg = "";
+  let varName: string;
+  const { vars, localVars } = getStore();
+  if (terminalFontSize) {
+    if (!vars[VAR_CS_TERMINAL_FONT_SIZE] || localVars[LOCAL_VAR_PREFIX + VAR_CS_TERMINAL_FONT_SIZE]) {
+      varName = LOCAL_VAR_PREFIX + VAR_CS_TERMINAL_FONT_SIZE;
+    } else {
+      varName = VAR_CS_TERMINAL_FONT_SIZE;
+    }
+    if (DEFAULT_TERMINAL_FONT_SIZE !== (__CS_TERMINAL_OPTIONS__.fontSize || DEFAULT_TERMINAL_FONT_SIZE)) {
+      csSetVar(varName, DEFAULT_TERMINAL_FONT_SIZE.toString());
+      msg += `Terminal font size reset to ${DEFAULT_TERMINAL_FONT_SIZE}`;
+    }
+  }
+
+  if (globalFontSize) {
+    if (!vars[VAR_CS_FONT_SIZE] || localVars[LOCAL_VAR_PREFIX + VAR_CS_FONT_SIZE]) {
+      varName = LOCAL_VAR_PREFIX + VAR_CS_FONT_SIZE;
+    } else {
+      varName = VAR_CS_FONT_SIZE;
+    }
+    if (DEFAULT_FONT_SIZE !== __CS_FONT_SIZE__) {
+      csSetVar(varName, DEFAULT_FONT_SIZE.toString());
+      if (msg) {
+        msg += `; `;
+      }
+      msg += `Global font size reset to ${DEFAULT_FONT_SIZE}`;
+    }
+  }
+
+  if (msg && !noToast) {
+    notify(msg, "info", TOAST_KEY_FONT_SIZE);
+  }
+}
+
+export function decreseFontSize(terminalFontSize: boolean, globalFontSize: boolean, noToast = false) {
+  const { vars, localVars } = getStore();
+  let msg = "";
+  let varName: string;
+  if (terminalFontSize) {
+    if (!vars[VAR_CS_TERMINAL_FONT_SIZE] || localVars[LOCAL_VAR_PREFIX + VAR_CS_TERMINAL_FONT_SIZE]) {
+      varName = LOCAL_VAR_PREFIX + VAR_CS_TERMINAL_FONT_SIZE;
+    } else {
+      varName = VAR_CS_TERMINAL_FONT_SIZE;
+    }
+    const fontSize = prevTerminalFontSize(__CS_TERMINAL_OPTIONS__.fontSize || DEFAULT_TERMINAL_FONT_SIZE);
+    if (fontSize !== (__CS_TERMINAL_OPTIONS__.fontSize || DEFAULT_TERMINAL_FONT_SIZE)) {
+      csSetVar(varName, fontSize.toString());
+      msg += `Terminal font size: ${fontSize.toFixed(1).padStart(4, "0")}`;
+    }
+  }
+
+  if (globalFontSize) {
+    if (!vars[VAR_CS_FONT_SIZE] || localVars[LOCAL_VAR_PREFIX + VAR_CS_FONT_SIZE]) {
+      varName = LOCAL_VAR_PREFIX + VAR_CS_FONT_SIZE;
+    } else {
+      varName = VAR_CS_FONT_SIZE;
+    }
+    const fontSize = Math.max(10, __CS_FONT_SIZE__ - 1);
+    if (fontSize !== __CS_FONT_SIZE__) {
+      csSetVar(varName, fontSize.toString());
+      if (msg) {
+        msg += "; ";
+      }
+      msg += `Global font size: ${fontSize}`;
+    }
+  }
+  if (msg && !noToast) {
+    notify(msg, "info", TOAST_KEY_FONT_SIZE);
+  }
+}
+
+export function increaseFontSize(terminalFontSize: boolean, globalFontSize: boolean, noToast = false) {
+  let msg = "";
+  const { vars, localVars } = getStore();
+  let varName: string;
+  if (terminalFontSize) {
+    if (!vars[VAR_CS_TERMINAL_FONT_SIZE] || localVars[LOCAL_VAR_PREFIX + VAR_CS_TERMINAL_FONT_SIZE]) {
+      varName = LOCAL_VAR_PREFIX + VAR_CS_TERMINAL_FONT_SIZE;
+    } else {
+      varName = VAR_CS_TERMINAL_FONT_SIZE;
+    }
+    const fontSize = nextTerminalFontSize(__CS_TERMINAL_OPTIONS__.fontSize || DEFAULT_TERMINAL_FONT_SIZE);
+    if (fontSize !== (__CS_TERMINAL_OPTIONS__.fontSize || DEFAULT_TERMINAL_FONT_SIZE)) {
+      csSetVar(varName, fontSize.toString());
+      msg += `Terminal font size: ${fontSize.toFixed(1).padStart(4, "0")}`;
+    }
+  }
+
+  if (globalFontSize) {
+    if (!vars[VAR_CS_FONT_SIZE] || localVars[LOCAL_VAR_PREFIX + VAR_CS_FONT_SIZE]) {
+      varName = LOCAL_VAR_PREFIX + VAR_CS_FONT_SIZE;
+    } else {
+      varName = VAR_CS_FONT_SIZE;
+    }
+    const fontSize = Math.min(40, __CS_FONT_SIZE__ + 1);
+    if (fontSize !== __CS_FONT_SIZE__) {
+      csSetVar(varName, fontSize.toString());
+      if (msg) {
+        msg += "; ";
+      }
+      msg += `Global font size: ${fontSize}`;
+    }
+  }
+  if (msg && !noToast) {
+    notify(msg, "info", TOAST_KEY_FONT_SIZE);
+  }
+}

@@ -47,7 +47,7 @@ func TestTerminalInputDialog(t *testing.T) {
 	}
 
 	// 3. Type "input" in the filter field to narrow the list to INPUT (Prompt).
-	if err := page.Locator("#new-tab-dialog input[type='search']").Fill("input"); err != nil {
+	if err := page.Locator("#new-tab-dialog input[type='search']").Fill(">input"); err != nil {
 		t.Fatalf("failed to type in New Tab Dialog filter: %v", err)
 	}
 	time.Sleep(200 * time.Millisecond)

@@ -63,7 +63,6 @@ import {
   setInputDialogOpen,
   setInputValue,
   setInputLiquid,
-  setNewTabDialogOpen,
   setSendScope,
   setToasts,
   triggerFocus,
@@ -72,6 +71,7 @@ import {
   setSearchOpen,
   triggerFocusSearchInput,
   activatePane,
+  closeNewTabDialog,
 } from "./store";
 import NewTabDialog from "./NewTabDialog";
 import { dialogs } from "./Dialogs";
@@ -1246,12 +1246,10 @@ export default function DialogManager({
       <NewTabDialog
         key={newTabDialogOpen ? "open" : "closed"}
         open={newTabDialogOpen}
-        onClose={() => {
-          setNewTabDialogOpen(false);
-        }}
+        onClose={closeNewTabDialog}
         onExecuteButton={(btn) => {
           handleButtonClick(btn);
-          setNewTabDialogOpen(false);
+          closeNewTabDialog();
         }}
         onSelectTab={(tabId) => {
           setActiveTabId(tabId);
@@ -1263,7 +1261,7 @@ export default function DialogManager({
         }}
         onAttachPinned={(id, host, title, isLocked) => {
           handleAttach(id, host, title, isLocked);
-          setNewTabDialogOpen(false);
+          closeNewTabDialog();
         }}
         onSelect={async (host) => {
           const [hostname, query] = cutString(host, "?");
