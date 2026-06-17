@@ -15,7 +15,7 @@ import {
   setActivePaneId,
   setMobileAppletsOpen,
   setMobileOpen,
-  setNewTabDialogInitialViewMode,
+  setNewTabDialogFilter,
   setNewTabDialogOpen,
   setShellIntegrations,
   setTabs,
@@ -396,7 +396,7 @@ export default function TerminalGrid({
               <Tooltip title="New Tab (Alt+O)">
                 <IconButton
                   onClick={() => {
-                    setNewTabDialogInitialViewMode("servers");
+                    setNewTabDialogFilter("");
                     setNewTabDialogOpen(true);
                   }}
                   color="primary"

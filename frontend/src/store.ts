@@ -13,10 +13,10 @@ import { create } from "zustand";
 import type { HostData, ButtonData, WsTerminalMessage, Recent, LocalShell } from "./api";
 import {
   type HostForm,
-  type ViewMode,
   type Severity,
   type ShellIntegration,
   type Toast,
+  type ViewMode,
   isMuiModalOpen,
 } from "./common";
 import type { TerminalHandle } from "./Terminal";
@@ -82,7 +82,7 @@ interface Store {
   inputValue: string;
   inputLiquid: boolean;
   newTabDialogOpen: boolean;
-  newTabDialogInitialViewMode: ViewMode;
+  newTabDialogFilter: string;
   sysHostname: string;
   unreadTabIds: Set<string>;
   focusTrigger: number;
@@ -156,10 +156,10 @@ export const useStore = create<Store>(() => ({
   editButtonDialogOpen: false,
   editHostDialogOpen: false,
   newTabDialogOpen: false,
+  newTabDialogFilter: "",
   inputDialogOpen: false,
   inputValue: "",
   inputLiquid: false,
-  newTabDialogInitialViewMode: "servers",
   sysHostname: "",
   unreadTabIds: new Set<string>(),
   focusTrigger: 0,
@@ -265,12 +265,33 @@ export const setInitialBtnFormData = (initialBtnFormData: ButtonData | null) =>
 export const setEditButtonDialogOpen = (editButtonDialogOpen: boolean) => useStore.setState({ editButtonDialogOpen });
 export const setEditHostDialogOpen = (editHostDialogOpen: boolean) => useStore.setState({ editHostDialogOpen });
 export const setNewTabDialogOpen = (newTabDialogOpen: boolean) => useStore.setState({ newTabDialogOpen });
+export const setNewTabDialogFilter = (newTabDialogFilter: string) => useStore.setState({ newTabDialogFilter });
+
+function newTabDialogViewMode(filter: string): ViewMode {
+  if (filter.startsWith(">")) {
+    return "buttons";
+  } else if (filter.startsWith("@")) {
+    return "tabs";
+  } else if (filter.startsWith("?")) {
+    return "help";
+  }
+  return "servers";
+}
+
+export const cycleNewTabDialogMode = (prev?: boolean) =>
+  useStore.setState((state) => {
+    const modes: ViewMode[] = ["servers", "tabs", "buttons"];
+    const mode = newTabDialogViewMode(state.newTabDialogFilter);
+    const idx = modes.indexOf(mode);
+    const nextMode =
+      idx === -1 ? "servers" : prev ? modes[(idx - 1 + modes.length) % modes.length] : modes[(idx + 1) % modes.length];
+    const prefix = nextMode === "buttons" ? ">" : nextMode === "tabs" ? "@" : nextMode === "help" ? "?" : "";
+    return { newTabDialogFilter: prefix };
+  });
+
 export const setInputDialogOpen = (inputDialogOpen: boolean) => useStore.setState({ inputDialogOpen });
 export const setInputValue = (inputValue: string) => useStore.setState({ inputValue });
 export const setInputLiquid = (inputLiquid: boolean) => useStore.setState({ inputLiquid });
-
-export const setNewTabDialogInitialViewMode = (newTabDialogInitialViewMode: ViewMode) =>
-  useStore.setState({ newTabDialogInitialViewMode });
 
 export const setSysHostname = (sysHostname: string) => useStore.setState({ sysHostname });
 

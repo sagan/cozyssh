@@ -37,7 +37,7 @@ export type ServiceWorkerStatus =
 
 export type ScratchpadSyncState = "offline" | "syncing" | "synced" | "dirty";
 
-export type ViewMode = "servers" | "tabs" | "buttons";
+export type ViewMode = "servers" | "tabs" | "buttons" | "help";
 
 export type Severity = "success" | "info" | "warning" | "error";
 

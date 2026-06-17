@@ -42,7 +42,7 @@ import {
   setActiveGroup,
   setActivePaneId,
   setActiveTabId,
-  setNewTabDialogInitialViewMode,
+  setNewTabDialogFilter,
   setNewTabDialogOpen,
   setSearchOpen,
   triggerFocus,
@@ -282,19 +282,19 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
 
         case "alt+o":
           e.preventDefault();
-          setNewTabDialogInitialViewMode("servers");
+          setNewTabDialogFilter("");
           setNewTabDialogOpen(true);
           return;
 
         case "alt+a":
           e.preventDefault();
-          setNewTabDialogInitialViewMode("tabs");
+          setNewTabDialogFilter("@");
           setNewTabDialogOpen(true);
           return;
 
         case "alt+e":
           e.preventDefault();
-          setNewTabDialogInitialViewMode("buttons");
+          setNewTabDialogFilter(">");
           setNewTabDialogOpen(true);
           return;
 

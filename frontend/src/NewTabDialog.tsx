@@ -18,6 +18,7 @@ import {
 } from "@mui/material";
 import ComputerIcon from "@mui/icons-material/Computer";
 import DnsIcon from "@mui/icons-material/Dns";
+import HelpIcon from "@mui/icons-material/Help";
 import HistoryIcon from "@mui/icons-material/History";
 import SendIcon from "@mui/icons-material/Send";
 import StarIcon from "@mui/icons-material/Star";
@@ -46,10 +47,10 @@ import {
   parseHostName,
   searchStringAny,
 } from "./common";
-import { getStore, updateRecentButtonId, useStore } from "./store";
+import { cycleNewTabDialogMode, getStore, setNewTabDialogFilter, updateRecentButtonId, useStore } from "./store";
 
 interface DialogItem {
-  type: "recent" | "host" | "direct" | "local" | "tab" | "pinned_tab" | "button" | "other_button" | "builtin_button";
+  type: "recent" | "host" | "direct" | "local" | "tab" | "pinned_tab" | "button" | "other_button" | "builtin_button" | "help";
   value: string;
   label: string;
   subtitle?: string;
@@ -90,14 +91,12 @@ export default function NewTabDialog({
   const buttons = useStore((state) => state.buttons);
   const shells = useStore((state) => state.shells);
   const activeGroup = useStore((state) => state.activeGroup);
-  const newTabDialogInitialViewMode = useStore((state) => state.newTabDialogInitialViewMode);
   const recentButtonIds = useStore((state) => state.recentButtonIds);
+  const newTabDialogFilter = useStore((state) => state.newTabDialogFilter);
 
   const defaultShell = shells[0];
   const alternativeShell = shells[1];
-  const [filter, setFilter] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [viewMode, setViewMode] = useState<ViewMode>(newTabDialogInitialViewMode);
   const inputRef = useRef<HTMLInputElement>(null);
   const selectedItemRef = useRef<HTMLDivElement>(null);
   const swipeStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
@@ -105,18 +104,33 @@ export default function NewTabDialog({
   const [localPinned, setLocalPinned] = useState<SessionPinned[]>([]);
 
   const f = useMemo(() => {
-    const f = filter.trim();
+    let f: string;
+    if (
+      newTabDialogFilter.startsWith(">") ||
+      newTabDialogFilter.startsWith("@") ||
+      newTabDialogFilter.startsWith("?")
+    ) {
+      f = newTabDialogFilter.slice(1).trim();
+    } else {
+      f = newTabDialogFilter.trim();
+    }
     const [before, after, found] = cutString(f, "?");
     if (found) {
       return before.toLowerCase() + "?" + after;
     }
     return f.toLowerCase();
-  }, [filter]);
+  }, [newTabDialogFilter]);
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setViewMode(newTabDialogInitialViewMode);
-  }, [newTabDialogInitialViewMode]);
+  const viewMode: ViewMode = useMemo(() => {
+    if (newTabDialogFilter.startsWith(">")) {
+      return "buttons";
+    } else if (newTabDialogFilter.startsWith("@")) {
+      return "tabs";
+    } else if (newTabDialogFilter.startsWith("?")) {
+      return "help";
+    }
+    return "servers";
+  }, [newTabDialogFilter]);
 
   useEffect(() => {
     if (open) {
@@ -543,6 +557,42 @@ export default function NewTabDialog({
         });
       });
       addSection("Built-in Functions", builtinList);
+    } else if (viewMode === "help") {
+      const helpOptions = [
+        {
+          type: "help" as const,
+          value: ">",
+          label: "> Buttons (Commands)",
+          subtitle: "Execute custom buttons, scripts, or built-in functions",
+        },
+        {
+          type: "help" as const,
+          value: "@",
+          label: "@ Tabs",
+          subtitle: "Switch to active browser tabs or attach pinned sessions",
+        },
+        {
+          type: "help" as const,
+          value: "?",
+          label: "? Help",
+          subtitle: "Show help guide for command palette prefixes",
+        },
+        {
+          type: "help" as const,
+          value: "",
+          label: "Servers / Connections",
+          subtitle: "Connect to saved servers, local shells, or a direct SSH address",
+        },
+      ];
+
+      const filteredHelp = helpOptions.filter(
+        (o) =>
+          o.label.toLowerCase().includes(f) ||
+          o.subtitle.toLowerCase().includes(f) ||
+          o.value.includes(f),
+      );
+
+      addSection("Command Palette Prefix Guide", filteredHelp);
     }
 
     return { sections, items };
@@ -577,19 +627,6 @@ export default function NewTabDialog({
     }
   }, [selectedIndex]);
 
-  const cycleViewMode = useCallback((direction: "next" | "prev") => {
-    const modes: ViewMode[] = ["servers", "tabs", "buttons"];
-    setViewMode((prev) => {
-      const idx = modes.indexOf(prev);
-      if (direction === "next") {
-        return modes[(idx + 1) % modes.length];
-      } else {
-        return modes[(idx - 1 + modes.length) % modes.length];
-      }
-    });
-    setSelectedIndex(0);
-  }, []);
-
   const handleSelect = useCallback(
     (item: (typeof items)[number]) => {
       if (item.type === "tab") {
@@ -604,12 +641,18 @@ export default function NewTabDialog({
         }
         onExecuteButton(item.btn!);
         onClose();
+      } else if (item.type === "help") {
+        setNewTabDialogFilter(item.value);
+        setSelectedIndex(0);
+        setTimeout(() => {
+          inputRef.current?.focus();
+        }, 0);
       } else {
         onSelect(item.value);
         onClose();
       }
     },
-    [onAttachPinned, onClose, onExecuteButton, onSelect, onSelectTab],
+    [onAttachPinned, onClose, onExecuteButton, onSelect, onSelectTab, setNewTabDialogFilter],
   );
 
   const handleKeyDown = useCallback(
@@ -628,11 +671,11 @@ export default function NewTabDialog({
       } else if ((key === "arrowleft" && !f) || (e.altKey && key === "h")) {
         e.stopPropagation();
         e.preventDefault();
-        cycleViewMode("prev");
+        cycleNewTabDialogMode(true);
       } else if ((key === "arrowright" && !f) || (e.altKey && key === "l")) {
         e.stopPropagation();
         e.preventDefault();
-        cycleViewMode("next");
+        cycleNewTabDialogMode();
       } else if (key === "enter" && !e.altKey) {
         e.preventDefault();
         e.stopPropagation();
@@ -643,7 +686,7 @@ export default function NewTabDialog({
         onClose();
       }
     },
-    [cycleViewMode, f, handleSelect, items, onClose, selectedIndex],
+    [f, handleSelect, items, onClose, selectedIndex],
   );
 
   useEffect(() => {
@@ -683,13 +726,13 @@ export default function NewTabDialog({
 
       if (Math.abs(diffX) > 100 && Math.abs(diffX) > Math.abs(diffY) * 2 && diffTime < 500) {
         if (diffX > 0) {
-          cycleViewMode("prev");
+          cycleNewTabDialogMode(true);
         } else {
-          cycleViewMode("next");
+          cycleNewTabDialogMode();
         }
       }
     },
-    [cycleViewMode, isMobile, isTouch],
+    [isMobile, isTouch],
   );
 
   const getItemIcon = (item: (typeof items)[number], index: number, selectedIndex: number) => {
@@ -717,6 +760,16 @@ export default function NewTabDialog({
       case "other_button":
       case "builtin_button":
         return <SmartButtonIcon {...activeProps} />;
+      case "help":
+        if (item.value === ">") {
+          return <SmartButtonIcon {...activeProps} />;
+        } else if (item.value === "@") {
+          return <TabIcon {...activeProps} />;
+        } else if (item.value === "?") {
+          return <HelpIcon {...activeProps} />;
+        } else {
+          return <DnsIcon {...baseProps} />;
+        }
       default:
         if (item.isFav) {
           return <StarIcon {...activeProps} />;
@@ -760,11 +813,13 @@ export default function NewTabDialog({
               ? "Search for a server or type an address..."
               : viewMode === "tabs"
                 ? "Search opened tabs..."
-                : "Search buttons..."
+                : viewMode === "buttons"
+                  ? "Search buttons..."
+                  : "Search help guide..."
           }
-          value={filter}
+          value={newTabDialogFilter}
           onChange={(e) => {
-            setFilter(e.target.value);
+            setNewTabDialogFilter(e.target.value);
             setSelectedIndex(0);
           }}
           onKeyDownCapture={handleKeyDown}
@@ -779,13 +834,21 @@ export default function NewTabDialog({
                 <InputAdornment position="end">
                   <IconButton
                     onClick={() => {
-                      cycleViewMode("next");
+                      cycleNewTabDialogMode();
                       inputRef.current?.focus();
                     }}
                     color={viewMode !== "servers" ? "primary" : "default"}
                     title={`Toggle View (Currently: ${viewMode}) (←, →) (or Alt+H / Alt+L)`}
                   >
-                    {viewMode === "servers" ? <DnsIcon /> : viewMode === "tabs" ? <TabIcon /> : <SmartButtonIcon />}
+                    {viewMode === "servers" ? (
+                      <DnsIcon />
+                    ) : viewMode === "tabs" ? (
+                      <TabIcon />
+                    ) : viewMode === "buttons" ? (
+                      <SmartButtonIcon />
+                    ) : (
+                      <HelpIcon />
+                    )}
                   </IconButton>
                 </InputAdornment>
               ),

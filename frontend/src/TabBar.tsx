@@ -22,10 +22,10 @@ import {
   setActiveTabId,
   setMobileAppletsOpen,
   setMobileOpen,
-  setNewTabDialogInitialViewMode,
   setNewTabDialogOpen,
   triggerFocus,
   useStore,
+  setNewTabDialogFilter,
 } from "./store";
 import { APP_NAME, ID_TERMINAL_SEARCH_INPUT, LOCAL_NAME } from "./constants";
 
@@ -207,7 +207,7 @@ export default function TabBar({
             size="small"
             title="New Tab (Alt+O)"
             onClick={() => {
-              setNewTabDialogInitialViewMode("servers");
+              setNewTabDialogFilter("");
               setNewTabDialogOpen(true);
             }}
             sx={{ mr: 1, ml: 0.5, bgcolor: "action.hover", "&:hover": { bgcolor: "action.selected" } }}
