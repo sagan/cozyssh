@@ -81,13 +81,16 @@ func GetShells() []*LocalShell {
 	return shells.Load().([]*LocalShell)
 }
 
-func Start(initialCmd string) (*LocalSession, error) {
+func Start(initialCmd string, execFlag bool) (*LocalSession, error) {
 	var program string
 	var args []string
 
 	shells := GetShells()
 
-	if initialCmd != "" {
+	if initialCmd == "" {
+		program = shells[0].Path
+		args = shells[0].Args
+	} else if execFlag {
 		var err error
 		args, err = shlex.Split(initialCmd)
 		if err == nil && len(args) > 0 {
@@ -95,12 +98,13 @@ func Start(initialCmd string) (*LocalSession, error) {
 			args = args[1:]
 		} else {
 			program = shells[0].Path
-			args = shells[0].RunCmdlineArgs
+			args = append(args, shells[0].RunCmdlineArgs...)
 			args = append(args, initialCmd)
 		}
 	} else {
 		program = shells[0].Path
-		args = shells[0].Args
+		args = append(args, shells[0].RunCmdlineArgs...)
+		args = append(args, initialCmd)
 	}
 
 	p, err := pty.New()

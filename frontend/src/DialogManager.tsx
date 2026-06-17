@@ -42,13 +42,13 @@ import {
   getKeyCombination,
   ButtonDataSchema,
   generatePassword,
-  removePassFromHost,
   parseHostName,
   getCanonicalHostString,
   getTemplateVariables,
   liquidEngine,
   openHostInNewWindow,
   type OpenHostFunction,
+  cutString,
 } from "./common";
 import {
   type TabData,
@@ -639,6 +639,7 @@ export default function DialogManager({
               );
             }
           }}
+          className="hide-desktop"
           sx={{
             display: lastMenuBtn?.type === "open_terminal" ? "flex" : "none",
           }}
@@ -959,8 +960,10 @@ export default function DialogManager({
                 <br />- <b>proxyJump</b> : Proxy jump server
                 <br />- <b>target</b> : The tab id. If the same id tab exists, the new terminal will be opened in the
                 target tab, use <code>_self</code> for current tab
-                <br />
-                E.g. <b>local?id=local-abc&title=Local&remoteCommand=tmux attach || tmux new</b>
+                <br />- <b>exec</b> : Only valid for <code>{LOCAL_NAME}</code> host. If set to <code>1</code>, it treats
+                <code>remoteCommand</code> as a single program with args and execute it directly instead of executing it
+                using system shell.
+                <br /> E.g. <b>local?id=local-abc&title=Local&remoteCommand=tmux attach || tmux new</b>
               </Typography>
             </Box>
           ) : (
@@ -1263,36 +1266,37 @@ export default function DialogManager({
           setNewTabDialogOpen(false);
         }}
         onSelect={async (host) => {
-          host = removePassFromHost(host);
+          const [hostname, query] = cutString(host, "?");
           // Check if it's a direct connection and not in known hosts
-          if (host.includes(".") || host.includes(":") || host === "localhost") {
-            const parsedHost = parseHostName(host);
-            const parsedHostString = getCanonicalHostString(parsedHost);
-            const known = hosts.find((h) => getCanonicalHostString(h) === parsedHostString);
-            if (!known) {
-              // Automatically add to ~/.ssh/config
-              const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-              try {
-                await fetch("/api/hosts", {
-                  method: METHOD_POST,
-                  headers: {
-                    [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-                    [HEADER_CONTENT_TYPE]: MIME_JSON,
-                  },
-                  body: JSON.stringify({
-                    user: "",
-                    port: "22",
-                    name: parsedHost.hostname,
-                    ...parsedHost,
-                  } satisfies HostData),
-                });
-                handleRefresh(); // Refresh hosts list
-              } catch (e) {
-                console.error("Failed to auto-add host:", e);
-              }
+          const parsedHost = parseHostName(hostname);
+          const parsedHostString = getCanonicalHostString(parsedHost);
+          const known = hosts.find(
+            (h) => h.name === parsedHost.hostname || getCanonicalHostString(h) === parsedHostString,
+          );
+          if (!known) {
+            // Automatically add to ~/.ssh/config
+            const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+            try {
+              await fetch("/api/hosts", {
+                method: METHOD_POST,
+                headers: {
+                  [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+                  [HEADER_CONTENT_TYPE]: MIME_JSON,
+                },
+                body: JSON.stringify({
+                  user: "",
+                  port: "22",
+                  name: parsedHost.hostname,
+                  ...parsedHost,
+                  password: undefined, // don't save password from direct connect string
+                } satisfies HostData),
+              });
+              handleRefresh(); // Refresh hosts list
+            } catch (e) {
+              console.error("Failed to auto-add host:", e);
             }
           }
-          handleSelectHost(host);
+          handleSelectHost((known?.name || parsedHostString) + (query ? "?" + query : ""));
         }}
       />
       <Box

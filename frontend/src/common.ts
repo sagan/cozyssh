@@ -490,7 +490,7 @@ export function filterHosts(hosts: HostData[], filterStr: string): HostData[] {
   }
 
   // The rest of the string is the search text (case-insensitive)
-  const searchText = tokens.slice(textStartIndex).join(" ");
+  const searchTokens = tokens.slice(textStartIndex);
 
   return hosts.filter((host) => {
     // 1. Tag Filtering
@@ -506,20 +506,30 @@ export function filterHosts(hosts: HostData[], filterStr: string): HostData[] {
       }
     }
 
-    // 2. Text Filtering
-    // If there is remaining text, it must match name, hostname, or comment
-    if (searchText) {
-      const matchName = host.name.toLowerCase().includes(searchText);
-      const matchHostname = host.hostname.toLowerCase().includes(searchText);
-      const matchComment = !!(host.comment && host.comment.toLowerCase().includes(searchText));
-
-      if (!matchName && !matchHostname && !matchComment) {
-        return false;
-      }
+    if (searchTokens.length > 0) {
+      return searchTokens.every((searchText) => matchHost(host, searchText));
     }
 
     return true;
   });
+}
+
+function matchHost(host: HostData, searchText: string): boolean {
+  return (
+    host.name.toLowerCase().includes(searchText) ||
+    host.hostname.toLowerCase().includes(searchText) ||
+    !!(host.comment && host.comment.toLowerCase().includes(searchText))
+  );
+}
+
+export function searchStringAny(input: string, searchText: string): string {
+  const matched = searchString(input, searchText);
+  if (matched) {
+    return matched;
+  } else {
+    const [searchTextFirstSegment] = cutString(searchText, " ");
+    return searchString(input, searchTextFirstSegment);
+  }
 }
 
 /**
@@ -927,7 +937,7 @@ export function cutString(s: string, sep: string): [before: string, after: strin
  * Returns the host string for a local shell
  */
 export function localShellHost(shell: LocalShell): string {
-  return `${LOCAL_NAME}?title=${encodeURIComponent(shell.name)}&remoteCommand=${encodeURIComponent(
+  return `${LOCAL_NAME}?title=${encodeURIComponent(shell.name)}&exec=1&remoteCommand=${encodeURIComponent(
     join([shell.path, ...(shell.args ?? [])]),
   )}`;
 }

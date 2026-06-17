@@ -296,7 +296,7 @@ func ListHosts() ([]*models.HostData, error) {
 
 	lines, _ := readConfigLines()
 
-	var hosts []*models.HostData
+	var hosts = []*models.HostData{}
 	seenHosts := make(map[string]bool)
 
 	if cfg != nil {

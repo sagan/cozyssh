@@ -94,7 +94,7 @@ import {
   localShellHost,
   openHostInNewWindow,
   remoteCommandOptions,
-  searchString,
+  searchStringAny,
 } from "./common";
 import { dialogs } from "./Dialogs";
 import {
@@ -1420,7 +1420,9 @@ export default function Sidebar({
             className="hide-desktop"
             onClick={async () => {
               setAnchorEl(null);
-              if (await dialogs.confirm("Log out of current device?")) {
+              if (
+                await dialogs.confirm("Log out of current device?", "All data stored in this browser will be cleared.")
+              ) {
                 onLogout();
               }
             }}
@@ -1434,7 +1436,9 @@ export default function Sidebar({
               setAnchorEl(null);
               if (
                 await dialogs.confirm(
-                  "Are you sure you want to log out of all browser sessions? This will invalidate all active sessions and require you to sign in again on all devices.",
+                  "Log out of all browser sessions?",
+                  "This will invalidate all active sessions and require you to sign in again on all devices." +
+                    " All data stored in this browser will be cleared.",
                 )
               ) {
                 onLogoutAll();
@@ -1675,6 +1679,7 @@ export default function Sidebar({
           Open (In Current Tab)
         </MenuItem>
         <MenuItem
+          className="hide-desktop"
           onClick={() => {
             if (!contextMenu) {
               return;
@@ -2540,8 +2545,10 @@ function HostListItem({
   const isFavourite = host.is_favourite;
   let secondaryText = `${host.user || "root"}@${host.hostname}`;
   if (filter && host.comment) {
-    const matchedComment = searchString(host.comment, filter);
-    if (matchedComment) secondaryText += ` // ${matchedComment}`;
+    const matchedComment = searchStringAny(host.comment, filter);
+    if (matchedComment) {
+      secondaryText += ` // ${matchedComment}`;
+    }
   }
   return (
     <ListItem

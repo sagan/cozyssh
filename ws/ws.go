@@ -149,6 +149,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	rows, _ := strconv.Atoi(query.Get("rows"))
 	sessionProxyJump := query.Get("proxyJump")
 	sessionRemoteCommand := query.Get("remoteCommand")
+	execFlag := query.Get("exec") == "1"
 	noPublicKey := query.Get("noPublicKey") == "1"
 
 	user := common.User
@@ -175,7 +176,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	s := session.GlobalManager.Get(sessionID)
 	if s == nil {
 		if host == "" || host == constants.LOCAL_NAME {
-			ls, err := localpty.Start(sessionRemoteCommand)
+			ls, err := localpty.Start(sessionRemoteCommand, execFlag)
 			if err != nil {
 				return
 			}

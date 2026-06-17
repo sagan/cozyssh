@@ -36,8 +36,17 @@ import {
   LOCAL_NAME,
   VAR_CS_SCROLL_ITEMS,
 } from "./constants";
-import { type ViewMode, filterHosts, getIntVar, localShellHost, searchString } from "./common";
-import { getStore, useStore } from "./store";
+import {
+  type ViewMode,
+  cutString,
+  filterHosts,
+  getIntVar,
+  isValidHostname,
+  localShellHost,
+  parseHostName,
+  searchStringAny,
+} from "./common";
+import { getStore, updateRecentButtonId, useStore } from "./store";
 
 interface DialogItem {
   type: "recent" | "host" | "direct" | "local" | "tab" | "pinned_tab" | "button" | "other_button" | "builtin_button";
@@ -50,7 +59,7 @@ interface DialogItem {
   host?: string;
   isLocked?: boolean;
   btn?: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">;
-  tags?: string[];
+  tag?: string;
   flatIndex: number;
 }
 
@@ -82,6 +91,7 @@ export default function NewTabDialog({
   const shells = useStore((state) => state.shells);
   const activeGroup = useStore((state) => state.activeGroup);
   const newTabDialogInitialViewMode = useStore((state) => state.newTabDialogInitialViewMode);
+  const recentButtonIds = useStore((state) => state.recentButtonIds);
 
   const defaultShell = shells[0];
   const alternativeShell = shells[1];
@@ -93,6 +103,15 @@ export default function NewTabDialog({
   const swipeStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
   const [localPinned, setLocalPinned] = useState<SessionPinned[]>([]);
+
+  const f = useMemo(() => {
+    const f = filter.trim();
+    const [before, after, found] = cutString(f, "?");
+    if (found) {
+      return before.toLowerCase() + "?" + after;
+    }
+    return f.toLowerCase();
+  }, [filter]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -117,22 +136,24 @@ export default function NewTabDialog({
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const isTouch = useMediaQuery("(pointer: coarse)");
 
-  const filteredRecents = useMemo(() => {
+  const [filteredRecents, filteredOlderRecents] = useMemo(() => {
     if (viewMode !== "servers") {
-      return [];
+      return [[], []];
     }
-    const f = filter.toLowerCase();
-    return getStore()
+    const recents = getStore()
       .recents.filter((r) => r.host.toLowerCase().includes(f))
-      .sort((a, b) => b.last_used - a.last_used)
-      .slice(0, 5);
-  }, [filter, viewMode]);
+      .sort((a, b) => b.last_used - a.last_used);
+
+    if (f) {
+      return [recents.slice(0, 5), []];
+    }
+    return [recents.slice(0, 5), recents.slice(5)];
+  }, [f, viewMode]);
 
   const filteredHosts = useMemo(() => {
     if (viewMode !== "servers") {
       return { favourite: [], normal: [], auto: [] };
     }
-    const f = filter.trim();
     const filtered = filterHosts(hosts, f);
 
     const favs = filtered.filter((h) => h.is_favourite);
@@ -152,58 +173,56 @@ export default function NewTabDialog({
       normal: normals.sort(nameSorter),
       auto: autos.sort(hostNameSorter),
     };
-  }, [hosts, filter, viewMode]);
+  }, [hosts, f, viewMode]);
 
   const filteredShells = useMemo(() => {
     if (viewMode !== "servers") {
       return [];
     }
-    const f = filter.toLowerCase().trim();
     if (!f) {
       return shells;
     }
     return shells.filter((s) => s.name.toLowerCase().includes(f));
-  }, [shells, filter, viewMode]);
+  }, [shells, f, viewMode]);
 
   const directConnect = useMemo(() => {
     if (viewMode !== "servers") {
       return null;
     }
-    if (!filter || (!filter.includes(".") && !filter.includes(":") && filter !== "localhost")) {
-      return null;
+    const [host, , found] = cutString(f, "?");
+    // If has query parames, always allow direct connect
+    if (isValidHostname(parseHostName(host).hostname, found)) {
+      return f;
     }
-    return filter;
-  }, [filter, viewMode]);
+    return null;
+  }, [f, viewMode]);
 
   const activeTabsList = useMemo(() => {
     if (viewMode !== "tabs") {
       return [];
     }
-    const f = filter.toLowerCase();
     return tabs.filter(
       (t) =>
         t.title.toLowerCase().includes(f) ||
         (t.type === "terminal" && t.panes.some((p) => p.host.toLowerCase().includes(f))),
     );
-  }, [tabs, filter, viewMode]);
+  }, [tabs, f, viewMode]);
 
   const attachablePinnedTabs = useMemo(() => {
     if (viewMode !== "tabs") {
       return [];
     }
-    const f = filter.toLowerCase();
     return localPinned.filter(
       (p) =>
         !tabs.some((t) => t.panes.some((pane) => (pane.sessionId || pane.id) === p.id && pane.state !== "stolen")) &&
         (p.title?.toLowerCase().includes(f) || p.host?.toLowerCase().includes(f)),
     );
-  }, [localPinned, tabs, filter, viewMode]);
+  }, [localPinned, tabs, f, viewMode]);
 
   const allFilteredButtons = useMemo(() => {
     if (viewMode !== "buttons") {
       return { matchedUser: [], matchedBuiltin: [] };
     }
-    const f = filter.toLowerCase();
 
     const matchedUser = buttons.filter(
       (b) =>
@@ -216,7 +235,7 @@ export default function NewTabDialog({
     );
 
     return { matchedUser, matchedBuiltin };
-  }, [buttons, filter, viewMode]);
+  }, [buttons, f, viewMode]);
 
   const activeGroupButtons = useMemo(() => {
     if (viewMode !== "buttons") {
@@ -243,6 +262,40 @@ export default function NewTabDialog({
     return allFilteredButtons.matchedBuiltin;
   }, [allFilteredButtons, viewMode]);
 
+  const recentButtons = useMemo(() => {
+    if (viewMode !== "buttons") {
+      return [];
+    }
+    const list: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs" | "group" | "shortcut">[] = [];
+    recentButtonIds.forEach((id) => {
+      const userBtn = buttons.find((b) => b.id === id);
+      if (userBtn) {
+        list.push(userBtn);
+        return;
+      }
+      const builtinBtn = BUILTIN_BUTTONS.find((b) => b.id === id);
+      if (builtinBtn) {
+        list.push({
+          id: builtinBtn.id,
+          name: builtinBtn.name,
+          type: builtinBtn.type,
+          payload: builtinBtn.payload,
+          group: "",
+          shortcut: "",
+        });
+      }
+    });
+
+    if (!f) {
+      return list;
+    }
+    return list.filter(
+      (b) =>
+        b.name.toLowerCase().includes(f) ||
+        (b.type !== "run_script" && b.payload && b.payload.toLowerCase().includes(f)),
+    );
+  }, [recentButtonIds, buttons, f, viewMode]);
+
   const { sections, items } = useMemo(() => {
     const sections: DialogSection[] = [];
     const items: DialogItem[] = [];
@@ -259,7 +312,7 @@ export default function NewTabDialog({
     };
 
     if (viewMode === "servers") {
-      // 1. Recents
+      // Recents
       const recentList: Omit<DialogItem, "flatIndex">[] = [];
       filteredRecents.forEach((r) => {
         const knownHost = hosts.find((h) => h.name === r.host);
@@ -269,34 +322,12 @@ export default function NewTabDialog({
           label: r.host,
           subtitle: knownHost ? `${knownHost.user || "root"}@${knownHost.hostname}` : undefined,
           tooltip: knownHost?.comment,
-          tags: knownHost?.tags,
+          tag: knownHost?.tags?.map((t) => "#" + t).join(" "),
         });
       });
       addSection("Recents", recentList);
 
-      // 2. Favourite servers
-      const favList: Omit<DialogItem, "flatIndex">[] = [];
-      filteredHosts.favourite.forEach((h) => {
-        let subtitle = `${h.user || "root"}@${h.hostname}`;
-        if (filter && h.comment) {
-          const matchedComment = searchString(h.comment, filter);
-          if (matchedComment) {
-            subtitle += ` // ${matchedComment}`;
-          }
-        }
-        favList.push({
-          type: "host",
-          value: h.name,
-          label: h.name,
-          subtitle,
-          tooltip: h.comment,
-          isFav: h.is_favourite,
-          tags: h.tags,
-        });
-      });
-      addSection("Favourite Servers", favList);
-
-      // 3. Local shells
+      // Local shells
       const localList: Omit<DialogItem, "flatIndex">[] = [];
       filteredShells.forEach((shell) => {
         localList.push({
@@ -309,12 +340,49 @@ export default function NewTabDialog({
       });
       addSection("Local Shells", localList);
 
+      // Older recents
+      const olderRecentList: Omit<DialogItem, "flatIndex">[] = [];
+      filteredOlderRecents.forEach((r) => {
+        const knownHost = hosts.find((h) => h.name === r.host);
+        olderRecentList.push({
+          type: "recent",
+          value: r.host,
+          label: r.host,
+          subtitle: knownHost ? `${knownHost.user || "root"}@${knownHost.hostname}` : undefined,
+          tooltip: knownHost?.comment,
+          tag: knownHost?.tags?.map((t) => "#" + t).join(" "),
+        });
+      });
+      addSection("Older Recents", olderRecentList);
+
+      // Favourite servers
+      const favList: Omit<DialogItem, "flatIndex">[] = [];
+      filteredHosts.favourite.forEach((h) => {
+        let subtitle = `${h.user || "root"}@${h.hostname}`;
+        if (f && h.comment) {
+          const matchedComment = searchStringAny(h.comment, f);
+          if (matchedComment) {
+            subtitle += ` // ${matchedComment}`;
+          }
+        }
+        favList.push({
+          type: "host",
+          value: h.name,
+          label: h.name,
+          subtitle,
+          tooltip: h.comment,
+          isFav: h.is_favourite,
+          tag: h.tags?.map((t) => "#" + t).join(" "),
+        });
+      });
+      addSection("Favourite Servers", favList);
+
       // 4. Normal servers
       const normalList: Omit<DialogItem, "flatIndex">[] = [];
       filteredHosts.normal.forEach((h) => {
         let subtitle = `${h.user || "root"}@${h.hostname}`;
-        if (filter && h.comment) {
-          const matchedComment = searchString(h.comment, filter);
+        if (f && h.comment) {
+          const matchedComment = searchStringAny(h.comment, f);
           if (matchedComment) {
             subtitle += ` // ${matchedComment}`;
           }
@@ -326,7 +394,7 @@ export default function NewTabDialog({
           subtitle,
           tooltip: h.comment,
           isFav: h.is_favourite,
-          tags: h.tags,
+          tag: h.tags?.map((t) => "#" + t).join(" "),
         });
       });
       addSection("Normal Servers", normalList);
@@ -335,8 +403,8 @@ export default function NewTabDialog({
       const autoList: Omit<DialogItem, "flatIndex">[] = [];
       filteredHosts.auto.forEach((h) => {
         let subtitle = `${h.user || "root"}@${h.hostname}`;
-        if (filter && h.comment) {
-          const matchedComment = searchString(h.comment, filter);
+        if (f && h.comment) {
+          const matchedComment = searchStringAny(h.comment, f);
           if (matchedComment) {
             subtitle += ` // ${matchedComment}`;
           }
@@ -348,7 +416,7 @@ export default function NewTabDialog({
           subtitle,
           tooltip: h.comment,
           isFav: h.is_favourite,
-          tags: h.tags,
+          tag: h.tags?.map((t) => "#" + t).join(" "),
         });
       });
       addSection("Auto Servers", autoList);
@@ -385,13 +453,43 @@ export default function NewTabDialog({
       }));
       addSection("Attachable Pinned Tabs", pinnedTabsItems);
     } else if (viewMode === "buttons") {
+      const recentList: Omit<DialogItem, "flatIndex">[] = [];
+      recentButtons.forEach((b) => {
+        let subtitle = "";
+        const isBuiltin = b.id.startsWith("builtin-");
+        if (isBuiltin) {
+          subtitle = `Built-in | Type: ${b.type} | Payload: ${b.payload}`;
+        } else {
+          subtitle = `Group: ${b.group || DEFAULT_BUTTON_GROUP} | Type: ${b.type}${
+            b.type !== "send_string" && b.type !== "run_script" ? " | Payload: " + b.payload : ""
+          }`;
+        }
+        if (f && b.type === "send_string" && b.payload) {
+          const matchedPayload = searchStringAny(b.payload, f);
+          if (matchedPayload) {
+            subtitle += ` // ${matchedPayload}`;
+          }
+        }
+        recentList.push({
+          type: isBuiltin ? "builtin_button" : "button",
+          id: b.id,
+          value: b.id,
+          label: b.name,
+          subtitle,
+          tooltip: b.type !== "run_script" ? b.payload : undefined,
+          btn: b,
+          tag: b.shortcut,
+        });
+      });
+      addSection("Recently used", recentList);
+
       const activeGroupList: Omit<DialogItem, "flatIndex">[] = [];
       activeGroupButtons.forEach((b) => {
         let subtitle = `Group: ${b.group || DEFAULT_BUTTON_GROUP} | Type: ${b.type}${
           b.type !== "send_string" && b.type !== "run_script" ? " | Payload: " + b.payload : ""
         }`;
-        if (filter && b.type === "send_string" && b.payload) {
-          const matchedPayload = searchString(b.payload, filter);
+        if (f && b.type === "send_string" && b.payload) {
+          const matchedPayload = searchStringAny(b.payload, f);
           if (matchedPayload) {
             subtitle += ` // ${matchedPayload}`;
           }
@@ -404,6 +502,7 @@ export default function NewTabDialog({
           subtitle,
           tooltip: b.type !== "run_script" ? b.payload : undefined,
           btn: b,
+          tag: b.shortcut,
         });
       });
       addSection(`Active Group (${activeGroup || DEFAULT_BUTTON_GROUP})`, activeGroupList);
@@ -413,8 +512,8 @@ export default function NewTabDialog({
         let subtitle = `Group: ${b.group || DEFAULT_BUTTON_GROUP} | Type: ${b.type}${
           b.type !== "send_string" && b.type !== "run_script" ? " | Payload: " + b.payload : ""
         }`;
-        if (filter && b.type === "send_string" && b.payload) {
-          const matchedPayload = searchString(b.payload, filter);
+        if (f && b.type === "send_string" && b.payload) {
+          const matchedPayload = searchStringAny(b.payload, f);
           if (matchedPayload) {
             subtitle += ` // ${matchedPayload}`;
           }
@@ -427,6 +526,7 @@ export default function NewTabDialog({
           subtitle,
           tooltip: b.type !== "run_script" ? b.payload : undefined,
           btn: b,
+          tag: b.shortcut,
         });
       });
       addSection("Other Groups", otherGroupList);
@@ -449,21 +549,23 @@ export default function NewTabDialog({
   }, [
     viewMode,
     filteredRecents,
+    filteredShells,
+    filteredOlderRecents,
     filteredHosts.favourite,
     filteredHosts.normal,
     filteredHosts.auto,
-    filteredShells,
     directConnect,
     hosts,
-    filter,
     defaultShell,
     alternativeShell,
+    f,
     activeTabsList,
     attachablePinnedTabs,
     activeGroupButtons,
     activeGroup,
     otherGroupButtons,
     builtinButtons,
+    recentButtons,
   ]);
 
   useEffect(() => {
@@ -497,6 +599,9 @@ export default function NewTabDialog({
         onAttachPinned(item.id!, item.host!, item.label, !!item.isLocked);
         onClose();
       } else if (item.type === "button" || item.type === "other_button" || item.type === "builtin_button") {
+        if (item.btn?.id) {
+          updateRecentButtonId(item.btn.id);
+        }
         onExecuteButton(item.btn!);
         onClose();
       } else {
@@ -520,11 +625,11 @@ export default function NewTabDialog({
         e.preventDefault();
         e.stopPropagation();
         setSelectedIndex((prev) => Math.max(prev - step, 0));
-      } else if ((key === "arrowleft" && !filter) || (e.altKey && key === "h")) {
+      } else if ((key === "arrowleft" && !f) || (e.altKey && key === "h")) {
         e.stopPropagation();
         e.preventDefault();
         cycleViewMode("prev");
-      } else if ((key === "arrowright" && !filter) || (e.altKey && key === "l")) {
+      } else if ((key === "arrowright" && !f) || (e.altKey && key === "l")) {
         e.stopPropagation();
         e.preventDefault();
         cycleViewMode("next");
@@ -538,7 +643,7 @@ export default function NewTabDialog({
         onClose();
       }
     },
-    [cycleViewMode, filter, handleSelect, items, onClose, selectedIndex],
+    [cycleViewMode, f, handleSelect, items, onClose, selectedIndex],
   );
 
   useEffect(() => {
@@ -742,23 +847,19 @@ export default function NewTabDialog({
                           {item.label}
                         </Typography>
                         <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 0.25 }}>
-                          {item.tags &&
-                            item.tags
-                              .filter((t) => t !== "fav")
-                              .map((tag) => (
-                                <Typography
-                                  key={tag}
-                                  variant="caption"
-                                  sx={{
-                                    color: "inherit",
-                                    fontSize: "typography.caption.fontSize",
-                                    fontWeight: 600,
-                                    opacity: 0.8,
-                                  }}
-                                >
-                                  #{tag}
-                                </Typography>
-                              ))}
+                          {item.tag && (
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                color: "inherit",
+                                fontSize: "typography.caption.fontSize",
+                                fontWeight: 600,
+                                opacity: 0.8,
+                              }}
+                            >
+                              {item.tag}
+                            </Typography>
+                          )}
                         </Box>
                       </Box>
                     }

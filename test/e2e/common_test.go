@@ -125,6 +125,10 @@ func createPage(t *testing.T) playwright.Page {
 		t.Logf("BROWSER CONSOLE: %s", msg.Text())
 	})
 
+	page.On("pageerror", func(err error) {
+		t.Logf("BROWSER PAGE ERROR: %v", err)
+	})
+
 	return page
 }
 

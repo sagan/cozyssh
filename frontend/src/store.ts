@@ -24,6 +24,7 @@ import type { ScratchpadHandle } from "./Scratchpad";
 import {
   BROWSER_STORAGE_KEY_ACTIVE_GROUP,
   BROWSER_STORAGE_KEY_LOCAL_VARS,
+  BROWSER_STORAGE_KEY_RECENT_BUTTONS,
   BROWSER_STORAGE_KEY_RECENTS,
   BROWSER_STORAGE_KEY_VARS,
   DEFAULT_BUTTON_GROUP,
@@ -95,6 +96,7 @@ interface Store {
   vars: Record<string, string>;
   /** Local (browser-only) vars. All names have a "local_" (case-insensitive) prefix. */
   localVars: Record<string, string>;
+  recentButtonIds: string[];
   shellIntegrations: Record<string, ShellIntegration>;
 }
 
@@ -170,6 +172,7 @@ export const useStore = create<Store>(() => ({
   buttons: [],
   vars: loadFromStorage(BROWSER_STORAGE_KEY_VARS, {}),
   localVars: loadFromStorage(BROWSER_STORAGE_KEY_LOCAL_VARS, {}),
+  recentButtonIds: loadFromStorage(BROWSER_STORAGE_KEY_RECENT_BUTTONS, []),
   shellIntegrations: {},
 }));
 
@@ -197,6 +200,18 @@ export const notify = (msg: string, severity: Severity = "info", key?: string) =
   setTimeout(() => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, 4000);
+};
+
+export const updateRecentButtonId = (id: string) => {
+  useStore.setState((state) => {
+    if (state.recentButtonIds[0] === id) {
+      return {};
+    }
+    const filtered = state.recentButtonIds.filter((i) => i !== id);
+    const updated = [id, ...filtered].slice(0, 10);
+    localStorage.setItem(BROWSER_STORAGE_KEY_RECENT_BUTTONS, JSON.stringify(updated));
+    return { recentButtonIds: updated };
+  });
 };
 
 export const setSendScope = (sendScope: 0 | 1 | 2) => useStore.setState({ sendScope });
@@ -231,13 +246,10 @@ export const setActiveGroup = (activeGroup: string) => {
   localStorage.setItem(BROWSER_STORAGE_KEY_ACTIVE_GROUP, activeGroup);
 };
 
-export const setRecents = (update: Recent[] | ((prev: Recent[]) => Recent[])) => {
-  useStore.setState((state) => {
-    const next = typeof update === "function" ? update(state.recents) : update;
-    localStorage.setItem(BROWSER_STORAGE_KEY_RECENTS, JSON.stringify(next));
-    return { recents: next };
-  });
-};
+export const setRecents = (update: Recent[] | ((prev: Recent[]) => Recent[])) =>
+  useStore.setState((state) => ({
+    recents: typeof update === "function" ? update(state.recents) : update,
+  }));
 
 export const setToasts = (update: Toast[] | ((data: Toast[]) => Toast[])) =>
   useStore.setState((state) => ({
@@ -349,6 +361,7 @@ export const clearData = () =>
     vars: {},
     localVars: {},
     shellIntegrations: {},
+    recentButtonIds: [],
   });
 
 /**
@@ -363,6 +376,9 @@ window.addEventListener("storage", (e) => {
     }
     if (e.key === BROWSER_STORAGE_KEY_LOCAL_VARS) {
       useStore.setState({ localVars: e.newValue ? JSON.parse(e.newValue) : {} });
+    }
+    if (e.key === BROWSER_STORAGE_KEY_RECENT_BUTTONS) {
+      useStore.setState({ recentButtonIds: e.newValue ? JSON.parse(e.newValue) : [] });
     }
   } catch (err) {
     console.warn("Failed to sync cross-tab localStorage update:", err);
