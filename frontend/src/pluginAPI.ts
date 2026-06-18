@@ -63,7 +63,7 @@ import {
 } from "./store";
 import { dialogs } from "./Dialogs";
 import type { AppletData } from "./AppletWrapper";
-import { disableShortcuts } from "./useKeyboardManager";
+import { blackholeShortcuts, disableShortcuts } from "./useKeyboardManager";
 import type { ITerminalOptions } from "@xterm/xterm";
 import { openMenu } from "./DynamicMenu";
 
@@ -87,8 +87,10 @@ window.__CS_VERSION__ = PACKAGE_JSON_VERSION;
 window.__CS_USE_STORE__ = useStore;
 window.__CS_PASSTHROUGH_SHORTCUTS__ = terminalKeyShortcuts;
 window.__CS_DISABLE_SHORTCUTS__ = disableShortcuts;
+window.__CS_BLACKHOLE_SHORTCUTS__ = blackholeShortcuts;
 window.__CS_LIQUID_ENGINE__ = liquidEngine;
 window.__CS_RUNNING_SCRIPT__ = undefined;
+window.__CS_SHORTCUT_BUTTONS__ = {};
 window.__CS_ENV__ = window.appToggleFullscreen ? 1 : 0;
 document.documentElement.dataset.csEnv = `${window.__CS_ENV__}`;
 document.documentElement.dataset.csVersion = PACKAGE_JSON_VERSION;

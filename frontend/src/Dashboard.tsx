@@ -107,6 +107,10 @@ import {
   resetFontSize,
   decreseFontSize,
   increaseFontSize,
+  prevButtonGroup,
+  nextButtonGroup,
+  closeOtherTabs,
+  closeRightTabs,
 } from "./store";
 import { setupPluginAPI, runScript, moduleCache } from "./pluginAPI";
 import { useKeyboardManager } from "./useKeyboardManager";
@@ -1081,6 +1085,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
             case "INCREASE_GLOBAL_FONT_SIZE":
               increaseFontSize(false, true);
               break;
+            case "CLOSE_OTHER_TABS":
+              closeOtherTabs();
+              break;
+            case "CLOSE_RIGHT_TABS":
+              closeRightTabs();
+              break;
             case "TABS_SCROLL_LEFT":
               (document.querySelector("#tab-bar .MuiTabScrollButton-root:first-of-type") as HTMLElement)?.click();
               break;
@@ -1094,21 +1104,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
               (document.querySelector("#button-bar .MuiTabScrollButton-root:last-of-type") as HTMLElement)?.click();
               break;
             case "NEXT_BUTTON_GROUP": {
-              const idx = groups.indexOf(getStore().activeGroup);
-              let nextIdx = (idx + 1) % groups.length;
-              while (nextIdx !== idx && groups[nextIdx].startsWith("_")) {
-                nextIdx = (nextIdx + 1) % groups.length;
-              }
-              setActiveGroup(groups[nextIdx]);
+              nextButtonGroup();
               break;
             }
             case "PREV_BUTTON_GROUP": {
-              const idx = groups.indexOf(getStore().activeGroup);
-              let prevIdx = (idx - 1 + groups.length) % groups.length;
-              while (prevIdx !== idx && groups[prevIdx].startsWith("_")) {
-                prevIdx = (prevIdx - 1 + groups.length) % groups.length;
-              }
-              setActiveGroup(groups[prevIdx]);
+              prevButtonGroup();
               break;
             }
             case "OPEN_SCRATCHPAD":
@@ -1585,40 +1585,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   const handleCloseMenu = useCallback(() => setContextMenu(null), []);
 
-  const handleCloseOther = useCallback(() => {
-    if (!contextMenu) {
-      return;
-    }
-    const targetId = contextMenu.targetTabId;
-    setContextMenu(null);
-    const tab = getStore().tabs.find((t) => t.id === targetId);
-    setTabs((prev) => prev.filter((t) => t.id === targetId));
-    setActiveTabId(targetId);
-    if (tab) {
-      setActivePaneId(tab.activePaneId);
-    }
-    triggerFocus();
-  }, [contextMenu]);
-
-  const handleCloseRight = useCallback(() => {
-    if (!contextMenu) {
-      return;
-    }
-    const targetId = contextMenu.targetTabId;
-    setContextMenu(null);
-    setTabs((prev) => {
-      const idx = prev.findIndex((t) => t.id === targetId);
-      const newTabs = prev.slice(0, idx + 1);
-      const targetTab = newTabs[idx];
-      if (getStore().activeTabId !== targetId) {
-        setActiveTabId(targetId);
-        setActivePaneId(targetTab.activePaneId);
-      }
-      return newTabs;
-    });
-    triggerFocus();
-  }, [contextMenu]);
-
   const getTerminalRefs = useCallback(() => terminalRefs.current, []);
   const getApplets = useCallback(() => appletRefs.current, []);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1853,7 +1819,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             setMobileOpen(false);
           }}
           onRefresh={() => {
-            handleRefresh();
+            handleRefresh({ sync: 2 });
             setMobileOpen(false);
           }}
           fetchHosts={fetchHosts}
@@ -2089,8 +2055,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
         handleToggleFiles={handleToggleFiles}
         handleReconnectTab={handleReconnectTab}
         handleRename={handleRename}
-        handleCloseOther={handleCloseOther}
-        handleCloseRight={handleCloseRight}
         handleMoveButton={handleMoveButton}
         handleDeleteButton={handleDeleteButton}
         handleCloseBtnDialog={handleCloseBtnDialog}

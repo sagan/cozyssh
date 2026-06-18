@@ -90,12 +90,15 @@ CozySSH sets some global variables in the browser's window object.
 
 - `window.__CS_AUTORUN_DONE__` : `undefined | 0 | 1` - `1` - If all autorun scripts have been executed, unset (undefined) or 0 otherwise. It can be used to determine if the script is executed via auto-run or via clicking the button.
 - `window.__CS_MODULECACHE__` : `Record<string, CsScriptModule>` - The module cache of imported scripts. The key is the button internal id.
-- `window.__CS_VERSION__` : `string` - The current frontend version of CozySSH. E.g. `0.1.26`.
 - `window.__CS_PASSTHROUGH_SHORTCUTS__` : `Set<string>` - The list of key combinations that should be passed through to the terminal if terminal has focus. Each element is a key combination string such as `ctrl+shift+m` (all lowercase, modifiers in `ctrl,alt,shift,meta` order). Some key combinations (like `ctrl+c`, `ctrl+d`, etc.) are pre-added to this set by default.
 - `window.__CS_DISABLE_SHORTCUTS__` : `Set<string>` - The list of keyboard shortcuts that should be disabled. The element is in the same format as `__CS_PASSTHROUGH_SHORTCUTS__` element.
+- `window.__CS_BLACKHOLE_SHORTCUTS__` : `Set<string>` - The list of keyboard shortcuts that should be silently consumed / ignored. The difference between it and `__CS_DISABLE_SHORTCUTS__` is that for shortcut in this list it will execute `e.preventDefault()` before returning in keyboard event handle.
 - `window.__CS_USE_STORE__` : `typeof useStore` - The [zustand][] store hook function that CozySSH uses to manage state.
 - `window.__CS_TERMINAL_OPTIONS__` : `ITerminalOptions` - Used to set additional xterm.js terminal options. These options are merged with the default options. It uses Proxy so any modification takes effect to all terminals immediately. See xterm.js [ITerminalOptions](https://xtermjs.org/docs/api/terminal/interfaces/iterminaloptions/) for details. The default options can be found in `frontend/src/Terminal.tsx`.
+- `window.__CS_FONT_SIZE__`: `number` - Global font size. Default is `14` (MUI default). It uses Object.defineProperty so the modification takes effect immediately.
 - `window.__CS_LIQUID_ENGINE__` : `Liquid` - The LiquidJs Engine instannce that CozySSH uses for send_string buttons & Terminal Input dialog.
+- `window.__CS_ENV__` : `number` - `0` - CozySSH is running as web app; `1` - CozySSH is running as Windows Desktop app (webview2). This variable is also available in `<html data-cs-env>`.
+- `window.__CS_VERSION__` : `string` - The current frontend version of CozySSH. E.g. `0.5.0`. This variable is also available in `<html data-cs-version>`.
 
 ## Available global functions
 

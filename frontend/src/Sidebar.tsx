@@ -105,6 +105,7 @@ import {
   setHostFormData,
   setInitialHostFormData,
   setMobileOpen,
+  setTagsExpanded,
   triggerFocus,
   useStore,
 } from "./store";
@@ -149,11 +150,12 @@ export default function Sidebar({
   const sysHostname = useStore((state) => state.sysHostname);
   const hosts = useStore((state) => state.hosts);
   const shells = useStore((state) => state.shells);
+  const tagsExpanded = useStore((state) => state.tagsExpanded);
+
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const [loading, setLoading] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-
   // Settings State
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newPwd, setNewPwd] = useState("");
@@ -434,7 +436,6 @@ export default function Sidebar({
 
   const [startupParams] = useSearchParams();
   const [filterStr, setFilterStr] = useState(startupParams.get("filter") || "");
-  const [tagsExpanded, setTagsExpanded] = useState(false);
   const [showTagsToggle, setShowTagsToggle] = useState(false);
   const tagsContainerRef = useRef<HTMLDivElement | null>(null);
   const localShellRef = useRef<HTMLLIElement | null>(null);
@@ -1525,7 +1526,7 @@ export default function Sidebar({
             </Box>
             {showTagsToggle && (
               <Box sx={{ textAlign: "center", mt: -0.5 }}>
-                <IconButton size="small" onClick={() => setTagsExpanded(!tagsExpanded)} sx={{ p: 0 }}>
+                <IconButton size="small" onClick={() => setTagsExpanded(+!tagsExpanded)} sx={{ p: 0 }}>
                   {tagsExpanded ? (
                     <Typography variant="caption" color="text.secondary">
                       ▲

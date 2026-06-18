@@ -24,6 +24,7 @@ import SendIcon from "@mui/icons-material/Send";
 import StarIcon from "@mui/icons-material/Star";
 import TabIcon from "@mui/icons-material/Tab";
 import PushPinIcon from "@mui/icons-material/PushPin";
+import TagIcon from "@mui/icons-material/Tag";
 import SmartButtonIcon from "@mui/icons-material/SmartButton";
 
 import type { SessionPinned, ButtonData, HostData } from "./api";
@@ -39,7 +40,6 @@ import {
   ID_NEW_TAB_DIALOG_INPUT,
 } from "./constants";
 import {
-  type ViewMode,
   cutString,
   filterButtons,
   filterHosts,
@@ -49,7 +49,14 @@ import {
   parseHostName,
   searchStringAny,
 } from "./common";
-import { changeNewTabDialogViewMode, getStore, setNewTabDialogFilter, updateRecentButtonId, useStore } from "./store";
+import {
+  changeNewTabDialogViewMode,
+  getStore,
+  parseNewTabDialogFilter,
+  setNewTabDialogFilter,
+  updateRecentButtonId,
+  useStore,
+} from "./store";
 
 interface DialogItem {
   type:
@@ -62,6 +69,7 @@ interface DialogItem {
     | "button"
     | "other_button"
     | "builtin_button"
+    | "tag"
     | "help";
   value: string;
   label: string;
@@ -115,38 +123,30 @@ export default function NewTabDialog({
 
   const [localPinned, setLocalPinned] = useState<SessionPinned[]>([]);
 
-  const f = useMemo(() => {
-    let f: string;
-    if (
-      newTabDialogFilter.startsWith(">") ||
-      newTabDialogFilter.startsWith("@") ||
-      newTabDialogFilter.startsWith("?")
-    ) {
-      f = newTabDialogFilter.slice(1).trim();
-    } else {
-      f = newTabDialogFilter.trim();
-    }
+  const uniqueTags: { tag: string; count: number }[] = useMemo(() => {
+    const set = new Map<string, number>();
+    hosts.forEach((h) => {
+      h.tags?.forEach((t) => set.set(t, (set.get(t) || 0) + 1));
+    });
+    return Array.from(set.entries())
+      .map(([t, count]) => ({ tag: t, count }))
+      .sort();
+  }, [hosts]);
+
+  const [viewMode, f] = useMemo(() => {
+    // eslint-disable-next-line prefer-const
+    let [viewMode, f] = parseNewTabDialogFilter(newTabDialogFilter);
+    f = f.trim();
     const [before, after, found] = cutString(f, "?");
     if (found) {
-      return before.toLowerCase() + "?" + after;
+      return [viewMode, before.toLowerCase() + "?" + after];
     }
-    return f.toLowerCase();
-  }, [newTabDialogFilter]);
-
-  const viewMode: ViewMode = useMemo(() => {
-    if (newTabDialogFilter.startsWith(">")) {
-      return "buttons";
-    } else if (newTabDialogFilter.startsWith("@")) {
-      return "tabs";
-    } else if (newTabDialogFilter.startsWith("?")) {
-      return "help";
-    }
-    return "servers";
+    return [viewMode, f.toLowerCase()];
   }, [newTabDialogFilter]);
 
   useEffect(() => {
     const value = inputRef.current?.value;
-    if (value) {
+    if (value && !value.startsWith("#")) {
       if (viewMode === "servers") {
         inputRef.current!.select();
       } else {
@@ -211,6 +211,16 @@ export default function NewTabDialog({
       auto: autos.sort(hostNameSorter),
     };
   }, [hosts, f, viewMode]);
+
+  const filteredTags = useMemo(() => {
+    if (viewMode !== "tags") {
+      return [];
+    }
+    if (!f) {
+      return uniqueTags;
+    }
+    return uniqueTags.filter((t) => t.tag.toLowerCase().includes(f));
+  }, [uniqueTags, f, viewMode]);
 
   const filteredShells = useMemo(() => {
     if (viewMode !== "servers") {
@@ -309,7 +319,7 @@ export default function NewTabDialog({
           type: builtinBtn.type,
           payload: builtinBtn.payload,
           group: "",
-          shortcut: "",
+          shortcut: builtinBtn.shortcut || "",
         });
       }
     });
@@ -509,7 +519,7 @@ export default function NewTabDialog({
       addSection("Recently used", recentList);
 
       const activeGroupList: Omit<DialogItem, "flatIndex">[] = [];
-      activeGroupButtons.forEach((b) => {
+      activeGroupButtons.forEach((b, idx) => {
         let subtitle = `Group: ${b.group || DEFAULT_BUTTON_GROUP} | Type: ${b.type}${
           b.type !== "send_string" && b.type !== "run_script" ? " | Payload: " + b.payload : ""
         }`;
@@ -527,7 +537,8 @@ export default function NewTabDialog({
           subtitle,
           tooltip: b.type !== "run_script" ? b.payload : undefined,
           btn: b,
-          tag: b.shortcut,
+          tag:
+            b.shortcut + (idx < 10 ? (b.shortcut ? " " : "") + (idx < 9 ? `alt+shift+${idx + 1}` : "alt+shift+0") : ""),
         });
       });
       addSection(`Active Group (${activeGroup || DEFAULT_BUTTON_GROUP})`, activeGroupList);
@@ -556,18 +567,25 @@ export default function NewTabDialog({
       });
       addSection("Other Groups", otherGroupList);
 
-      const builtinList: Omit<DialogItem, "flatIndex">[] = [];
-      builtinButtons.forEach((b) => {
-        builtinList.push({
-          type: "builtin_button",
-          id: b.id,
-          value: b.id,
-          label: b.name,
-          subtitle: `Built-in | Type: ${b.type} | Payload: ${b.payload}`,
-          btn: b,
-        });
-      });
+      const builtinList: Omit<DialogItem, "flatIndex">[] = builtinButtons.map((b) => ({
+        type: "builtin_button",
+        id: b.id,
+        value: b.id,
+        label: b.name,
+        subtitle: `Built-in | Type: ${b.type} | Payload: ${b.payload}`,
+        btn: b,
+        tag: b.shortcut,
+      }));
       addSection("Built-in Functions", builtinList);
+    } else if (viewMode === "tags") {
+      const tagItems: Omit<DialogItem, "flatIndex">[] = filteredTags.map((t) => ({
+        type: "tag",
+        id: t.tag,
+        value: t.tag,
+        label: "#" + t.tag,
+        subtitle: `${t.count} servers`,
+      }));
+      addSection("Tags", tagItems);
     } else if (viewMode === "help") {
       const helpOptions: Omit<DialogItem, "flatIndex">[] = [
         {
@@ -590,6 +608,12 @@ export default function NewTabDialog({
         //   label: "? Help",
         //   subtitle: "Show help guide for command palette prefixes",
         // },
+        {
+          type: "help" as const,
+          value: "#",
+          label: "# Tag",
+          subtitle: "Filter servers by tag",
+        },
         {
           type: "help" as const,
           value: "",
@@ -622,11 +646,12 @@ export default function NewTabDialog({
     f,
     activeTabsList,
     attachablePinnedTabs,
+    recentButtons,
     activeGroupButtons,
     activeGroup,
     otherGroupButtons,
     builtinButtons,
-    recentButtons,
+    filteredTags,
   ]);
 
   useEffect(() => {
@@ -652,6 +677,12 @@ export default function NewTabDialog({
         }
         onExecuteButton(item.btn!);
         onClose();
+      } else if (item.type === "tag") {
+        setNewTabDialogFilter("#" + item.value + " ");
+        setSelectedIndex(0);
+        setTimeout(() => {
+          inputRef.current?.focus();
+        }, 0);
       } else if (item.type === "help") {
         setNewTabDialogFilter(item.value);
         setSelectedIndex(0);
@@ -778,6 +809,8 @@ export default function NewTabDialog({
           return <TabIcon {...activeProps} />;
         } else if (item.value === "?") {
           return <HelpIcon {...activeProps} />;
+        } else if (item.value === "#") {
+          return <TagIcon {...activeProps} />;
         } else {
           return <DnsIcon {...baseProps} />;
         }
@@ -850,6 +883,8 @@ export default function NewTabDialog({
                       <TabIcon />
                     ) : viewMode === "buttons" ? (
                       <SmartButtonIcon />
+                    ) : viewMode === "tags" ? (
+                      <TagIcon />
                     ) : (
                       <HelpIcon />
                     )}

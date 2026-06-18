@@ -81,6 +81,10 @@ const (
 	swShowMaximized = 3
 
 	wmSetRedraw = 0x000B
+	wmSetIcon   = 0x0080
+	iconSmall   = 0
+	iconBig     = 1
+	imageIcon   = 1
 
 	rdwErase       = 0x0004
 	rdwFrame       = 0x0400
@@ -89,6 +93,14 @@ const (
 
 	smCxScreen = 0
 	smCyScreen = 1
+
+	smCxIcon   = 11
+	smCyIcon   = 12
+	smCxSmIcon = 49
+	smCySmIcon = 50
+
+	lrDefaultSize = 0x0040
+	lrShared      = 0x8000
 
 	wsOverlappedWindow      uint32 = 0x00CF0000
 	wsPopup                 uint32 = 0x80000000
@@ -102,6 +114,9 @@ const (
 	wmDestroy = 0x0002
 
 	pmRemove = 0x0001
+
+	// Icon resource ID assigned by rsrc tool (manifest=1, group_icon=2)
+	appIconResourceId = 2
 )
 
 // Global state sync orchestration references
@@ -130,6 +145,36 @@ func isMinimized(hwnd uintptr) bool {
 func isVisible(hwnd uintptr) bool {
 	ret, _, _ := procIsWindowVisible.Call(hwnd)
 	return ret != 0
+}
+
+// setWindowIcon loads the app icon from the embedded resource and sets it on
+// the window via WM_SETICON for both the title bar (ICON_SMALL) and taskbar
+// (ICON_BIG). This is more reliable than relying on the window class icon alone.
+func setWindowIcon(hwnd uintptr) {
+	var hinstance windows.Handle
+	_ = windows.GetModuleHandleEx(0, nil, &hinstance)
+
+	// Load big icon (typically 32x32, for taskbar / Alt-Tab)
+	bigCx, _, _ := procGetSystemMetrics.Call(uintptr(smCxIcon))
+	bigCy, _, _ := procGetSystemMetrics.Call(uintptr(smCyIcon))
+	bigIcon, _, _ := user32dll.NewProc("LoadImageW").Call(
+		uintptr(hinstance), uintptr(appIconResourceId), imageIcon,
+		bigCx, bigCy, lrShared,
+	)
+	if bigIcon != 0 {
+		procSendMessage.Call(hwnd, wmSetIcon, iconBig, bigIcon)
+	}
+
+	// Load small icon (typically 16x16, for title bar)
+	smCx, _, _ := procGetSystemMetrics.Call(uintptr(smCxSmIcon))
+	smCy, _, _ := procGetSystemMetrics.Call(uintptr(smCySmIcon))
+	smallIcon, _, _ := user32dll.NewProc("LoadImageW").Call(
+		uintptr(hinstance), uintptr(appIconResourceId), imageIcon,
+		smCx, smCy, lrShared,
+	)
+	if smallIcon != 0 {
+		procSendMessage.Call(hwnd, wmSetIcon, iconSmall, smallIcon)
+	}
 }
 
 // windowState returns the outer pixel size of the window and whether it is
@@ -305,7 +350,7 @@ func main() {
 			Title:     constants.APP_NAME,
 			Width:     initWidth,
 			Height:    initHeight,
-			IconId:    1,
+			IconId:    2, // RT_GROUP_ICON ID assigned by rsrc (manifest=1, group_icon=2)
 			Center:    true,
 			Maximized: startMaximized,
 		},
@@ -318,6 +363,7 @@ func main() {
 	defer w.Destroy()
 
 	hwnd := uintptr(w.Window())
+	setWindowIcon(hwnd)
 
 	// Push UI references into the buffered channel for the background manager
 	uiReady <- uiReferences{w: w, hwnd: hwnd}
@@ -383,7 +429,7 @@ func main() {
 					Title:     constants.APP_NAME,
 					Width:     width,
 					Height:    height,
-					IconId:    1,
+					IconId:    2, // RT_GROUP_ICON ID assigned by rsrc (manifest=1, group_icon=2)
 					Maximized: maximized,
 					Center:    true,
 				},
@@ -393,6 +439,7 @@ func main() {
 			}
 
 			subW.Navigate(targetURL)
+			setWindowIcon(uintptr(subW.Window()))
 			subW.Run()
 			subW.Destroy()
 

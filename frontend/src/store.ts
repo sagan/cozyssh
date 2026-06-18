@@ -28,6 +28,7 @@ import {
   BROWSER_STORAGE_KEY_LOCAL_VARS,
   BROWSER_STORAGE_KEY_RECENT_BUTTONS,
   BROWSER_STORAGE_KEY_RECENTS,
+  BROWSER_STORAGE_KEY_TAGS_EXPANDED,
   BROWSER_STORAGE_KEY_VARS,
   DEFAULT_BUTTON_GROUP,
   DEFAULT_FONT_SIZE,
@@ -101,6 +102,7 @@ interface Store {
   hosts: HostData[];
   shells: LocalShell[];
   buttons: ButtonData[];
+  tagsExpanded: number;
   vars: Record<string, string>;
   /** Local (browser-only) vars. All names have a "local_" (case-insensitive) prefix. */
   localVars: Record<string, string>;
@@ -178,6 +180,7 @@ export const useStore = create<Store>(() => ({
   hosts: [],
   shells: [],
   buttons: [],
+  tagsExpanded: loadFromStorage(BROWSER_STORAGE_KEY_TAGS_EXPANDED, 0),
   vars: loadFromStorage(BROWSER_STORAGE_KEY_VARS, {}),
   localVars: loadFromStorage(BROWSER_STORAGE_KEY_LOCAL_VARS, {}),
   recentButtonIds: loadFromStorage(BROWSER_STORAGE_KEY_RECENT_BUTTONS, []),
@@ -281,6 +284,8 @@ export function parseNewTabDialogFilter(filter: string): [viewMode: ViewMode, f:
     return ["buttons", filter.slice(1)];
   } else if (filter.startsWith("@")) {
     return ["tabs", filter.slice(1)];
+  } else if (filter.startsWith("#") && !filter.includes(" ")) {
+    return ["tags", filter.slice(1)];
   } else if (filter.startsWith("?")) {
     return ["help", filter.slice(1)];
   }
@@ -298,7 +303,7 @@ export const changeNewTabDialogViewMode = (target?: boolean | ViewMode) =>
     if (typeof target === "string") {
       nextMode = target;
     } else {
-      const modes: ViewMode[] = ["servers", "tabs", "buttons"];
+      const modes: ViewMode[] = ["servers", "buttons", "tabs"];
       const idx = modes.indexOf(mode);
       if (idx === -1) {
         nextMode = "servers";
@@ -327,6 +332,49 @@ export const addUnreadTabId = (tabId: string) =>
   useStore.setState((state) => ({
     unreadTabIds: new Set([...state.unreadTabIds, tabId]),
   }));
+
+export const closeOtherTabs = (targetTabId?: string) => {
+  const { activeTabId, tabs } = getStore();
+  targetTabId = targetTabId || activeTabId;
+  if (tabs.length === 0 || (tabs.length === 1 && tabs[0].id === targetTabId)) {
+    return;
+  }
+  const targetTab = tabs.find((tab) => tab.id === targetTabId);
+  if (!targetTab) {
+    return;
+  }
+  useStore.setState({
+    tabs: [targetTab],
+    activeTabId: targetTab.id,
+    activePaneId: targetTab.activePaneId,
+  });
+  triggerFocus();
+};
+
+export const closeRightTabs = (targetTabId?: string) => {
+  const { activeTabId, tabs } = getStore();
+  targetTabId = targetTabId || activeTabId;
+  if (tabs.length === 0 || (tabs.length === 1 && tabs[0].id === targetTabId)) {
+    return;
+  }
+  const targetTabIndex = tabs.findIndex((tab) => tab.id === targetTabId);
+  if (targetTabIndex === -1) {
+    return;
+  }
+  const targetTab = tabs[targetTabIndex];
+  const activeTabClosed = tabs.findIndex((tab) => tab.id === activeTabId) > targetTabIndex;
+  const newTabs = tabs.slice(0, targetTabIndex + 1);
+  useStore.setState(
+    activeTabClosed
+      ? {
+          tabs: newTabs,
+          activeTabId: targetTab.id,
+          activePaneId: targetTab.activePaneId,
+        }
+      : { tabs: newTabs },
+  );
+  triggerFocus();
+};
 
 export const setTabs = (update: TabData[] | ((data: TabData[]) => TabData[])) =>
   useStore.setState((state) => ({
@@ -378,6 +426,37 @@ export const setShells = (shells: LocalShell[]) => useStore.setState({ shells })
 
 export const setButtons = (buttons: ButtonData[]) => useStore.setState({ buttons });
 
+export const prevButtonGroup = () => {
+  useStore.setState((state) => {
+    const groups = Array.from(new Set([DEFAULT_BUTTON_GROUP, ...state.buttons.map((button) => button.group)])).sort();
+    const idx = groups.indexOf(state.activeGroup);
+    let nextIdx = (idx - 1 + groups.length) % groups.length;
+    while (nextIdx !== idx && groups[nextIdx].startsWith("_")) {
+      nextIdx = (nextIdx - 1 + groups.length) % groups.length;
+    }
+    return { activeGroup: groups[nextIdx] };
+  });
+};
+
+export const nextButtonGroup = () => {
+  useStore.setState((state) => {
+    const groups = Array.from(new Set([DEFAULT_BUTTON_GROUP, ...state.buttons.map((button) => button.group)])).sort();
+    const idx = groups.indexOf(state.activeGroup);
+    let nextIdx = (idx + 1) % groups.length;
+    while (nextIdx !== idx && groups[nextIdx].startsWith("_")) {
+      nextIdx = (nextIdx + 1) % groups.length;
+    }
+    return { activeGroup: groups[nextIdx] };
+  });
+};
+
+export const setTagsExpanded = (update: number | ((prev: number) => number)) =>
+  useStore.setState((state) => {
+    const tagsExpanded = typeof update === "function" ? update(state.tagsExpanded) : update;
+    localStorage.setItem(BROWSER_STORAGE_KEY_TAGS_EXPANDED, JSON.stringify(tagsExpanded));
+    return { tagsExpanded };
+  });
+
 export const setVars = (vars: Record<string, string>) => {
   useStore.setState({ vars });
   // store a duplicate in localStorage
@@ -413,14 +492,19 @@ export const clearData = () =>
  */
 window.addEventListener("storage", (e) => {
   try {
-    if (e.key === BROWSER_STORAGE_KEY_VARS) {
-      useStore.setState({ vars: e.newValue ? JSON.parse(e.newValue) : {} });
-    }
-    if (e.key === BROWSER_STORAGE_KEY_LOCAL_VARS) {
-      useStore.setState({ localVars: e.newValue ? JSON.parse(e.newValue) : {} });
-    }
-    if (e.key === BROWSER_STORAGE_KEY_RECENT_BUTTONS) {
-      useStore.setState({ recentButtonIds: e.newValue ? JSON.parse(e.newValue) : [] });
+    switch (e.key) {
+      case BROWSER_STORAGE_KEY_VARS:
+        useStore.setState({ vars: e.newValue ? JSON.parse(e.newValue) : {} });
+        break;
+      case BROWSER_STORAGE_KEY_LOCAL_VARS:
+        useStore.setState({ localVars: e.newValue ? JSON.parse(e.newValue) : {} });
+        break;
+      case BROWSER_STORAGE_KEY_RECENT_BUTTONS:
+        useStore.setState({ recentButtonIds: e.newValue ? JSON.parse(e.newValue) : [] });
+        break;
+      case BROWSER_STORAGE_KEY_TAGS_EXPANDED:
+        useStore.setState({ tagsExpanded: e.newValue ? JSON.parse(e.newValue) : 0 });
+        break;
     }
   } catch (err) {
     console.warn("Failed to sync cross-tab localStorage update:", err);

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 
 import {
+  DEFAULT_BUTTON_GROUP,
   DEFAULT_FONT_SIZE,
   DEFAULT_TERMINAL_FONT_SIZE,
   VAR_CS_FONT_SIZE,
@@ -11,11 +12,14 @@ import {
 import { CS_EVENT_VARS, getIntVar, type CSEventDetailVars } from "./common";
 import { triggerFocus, useStore } from "./store";
 import { useWakeLock } from "./useWakeLock";
+import type { ButtonData } from "./api";
 
 export default function SideEffect() {
   const tabsNotEmpty = useStore((state) => state.tabs.length > 0);
   const vars = useStore((state) => state.vars);
   const localVars = useStore((state) => state.localVars);
+  const buttons = useStore((state) => state.buttons);
+  const activeGroup = useStore((state) => state.activeGroup);
 
   const anyDialogOpen = useStore(
     (state) =>
@@ -27,6 +31,28 @@ export default function SideEffect() {
       triggerFocus();
     }
   }, [anyDialogOpen]);
+
+  useEffect(() => {
+    const shortcutButtons: Record<string, ButtonData> = {};
+    for (const btn of buttons) {
+      if ((btn.group || DEFAULT_BUTTON_GROUP) === activeGroup) {
+        continue;
+      }
+      if (btn.shortcut && btn.shortcut.length > 1) {
+        shortcutButtons[btn.shortcut.toLowerCase()] = btn;
+      }
+    }
+    // active group button shortcut has priority
+    for (const btn of buttons) {
+      if ((btn.group || DEFAULT_BUTTON_GROUP) !== activeGroup) {
+        continue;
+      }
+      if (btn.shortcut && btn.shortcut.length > 1) {
+        shortcutButtons[btn.shortcut.toLowerCase()] = btn;
+      }
+    }
+    __CS_SHORTCUT_BUTTONS__ = shortcutButtons;
+  }, [buttons, activeGroup]);
 
   // It's OK to use static (non-reactive) getIntVar() here because the function scope vars & localVars
   // variables (introduced by Zustand useStore selectors) will cause the component to re-render if they change.

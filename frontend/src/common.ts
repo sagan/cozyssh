@@ -37,7 +37,7 @@ export type ServiceWorkerStatus =
 
 export type ScratchpadSyncState = "offline" | "syncing" | "synced" | "dirty";
 
-export type ViewMode = "servers" | "tabs" | "buttons" | "help";
+export type ViewMode = "servers" | "tabs" | "buttons" | "help" | "tags";
 
 export type Severity = "success" | "info" | "warning" | "error";
 
@@ -415,12 +415,28 @@ export function getIntVar(name: string, defaultValue = 0): number {
  */
 export function getKeyCombination(ev: KeyboardEvent): string {
   let mods = "";
-  if (ev.ctrlKey) mods += "ctrl+";
-  if (ev.altKey) mods += "alt+";
-  if (ev.shiftKey) mods += "shift+";
-  if (ev.metaKey) mods += "meta+";
-  mods += ev.key.toLowerCase();
-  return mods;
+  const suppressKeys = new Set<string>();
+  if (ev.ctrlKey) {
+    suppressKeys.add("control");
+    mods += "+ctrl";
+  }
+  if (ev.altKey) {
+    suppressKeys.add("alt");
+    mods += "+alt";
+  }
+  if (ev.shiftKey) {
+    suppressKeys.add("shift");
+    mods += "+shift";
+  }
+  if (ev.metaKey) {
+    suppressKeys.add("meta");
+    mods += "+meta";
+  }
+  const key = ev.key.toLowerCase();
+  if (!suppressKeys.has(key)) {
+    mods += "+" + key;
+  }
+  return mods.slice(1);
 }
 
 /**

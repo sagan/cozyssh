@@ -735,6 +735,10 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
 
         if (__CS_REMAP_CTRL_L__) {
           if (kcomb === "ctrl+l") {
+            if (__CS_ENV__ === 1) {
+              // don't intercept in desktop app
+              return true;
+            }
             return false;
           } else if (kcomb === "ctrl+shift+l" || kcomb === "ctrl+alt+l") {
             // we support both ctrl+shift+l & ctrl+alt+l because some browser extension (aka. Bitwarden) uses former

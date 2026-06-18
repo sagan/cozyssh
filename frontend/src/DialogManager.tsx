@@ -72,6 +72,8 @@ import {
   triggerFocusSearchInput,
   activatePane,
   closeNewTabDialog,
+  closeOtherTabs,
+  closeRightTabs,
 } from "./store";
 import NewTabDialog from "./NewTabDialog";
 import { dialogs } from "./Dialogs";
@@ -89,8 +91,6 @@ export interface DialogManagerProps {
   handleToggleFiles: () => void;
   handleReconnectTab: (id: string) => void;
   handleRename: () => void;
-  handleCloseOther: () => void;
-  handleCloseRight: () => void;
   handleMoveButton: (id: string, dir: number) => void;
   handleDeleteButton: (id: string, name: string) => void;
   handleCloseBtnDialog: (e: unknown, reason: string) => void;
@@ -129,8 +129,6 @@ export default function DialogManager({
   handleToggleFiles,
   handleReconnectTab,
   handleRename,
-  handleCloseOther,
-  handleCloseRight,
   handleButtonClick,
   handleMoveButton,
   handleDeleteButton,
@@ -523,8 +521,22 @@ export default function DialogManager({
                     <MenuItem onClick={handleRename}>Rename Tab</MenuItem>
                   </>
                 )}
-                <MenuItem onClick={handleCloseOther}>Close Other Tabs</MenuItem>
-                <MenuItem onClick={handleCloseRight}>Close Tabs to the Right</MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    handleCloseMenu();
+                    closeOtherTabs(memoTabId);
+                  }}
+                >
+                  Close Other Tabs
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    handleCloseMenu();
+                    closeRightTabs(memoTabId);
+                  }}
+                >
+                  Close Tabs to the Right
+                </MenuItem>
                 {tab.type === "scratchpad" && (
                   <MenuItem
                     onClick={() => {

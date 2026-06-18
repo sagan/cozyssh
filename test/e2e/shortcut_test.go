@@ -41,7 +41,7 @@ func TestKeyboardShortcuts(t *testing.T) {
 	}
 
 	// Wait for dialog
-	if _, err := page.WaitForSelector("input[placeholder*='Search for a server']", playwright.PageWaitForSelectorOptions{}); err != nil {
+	if _, err := page.WaitForSelector("input[placeholder*='Search server']", playwright.PageWaitForSelectorOptions{}); err != nil {
 		t.Fatalf("dialog not opened: %v", err)
 	}
 

@@ -94,9 +94,16 @@ declare global {
   /**
    * The list of CozySSH shortcut key combinations that should be disabled.
    * The element is in the same format as `__CS_PASSTHROUGH_SHORTCUTS__` element.
+   * For shortcut in this list it will directly return in keyboard event handle.
    */
   var __CS_DISABLE_SHORTCUTS__: Set<string>;
-
+  /**
+   * The list of shortcut key combinations that are silently "consumed" by CozySSH.
+   * The difference between it and `__CS_DISABLE_SHORTCUTS__` is that for shortcut in this list
+   * it will execute `e.preventDefault()` before returning in keyboard event handle.
+   * Some key combinations (like `alt`, `alt+shift`, etc.) are pre-added to this set by default.
+   */
+  var __CS_BLACKHOLE_SHORTCUTS__: Set<string>;
   /**
    * If 1, disable terminal ctrl+l (let browser handle it) and remap ctrl+shift+l & ctrl+alt+l to ctrl+l in terminal.
    */
@@ -128,6 +135,10 @@ declare global {
    * It uses Object.defineProperty so the modification takes effect immediately.
    */
   var __CS_FONT_SIZE__: number;
+  /**
+   * Global shortcut button map.
+   */
+  var __CS_SHORTCUT_BUTTONS__: Record<string, ButtonData>;
   /**
    * Focus the terminal with the given pane id.
    * @param tabOrPaneId defaults to active terminal pane id.

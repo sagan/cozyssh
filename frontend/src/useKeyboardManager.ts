@@ -12,7 +12,6 @@ import { useEffect } from "react";
 
 import { type ButtonData } from "./api";
 import {
-  BROWSER_STORAGE_KEY_ACTIVE_GROUP,
   DEFAULT_BUTTON_GROUP,
   DEFAULT_SCROLL_LINES,
   ID_SIDEBAR_FILTER,
@@ -27,8 +26,9 @@ import {
   decreseFontSize,
   getStore,
   increaseFontSize,
+  nextButtonGroup,
+  prevButtonGroup,
   resetFontSize,
-  setActiveGroup,
   setActivePaneId,
   setActiveTabId,
   setNewTabDialogOpen,
@@ -51,6 +51,11 @@ export interface KeyboardManagerOptions {
   getTerminalRefs: () => TerminalRefMap;
 }
 
+/**
+ * These keystrokes are silently "consumed" by CozySSH.
+ */
+export const blackholeShortcuts = new Set<string>(["ctrl+alt", "ctrl+alt+shift", "ctrl+shift", "alt", "alt+shift"]);
+
 export const disableShortcuts = new Set<string>();
 
 export function useKeyboardManager(options: KeyboardManagerOptions): void {
@@ -65,61 +70,21 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // ── Read fresh state at call-time (no stale closures) ────────────────
-      const { tabs, activePaneId, activeTabId, buttons } = getStore();
-      const terminalRefs = getTerminalRefs();
-
-      // Derive scrollLines from store vars at call-time
-      const scrollLines = getIntVar(VAR_CS_SCROLL_LINES, DEFAULT_SCROLL_LINES);
-
-      // Derive groups / activeGroup / shortcutButtons from store at call-time
-      const activeGroup = localStorage.getItem(BROWSER_STORAGE_KEY_ACTIVE_GROUP) || DEFAULT_BUTTON_GROUP;
-      const groups = [
-        DEFAULT_BUTTON_GROUP,
-        ...Array.from(
-          new Set(buttons.map((b) => b.group || DEFAULT_BUTTON_GROUP).filter((g) => g !== DEFAULT_BUTTON_GROUP)),
-        ),
-      ].sort();
-
-      const shortcutButtons: Record<string, ButtonData> = {};
-      for (const btn of buttons) {
-        if ((btn.group || DEFAULT_BUTTON_GROUP) === activeGroup) {
-          continue;
-        }
-        if (btn.shortcut && btn.shortcut.length > 1) {
-          shortcutButtons[btn.shortcut.toLowerCase()] = btn;
-        }
-      }
-      // active group button shortcut has priority
-      for (const btn of buttons) {
-        if ((btn.group || DEFAULT_BUTTON_GROUP) !== activeGroup) {
-          continue;
-        }
-        if (btn.shortcut && btn.shortcut.length > 1) {
-          shortcutButtons[btn.shortcut.toLowerCase()] = btn;
-        }
-      }
-
       const keycomb = getKeyCombination(e);
-
-      // ── Button shortcuts ──────────────────────────────────────────────────
-      if (shortcutButtons[keycomb]) {
+      if (__CS_SHORTCUT_BUTTONS__[keycomb]) {
         e.preventDefault();
-        handleButtonClick(shortcutButtons[keycomb]);
+        handleButtonClick(__CS_SHORTCUT_BUTTONS__[keycomb]);
         return;
       }
-
-      // Suppress standalone Alt key
-      if (e.key === "Alt" && !e.ctrlKey && !e.shiftKey && !e.metaKey) {
+      if (blackholeShortcuts.has(keycomb)) {
         e.preventDefault();
         return;
       }
-
       if (disableShortcuts.has(keycomb)) {
         return;
       }
 
-      // ── Named shortcuts ───────────────────────────────────────────────────
+      // Internal shortcuts
       switch (keycomb) {
         case "f11": {
           if (window.appToggleFullscreen) {
@@ -171,12 +136,12 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         }
         case "alt+c":
           e.preventDefault();
-          handleCloneSession(activePaneId);
+          handleCloneSession(getStore().activePaneId);
           return;
 
         case "alt+shift+c":
           e.preventDefault();
-          handleCloneSession(activePaneId, true);
+          handleCloneSession(getStore().activePaneId, true);
           return;
 
         case "alt+o":
@@ -229,6 +194,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         case "alt+h":
         case "alt+shift+h": {
           e.preventDefault();
+          const { tabs, activeTabId, activePaneId } = getStore();
           const idx = tabs.findIndex((t) => t.id === activeTabId);
           if (idx < 0) {
             return;
@@ -254,6 +220,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         case "alt+l":
         case "alt+shift+l": {
           e.preventDefault();
+          const { tabs, activeTabId, activePaneId } = getStore();
           const idx = tabs.findIndex((t) => t.id === activeTabId);
           if (idx < 0) {
             return;
@@ -283,11 +250,12 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
 
         case "alt+shift+w":
           e.preventDefault();
-          handleCloseTabOrPane(activeTabId);
+          handleCloseTabOrPane(getStore().activeTabId);
           return;
 
         case "alt+g": {
           e.preventDefault();
+          const { activeTabId, tabs } = getStore();
           const activeTab = tabs.find((t) => t.id === activeTabId);
           if (activeTab?.activePaneId) {
             const pid = activeTab.activePaneId;
@@ -299,6 +267,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
 
         case "alt+shift+g": {
           e.preventDefault();
+          const { tabs, activeTabId } = getStore();
           const activeTab = tabs.find((t) => t.id === activeTabId);
           if (activeTab && activeTab.panes.length > 0) {
             activatePane(activeTab.panes[0].id, activeTab.id);
@@ -307,27 +276,28 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           return;
         }
 
-        case "alt+v":
+        case "alt+v": {
+          e.preventDefault();
+          nextButtonGroup();
+          return;
+        }
         case "alt+shift+v": {
           e.preventDefault();
-          const idx = groups.indexOf(activeGroup);
-          let nextIdx = (e.shiftKey ? idx - 1 + groups.length : idx + 1) % groups.length;
-          while (nextIdx !== idx && groups[nextIdx].startsWith("_")) {
-            nextIdx = (e.shiftKey ? nextIdx - 1 + groups.length : nextIdx + 1) % groups.length;
-          }
-          setActiveGroup(groups[nextIdx]);
+          prevButtonGroup();
           return;
         }
 
         case "alt+j":
         case "alt+shift+j": {
+          const { activePaneId } = getStore();
+          const terminalRefs = getTerminalRefs();
           const term = terminalRefs[activePaneId];
           if (term && "getXterm" in term) {
             e.preventDefault();
             if (e.shiftKey) {
               term.scrollPages(1);
             } else {
-              term.scrollLines(scrollLines);
+              term.scrollLines(getIntVar(VAR_CS_SCROLL_LINES, DEFAULT_SCROLL_LINES));
             }
           }
           return;
@@ -335,27 +305,33 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
 
         case "alt+k":
         case "alt+shift+k": {
+          const { activePaneId } = getStore();
+          const terminalRefs = getTerminalRefs();
           const term = terminalRefs[activePaneId];
           if (term && "getXterm" in term) {
             e.preventDefault();
             if (e.shiftKey) {
               term.scrollPages(-1);
             } else {
-              term.scrollLines(-scrollLines);
+              term.scrollLines(-getIntVar(VAR_CS_SCROLL_LINES, DEFAULT_SCROLL_LINES));
             }
           }
           return;
         }
 
-        case "ctrl+shift+f":
+        case "ctrl+shift+f": {
+          const { activePaneId } = getStore();
+          const terminalRefs = getTerminalRefs();
           if (!isMuiModalOpen() && terminalRefs[activePaneId] && "clear" in terminalRefs[activePaneId]!) {
             e.preventDefault();
             setSearchOpen(true);
             triggerFocusSearchInput();
           }
           return;
-
+        }
         case "ctrl+shift+r": {
+          const { activePaneId } = getStore();
+          const terminalRefs = getTerminalRefs();
           const term = terminalRefs[activePaneId];
           if (term && "getXterm" in term) {
             e.preventDefault();
@@ -365,6 +341,8 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         }
 
         case "ctrl+shift+c": {
+          const { activePaneId } = getStore();
+          const terminalRefs = getTerminalRefs();
           const term = terminalRefs[activePaneId];
           if (term && "getXterm" in term) {
             e.preventDefault();
@@ -380,6 +358,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
       // ── Alt+0-9: switch to tab by index ───────────────────────────────────
       if (e.altKey && e.key >= "0" && e.key <= "9") {
         e.preventDefault();
+        const tabs = getStore().tabs;
         let idx = parseInt(e.key);
         idx = idx === 0 ? tabs.length - 1 : idx - 1;
         if (tabs[idx]) {
@@ -394,6 +373,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
 
       // ── Alt+Shift+0-9: trigger button by index ────────────────────────────
       if (e.altKey && e.shiftKey) {
+        const { buttons, activeGroup } = getStore();
         const digitMatch = e.code.match(/Digit(\d)/);
         if (digitMatch) {
           e.preventDefault();
@@ -409,7 +389,6 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-    // Stable callbacks only — no store state in deps.
   }, [
     handleButtonClick,
     handleSelectHost,

@@ -33,8 +33,12 @@ func Load(configShells []string) {
 		var newShells []*LocalShell
 		blacklist := map[string]bool{}
 		orders := map[string]int{}
+		removeAll := false
 		for i, configShell := range configShells {
-			if strings.HasPrefix(configShell, "-") {
+			if configShell == "-*" {
+				removeAll = true
+				continue
+			} else if strings.HasPrefix(configShell, "-") {
 				blacklist[strings.TrimSpace(configShell[1:])] = true
 			} else if strings.HasPrefix(configShell, "+") {
 				if tokens, err := shlex.Split(configShell[1:]); err == nil && len(tokens) > 2 {
@@ -58,9 +62,11 @@ func Load(configShells []string) {
 				orders[strings.TrimSpace(configShell)] = i + 1
 			}
 		}
-		for _, shell := range localShells {
-			if !blacklist[shell.Path] {
-				newShells = append(newShells, shell)
+		if !removeAll {
+			for _, shell := range localShells {
+				if !blacklist[shell.Path] {
+					newShells = append(newShells, shell)
+				}
 			}
 		}
 		slices.SortStableFunc(newShells, func(a, b *LocalShell) int {
@@ -72,7 +78,11 @@ func Load(configShells []string) {
 				return orders[a.Path] - orders[b.Path]
 			}
 		})
-		localShells = newShells
+		if len(newShells) > 0 {
+			localShells = newShells
+		} else {
+			localShells = []*LocalShell{localShells[0]}
+		}
 	}
 	shells.Store(localShells)
 }

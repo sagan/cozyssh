@@ -31,6 +31,7 @@ builds:
       - windows
     goarch:
       - amd64
+      - arm64
     main: ./cmd/cozyssh_windows_app
     binary: cozyssh-app
     flags:
@@ -54,7 +55,7 @@ archives:
       {{ .ProjectName }}-app-v{{ .Version }}-{{ .Os }}-{{ .Arch }}
 
 checksum:
-  name_template: 'checksums.txt'
+  name_template: "checksums.txt"
 
 snapshot:
   name_template: "{{ incpatch .Version }}-next"
@@ -63,5 +64,5 @@ changelog:
   sort: asc
   filters:
     exclude:
-      - '^docs:'
-      - '^test:'
+      - "^docs:"
+      - "^test:"
