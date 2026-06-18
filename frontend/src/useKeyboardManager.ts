@@ -365,6 +365,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           const target = tabs[idx];
           setActiveTabId(target.id);
           setActivePaneId(target.activePaneId);
+          setNewTabDialogOpen(false);
           (document.activeElement as HTMLElement)?.blur?.();
           triggerFocus();
         }

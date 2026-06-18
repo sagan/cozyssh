@@ -1920,6 +1920,7 @@ export interface TerminalHandle {
 	findPrevious: (term: string, searchOptions?: ISearchOptions) => boolean;
 	clearSearchDecorations: () => void;
 	clearSearchActiveDecoration: () => void;
+	fit: () => void;
 	getLastCommandOutput: () => string;
 	getXterm: () => Terminal | null;
 	/** Set the inputMode on the hidden xterm textarea (e.g. 'none' to suppress system keyboard) */

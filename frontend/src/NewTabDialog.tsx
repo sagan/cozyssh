@@ -244,17 +244,6 @@ export default function NewTabDialog({
     return null;
   }, [f, viewMode]);
 
-  const activeTabsList = useMemo(() => {
-    if (viewMode !== "tabs") {
-      return [];
-    }
-    return tabs.filter(
-      (t) =>
-        t.title.toLowerCase().includes(f) ||
-        (t.type === "terminal" && t.panes.some((p) => p.host.toLowerCase().includes(f))),
-    );
-  }, [tabs, f, viewMode]);
-
   const attachablePinnedTabs = useMemo(() => {
     if (viewMode !== "tabs") {
       return [];
@@ -467,14 +456,23 @@ export default function NewTabDialog({
         ]);
       }
     } else if (viewMode === "tabs") {
-      const activeTabsItems: Omit<DialogItem, "flatIndex">[] = activeTabsList.map((t) => ({
-        type: "tab",
-        id: t.id,
-        value: t.id,
-        label: t.title,
-        subtitle:
-          t.type === "scratchpad" ? "Scratchpad" : `Terminal (${t.panes.length} pane${t.panes.length > 1 ? "s" : ""})`,
-      }));
+      const activeTabsItems: Omit<DialogItem, "flatIndex">[] = [];
+      tabs.forEach((tab, idx) => {
+        if (
+          !f ||
+          tab.title.toLowerCase().includes(f) ||
+          (tab.type === "terminal" && tab.panes.some((p) => p.host.toLowerCase().includes(f)))
+        ) {
+          activeTabsItems.push({
+            type: "tab",
+            id: tab.id,
+            value: tab.id,
+            label: tab.title,
+            subtitle: tab.type === "scratchpad" ? "Scratchpad" : `Terminal: ${tab.panes.map((p) => p.host).join(", ")}`,
+            tag: idx < 9 ? `alt+${idx + 1}` : idx === tabs.length - 1 ? "alt+0" : "",
+          });
+        }
+      });
       addSection("Current Browser Tabs", activeTabsItems);
 
       const pinnedTabsItems: Omit<DialogItem, "flatIndex">[] = attachablePinnedTabs.map((p) => ({
@@ -636,15 +634,13 @@ export default function NewTabDialog({
     filteredRecents,
     filteredShells,
     filteredOlderRecents,
-    filteredHosts.favourite,
-    filteredHosts.normal,
-    filteredHosts.auto,
+    filteredHosts,
     directConnect,
     hosts,
     defaultShell,
     alternativeShell,
     f,
-    activeTabsList,
+    tabs,
     attachablePinnedTabs,
     recentButtons,
     activeGroupButtons,

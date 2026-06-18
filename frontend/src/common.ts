@@ -716,7 +716,7 @@ export function prevTerminalFontSize(fontSize: number): number {
   if (idx === -1) {
     return terminalFontSizes[0];
   }
-  return terminalFontSizes[idx - 1];
+  return terminalFontSizes[Math.max(0, idx - 1)];
 }
 
 export function nextTerminalFontSize(fontSize: number): number {
@@ -724,7 +724,7 @@ export function nextTerminalFontSize(fontSize: number): number {
   if (idx === -1) {
     return terminalFontSizes[terminalFontSizes.length - 1];
   }
-  return terminalFontSizes[idx + 1];
+  return terminalFontSizes[Math.min(terminalFontSizes.length - 1, idx + 1)];
 }
 
 /**

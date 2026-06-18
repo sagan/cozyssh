@@ -972,7 +972,8 @@ export default function DialogManager({
                 <br />- <b>proxyJump</b> : Proxy jump server
                 <br />- <b>target</b> : The tab id. If the same id tab exists, the new terminal will be opened in the
                 target tab, use <code>_self</code> for current tab
-                <br />- <b>exec</b> : Only valid for <code>{LOCAL_NAME}</code> host. If set to <code>1</code>, it treats
+                <br />- <b>exec</b> : Only valid for <code>{LOCAL_NAME}</code> host. If set to <code>1</code>, it
+                treats&nbsp;
                 <code>remoteCommand</code> as a single program with args and execute it directly instead of executing it
                 using system shell.
                 <br /> E.g. <b>local?id=local-abc&title=Local&remoteCommand=tmux attach || tmux new</b>
@@ -1140,6 +1141,7 @@ export default function DialogManager({
                         label={vname}
                         autoFocus={i === 0}
                         size="small"
+                        type="search"
                         value={userVars[vname] || ""}
                         onChange={(e) => {
                           setUserVars((prev) => ({ ...prev, [vname]: e.target.value }));

@@ -2183,7 +2183,7 @@ export default function Sidebar({
                 >
                   {isTestingWebdav
                     ? "Verifying & Saving..."
-                    : isCleared
+                    : isCleared && currentWebdavUrl
                       ? "Clear Sync Settings"
                       : urlChanged
                         ? "Verify & Save Sync Settings"
@@ -2321,6 +2321,7 @@ export default function Sidebar({
               fullWidth
               label="Alias Name"
               size="small"
+              type="search"
               value={hostFormData.name}
               onChange={(e) => setHostFormData({ ...hostFormData, name: e.target.value })}
               placeholder={hostFormData.hostname || "e.g. production-database"}
@@ -2329,6 +2330,7 @@ export default function Sidebar({
               fullWidth
               label="HostName (IP / Domain)"
               size="small"
+              type="search"
               value={hostFormData.hostname}
               onChange={(e) => setHostFormData({ ...hostFormData, hostname: e.target.value })}
               required
@@ -2364,6 +2366,7 @@ export default function Sidebar({
               fullWidth
               label="Tags (Optional)"
               size="small"
+              type="search"
               value={hostFormData.tags}
               onChange={(e) => setHostFormData({ ...hostFormData, tags: e.target.value })}
               placeholder="e.g. production web"
@@ -2372,6 +2375,7 @@ export default function Sidebar({
               fullWidth
               label="IdentityFile (Optional)"
               size="small"
+              type="search"
               value={hostFormData.identity_file}
               onChange={(e) => setHostFormData({ ...hostFormData, identity_file: e.target.value })}
               placeholder="~/.ssh/id_ed25519"
@@ -2402,6 +2406,7 @@ export default function Sidebar({
               fullWidth
               label="ProxyJump (Optional)"
               size="small"
+              type="search"
               value={hostFormData.proxy_jump}
               onChange={(e) => setHostFormData({ ...hostFormData, proxy_jump: e.target.value })}
               placeholder="e.g. server-foo,server-bar"

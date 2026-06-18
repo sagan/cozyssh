@@ -60,6 +60,7 @@ export interface TerminalHandle {
   findPrevious: (term: string, searchOptions?: ISearchOptions) => boolean;
   clearSearchDecorations: () => void;
   clearSearchActiveDecoration: () => void;
+  fit: () => void;
   getLastCommandOutput: () => string;
   getXterm: () => Terminal | null;
   /** Set the inputMode on the hidden xterm textarea (e.g. 'none' to suppress system keyboard) */
@@ -230,6 +231,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       },
       clearSearchActiveDecoration: () => {
         searchAddonRef.current?.clearActiveDecoration();
+      },
+      fit: () => {
+        fitAddonRef.current?.fit();
       },
       getLastCommandOutput: () => {
         const { start, end } = markersRef.current;

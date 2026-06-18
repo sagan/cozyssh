@@ -107,6 +107,7 @@ document.documentElement.dataset.csVersion = PACKAGE_JSON_VERSION;
         const xterm = term.getXterm();
         if (xterm) {
           xterm.options = { ...DefaultXtermOptions, ...finalValue };
+          term.fit();
         }
       }
     }

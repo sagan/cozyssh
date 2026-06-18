@@ -8,11 +8,11 @@ import { useShallow } from "zustand/react/shallow";
 import { DEFAULT_BUTTON_GROUP } from "./constants";
 
 const buttonStyleBorder: Record<ButtonData["type"], string> = {
-  run_script: "1px dashed",
-  send_string: "1px solid",
-  open_terminal: "1px groove",
-  terminal_function: "1px dotted",
-  misc: "1px dotted",
+  run_script: "2px dashed",
+  send_string: "2px solid",
+  open_terminal: "2px groove",
+  terminal_function: "2px dotted",
+  misc: "2px dotted",
 };
 
 const buttonStyleBorderColor: Record<ButtonData["type"], string> = {
@@ -38,7 +38,7 @@ const getButtonStyle = (btn: Pick<ButtonData, "type" | "liquidjs">) => {
 
   if (btn.type === "send_string") {
     if (btn.liquidjs) {
-      border = "3px double";
+      border = "2px inset";
       if (btn.liquidjs === 2) {
         borderColor = "secondary.main";
         hoverBgColor = "secondary.light";
