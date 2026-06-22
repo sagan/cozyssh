@@ -73,14 +73,14 @@ export const TERMINAL_FUNCTIONS: BuiltinButton[] = [
   { value: "COPY_CURRENT_CMDLINE", label: "COPY (Current Cmdline)" },
   { value: "COPY_LAST_COMMAND_OUTPUT", label: "COPY (Last Cmd Output)" },
   { value: "PASTE", label: "PASTE (Clipboard)", shortcut: "ctrl+shift+v" },
-  { value: "INPUT", label: "INPUT (Prompt)" },
+  { value: "INPUT", label: "INPUT (Prompt)", shortcut: "alt+q" },
   { value: "CLEAR", label: "CLEAR (Screen)" },
   { value: "RESET", label: "RESET (Terminal)" },
   { value: "RECONNECT", label: "RECONNECT (Session)", shortcut: "ctrl+shift+r" },
   { value: "CLOSE", label: "CLOSE (Pane)", shortcut: "alt+w" },
   { value: "CLOSE_TAB", label: "CLOSE (Tab)", shortcut: "alt+shift+w" },
-  { value: "SCROLL_TO_TOP", label: "SCROLL (Top)" },
-  { value: "SCROLL_TO_BOTTOM", label: "SCROLL (Bottom)" },
+  { value: "SCROLL_TO_TOP", label: "SCROLL (Top)", shortcut: "ctrl+alt+shift+k" },
+  { value: "SCROLL_TO_BOTTOM", label: "SCROLL (Bottom)", shortcut: "ctrl+alt+shift+j" },
   { value: "SCROLL_UP", label: "SCROLL (Up)", shortcut: "alt+k" },
   { value: "SCROLL_DOWN", label: "SCROLL (Down)", shortcut: "alt+j" },
   { value: "SCROLL_PAGE_UP", label: "SCROLL (Page Up)", shortcut: "alt+shift+k" },
@@ -100,7 +100,7 @@ export const MISC_FUNCTIONS: BuiltinButton[] = [
   { value: "INCREASE_FONT_SIZE", label: "Increase Font Size", shortcut: "alt+shift++" },
   { value: "INCREASE_TERMINAL_FONT_SIZE", label: "Increase Terminal Font Size", shortcut: "alt++" },
   { value: "INCREASE_GLOBAL_FONT_SIZE", label: "Increase Global Font Size" },
-  { value: "CLOSE_OTHER_TABS", label: "Close Other Tabs" },
+  { value: "CLOSE_OTHER_TABS", label: "Close Other Tabs", shortcut: "ctrl+alt+shift+w" },
   { value: "CLOSE_RIGHT_TABS", label: "Close Tabs to the Right" },
   { value: "TABS_SCROLL_LEFT", label: "Tabs Scroll Left" },
   { value: "TABS_SCROLL_RIGHT", label: "Tabs Scroll Right" },
@@ -149,6 +149,8 @@ export const ID_TERMINAL_SEARCH_INPUT = "terminal-search-input";
 export const ID_SIDEBAR_FILTER = "sidebar-filter";
 
 export const ID_NEW_TAB_DIALOG_INPUT = "new-tab-dialog-input";
+
+export const ID_INPUT_DIALOG_INPUT = "input-dialog-input";
 
 export const CACHE_API_DATA = "api-data-cache";
 

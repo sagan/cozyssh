@@ -14,6 +14,7 @@ import { type ButtonData } from "./api";
 import {
   DEFAULT_BUTTON_GROUP,
   DEFAULT_SCROLL_LINES,
+  ID_INPUT_DIALOG_INPUT,
   ID_SIDEBAR_FILTER,
   LOCAL_NAME,
   VAR_CS_SCROLL_LINES,
@@ -23,14 +24,19 @@ import {
   type TerminalRefMap,
   activatePane,
   changeNewTabDialogViewMode,
+  closeInputDialog,
+  closeOtherTabs,
   decreseFontSize,
   getStore,
   increaseFontSize,
   nextButtonGroup,
+  openInputDialog,
   prevButtonGroup,
   resetFontSize,
   setActivePaneId,
   setActiveTabId,
+  setEditButtonDialogOpen,
+  setEditHostDialogOpen,
   setNewTabDialogOpen,
   setSearchOpen,
   triggerFocus,
@@ -93,11 +99,19 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           }
           return;
         }
-        case "alt+`":
-        case "alt+shift+~": {
+        case "alt+`": {
           // Alt + Backquote
           e.preventDefault();
-          closeModal(keycomb === "alt+shift+~");
+          closeModal();
+          return;
+        }
+        case "alt+shift+~": {
+          e.preventDefault();
+          setNewTabDialogOpen(false);
+          closeInputDialog();
+          setEditButtonDialogOpen(false);
+          setEditHostDialogOpen(false);
+          closeModal(true);
           return;
         }
         case "alt+enter": {
@@ -243,9 +257,30 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           return;
         }
 
+        case "alt+q": {
+          e.preventDefault();
+          const inputEl = document.getElementById(ID_INPUT_DIALOG_INPUT);
+          if (inputEl) {
+            if (getStore().newTabDialogOpen) {
+              setNewTabDialogOpen(false);
+              setTimeout(() => inputEl.focus(), 0);
+            } else {
+              inputEl.focus();
+            }
+          } else {
+            openInputDialog();
+          }
+          return;
+        }
+
         case "alt+w":
           e.preventDefault();
           handleCloseTabOrPane();
+          return;
+
+        case "ctrl+alt+shift+w":
+          e.preventDefault();
+          closeOtherTabs();
           return;
 
         case "alt+shift+w":
@@ -315,6 +350,27 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
             } else {
               term.scrollLines(-getIntVar(VAR_CS_SCROLL_LINES, DEFAULT_SCROLL_LINES));
             }
+          }
+          return;
+        }
+
+        case "ctrl+alt+shift+k": {
+          const { activePaneId } = getStore();
+          const terminalRefs = getTerminalRefs();
+          const term = terminalRefs[activePaneId];
+          if (term && "getXterm" in term) {
+            e.preventDefault();
+            term.scrollToTop();
+          }
+          return;
+        }
+        case "ctrl+alt+shift+j": {
+          const { activePaneId } = getStore();
+          const terminalRefs = getTerminalRefs();
+          const term = terminalRefs[activePaneId];
+          if (term && "getXterm" in term) {
+            e.preventDefault();
+            term.scrollToBottom();
           }
           return;
         }

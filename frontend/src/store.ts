@@ -88,6 +88,7 @@ interface Store {
   editButtonDialogOpen: boolean;
   editHostDialogOpen: boolean;
   inputDialogOpen: boolean;
+  inputDialogDirty: boolean;
   inputValue: string;
   inputLiquid: boolean;
   newTabDialogOpen: boolean;
@@ -168,6 +169,7 @@ export const useStore = create<Store>(() => ({
   newTabDialogOpen: false,
   newTabDialogFilter: "",
   inputDialogOpen: false,
+  inputDialogDirty: false,
   inputValue: "",
   inputLiquid: false,
   sysHostname: "",
@@ -316,9 +318,26 @@ export const changeNewTabDialogViewMode = (target?: boolean | ViewMode) =>
   });
 
 export const setInputDialogOpen = (inputDialogOpen: boolean) => useStore.setState({ inputDialogOpen });
+export const setInputDialogDirty = (inputDialogDirty: boolean) => useStore.setState({ inputDialogDirty });
 export const setInputValue = (inputValue: string) => useStore.setState({ inputValue });
 export const setInputLiquid = (inputLiquid: boolean) => useStore.setState({ inputLiquid });
 
+export const closeInputDialog = () => useStore.setState({ inputDialogOpen: false, inputDialogDirty: false });
+
+export const openInputDialog = ({
+  inputValue = "",
+  inputLiquid = false,
+  appendNewLine = true,
+  sendScope = 0,
+}: { inputValue?: string; inputLiquid?: boolean; sendScope?: 0 | 1 | 2; appendNewLine?: boolean } = {}) =>
+  useStore.setState({
+    newTabDialogOpen: false,
+    inputDialogOpen: true,
+    inputValue,
+    appendNewLine,
+    inputLiquid,
+    sendScope,
+  });
 export const setSysHostname = (sysHostname: string) => useStore.setState({ sysHostname });
 
 export const setUnreadTabIds = (unreadTabIds: Set<string>) => useStore.setState({ unreadTabIds });

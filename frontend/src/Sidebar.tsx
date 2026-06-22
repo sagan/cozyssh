@@ -1339,7 +1339,6 @@ export default function Sidebar({
         } else {
           if (selectedIndex >= 0 && selectedIndex < flatFilteredHosts.length) {
             onSelect(flatFilteredHosts[selectedIndex].name);
-            setFilterStr("");
             document.getElementById(ID_SIDEBAR_FILTER)?.blur();
           }
         }
@@ -2199,8 +2198,7 @@ export default function Sidebar({
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
                   <b>Alt + O</b> : Open new tab dialog, use <b>← →</b> (or <b>Alt + H/L</b>) to switch view,&nbsp;
-                  <b>↓ ↑</b> (or <b>Alt + J/K</b>) to select, <b>Enter</b> to open or <b>Alt + Enter</b> to open context
-                  menu. Use <b>Alt + ↓↑</b> (or&nbsp;
+                  <b>↓ ↑</b> (or <b>Alt + J/K</b>) to select, <b>Enter</b> to open. Use <b>Alt + ↓↑</b> (or&nbsp;
                   <b>Alt + Shift + J/K</b>) to jump through items quickly
                   <br />
                   <b>Alt + A</b> : Open new tab dialog - tabs view
@@ -2227,13 +2225,18 @@ export default function Sidebar({
                   <br />
                   <b>Alt + Shift + W</b> : Close active tab
                   <br />
-                  <b>Alt + I</b> : Focus sidebar search filter, use <b>↑ ↓</b> to select, <b>Enter</b> to open
+                  <b>Ctrl + Alt + Shift + W</b> : Close other tabs
+                  <br />
+                  <b>Alt + I</b> : Focus sidebar search filter, use <b>↑ ↓</b> to select, <b>Enter</b> to open or&nbsp;
+                  <b>Alt + Enter</b> to open context menu.
                   <br />
                   <b>Alt + Shift + I</b> : Focus sidebar search filter and clear current value
                   <br />
                   <b>Alt + G</b> : Focus active terminal session
                   <br />
                   <b>Alt + Shift + G</b> : Focus the first pane of the active tab
+                  <br />
+                  <b>Alt + Q</b> : Open input dialog
                   <br />
                   <b>Alt + V / Alt + Shift + V</b> : Switch to next / previous group in button bar
                   <br />
@@ -2243,12 +2246,14 @@ export default function Sidebar({
                   <br />
                   <b>Alt + Shift + J / Alt + Shift + K</b> : Scroll terminal down / up by a page
                   <br />
+                  <b>Ctrl + Alt + Shift + J / Ctrl + Alt + Shift + K</b> : Scroll terminal to bottom / top
+                  <br />
                   <b>Alt + Enter</b> : Toggle fullscreen of main terminal area
                   <br />
                   <b>Alt + Backquote</b> : Close any modal (Dialog / Menu / Popover). Similar to <b>Escape</b> but works
                   even if terminal is in fullscreen mode
                   <br />
-                  <b>Alt + Shift + Backquote</b> : Close all modals
+                  <b>Alt + Shift + Backquote</b> : Force close all modals
                   <br />
                   <b>Alt + - / Alt + +</b> : Decrease / increase terminal font size
                   <br />

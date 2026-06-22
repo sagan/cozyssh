@@ -30,6 +30,7 @@ import {
   HEADER_AUTHORIZATION,
   HEADER_AUTHORIZATION_BEARER_PREFIX,
   HEADER_CONTENT_TYPE,
+  ID_INPUT_DIALOG_INPUT,
   LOCAL_NAME,
   METHOD_POST,
   MIME_JSON,
@@ -60,7 +61,6 @@ import {
   setEditButton,
   setEditButtonDialogOpen,
   setInitialBtnFormData,
-  setInputDialogOpen,
   setInputValue,
   setInputLiquid,
   setSendScope,
@@ -74,6 +74,9 @@ import {
   closeNewTabDialog,
   closeOtherTabs,
   closeRightTabs,
+  openInputDialog,
+  closeInputDialog,
+  setInputDialogDirty,
 } from "./store";
 import NewTabDialog from "./NewTabDialog";
 import { dialogs } from "./Dialogs";
@@ -163,10 +166,11 @@ export default function DialogManager({
 
   const [userVars, setUserVars] = useState<Record<string, string>>({});
   const [renderedPreview, setRenderedPreview] = useState("");
-  const [inputDialogDirty, setInputDialogDirty] = useState(false);
 
   const varsList = useMemo(() => {
-    if (!inputLiquid) return [];
+    if (!inputLiquid) {
+      return [];
+    }
     return getTemplateVariables(inputValue);
   }, [inputValue, inputLiquid]);
 
@@ -230,15 +234,11 @@ export default function DialogManager({
     };
   }, [inputValue, userVars, inputLiquid, activePaneId, shellIntegrations]);
 
-  const handleCloseInputDialog = useCallback(
-    (allowCloseDirty?: boolean) => {
-      if (!inputDialogDirty || allowCloseDirty) {
-        setInputDialogDirty(false);
-        setInputDialogOpen(false);
-      }
-    },
-    [inputDialogDirty],
-  );
+  const handleCloseInputDialog = useCallback((allowCloseDirty?: boolean) => {
+    if (!getStore().inputDialogDirty || allowCloseDirty) {
+      closeInputDialog();
+    }
+  }, []);
 
   const activeTab: TabData | undefined = useMemo(() => {
     return tabs.find((t) => t.id === activeTabId);
@@ -589,12 +589,13 @@ export default function DialogManager({
         <MenuItem
           onClick={() => {
             if (btnMenuAnchor) {
-              setInputValue(btnMenuAnchor.btn.payload);
-              setInputLiquid(btnMenuAnchor.btn.liquidjs === 1 || btnMenuAnchor.btn.liquidjs === 2);
-              setSendScope(0);
-              setAppendNewLine(false);
-              setInputDialogOpen(true);
               setBtnMenuAnchor(null);
+              openInputDialog({
+                inputValue: btnMenuAnchor.btn.payload,
+                inputLiquid: btnMenuAnchor.btn.liquidjs === 1 || btnMenuAnchor.btn.liquidjs === 2,
+                sendScope: 0,
+                appendNewLine: false,
+              });
             }
           }}
           sx={{ display: lastMenuBtn?.type === "send_string" ? "flex" : "none" }}
@@ -604,12 +605,13 @@ export default function DialogManager({
         <MenuItem
           onClick={() => {
             if (btnMenuAnchor) {
-              setInputValue(btnMenuAnchor.btn.payload);
-              setInputLiquid(btnMenuAnchor.btn.liquidjs === 1 || btnMenuAnchor.btn.liquidjs === 2);
-              setSendScope(2);
-              setAppendNewLine(false);
-              setInputDialogOpen(true);
               setBtnMenuAnchor(null);
+              openInputDialog({
+                inputValue: btnMenuAnchor.btn.payload,
+                inputLiquid: btnMenuAnchor.btn.liquidjs === 1 || btnMenuAnchor.btn.liquidjs === 2,
+                sendScope: 2,
+                appendNewLine: false,
+              });
             }
           }}
           sx={{ display: lastMenuBtn?.type === "send_string" ? "flex" : "none" }}
@@ -1052,14 +1054,19 @@ export default function DialogManager({
               multiline
               rows={6}
               variant="outlined"
-              placeholder="Type input to send to terminal. Press Enter to send, Shift + Enter for new line. <ctrl-x> style syntax supported."
+              id={ID_INPUT_DIALOG_INPUT}
+              placeholder="Type input to send to terminal. <ctrl-x> style syntax supported. Ctrl + Enter to send; Ctrl + Shift + Enter to send to all tabs"
               value={inputValue}
               onChange={(e) => {
                 setInputValue(e.target.value);
                 setInputDialogDirty(true);
               }}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey && !e.altKey) {
+                const key = getKeyCombination(e as unknown as KeyboardEvent);
+                if (key === "ctrl+enter" || key === "ctrl+shift+enter") {
+                  if (key === "ctrl+shift+enter") {
+                    setSendScope(2);
+                  }
                   e.preventDefault();
                   e.stopPropagation();
                   if (inputValue) {
@@ -1092,14 +1099,19 @@ export default function DialogManager({
                   multiline
                   rows={6}
                   variant="outlined"
-                  placeholder="Type template/input to send to terminal. Ctrl + Enter to send"
+                  id={ID_INPUT_DIALOG_INPUT}
+                  placeholder="Type template/input to send to terminal. Ctrl + Enter to send; Ctrl + Shift + Enter to send to all tabs"
                   value={inputValue}
                   onChange={(e) => {
                     setInputValue(e.target.value);
                     setInputDialogDirty(true);
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && e.ctrlKey) {
+                    const key = getKeyCombination(e as unknown as KeyboardEvent);
+                    if (key === "ctrl+enter" || key === "ctrl+shift+enter") {
+                      if (key === "ctrl+shift+enter") {
+                        setSendScope(2);
+                      }
                       e.preventDefault();
                       e.stopPropagation();
                       if (inputValue) {
@@ -1112,6 +1124,14 @@ export default function DialogManager({
                   autoFocus={varsList.length === 0}
                   slotProps={{ input: { sx: { fontFamily: "monospace", fontSize: "0.85rem" } } }}
                 />
+                <Typography variant="subtitle2" color="text.secondary">
+                  System Variables
+                </Typography>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.8 }}>
+                  <Chip color="success" label="shellIntegration" />
+                  <Chip color="success" label="vars" />
+                  <Chip color="success" label="localVars" />
+                </Box>
               </Box>
               <Box sx={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
                 <Typography variant="subtitle2" color="text.secondary">
@@ -1133,35 +1153,39 @@ export default function DialogManager({
                     bgcolor: "background.paper",
                   }}
                 >
-                  {varsList.length > 0 ? (
-                    varsList.map((vname, i) => (
-                      <TextField
-                        key={vname}
-                        fullWidth
-                        label={vname}
-                        autoFocus={i === 0}
-                        size="small"
-                        type="search"
-                        value={userVars[vname] || ""}
-                        onChange={(e) => {
-                          setUserVars((prev) => ({ ...prev, [vname]: e.target.value }));
-                          setInputDialogDirty(true);
-                        }}
-                        placeholder="Ctrl + Enter to send"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && e.ctrlKey) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (inputValue) {
-                              const data = appendNewLine ? inputValue + "\n" : inputValue;
-                              sendParsedString(data, true, userVars);
-                            }
-                            handleCloseInputDialog(true);
+                  {(varsList.length > 0 ? varsList : [""]).map((vname, i) => (
+                    <TextField
+                      key={i}
+                      sx={{ display: varsList.length > 0 ? "unset" : "none" }}
+                      fullWidth
+                      label={vname}
+                      autoFocus={i === 0 && varsList.length > 0}
+                      size="small"
+                      type="search"
+                      value={userVars[vname] || ""}
+                      onChange={(e) => {
+                        setUserVars((prev) => ({ ...prev, [vname]: e.target.value }));
+                        setInputDialogDirty(true);
+                      }}
+                      placeholder="Ctrl + Enter to send, + Shift to send to all tabs"
+                      onKeyDown={(e) => {
+                        const key = getKeyCombination(e as unknown as KeyboardEvent);
+                        if (key === "ctrl+enter" || key === "ctrl+shift+enter") {
+                          if (key === "ctrl+shift+enter") {
+                            setSendScope(2);
                           }
-                        }}
-                      />
-                    ))
-                  ) : (
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (inputValue) {
+                            const data = appendNewLine ? inputValue + "\n" : inputValue;
+                            sendParsedString(data, true, userVars);
+                          }
+                          handleCloseInputDialog(true);
+                        }
+                      }}
+                    />
+                  ))}
+                  {varsList.length === 0 && (
                     <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic", m: "auto" }}>
                       No variables to display
                     </Typography>

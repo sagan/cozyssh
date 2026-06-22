@@ -92,17 +92,12 @@ import {
   setActiveGroup,
   setRecents,
   setEditButton,
-  setInputDialogOpen,
-  setInputValue,
-  setInputLiquid,
   setBtnMenuAnchor,
   setMobileOpen,
   setMobileAppletsOpen,
   setSearchOpen,
-  setSendScope,
   activatePane,
   clearData,
-  setAppendNewLine,
   setShells,
   resetFontSize,
   decreseFontSize,
@@ -111,6 +106,7 @@ import {
   nextButtonGroup,
   closeOtherTabs,
   closeRightTabs,
+  openInputDialog,
 } from "./store";
 import { setupPluginAPI, runScript, moduleCache } from "./pluginAPI";
 import { useKeyboardManager } from "./useKeyboardManager";
@@ -860,11 +856,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
             if (varsList.length === 0) {
               await sendParsedString(btn.payload, true);
             } else {
-              setInputValue(btn.payload);
-              setInputLiquid(true);
-              setSendScope(0);
-              setAppendNewLine(false);
-              setInputDialogOpen(true);
+              openInputDialog({
+                inputValue: btn.payload,
+                inputLiquid: true,
+                sendScope: 0,
+                appendNewLine: false,
+              });
             }
           } else {
             await sendParsedString(btn.payload);
@@ -972,11 +969,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             }
 
             case "INPUT":
-              setInputValue("");
-              setSendScope(0);
-              setAppendNewLine(true);
-              setInputLiquid(false);
-              setInputDialogOpen(true);
+              openInputDialog();
               break;
 
             case "CLEAR":

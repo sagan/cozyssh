@@ -116,17 +116,20 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - `Alt + Shift + C` : Clone active pane in same tab (Max 4 panes per tab)
   - `Alt + W` : Close active pane
   - `Alt + Shift + W` : Close active tab
+  - `Ctrl + Alt + Shift + W` : Close other tabs
   - `Alt + I` : Focus sidebar search filter, then use `↑ ↓` to select, `Enter` to open
   - `Alt + Shift + I` : Focus sidebar search filter and clear current value
   - `Alt + G` : Focus active terminal session
   - `Alt + Shift + G` : Focus the first pane of the active tab
+  - `Alt + Q` : Open input dialog
   - `Alt + V / Alt + Shift + V` : Switch to next / previous group in button bar
   - `Alt + Shift + 1-9,0` : Click the button in button bar
   - `Alt + J / Alt + K` : Scroll terminal down / up by a few lines
   - `Alt + Shift + J / Alt + Shift + K` : Scroll terminal down / up by a page
+  - `Ctrl + Alt + Shift + J / Ctrl + Alt + Shift + K` : Scroll terminal to bottom / top
   - `Alt + Enter` : Toggle fullscreen of main terminal area
   - `Alt + Backquote` : Close any modal (Dialog / Menu / Popover). Similar to `Escape` but works even if terminal is in fullscreen mode
-  - `Alt + Shift + Backquote` : Close all models
+  - `Alt + Shift + Backquote` : Force close all models
   - `Alt + - / Alt + +` : Decrease / increase terminal font size
   - `Alt + Shift + - / Alt + Shift + +` : Decrease / increase global & terminal font size
   - `Ctrl + Alt + 0` : Reset to default global / terminal font size (14 / 15px)
