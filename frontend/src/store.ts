@@ -10,7 +10,7 @@
 
 import { create } from "zustand";
 
-import type { HostData, ButtonData, WsTerminalMessage, Recent, LocalShell } from "./api";
+import type { HostData, ButtonData, WsTerminalMessage, Recent, LocalShell, ActiveTunnel } from "./api";
 import {
   type HostForm,
   type Severity,
@@ -29,10 +29,13 @@ import {
   BROWSER_STORAGE_KEY_RECENT_BUTTONS,
   BROWSER_STORAGE_KEY_RECENTS,
   BROWSER_STORAGE_KEY_TAGS_EXPANDED,
+  BROWSER_STORAGE_KEY_TOKEN,
   BROWSER_STORAGE_KEY_VARS,
   DEFAULT_BUTTON_GROUP,
   DEFAULT_FONT_SIZE,
   DEFAULT_TERMINAL_FONT_SIZE,
+  HEADER_AUTHORIZATION,
+  HEADER_AUTHORIZATION_BEARER_PREFIX,
   LOCAL_VAR_PREFIX,
   TOAST_KEY_FONT_SIZE,
   VAR_CS_FONT_SIZE,
@@ -109,6 +112,7 @@ interface Store {
   localVars: Record<string, string>;
   recentButtonIds: string[];
   shellIntegrations: Record<string, ShellIntegration>;
+  activeTunnels: ActiveTunnel[];
 }
 
 function loadFromStorage<T>(key: string, defaultValue: T): T {
@@ -148,6 +152,8 @@ export const useStore = create<Store>(() => ({
     source: "",
     proxy_jump: "",
     remote_command: "",
+    local_forward: "",
+    remote_forward: "",
     tags: "",
     comment: "",
   },
@@ -187,6 +193,7 @@ export const useStore = create<Store>(() => ({
   localVars: loadFromStorage(BROWSER_STORAGE_KEY_LOCAL_VARS, {}),
   recentButtonIds: loadFromStorage(BROWSER_STORAGE_KEY_RECENT_BUTTONS, []),
   shellIntegrations: {},
+  activeTunnels: [],
 }));
 
 export const triggerFocus = () =>
@@ -288,6 +295,8 @@ export function parseNewTabDialogFilter(filter: string): [viewMode: ViewMode, f:
     return ["tabs", filter.slice(1)];
   } else if (filter.startsWith("#") && !filter.includes(" ")) {
     return ["tags", filter.slice(1)];
+  } else if (filter.startsWith(":")) {
+    return ["tunnels", filter.slice(1)];
   } else if (filter.startsWith("?")) {
     return ["help", filter.slice(1)];
   }
@@ -305,7 +314,7 @@ export const changeNewTabDialogViewMode = (target?: boolean | ViewMode) =>
     if (typeof target === "string") {
       nextMode = target;
     } else {
-      const modes: ViewMode[] = ["servers", "buttons", "tabs"];
+      const modes: ViewMode[] = ["servers", "buttons", "tabs", "tunnels"];
       const idx = modes.indexOf(mode);
       if (idx === -1) {
         nextMode = "servers";
@@ -313,7 +322,16 @@ export const changeNewTabDialogViewMode = (target?: boolean | ViewMode) =>
         nextMode = modes[(target ? idx - 1 + modes.length : idx + 1) % modes.length];
       }
     }
-    const prefix = nextMode === "buttons" ? ">" : nextMode === "tabs" ? "@" : nextMode === "help" ? "?" : "";
+    const prefix =
+      nextMode === "buttons"
+        ? ">"
+        : nextMode === "tabs"
+          ? "@"
+          : nextMode === "tunnels"
+            ? ":"
+            : nextMode === "help"
+              ? "?"
+              : "";
     return { newTabDialogFilter: prefix + f };
   });
 
@@ -549,6 +567,11 @@ export const setShellIntegrations = (
     shellIntegrations: typeof update === "function" ? update(state.shellIntegrations) : update,
   }));
 
+export const setActiveTunnels = (update: ActiveTunnel[] | ((data: ActiveTunnel[]) => ActiveTunnel[])) =>
+  useStore.setState((state) => ({
+    activeTunnels: typeof update === "function" ? update(state.activeTunnels) : update,
+  }));
+
 /**
  * Synchronous, non-reactive getter — safe to call from event handlers,
  * setTimeout callbacks, and window.cs* plugin functions.
@@ -664,5 +687,22 @@ export function increaseFontSize(terminalFontSize: boolean, globalFontSize: bool
   }
   if (msg && !noToast) {
     notify(msg, "info", TOAST_KEY_FONT_SIZE);
+  }
+}
+
+export async function fetchActiveTunnels() {
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+  try {
+    const r = await fetch("/api/tunnels", {
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      },
+    });
+    if (r.ok) {
+      const data = (await r.json()) as ActiveTunnel[];
+      setActiveTunnels(data || []);
+    }
+  } catch (e) {
+    console.error("Failed to fetch active tunnels:", e);
   }
 }

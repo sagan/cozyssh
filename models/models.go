@@ -81,6 +81,10 @@ type HostData struct {
 	StrictHostKeyChecking string `json:"strict_host_key_checking,omitempty" ts_type:"\"yes\" | \"no\" | \"ask\" | \"\""`
 	HostKeyAlgorithms     string `json:"host_key_algorithms,omitempty"`
 
+	// Port forwarding (OpenSSH syntax, one rule per line)
+	LocalForward  string `json:"local_forward,omitempty"`
+	RemoteForward string `json:"remote_forward,omitempty"`
+
 	// Password storage support
 	Password       string `json:"password,omitempty"`
 	PasswordExists bool   `json:"password_exists,omitempty"`
@@ -320,6 +324,24 @@ type PasswordsDeleteRequest struct {
 // POST /api/config
 type ConfigRequest struct {
 	SavePassword string `json:"save_password" ts_type:"\"ask\" | \"always\" | \"never\""`
+}
+
+// TunnelType indicates the direction of the tunnel.
+type TunnelType string
+
+const (
+	TunnelTypeLocal  TunnelType = "local"
+	TunnelTypeRemote TunnelType = "remote"
+)
+
+// ActiveTunnel represents a currently running port forwarding tunnel.
+type ActiveTunnel struct {
+	Type       TunnelType `json:"type" ts_type:"\"local\" | \"remote\""`
+	BindAddr   string     `json:"bindAddr"`
+	BindPort   string     `json:"bindPort"`
+	RemoteHost string     `json:"remoteHost"`
+	RemotePort string     `json:"remotePort"`
+	HostName   string     `json:"hostName"` // the SSH host alias this tunnel belongs to
 }
 
 // current it's not converted to TS automatically

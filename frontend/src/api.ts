@@ -64,6 +64,8 @@ export interface HostData {
     user_known_hosts_file?: string;
     strict_host_key_checking?: "yes" | "no" | "ask" | "";
     host_key_algorithms?: string;
+    local_forward?: string;
+    remote_forward?: string;
     password?: string;
     password_exists?: boolean;
     clear_password?: boolean;
@@ -247,4 +249,12 @@ export interface PasswordsDeleteRequest {
 }
 export interface ConfigRequest {
     save_password: "ask" | "always" | "never";
+}
+export interface ActiveTunnel {
+    type: "local" | "remote";
+    bindAddr: string;
+    bindPort: string;
+    remoteHost: string;
+    remotePort: string;
+    hostName: string;
 }

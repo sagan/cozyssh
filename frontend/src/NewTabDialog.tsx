@@ -23,6 +23,7 @@ import HistoryIcon from "@mui/icons-material/History";
 import SendIcon from "@mui/icons-material/Send";
 import StarIcon from "@mui/icons-material/Star";
 import TabIcon from "@mui/icons-material/Tab";
+import ShortcutIcon from "@mui/icons-material/Shortcut";
 import PushPinIcon from "@mui/icons-material/PushPin";
 import TagIcon from "@mui/icons-material/Tag";
 import SmartButtonIcon from "@mui/icons-material/SmartButton";
@@ -51,6 +52,7 @@ import {
 } from "./common";
 import {
   changeNewTabDialogViewMode,
+  fetchActiveTunnels,
   getStore,
   parseNewTabDialogFilter,
   setNewTabDialogFilter,
@@ -70,6 +72,7 @@ interface DialogItem {
     | "other_button"
     | "builtin_button"
     | "tag"
+    | "tunnel"
     | "help";
   value: string;
   label: string;
@@ -113,6 +116,7 @@ export default function NewTabDialog({
   const activeGroup = useStore((state) => state.activeGroup);
   const recentButtonIds = useStore((state) => state.recentButtonIds);
   const newTabDialogFilter = useStore((state) => state.newTabDialogFilter);
+  const activeTunnels = useStore((state) => state.activeTunnels);
 
   const defaultShell = shells[0];
   const alternativeShell = shells[1];
@@ -156,6 +160,14 @@ export default function NewTabDialog({
   }, [viewMode]);
 
   useEffect(() => {
+    if (viewMode === "tunnels") {
+      fetchActiveTunnels();
+      const interval = setInterval(fetchActiveTunnels, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [viewMode]);
+
+  useEffect(() => {
     if (open) {
       const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
       fetch("/api/sessions/pinned", {
@@ -172,6 +184,20 @@ export default function NewTabDialog({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const isTouch = useMediaQuery("(pointer: coarse)");
+
+  const filteredActiveTunnels = useMemo(() => {
+    if (viewMode !== "tunnels") {
+      return [];
+    }
+    return activeTunnels.filter(
+      (t) =>
+        t.bindAddr.toLowerCase().includes(f) ||
+        t.bindPort.toLowerCase().includes(f) ||
+        t.remoteHost.toLowerCase().includes(f) ||
+        t.remotePort.toLowerCase().includes(f) ||
+        t.hostName.toLowerCase().includes(f),
+    );
+  }, [activeTunnels, f, viewMode]);
 
   const [filteredRecents, filteredOlderRecents] = useMemo(() => {
     if (viewMode !== "servers") {
@@ -575,6 +601,18 @@ export default function NewTabDialog({
         tag: b.shortcut,
       }));
       addSection("Built-in Functions", builtinList);
+    } else if (viewMode === "tunnels") {
+      const tunnelItems: Omit<DialogItem, "flatIndex">[] = filteredActiveTunnels.map((t) => ({
+        type: "tunnel",
+        id: `${t.bindPort}-${t.remotePort}-${t.remoteHost}`,
+        value: "",
+        label:
+          t.type === "local"
+            ? `local ${t.bindAddr}:${t.bindPort} -> ${t.remoteHost}:${t.remotePort}`
+            : `remote ${t.remoteHost}:${t.remotePort} -> ${t.bindAddr}:${t.bindPort}`,
+        subtitle: `Type: ${t.type} | Server: ${t.hostName}`,
+      }));
+      addSection("Active SSH Tunnels", tunnelItems);
     } else if (viewMode === "tags") {
       const tagItems: Omit<DialogItem, "flatIndex">[] = filteredTags.map((t) => ({
         type: "tag",
@@ -614,6 +652,12 @@ export default function NewTabDialog({
         },
         {
           type: "help" as const,
+          value: ":",
+          label: ": Tunnels",
+          subtitle: "Display active SSH tunnels",
+        },
+        {
+          type: "help" as const,
           value: "",
           label: "Servers / Connections",
           subtitle: "Connect to saved servers, local shells, or a direct SSH address",
@@ -634,7 +678,9 @@ export default function NewTabDialog({
     filteredRecents,
     filteredShells,
     filteredOlderRecents,
-    filteredHosts,
+    filteredHosts.favourite,
+    filteredHosts.normal,
+    filteredHosts.auto,
     directConnect,
     hosts,
     defaultShell,
@@ -647,6 +693,7 @@ export default function NewTabDialog({
     activeGroup,
     otherGroupButtons,
     builtinButtons,
+    filteredActiveTunnels,
     filteredTags,
   ]);
 
@@ -685,6 +732,8 @@ export default function NewTabDialog({
         setTimeout(() => {
           inputRef.current?.focus();
         }, 0);
+      } else if (item.type === "tunnel") {
+        // do nothing
       } else {
         onSelect(item.value);
         onClose();
@@ -798,6 +847,8 @@ export default function NewTabDialog({
       case "other_button":
       case "builtin_button":
         return <SmartButtonIcon {...activeProps} />;
+      case "tunnel":
+        return <ShortcutIcon {...activeProps} />;
       case "help":
         if (item.value === ">") {
           return <SmartButtonIcon {...activeProps} />;
@@ -881,6 +932,8 @@ export default function NewTabDialog({
                       <SmartButtonIcon />
                     ) : viewMode === "tags" ? (
                       <TagIcon />
+                    ) : viewMode === "tunnels" ? (
+                      <ShortcutIcon />
                     ) : (
                       <HelpIcon />
                     )}

@@ -188,6 +188,22 @@ func SaveHost(oldAlias string, h models.HostData) error {
 	if h.HostKeyAlgorithms != "" {
 		block = append(block, fmt.Sprintf("    HostKeyAlgorithms %s", h.HostKeyAlgorithms))
 	}
+	if h.LocalForward != "" {
+		for line := range strings.SplitSeq(h.LocalForward, "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" && !strings.HasPrefix(line, "#") {
+				block = append(block, fmt.Sprintf("    LocalForward %s", line))
+			}
+		}
+	}
+	if h.RemoteForward != "" {
+		for line := range strings.SplitSeq(h.RemoteForward, "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" && !strings.HasPrefix(line, "#") {
+				block = append(block, fmt.Sprintf("    RemoteForward %s", line))
+			}
+		}
+	}
 	block = append(block, "")
 
 	if oldAlias != "" && oldAlias != h.Name {
@@ -325,6 +341,8 @@ func ListHosts() ([]*models.HostData, error) {
 
 				var tags []string
 				var commentParts []string
+				var localForwards []string
+				var remoteForwards []string
 				start, end := findHostBlock(lines, name)
 				if start != -1 {
 					for i := start; i < end; i++ {
@@ -351,6 +369,19 @@ func ListHosts() ([]*models.HostData, error) {
 								commentParts = append(commentParts, content)
 							}
 						}
+						// Read LocalForward / RemoteForward directives
+						lower := strings.ToLower(line)
+						if strings.HasPrefix(lower, "localforward ") {
+							val := strings.TrimSpace(line[len("localforward "):])
+							if val != "" {
+								localForwards = append(localForwards, val)
+							}
+						} else if strings.HasPrefix(lower, "remoteforward ") {
+							val := strings.TrimSpace(line[len("remoteforward "):])
+							if val != "" {
+								remoteForwards = append(remoteForwards, val)
+							}
+						}
 					}
 				}
 				comment := strings.Join(commentParts, " ")
@@ -374,6 +405,8 @@ func ListHosts() ([]*models.HostData, error) {
 					UserKnownHostsFile:    userKnownHostsFile,
 					StrictHostKeyChecking: strictHostKeyChecking,
 					HostKeyAlgorithms:     hostKeyAlgorithmsOption,
+					LocalForward:          strings.Join(localForwards, "\n"),
+					RemoteForward:         strings.Join(remoteForwards, "\n"),
 					Tags:                  tags,
 					Comment:               comment,
 					Source:                "config",
@@ -1013,6 +1046,83 @@ func getSSHClient(name string, term TerminalUI, identity string,
 	}
 
 	return client, closers, remoteCommand, nil
+}
+
+// GetHostForwardRules reads LocalForward and RemoteForward directives
+// from the ssh_config for the given host name. Returns them as multi-line strings.
+func GetHostForwardRules(name string) (localForward, remoteForward string) {
+	lines, _ := readConfigLines()
+	start, end := findHostBlock(lines, name)
+	if start == -1 {
+		return "", ""
+	}
+
+	var localForwards []string
+	var remoteForwards []string
+	for i := start; i < end; i++ {
+		line := strings.TrimSpace(lines[i])
+		lower := strings.ToLower(line)
+		if strings.HasPrefix(lower, "localforward ") {
+			val := strings.TrimSpace(line[len("localforward "):])
+			if val != "" {
+				localForwards = append(localForwards, val)
+			}
+		} else if strings.HasPrefix(lower, "remoteforward ") {
+			val := strings.TrimSpace(line[len("remoteforward "):])
+			if val != "" {
+				remoteForwards = append(remoteForwards, val)
+			}
+		}
+	}
+	return strings.Join(localForwards, "\n"), strings.Join(remoteForwards, "\n")
+}
+
+// GetHostCanonicalKey returns the canonical key (user@host:port) for a named SSH host.
+// This is used to uniquely identify hosts for port forwarding deduplication.
+func GetHostCanonicalKey(name string) string {
+	configPath := filepath.Join(getSSHDir(), "config")
+	f, err := os.Open(configPath)
+	var cfg *ssh_config.Config
+	if err == nil {
+		cfg, _ = ssh_config.Decode(f)
+		f.Close()
+	}
+
+	host := name
+	port := "22"
+	user := common.User
+
+	if i := strings.LastIndex(name, "@"); i != -1 {
+		userPart := name[:i]
+		hostPart := name[i+1:]
+		user, _, _ = strings.Cut(userPart, ":")
+		if _u, err := url.PathUnescape(user); err == nil {
+			user = _u
+		}
+		if i := strings.LastIndex(hostPart, ":"); i != -1 {
+			host = hostPart[:i]
+			port = hostPart[i+1:]
+		} else {
+			host = hostPart
+		}
+	} else if i := strings.LastIndex(name, ":"); i != -1 {
+		host = name[:i]
+		port = name[i+1:]
+	}
+
+	if cfg != nil {
+		if h, _ := cfg.Get(name, "HostName"); h != "" {
+			host = h
+		}
+		if p, _ := cfg.Get(name, "Port"); p != "" {
+			port = p
+		}
+		if u, _ := cfg.Get(name, "User"); u != "" {
+			user = u
+		}
+	}
+
+	return fmt.Sprintf("%s@%s:%s", user, host, port)
 }
 
 // CloneSSH creates a new terminal session from an existing PooledClient.

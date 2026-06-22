@@ -244,6 +244,18 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			})
 			s.SSHClient = pClient
 
+			// Set up port forwarding (only on the first SSH connection to this host)
+			localFwd, remoteFwd := sshmanager.GetHostForwardRules(host)
+			if localFwd != "" || remoteFwd != "" {
+				hostKey := sshmanager.GetHostCanonicalKey(host)
+				cleanupTunnels := sshmanager.SetupPortForwarding(pClient.Client, host, hostKey, localFwd, remoteFwd)
+				originalClose := s.CloseFunc
+				s.CloseFunc = func() error {
+					cleanupTunnels()
+					return originalClose()
+				}
+			}
+
 			s.RetryFunc = func() (io.Reader, io.Writer, error) {
 				s.Broadcast(append([]byte(models.WS_MSG_PREFIX_STATE), models.WsMsgStateDisconnected...))
 

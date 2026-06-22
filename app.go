@@ -691,6 +691,20 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 			json.NewEncoder(w).Encode(session.GlobalManager.GetPinned())
 		}))))
 
+	mux.Handle("/api/tunnels", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			tunnels := sshmanager.GetActiveTunnels()
+			if tunnels == nil {
+				tunnels = []*models.ActiveTunnel{}
+			}
+			w.Header().Set(headers.ContentType, constants.MIME_JSON)
+			json.NewEncoder(w).Encode(tunnels)
+		}))))
+
 	mux.Handle("/api/sessions/attach", securityMiddleware(auth.Middleware(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {

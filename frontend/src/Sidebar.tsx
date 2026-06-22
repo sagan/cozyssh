@@ -98,6 +98,7 @@ import {
 } from "./common";
 import { dialogs } from "./Dialogs";
 import {
+  fetchActiveTunnels,
   getStore,
   notify,
   setEditHostDialogOpen,
@@ -165,8 +166,17 @@ export default function Sidebar({
   const [dialogAppPassword, setDialogAppPassword] = useState<string | null>(null);
   const [passwordsState, setPasswordsState] = useState<PasswordsResponse>({ locked: true, keys: [] });
   const [revealedPasswords, setRevealedPasswords] = useState<{ [key: string]: string }>({});
+  const activeTunnels = useStore((state) => state.activeTunnels);
 
   const [swStatus, setSwStatus] = useState<ServiceWorkerStatus>("unknown");
+
+  useEffect(() => {
+    if (settingsOpen && dialogTab === 1) {
+      fetchActiveTunnels();
+      const interval = setInterval(fetchActiveTunnels, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [settingsOpen, dialogTab]);
 
   useEffect(() => {
     if (settingsOpen && dialogTab === 2) {
@@ -933,6 +943,8 @@ export default function Sidebar({
       user_known_hosts_file: "",
       strict_host_key_checking: "",
       host_key_algorithms: "",
+      local_forward: "",
+      remote_forward: "",
       tags: "",
       comment: "",
       password: "",
@@ -965,6 +977,8 @@ export default function Sidebar({
       user_known_hosts_file: target.user_known_hosts_file || "",
       strict_host_key_checking: target.strict_host_key_checking || "",
       host_key_algorithms: target.host_key_algorithms || "",
+      local_forward: target.local_forward || "",
+      remote_forward: target.remote_forward || "",
       tags: target.tags ? target.tags.join(" ") : "",
       comment: target.comment || "",
       password: target.password_exists ? PASSWORD_PLACEHOLDER : "",
@@ -1807,6 +1821,7 @@ export default function Sidebar({
             allowScrollButtonsMobile
           >
             <Tab label="Sessions" />
+            <Tab label="Tunnels" />
             <Tab label="Passwords" />
             <Tab label="Settings" />
             <Tab label="Sync" />
@@ -1844,6 +1859,65 @@ export default function Sidebar({
             )}
 
             {dialogTab === 1 && (
+              <>
+                <Typography variant="subtitle2" sx={{ fontSize: "1rem", fontWeight: "bold", mb: 2 }}>
+                  Active Port Forwarding Tunnels
+                </Typography>
+                {activeTunnels.length > 0 ? (
+                  <TableContainer
+                    component={Paper}
+                    sx={{
+                      maxHeight: 350,
+                      border: "1px solid",
+                      borderColor: "divider",
+                      borderRadius: 1,
+                      boxShadow: "none",
+                    }}
+                  >
+                    <Table size="small" stickyHeader>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: "bold" }}>SSH Host</TableCell>
+                          <TableCell sx={{ fontWeight: "bold" }}>Type</TableCell>
+                          <TableCell sx={{ fontWeight: "bold" }}>Local Address</TableCell>
+                          <TableCell sx={{ fontWeight: "bold" }}>Remote Host:Port</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {activeTunnels.map((tunnel, idx) => (
+                          <TableRow key={idx} hover>
+                            <TableCell>{tunnel.hostName}</TableCell>
+                            <TableCell>
+                              <Chip
+                                label={tunnel.type.toUpperCase()}
+                                size="small"
+                                color={tunnel.type === "local" ? "primary" : "secondary"}
+                                variant="outlined"
+                                sx={{ fontWeight: "bold" }}
+                              />
+                            </TableCell>
+                            <TableCell sx={{ fontFamily: "monospace" }}>
+                              {tunnel.bindAddr}:{tunnel.bindPort}
+                            </TableCell>
+                            <TableCell sx={{ fontFamily: "monospace" }}>
+                              {tunnel.remoteHost}:{tunnel.remotePort}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                ) : (
+                  <Box
+                    sx={{ py: 4, textAlign: "center", border: "1px dashed", borderColor: "divider", borderRadius: 1 }}
+                  >
+                    <Typography color="text.secondary">No active port forwarding tunnels.</Typography>
+                  </Box>
+                )}
+              </>
+            )}
+
+            {dialogTab === 2 && (
               <>
                 <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
                   <Typography variant="subtitle2" sx={{ fontSize: "1rem", fontWeight: "bold" }}>
@@ -1961,7 +2035,7 @@ export default function Sidebar({
               </>
             )}
 
-            {dialogTab === 2 && (
+            {dialogTab === 3 && (
               <>
                 <Typography variant="subtitle2" gutterBottom>
                   Service Worker & Cache
@@ -2039,7 +2113,7 @@ export default function Sidebar({
               </>
             )}
 
-            {dialogTab === 3 && (
+            {dialogTab === 4 && (
               <>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1, mt: -1 }}>
                   <b>WebDAV Synchronization</b>: Sync CozySSH data (buttons, vars, scratchpad) with a custom WebDAV
@@ -2191,7 +2265,7 @@ export default function Sidebar({
               </>
             )}
 
-            {dialogTab === 4 && (
+            {dialogTab === 5 && (
               <>
                 <Typography variant="subtitle2" gutterBottom>
                   Keyboard Shortcuts
@@ -2280,7 +2354,7 @@ export default function Sidebar({
               </>
             )}
 
-            {dialogTab === 5 && (
+            {dialogTab === 6 && (
               <Box sx={{ textAlign: "center", mt: 4 }}>
                 <Typography variant="h5" gutterBottom sx={{ fontWeight: "bold" }}>
                   CozySSH
@@ -2503,6 +2577,26 @@ export default function Sidebar({
                   placeholder="Use %i for session id"
                 />
               )}
+            />
+            <TextField
+              fullWidth
+              label="LocalForward (Optional)"
+              size="small"
+              multiline
+              rows={2}
+              value={hostFormData.local_forward || ""}
+              onChange={(e) => setHostFormData({ ...hostFormData, local_forward: e.target.value })}
+              placeholder="e.g. 8080 localhost:80&#10;One rule per line"
+            />
+            <TextField
+              fullWidth
+              label="RemoteForward (Optional)"
+              size="small"
+              multiline
+              rows={2}
+              value={hostFormData.remote_forward || ""}
+              onChange={(e) => setHostFormData({ ...hostFormData, remote_forward: e.target.value })}
+              placeholder="e.g. 8080 localhost:80&#10;One rule per line"
             />
             <TextField
               fullWidth

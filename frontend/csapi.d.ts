@@ -1697,6 +1697,8 @@ export interface HostData {
 	user_known_hosts_file?: string;
 	strict_host_key_checking?: "yes" | "no" | "ask" | "";
 	host_key_algorithms?: string;
+	local_forward?: string;
+	remote_forward?: string;
 	password?: string;
 	password_exists?: boolean;
 	clear_password?: boolean;
@@ -1985,6 +1987,7 @@ export interface Store {
 	editButtonDialogOpen: boolean;
 	editHostDialogOpen: boolean;
 	inputDialogOpen: boolean;
+	inputDialogDirty: boolean;
 	inputValue: string;
 	inputLiquid: boolean;
 	newTabDialogOpen: boolean;
