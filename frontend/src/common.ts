@@ -167,6 +167,8 @@ export type CSEventDetailTerminalData = {
   terminal: Terminal;
   sessionId: string;
   host: string;
+  data: string | Uint8Array;
+  filters: ((data: string | Uint8Array) => string | Uint8Array)[];
   is_active_terminal: boolean;
 };
 
@@ -190,6 +192,7 @@ export const CS_EVENT_TERMINAL_DATA = "cs:terminal-data";
 export const CS_EVENT_TERMINAL_RESIZE = "cs:terminal-resize";
 export const CS_EVENT_TERMINAL_CHANGE = "cs:terminal-change";
 export const CS_EVENT_SHELL_INTEGRATION = "cs:shell-integration";
+
 /**
  * Event when variables change
  */
@@ -978,4 +981,11 @@ export function localShellHost(shell: LocalShell): string {
   return `${LOCAL_NAME}?title=${encodeURIComponent(shell.name)}&exec=1&remoteCommand=${encodeURIComponent(
     join([shell.path, ...(shell.args ?? [])]),
   )}`;
+}
+
+export function applyFilters<T>(filters: ((t: T) => T)[], data: T): T {
+  for (const filter of filters) {
+    data = filter(data);
+  }
+  return data;
 }

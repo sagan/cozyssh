@@ -106,6 +106,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - `Alt + O` : Open new tab dialog, use `← →` (or `Alt + H/L`) to switch view, `↓ ↑` (or `Alt + J/K`) to select, `Enter` to open. `Alt + Enter` to open context menu. Use `Alt + ↓↑` (or `Alt + Shift + J/K`) to jump through items quickly
   - `Alt + A` : Open new tab dialog - tabs view
   - `Alt + E / Ctrl + Shift + P` : Open new tab dialog - buttons view
+  - `Alt + ?` : Open new tab dialog - all view
   - `Alt + N` : Open new default local shell tab
   - `Alt + Shift + N` : Open new alternative local shell tab
   - `Alt + S` : Open scratchpad
@@ -122,7 +123,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - `Alt + G` : Focus active terminal session
   - `Alt + Shift + G` : Focus the first pane of the active tab
   - `Alt + Q` : Open input dialog
-  - `Alt + V / Alt + Shift + V` : Switch to next / previous group in button bar
+  - `Alt + V / Alt + Shift + V` : Switch to next / previous group in button bar. Hold `Ctrl` to include hidden groups
   - `Alt + Shift + 1-9,0` : Click the button in button bar
   - `Alt + J / Alt + K` : Scroll terminal down / up by a few lines
   - `Alt + Shift + J / Alt + Shift + K` : Scroll terminal down / up by a page

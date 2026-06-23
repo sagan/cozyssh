@@ -164,6 +164,12 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           setNewTabDialogOpen(true);
           return;
 
+        case "alt+/":
+          e.preventDefault();
+          changeNewTabDialogViewMode("help");
+          setNewTabDialogOpen(true);
+          return;
+
         case "alt+a":
           e.preventDefault();
           changeNewTabDialogViewMode("tabs");
@@ -311,14 +317,16 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           return;
         }
 
-        case "alt+v": {
+        case "alt+v":
+        case "ctrl+alt+v": {
           e.preventDefault();
-          nextButtonGroup();
+          nextButtonGroup(keycomb === "ctrl+alt+v");
           return;
         }
-        case "alt+shift+v": {
+        case "alt+shift+v":
+        case "ctrl+alt+shift+v": {
           e.preventDefault();
-          prevButtonGroup();
+          prevButtonGroup(keycomb === "ctrl+alt+shift+v");
           return;
         }
 

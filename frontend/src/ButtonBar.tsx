@@ -74,6 +74,7 @@ export default function ButtonBar({ groups, handleButtonClick, onNewButtonClick 
       }}
     >
       <Box
+        id="button-bar-group"
         sx={{
           px: 1,
           display: "flex",
@@ -81,6 +82,8 @@ export default function ButtonBar({ groups, handleButtonClick, onNewButtonClick 
           borderRight: 1,
           borderColor: "divider",
           flexShrink: 0,
+          height: 28,
+          // minHeight: 40,
         }}
       >
         <TextField
@@ -91,7 +94,15 @@ export default function ButtonBar({ groups, handleButtonClick, onNewButtonClick 
           slotProps={{ select: { native: true } }}
           sx={{
             minWidth: 80,
-            "& .MuiInputBase-root": { fontSize: "typography.caption.fontSize", height: 26 },
+            height: "100%",
+            "& .MuiInputBase-root": {
+              height: "100%",
+              fontSize: "typography.caption.fontSize",
+              // height: 26,
+            },
+            "& .MuiInputBase-input": {
+              height: "100% !important", // Ensures the inner textarea fills the space
+            },
             "& select": { py: 0, pr: "18px !important" },
           }}
         >

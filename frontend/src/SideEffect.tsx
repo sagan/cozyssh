@@ -62,7 +62,7 @@ export default function SideEffect() {
     __CS_REMAP_CTRL_L__ = getIntVar(VAR_CS_REMAP_CTRL_L);
 
     const terminalFontSize = Math.max(1, getIntVar(VAR_CS_TERMINAL_FONT_SIZE, DEFAULT_TERMINAL_FONT_SIZE));
-    if (terminalFontSize !== (__CS_TERMINAL_OPTIONS__.fontSize || DEFAULT_TERMINAL_FONT_SIZE)) {
+    if (terminalFontSize !== __CS_TERMINAL_OPTIONS__.fontSize) {
       __CS_TERMINAL_OPTIONS__.fontSize = terminalFontSize;
     }
 

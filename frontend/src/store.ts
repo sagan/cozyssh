@@ -463,25 +463,29 @@ export const setShells = (shells: LocalShell[]) => useStore.setState({ shells })
 
 export const setButtons = (buttons: ButtonData[]) => useStore.setState({ buttons });
 
-export const prevButtonGroup = () => {
+export const prevButtonGroup = (includeHidden = false) => {
   useStore.setState((state) => {
     const groups = Array.from(new Set([DEFAULT_BUTTON_GROUP, ...state.buttons.map((button) => button.group)])).sort();
     const idx = groups.indexOf(state.activeGroup);
     let nextIdx = (idx - 1 + groups.length) % groups.length;
-    while (nextIdx !== idx && groups[nextIdx].startsWith("_")) {
-      nextIdx = (nextIdx - 1 + groups.length) % groups.length;
+    if (!includeHidden) {
+      while (nextIdx !== idx && groups[nextIdx].startsWith("_")) {
+        nextIdx = (nextIdx - 1 + groups.length) % groups.length;
+      }
     }
     return { activeGroup: groups[nextIdx] };
   });
 };
 
-export const nextButtonGroup = () => {
+export const nextButtonGroup = (includeHidden = false) => {
   useStore.setState((state) => {
     const groups = Array.from(new Set([DEFAULT_BUTTON_GROUP, ...state.buttons.map((button) => button.group)])).sort();
     const idx = groups.indexOf(state.activeGroup);
     let nextIdx = (idx + 1) % groups.length;
-    while (nextIdx !== idx && groups[nextIdx].startsWith("_")) {
-      nextIdx = (nextIdx + 1) % groups.length;
+    if (!includeHidden) {
+      while (nextIdx !== idx && groups[nextIdx].startsWith("_")) {
+        nextIdx = (nextIdx + 1) % groups.length;
+      }
     }
     return { activeGroup: groups[nextIdx] };
   });

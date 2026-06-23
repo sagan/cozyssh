@@ -125,6 +125,10 @@ func LoadConfig(customDir string) (*Config, error) {
 	if cfg.SSHDir == "" {
 		home, _ := os.UserHomeDir()
 		cfg.SSHDir = filepath.Join(home, ".ssh")
+	} else if filepath.IsAbs(cfg.SSHDir) {
+		cfg.SSHDir = filepath.Clean(cfg.SSHDir)
+	} else {
+		cfg.SSHDir = filepath.Join(cfg.ConfigDir, cfg.SSHDir)
 	}
 	if cfg.Vars == nil {
 		cfg.Vars = make(map[string]string)

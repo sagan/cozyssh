@@ -40,6 +40,7 @@ import {
   terminalKeyShortcuts,
   nonCharKeys,
   DefaultXtermOptions,
+  applyFilters,
 } from "./common";
 import { notify, type PaneData } from "./store";
 
@@ -923,43 +924,52 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
             } catch {
               /* empty */
             }
+            let data: string | Uint8Array = ev.data;
             if (!isRestoringHistory) {
               onDataRef.current?.();
+              const filters: CSEventDetailTerminalData["filters"] = [];
               window.dispatchEvent(
                 new CustomEvent(CS_EVENT_TERMINAL_DATA, {
                   detail: {
                     terminal: term,
                     sessionId,
                     host,
+                    data,
+                    filters,
                     is_active_terminal: isActive,
                   } satisfies CSEventDetailTerminalData,
                 }),
               );
+              data = applyFilters(filters, ev.data);
             }
-            term.write(ev.data);
+            term.write(data);
           } else {
-            const buffer = new Uint8Array(ev.data);
+            let data: string | Uint8Array = new Uint8Array(ev.data);
             if (expectingHistory) {
               expectingHistory = false;
               isRestoringHistory = true;
-              term.write(buffer, () => {
+              term.write(data, () => {
                 isRestoringHistory = false;
               });
             } else {
               if (!isRestoringHistory) {
                 onDataRef.current?.();
+                const filters: CSEventDetailTerminalData["filters"] = [];
                 window.dispatchEvent(
                   new CustomEvent(CS_EVENT_TERMINAL_DATA, {
                     detail: {
                       terminal: term,
                       sessionId,
                       host,
+                      data,
+                      filters,
                       is_active_terminal: isActive,
                     } satisfies CSEventDetailTerminalData,
                   }),
                 );
+                data = applyFilters(filters, data);
               }
-              term.write(buffer);
+              term.write(data);
             }
           }
         };

@@ -145,6 +145,9 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 	log.Printf("local shells:")
 	json.NewEncoder(os.Stderr).Encode(localpty.GetShells())
 	cfg.ApplyConfig()
+	if home, err := os.UserHomeDir(); err == nil {
+		os.Chdir(home)
+	}
 	log.Printf("CozySSH %s; Config file: %s", version, cfg.ConfigPath)
 
 	passstore.Init(cfg.ConfigDir, cfg.AppPasswordHash)

@@ -1751,6 +1751,22 @@ export default function Sidebar({
             if (target.host_key_algorithms) {
               command += ` -o "HostKeyAlgorithms=${target.host_key_algorithms}"`;
             }
+            if (target.local_forward) {
+              const forwards = target.local_forward
+                .split(/[\r\n]+/)
+                .map((forward) => forward.trim())
+                .filter((forward) => forward && !forward.startsWith("#"))
+                .map((forward) => ` -L "${forward.split(/\s+/).join(":")}"`);
+              command += forwards.join("");
+            }
+            if (target.remote_forward) {
+              const forwards = target.remote_forward
+                .split(/[\r\n]+/)
+                .map((forward) => forward.trim())
+                .filter((forward) => forward && !forward.startsWith("#"))
+                .map((forward) => ` -R "${forward.split(/\s+/).join(":")}"`);
+              command += forwards.join("");
+            }
             if (target.port && target.port !== "22") {
               command += ` -p ${target.port}`;
             }
@@ -1808,7 +1824,7 @@ export default function Sidebar({
           triggerFocus();
         }}
         fullWidth
-        maxWidth="md"
+        maxWidth="lg"
         sx={{ "& .MuiDialog-paper": { overflow: "hidden" } }}
       >
         <DialogTitle>Dashboard</DialogTitle>
@@ -2279,6 +2295,8 @@ export default function Sidebar({
                   <br />
                   <b>Alt + E / Ctrl + Shift + P</b> : Open new tab dialog - buttons view
                   <br />
+                  <b>Alt + ?</b> : Open new tab dialog - all view
+                  <br />
                   <b>Alt + N</b> : Open new default local shell tab
                   <br />
                   <b>Alt + Shift + N</b> : Open new alternative local shell tab
@@ -2312,7 +2330,8 @@ export default function Sidebar({
                   <br />
                   <b>Alt + Q</b> : Open input dialog
                   <br />
-                  <b>Alt + V / Alt + Shift + V</b> : Switch to next / previous group in button bar
+                  <b>Alt + V / Alt + Shift + V</b> : Switch to next / previous group in button bar. Hold <b>Ctrl</b> to
+                  include hidden groups
                   <br />
                   <b>Alt + Shift + 1-9,0</b> : Click the button in button bar
                   <br />
