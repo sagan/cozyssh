@@ -299,6 +299,77 @@ func DeleteHost(name string) error {
 	return nil
 }
 
+func ParseGroups(lines []string) []string {
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "### #g-") {
+			fields := strings.Fields(trimmed[4:]) // Skip the "### " prefix
+			var groups []string
+			for _, f := range fields {
+				if strings.HasPrefix(f, "#g-") {
+					groups = append(groups, strings.TrimPrefix(f, "#g-"))
+				}
+			}
+			return groups
+		}
+	}
+	return []string{}
+}
+
+func ListGroups() ([]string, error) {
+	lines, err := readConfigLines()
+	if err != nil {
+		return nil, err
+	}
+	return ParseGroups(lines), nil
+}
+
+func SaveGroups(groups []string) error {
+	lines, err := readConfigLines()
+	if err != nil {
+		return err
+	}
+
+	var groupLine string
+	if len(groups) > 0 {
+		var parts []string
+		for _, g := range groups {
+			parts = append(parts, "#g-"+g)
+		}
+		groupLine = "### " + strings.Join(parts, " ")
+	}
+
+	foundIdx := -1
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "### #g-") {
+			foundIdx = i
+			break
+		}
+	}
+
+	if foundIdx != -1 {
+		if groupLine != "" {
+			lines[foundIdx] = groupLine
+			if foundIdx == len(lines)-1 || lines[foundIdx+1] != "" {
+				// append an empty line after group line
+				lines = append(lines[:foundIdx+1], append([]string{""}, lines[foundIdx+1:]...)...)
+			}
+		} else {
+			// Remove the line
+			lines = append(lines[:foundIdx], lines[foundIdx+1:]...)
+		}
+
+	} else {
+		if groupLine != "" {
+			// Insert at the very beginning
+			lines = append([]string{groupLine, ""}, lines...)
+		}
+	}
+
+	return writeConfigLines(lines)
+}
+
 // ListHosts reads the standard ~/.ssh/config and ~/.ssh/known_hosts
 // and returns a list of configured and auto-discovered servers
 func ListHosts() ([]*models.HostData, error) {

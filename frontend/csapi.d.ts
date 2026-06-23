@@ -1731,6 +1731,14 @@ export interface WsTerminalMessage {
 	isPinned: boolean;
 	isLocked: boolean;
 }
+export interface ActiveTunnel {
+	type: "local" | "remote";
+	bindAddr: string;
+	bindPort: string;
+	remoteHost: string;
+	remotePort: string;
+	hostName: string;
+}
 export type Severity = "success" | "info" | "warning" | "error";
 export type ToastData = {
 	msg: string;
@@ -1826,6 +1834,8 @@ export type CSEventDetailTerminalData = {
 	terminal: Terminal;
 	sessionId: string;
 	host: string;
+	data: string | Uint8Array;
+	filters: ((data: string | Uint8Array) => string | Uint8Array)[];
 	is_active_terminal: boolean;
 };
 export type CSEventDetailShellIntegration = {
@@ -2000,6 +2010,7 @@ export interface Store {
 	activeTabId: string;
 	activePaneId: string;
 	hosts: HostData[];
+	groups: string[];
 	shells: LocalShell[];
 	buttons: ButtonData[];
 	tagsExpanded: number;
@@ -2008,6 +2019,7 @@ export interface Store {
 	localVars: Record<string, string>;
 	recentButtonIds: string[];
 	shellIntegrations: Record<string, ShellIntegration>;
+	activeTunnels: ActiveTunnel[];
 }
 declare const useStore: import("zustand").UseBoundStore<import("zustand").StoreApi<Store>>;
 export type UseStore = typeof useStore;

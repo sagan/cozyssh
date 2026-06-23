@@ -168,6 +168,7 @@ type RecentUpdateRequest struct {
 type FullData struct {
 	Sysinfo Sysinfo                `json:"sysinfo"`
 	Hosts   []*HostData            `json:"hosts"`
+	Groups  []string               `json:"groups,omitempty"`
 	Buttons []*ButtonData          `json:"buttons"`
 	Vars    map[string]string      `json:"vars"`
 	Pinned  []*SessionPinned       `json:"pinned"`

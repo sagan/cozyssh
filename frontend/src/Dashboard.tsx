@@ -81,6 +81,7 @@ import {
   setActiveTabId,
   setActivePaneId,
   setHosts,
+  setGroups,
   setButtons,
   setVars,
   triggerFocus,
@@ -353,6 +354,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     setAppVersion(data.sysinfo.version || "dev");
     setSavePassword(data.sysinfo.savePassword);
     setHosts(data.hosts);
+    setGroups(data.groups || []);
     setShells(data.shells);
     setButtons(data.buttons);
     setVars(data.vars);

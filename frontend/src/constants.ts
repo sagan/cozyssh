@@ -28,6 +28,7 @@ export const BROWSER_STORAGE_KEY_VARS = "cozy_vars";
 export const BROWSER_STORAGE_KEY_TAGS_EXPANDED = "cozy_tags_expanded";
 export const BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE = "cozy_scratchpad_sync_state";
 export const BROWSER_STORAGE_KEY_SCRATCHPAD_CACHE = "cozy_scratchpad_cache";
+export const BROWSER_STORAGE_KEY_EXPANDED_GROUPS = "cozyssh_expanded_groups";
 
 export const LOCAL_VAR_PREFIX = "local_";
 export const VAR_CS_SCROLL_LINES = "cs_scroll_lines";

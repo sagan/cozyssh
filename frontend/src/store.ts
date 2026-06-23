@@ -104,6 +104,7 @@ interface Store {
   activeTabId: string;
   activePaneId: string;
   hosts: HostData[];
+  groups: string[];
   shells: LocalShell[];
   buttons: ButtonData[];
   tagsExpanded: number;
@@ -186,6 +187,7 @@ export const useStore = create<Store>(() => ({
   activeTabId: "",
   activePaneId: "",
   hosts: [],
+  groups: [],
   shells: [],
   buttons: [],
   tagsExpanded: loadFromStorage(BROWSER_STORAGE_KEY_TAGS_EXPANDED, 0),
@@ -459,6 +461,7 @@ export const activatePane = (paneId: string, tabId?: string) => {
 };
 
 export const setHosts = (hosts: HostData[]) => useStore.setState({ hosts });
+export const setGroups = (groups: string[]) => useStore.setState({ groups });
 export const setShells = (shells: LocalShell[]) => useStore.setState({ shells });
 
 export const setButtons = (buttons: ButtonData[]) => useStore.setState({ buttons });
@@ -516,6 +519,7 @@ export const clearData = () =>
   useStore.setState({
     activeGroup: "",
     hosts: [],
+    groups: [],
     tabs: [],
     buttons: [],
     recents: [],

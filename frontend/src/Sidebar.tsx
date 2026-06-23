@@ -36,6 +36,7 @@ import {
   TableRow,
   Paper,
   Tooltip,
+  Collapse,
 } from "@mui/material";
 import ComputerIcon from "@mui/icons-material/Computer";
 import DnsIcon from "@mui/icons-material/Dns";
@@ -49,6 +50,9 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import LockIcon from "@mui/icons-material/Lock";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import FolderIcon from "@mui/icons-material/Folder";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
 import { version as PACKAGE_JSON_VERSION } from "../package.json";
 import type {
@@ -82,6 +86,7 @@ import {
   ID_SIDEBAR_FILTER,
   DEFAULT_SCROLL_ITEMS,
   VAR_CS_SCROLL_ITEMS,
+  BROWSER_STORAGE_KEY_EXPANDED_GROUPS,
 } from "./constants";
 import {
   type HostForm,
@@ -109,10 +114,44 @@ import {
   setTagsExpanded,
   triggerFocus,
   useStore,
+  setGroups,
 } from "./store";
 import { useShallow } from "zustand/react/shallow";
 
 const drawerWidth = 260;
+
+interface GroupNode {
+  id: string;
+  type: "group";
+  name: string;
+  path: string;
+  children: TreeNode[];
+}
+
+interface ServerNode {
+  id: string;
+  type: "server";
+  name: string;
+  host: HostData;
+}
+
+type TreeNode = GroupNode | ServerNode;
+
+interface SelectableGroupItem {
+  id: string;
+  type: "group";
+  path: string;
+  name: string;
+}
+
+interface SelectableServerItem {
+  id: string;
+  type: "server";
+  section: "fav" | "tree" | "auto";
+  host: HostData;
+}
+
+type SelectableItem = SelectableGroupItem | SelectableServerItem;
 
 const PASSWORD_PLACEHOLDER = "***";
 
@@ -150,6 +189,7 @@ export default function Sidebar({
   const hostFormData = useStore((state) => state.hostFormData);
   const sysHostname = useStore((state) => state.sysHostname);
   const hosts = useStore((state) => state.hosts);
+  const groups = useStore((state) => state.groups);
   const shells = useStore((state) => state.shells);
   const tagsExpanded = useStore((state) => state.tagsExpanded);
 
@@ -460,6 +500,184 @@ export default function Sidebar({
   const [contextMenu, setContextMenu] = useState<{ element: Element; target: HostData } | null>(null);
   const [tagContextMenuOpen, setTagContextMenuOpen] = useState(false);
   const [tagContextMenu, setTagContextMenu] = useState<{ element: Element; tag: string } | null>(null);
+
+  // Expanded state of folders in Tree View
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem(BROWSER_STORAGE_KEY_EXPANDED_GROUPS);
+      if (saved) {
+        return new Set(JSON.parse(saved));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return new Set<string>();
+  });
+
+  const toggleGroupExpanded = (path: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      localStorage.setItem(BROWSER_STORAGE_KEY_EXPANDED_GROUPS, JSON.stringify(Array.from(next)));
+      return next;
+    });
+  };
+
+  // Group context menu states
+  const [groupContextMenuOpen, setGroupContextMenuOpen] = useState(false);
+  const [groupContextMenu, setGroupContextMenu] = useState<{ element: Element; path: string } | null>(null);
+
+  // Drag and Drop States
+  const [draggedItem, setDraggedItem] = useState<
+    { type: "group"; path: string } | { type: "server"; name: string } | null
+  >(null);
+  const [dragOverTarget, setDragOverTarget] = useState<{ id: string; effect: "before" | "inside" } | null>(null);
+
+  // Helper functions for tree view
+  const getHostOrder = useCallback((host: HostData): number => {
+    if (!host.tags) return Infinity;
+    for (const tag of host.tags) {
+      if (tag.startsWith("o-")) {
+        const order = parseInt(tag.substring(2));
+        if (!isNaN(order)) return order;
+      }
+    }
+    return Infinity;
+  }, []);
+
+  const getHostGroupPath = useCallback((host: HostData): string | null => {
+    if (!host.tags) return null;
+    for (const tag of host.tags) {
+      if (tag.startsWith("g-")) {
+        return tag.substring(2);
+      }
+    }
+    return null;
+  }, []);
+
+  const getGroupOrder = useCallback(
+    (path: string): number => {
+      const idx = groups.indexOf(path);
+      return idx === -1 ? Infinity : idx;
+    },
+    [groups],
+  );
+
+  // Server move function (drag & drop)
+  const moveServer = useCallback(
+    async (serverName: string, destGroupPath: string | null, beforeServerName: string | null) => {
+      const host = hosts.find((h) => h.name === serverName);
+      if (!host) return;
+
+      const siblingHosts = hosts.filter(
+        (h) => !h.is_auto && h.name !== serverName && getHostGroupPath(h) === destGroupPath,
+      );
+      siblingHosts.sort((a, b) => {
+        const orderA = getHostOrder(a);
+        const orderB = getHostOrder(b);
+        if (orderA !== orderB) return orderA - orderB;
+        return a.name.localeCompare(b.name);
+      });
+
+      const newSortedList = [...siblingHosts];
+      if (beforeServerName) {
+        const idx = newSortedList.findIndex((h) => h.name === beforeServerName);
+        if (idx !== -1) {
+          newSortedList.splice(idx, 0, host);
+        } else {
+          newSortedList.push(host);
+        }
+      } else {
+        newSortedList.push(host);
+      }
+
+      const updatedHosts: HostData[] = [];
+      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+      for (let i = 0; i < newSortedList.length; i++) {
+        const h = newSortedList[i];
+        const newOrder = (i + 1) * 10;
+        const newGroupTag = destGroupPath ? `g-${destGroupPath}` : null;
+
+        let tagsChanged = false;
+        let newTags = h.tags ? h.tags.filter((t) => !t.startsWith("o-") && !t.startsWith("g-")) : [];
+
+        const oldGroupTag = h.tags ? h.tags.find((t) => t.startsWith("g-")) : null;
+        const expectedGroupTag = newGroupTag;
+        if (oldGroupTag !== expectedGroupTag) {
+          tagsChanged = true;
+        }
+        if (newGroupTag) {
+          newTags.push(newGroupTag);
+        }
+
+        const oldOrder = getHostOrder(h);
+        if (oldOrder !== newOrder) {
+          tagsChanged = true;
+        }
+        newTags.push(`o-${newOrder}`);
+
+        if (h.name === serverName || tagsChanged) {
+          const updatedHost = {
+            ...h,
+            tags: newTags,
+          };
+          updatedHosts.push(updatedHost);
+        }
+      }
+
+      for (const h of updatedHosts) {
+        const url = h.source === "config" ? `/api/hosts/${h.name}` : `/api/hosts`;
+        const method = h.source === "config" ? METHOD_PUT : METHOD_POST;
+        await fetch(url, {
+          method,
+          headers: {
+            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+            [HEADER_CONTENT_TYPE]: MIME_JSON,
+          },
+          body: JSON.stringify(h),
+        });
+      }
+
+      fetchHosts();
+    },
+    [hosts, getHostGroupPath, getHostOrder, fetchHosts],
+  );
+
+  // Group move/reorder function (drag & drop)
+  const moveGroup = useCallback(
+    async (srcPath: string, beforeSiblingPath: string) => {
+      const draggedGroupList = groups.filter((g) => g === srcPath || g.startsWith(srcPath + "/"));
+      const remainingGroups = groups.filter((g) => g !== srcPath && !g.startsWith(srcPath + "/"));
+
+      const idx = remainingGroups.indexOf(beforeSiblingPath);
+      const nextGroups = [...remainingGroups];
+      if (idx !== -1) {
+        nextGroups.splice(idx, 0, ...draggedGroupList);
+      } else {
+        nextGroups.push(...draggedGroupList);
+      }
+
+      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+      const res = await fetch("/api/groups", {
+        method: METHOD_POST,
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+          [HEADER_CONTENT_TYPE]: MIME_JSON,
+        },
+        body: JSON.stringify(nextGroups),
+      });
+      if (res.ok) {
+        setGroups(nextGroups);
+      } else {
+        dialogs.alert("Failed to save group order");
+      }
+    },
+    [groups],
+  );
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -1159,6 +1377,171 @@ export default function Sidebar({
     }
   }, [contextMenu]);
 
+  const handleAddSubGroupClick = useCallback(async () => {
+    setGroupContextMenuOpen(false);
+    if (!groupContextMenu) return;
+    const parentPath = groupContextMenu.path;
+    const name = await dialogs.prompt("Enter sub-group name:", "", {
+      validate: function (str: string): string | undefined {
+        if (str.includes(" ") || str.includes("/")) {
+          return "Group name cannot contain spaces or slashes (/)";
+        }
+        return undefined;
+      },
+    });
+    if (!name) {
+      return;
+    }
+    const trimmed = name.trim();
+    if (!trimmed) {
+      return;
+    }
+    if (trimmed.includes(" ") || trimmed.includes("/")) {
+      dialogs.alert("Group name cannot contain spaces or slashes (/).");
+      return;
+    }
+    const newPath = `${parentPath}/${trimmed}`;
+    if (groups.includes(newPath)) {
+      dialogs.alert("Sub-group already exists.");
+      return;
+    }
+    const nextGroups = [...groups, newPath];
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+    const res = await fetch("/api/groups", {
+      method: METHOD_POST,
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        [HEADER_CONTENT_TYPE]: MIME_JSON,
+      },
+      body: JSON.stringify(nextGroups),
+    });
+    if (res.ok) {
+      setGroups(nextGroups);
+      setExpandedGroups((prev) => {
+        const next = new Set(prev);
+        next.add(parentPath);
+        localStorage.setItem(BROWSER_STORAGE_KEY_EXPANDED_GROUPS, JSON.stringify(Array.from(next)));
+        return next;
+      });
+    } else {
+      dialogs.alert("Failed to save group");
+    }
+  }, [groupContextMenu, groups]);
+
+  const handleAddTopLevelGroupClick = useCallback(async () => {
+    setGroupContextMenuOpen(false);
+    setContextMenuOpen(false);
+    const name = await dialogs.prompt("Enter top-level group name:");
+    if (!name) {
+      return;
+    }
+    const trimmed = name.trim();
+    if (!trimmed) {
+      return;
+    }
+    if (trimmed.includes(" ") || trimmed.includes("/")) {
+      dialogs.alert("Group name cannot contain spaces or slashes (/).");
+      return;
+    }
+    if (groups.includes(trimmed)) {
+      dialogs.alert("Group already exists.");
+      return;
+    }
+    const nextGroups = [...groups, trimmed];
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+    const res = await fetch("/api/groups", {
+      method: METHOD_POST,
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        [HEADER_CONTENT_TYPE]: MIME_JSON,
+      },
+      body: JSON.stringify(nextGroups),
+    });
+    if (res.ok) {
+      setGroups(nextGroups);
+    } else {
+      dialogs.alert("Failed to save group");
+    }
+  }, [groups]);
+
+  const handleDeleteGroupClick = useCallback(async () => {
+    setGroupContextMenuOpen(false);
+    if (!groupContextMenu) return;
+    const G = groupContextMenu.path;
+    if (
+      !(await dialogs.confirm(
+        `Are you sure you want to delete the group "${G}"? Belonging servers will be relocated to parent group or ungrouped.`,
+      ))
+    ) {
+      return;
+    }
+
+    const parts = G.split("/");
+    const parentPath = parts.length > 1 ? parts.slice(0, -1).join("/") : null;
+
+    const updatedHosts: HostData[] = [];
+    for (const host of hosts) {
+      const gp = getHostGroupPath(host);
+      if (gp === G || (gp && gp.startsWith(G + "/"))) {
+        let newGp: string | null = null;
+        if (gp === G) {
+          newGp = parentPath;
+        } else {
+          const rel = gp.substring(G.length + 1);
+          newGp = parentPath ? `${parentPath}/${rel}` : rel;
+        }
+        const newTags = host.tags ? host.tags.filter((t) => !t.startsWith("g-")) : [];
+        if (newGp) {
+          newTags.push(`g-${newGp}`);
+        }
+        updatedHosts.push({
+          ...host,
+          tags: newTags,
+        });
+      }
+    }
+
+    const nextGroups = groups
+      .filter((g) => g !== G)
+      .map((g) => {
+        if (g.startsWith(G + "/")) {
+          const rel = g.substring(G.length + 1);
+          return parentPath ? `${parentPath}/${rel}` : rel;
+        }
+        return g;
+      });
+
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+
+    const groupsRes = await fetch("/api/groups", {
+      method: METHOD_POST,
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        [HEADER_CONTENT_TYPE]: MIME_JSON,
+      },
+      body: JSON.stringify(nextGroups),
+    });
+
+    if (groupsRes.ok) {
+      setGroups(nextGroups);
+    }
+
+    for (const h of updatedHosts) {
+      const url = h.source === "config" ? `/api/hosts/${h.name}` : `/api/hosts`;
+      const method = h.source === "config" ? METHOD_PUT : METHOD_POST;
+      await fetch(url, {
+        method,
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+          [HEADER_CONTENT_TYPE]: MIME_JSON,
+        },
+        body: JSON.stringify(h),
+      });
+    }
+
+    fetchHosts();
+  }, [groupContextMenu, groups, hosts, getHostGroupPath, fetchHosts]);
+
   const handleSaveHost = useCallback(async () => {
     const { hostFormData } = getStore();
     if (!hostFormData.hostname) {
@@ -1278,56 +1661,250 @@ export default function Sidebar({
   }, []);
 
   const filteredHosts = useMemo(() => {
-    const filtered = filterHosts(hosts, filterStr);
+    const filteredAll = filterHosts(hosts, filterStr);
 
-    const favs = filtered.filter((h) => h.is_favourite);
-    const normals = filtered.filter((h) => !h.is_favourite && !h.is_auto);
-    const autos = filtered.filter((h) => !h.is_favourite && h.is_auto);
-
+    const favs = filteredAll.filter((h) => h.is_favourite);
     const nameSorter = (a: HostData, b: HostData) => a.name.localeCompare(b.name);
+    const sortedFavs = favs.sort(nameSorter);
+
+    const autos = filteredAll.filter((h) => !h.is_favourite && h.is_auto);
     const hostNameSorter = (a: HostData, b: HostData) => {
       if (a.hostname === b.hostname) {
         return a.name.localeCompare(b.name);
       }
       return a.hostname.localeCompare(b.hostname);
     };
+    const sortedAutos = autos.sort(hostNameSorter);
+
+    const treeHosts = filteredAll.filter((h) => !h.is_auto);
+
+    const allGroupPaths = new Set<string>();
+    for (const g of groups) {
+      const parts = g.split("/");
+      let current = "";
+      for (const part of parts) {
+        current = current ? `${current}/${part}` : part;
+        allGroupPaths.add(current);
+      }
+    }
+    for (const host of treeHosts) {
+      const gp = getHostGroupPath(host);
+      if (gp) {
+        const parts = gp.split("/");
+        let current = "";
+        for (const part of parts) {
+          current = current ? `${current}/${part}` : part;
+          allGroupPaths.add(current);
+        }
+      }
+    }
+
+    const nodesMap = new Map<string, GroupNode>();
+    for (const gp of allGroupPaths) {
+      const parts = gp.split("/");
+      const name = parts[parts.length - 1];
+      nodesMap.set(gp, {
+        id: `group:${gp}`,
+        type: "group",
+        name,
+        path: gp,
+        children: [],
+      });
+    }
+
+    const topLevelGroups: GroupNode[] = [];
+    for (const [gp, node] of nodesMap.entries()) {
+      const parts = gp.split("/");
+      if (parts.length === 1) {
+        topLevelGroups.push(node);
+      } else {
+        const parentPath = parts.slice(0, -1).join("/");
+        const parentNode = nodesMap.get(parentPath);
+        if (parentNode) {
+          parentNode.children.push(node);
+        }
+      }
+    }
+
+    const topLevelServers: ServerNode[] = [];
+    for (const host of treeHosts) {
+      const gp = getHostGroupPath(host);
+      const serverNode: ServerNode = {
+        id: `server:${host.name}`,
+        type: "server",
+        name: host.name,
+        host,
+      };
+      if (gp) {
+        const parentNode = nodesMap.get(gp);
+        if (parentNode) {
+          parentNode.children.push(serverNode);
+        } else {
+          topLevelServers.push(serverNode);
+        }
+      } else {
+        topLevelServers.push(serverNode);
+      }
+    }
+
+    for (const node of nodesMap.values()) {
+      const subGroups = node.children.filter((c) => c.type === "group") as GroupNode[];
+      const subServers = node.children.filter((c) => c.type === "server") as ServerNode[];
+
+      subGroups.sort((a, b) => {
+        const orderA = getGroupOrder(a.path);
+        const orderB = getGroupOrder(b.path);
+        if (orderA !== orderB) return orderA - orderB;
+        return a.name.localeCompare(b.name);
+      });
+
+      subServers.sort((a, b) => {
+        const orderA = getHostOrder(a.host);
+        const orderB = getHostOrder(b.host);
+        if (orderA !== orderB) return orderA - orderB;
+        return a.name.localeCompare(b.name);
+      });
+
+      node.children = [...subGroups, ...subServers];
+    }
+
+    topLevelGroups.sort((a, b) => {
+      const orderA = getGroupOrder(a.path);
+      const orderB = getGroupOrder(b.path);
+      if (orderA !== orderB) return orderA - orderB;
+      return a.name.localeCompare(b.name);
+    });
+
+    topLevelServers.sort((a, b) => {
+      const orderA = getHostOrder(a.host);
+      const orderB = getHostOrder(b.host);
+      if (orderA !== orderB) return orderA - orderB;
+      return a.name.localeCompare(b.name);
+    });
+
+    const rawTree = [...topLevelGroups, ...topLevelServers];
+    const pruneTree = (nodes: TreeNode[]): TreeNode[] => {
+      return nodes
+        .map((node) => {
+          if (node.type === "group") {
+            const prunedChildren = pruneTree(node.children);
+            return {
+              ...node,
+              children: prunedChildren,
+            };
+          }
+          return node;
+        })
+        .filter((node) => {
+          if (node.type === "group") {
+            if (!filterStr.trim()) return true;
+            return node.children.length > 0 || node.name.toLowerCase().includes(filterStr.toLowerCase());
+          }
+          return true;
+        });
+    };
+    const prunedTree = pruneTree(rawTree);
 
     return {
-      favourite: favs.sort(nameSorter),
-      normal: normals.sort(nameSorter),
-      auto: autos.sort(hostNameSorter),
+      favourite: sortedFavs,
+      auto: sortedAutos,
+      treeNodes: prunedTree,
     };
-  }, [hosts, filterStr]);
+  }, [hosts, groups, filterStr, getHostGroupPath, getGroupOrder, getHostOrder]);
 
-  const [flatFilteredHosts, flatFilteredHostIds] = useMemo(() => {
-    const flatFilteredHosts: HostData[] = [];
-    const flatFilteredHostIds: string[] = [];
-    let idx = 0;
+  const [flatList, flatListIds] = useMemo(() => {
+    const list: SelectableItem[] = [];
+    const ids: string[] = [];
+
     for (const host of filteredHosts.favourite) {
-      flatFilteredHosts.push(host);
-      flatFilteredHostIds.push(`sidebar-host-fav-${idx++}`);
+      const item: SelectableItem = {
+        id: `sidebar-fav-${host.name}`,
+        type: "server",
+        section: "fav",
+        host,
+      };
+      list.push(item);
+      ids.push(item.id);
     }
-    idx = 0;
-    for (const host of filteredHosts.normal) {
-      flatFilteredHosts.push(host);
-      flatFilteredHostIds.push(`sidebar-host-normal-${idx++}`);
-    }
-    idx = 0;
+
+    const traverseTree = (nodes: TreeNode[]) => {
+      for (const node of nodes) {
+        if (node.type === "group") {
+          const item: SelectableItem = {
+            id: `sidebar-tree-group-${node.path}`,
+            type: "group",
+            path: node.path,
+            name: node.name,
+          };
+          list.push(item);
+          ids.push(item.id);
+
+          if (expandedGroups.has(node.path)) {
+            traverseTree(node.children);
+          }
+        } else {
+          const item: SelectableItem = {
+            id: `sidebar-tree-server-${node.host.name}`,
+            type: "server",
+            section: "tree",
+            host: node.host,
+          };
+          list.push(item);
+          ids.push(item.id);
+        }
+      }
+    };
+    traverseTree(filteredHosts.treeNodes);
+
     for (const host of filteredHosts.auto) {
-      flatFilteredHosts.push(host);
-      flatFilteredHostIds.push(`sidebar-host-auto-${idx++}`);
+      const item: SelectableItem = {
+        id: `sidebar-auto-${host.name}`,
+        type: "server",
+        section: "auto",
+        host,
+      };
+      list.push(item);
+      ids.push(item.id);
     }
-    return [flatFilteredHosts, flatFilteredHostIds];
-  }, [filteredHosts]);
+
+    return [list, ids];
+  }, [filteredHosts, expandedGroups]);
+
+  const lastSelectedItemId = useRef<string | null>(null);
+  const lastFilterStr = useRef(filterStr);
 
   useEffect(() => {
-    if (filterStr.trim() !== "" && flatFilteredHosts.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSelectedIndex(0);
+    if (selectedIndex >= 0 && selectedIndex < flatList.length) {
+      lastSelectedItemId.current = flatList[selectedIndex].id;
     } else {
-      setSelectedIndex(-1);
+      lastSelectedItemId.current = null;
     }
-  }, [filterStr, flatFilteredHosts]);
+  }, [selectedIndex, flatList]);
+
+  useEffect(() => {
+    if (filterStr !== lastFilterStr.current) {
+      lastFilterStr.current = filterStr;
+      if (filterStr.trim() !== "" && flatList.length > 0) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setSelectedIndex(0);
+      } else {
+        setSelectedIndex(-1);
+      }
+      return;
+    }
+
+    if (lastSelectedItemId.current) {
+      const idx = flatListIds.indexOf(lastSelectedItemId.current);
+      if (idx !== -1) {
+        setSelectedIndex(idx);
+        return;
+      }
+    }
+
+    if (selectedIndex >= flatList.length) {
+      setSelectedIndex(flatList.length - 1);
+    }
+  }, [flatList, flatListIds, filterStr]);
 
   const handleFilterKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -1336,7 +1913,7 @@ export default function Sidebar({
         const step = (key === "j" ? e.shiftKey : e.altKey) ? getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS) : 1;
         e.preventDefault();
         e.stopPropagation();
-        setSelectedIndex((prev) => Math.min(prev + step, flatFilteredHosts.length - 1));
+        setSelectedIndex((prev) => Math.min(prev + step, flatList.length - 1));
       } else if (key === "arrowup" || (e.altKey && key === "k")) {
         const step = (key === "k" ? e.shiftKey : e.altKey) ? getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS) : 1;
         e.preventDefault();
@@ -1346,25 +1923,36 @@ export default function Sidebar({
         e.preventDefault();
         e.stopPropagation();
         if (e.altKey) {
-          const el = document.getElementById(flatFilteredHostIds[selectedIndex]);
+          const el = document.getElementById(flatListIds[selectedIndex]);
           if (el) {
             el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
           }
         } else {
-          if (selectedIndex >= 0 && selectedIndex < flatFilteredHosts.length) {
-            onSelect(flatFilteredHosts[selectedIndex].name);
-            document.getElementById(ID_SIDEBAR_FILTER)?.blur();
+          if (selectedIndex >= 0 && selectedIndex < flatList.length) {
+            const selectedItem = flatList[selectedIndex];
+            if (selectedItem.type === "group") {
+              toggleGroupExpanded(selectedItem.path);
+            } else {
+              onSelect(selectedItem.host.name);
+              document.getElementById(ID_SIDEBAR_FILTER)?.blur();
+            }
           }
         }
       }
     },
-    [flatFilteredHostIds, flatFilteredHosts, onSelect, selectedIndex],
+    [flatListIds, flatList, onSelect, selectedIndex],
   );
 
   const uniqueTags = useMemo(() => {
     const set = new Set<string>();
     hosts.forEach((h) => {
-      if (h.tags) h.tags.forEach((t) => set.add(t));
+      if (h.tags) {
+        h.tags.forEach((t) => {
+          if (t !== "fav" && !t.startsWith("g-") && !t.startsWith("o-")) {
+            set.add(t);
+          }
+        });
+      }
     });
     return Array.from(set).sort();
   }, [hosts]);
@@ -1376,6 +1964,74 @@ export default function Sidebar({
       }
     }, 0);
   }, [uniqueTags, filterStr]);
+
+  const renderTreeNode = (node: TreeNode, level: number): React.ReactNode => {
+    if (node.type === "group") {
+      const groupItemIdx = flatList.findIndex((item) => item.type === "group" && item.path === node.path);
+      const isSelected = selectedIndex >= 0 && selectedIndex < flatList.length && selectedIndex === groupItemIdx;
+      return (
+        <React.Fragment key={node.id}>
+          <TreeGroupItem
+            node={node}
+            level={level}
+            isSelected={isSelected}
+            expandedGroups={expandedGroups}
+            toggleGroupExpanded={toggleGroupExpanded}
+            setDraggedItem={setDraggedItem}
+            draggedItem={draggedItem}
+            dragOverTarget={dragOverTarget}
+            setDragOverTarget={setDragOverTarget}
+            moveServer={moveServer}
+            moveGroup={moveGroup}
+            setGroupContextMenu={setGroupContextMenu}
+            setGroupContextMenuOpen={setGroupContextMenuOpen}
+          />
+          <Collapse in={expandedGroups.has(node.path)} timeout="auto" unmountOnExit>
+            <List disablePadding>{node.children.map((child) => renderTreeNode(child, level + 1))}</List>
+          </Collapse>
+        </React.Fragment>
+      );
+    } else {
+      const serverItemIdx = flatList.findIndex(
+        (item) => item.type === "server" && item.section === "tree" && item.host.name === node.host.name,
+      );
+      const isSelected = selectedIndex >= 0 && selectedIndex < flatList.length && selectedIndex === serverItemIdx;
+      return (
+        <TreeServerItem
+          key={node.id}
+          node={node}
+          level={level}
+          isSelected={isSelected}
+          filterStr={filterStr}
+          draggedItem={draggedItem}
+          dragOverTarget={dragOverTarget}
+          setDraggedItem={setDraggedItem}
+          setDragOverTarget={setDragOverTarget}
+          moveServer={moveServer}
+          getHostGroupPath={getHostGroupPath}
+          handleContextMenu={handleContextMenu}
+          onSelect={onSelect}
+        />
+      );
+    }
+  };
+
+  const handleRootDragOver = (e: React.DragEvent) => {
+    if (!draggedItem) return;
+    e.preventDefault();
+    setDragOverTarget({ id: "root", effect: "inside" });
+  };
+
+  const handleRootDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverTarget(null);
+    if (!draggedItem) return;
+
+    if (draggedItem.type === "server") {
+      await moveServer(draggedItem.name, null, null);
+    }
+    setDraggedItem(null);
+  };
 
   return (
     <Drawer
@@ -1590,60 +2246,109 @@ export default function Sidebar({
             </ListItemButton>
           </ListItem>
 
-          {(filteredHosts.favourite.length > 0 || filteredHosts.normal.length > 0 || filteredHosts.auto.length > 0) && (
-            <Divider sx={{ my: 1 }} />
+          {(filteredHosts.favourite.length > 0 ||
+            filteredHosts.treeNodes.length > 0 ||
+            filteredHosts.auto.length > 0) && <Divider sx={{ my: 1 }} />}
+
+          {filteredHosts.favourite.length > 0 && (
+            <>
+              <Box sx={{ px: 2, py: 0.5, display: "flex", alignItems: "center" }}>
+                <Typography
+                  variant="caption"
+                  sx={{ fontWeight: 700, color: "text.secondary", letterSpacing: "0.08em" }}
+                >
+                  FAVOURITES
+                </Typography>
+              </Box>
+              {filteredHosts.favourite.map((host) => {
+                const itemIdx = flatList.findIndex((item) => item.id === `sidebar-fav-${host.name}`);
+                return (
+                  <HostListItem
+                    key={`fav-${host.name}`}
+                    id={`sidebar-fav-${host.name}`}
+                    filter={filterStr}
+                    host={host}
+                    onSelect={onSelect}
+                    onContextMenu={handleContextMenu}
+                    isSelected={selectedIndex === itemIdx}
+                  />
+                );
+              })}
+              <Divider sx={{ my: 1 }} />
+            </>
           )}
 
-          {filteredHosts.favourite.map((host, idx) => {
-            const absIdx = idx;
-            return (
-              <HostListItem
-                key={`fav-${idx}`}
-                id={`sidebar-host-fav-${idx}`}
-                filter={filterStr}
-                host={host}
-                onSelect={onSelect}
-                onContextMenu={handleContextMenu}
-                isSelected={selectedIndex === absIdx}
-              />
-            );
-          })}
+          <Box
+            sx={{
+              px: 2,
+              py: 0.5,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              "&:hover .add-group-btn": { opacity: 1 },
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setGroupContextMenu({ element: e.currentTarget, path: "" });
+              setGroupContextMenuOpen(true);
+            }}
+          >
+            <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary", letterSpacing: "0.08em" }}>
+              ALL SERVERS
+            </Typography>
+            <IconButton
+              className="add-group-btn"
+              size="small"
+              onClick={handleAddTopLevelGroupClick}
+              sx={{ p: 0, opacity: 0.6, transition: "opacity 0.2s", "&:hover": { opacity: 1 } }}
+              title="Add Group"
+            >
+              <AddIcon fontSize="small" />
+            </IconButton>
+          </Box>
 
-          {filteredHosts.favourite.length > 0 && (filteredHosts.normal.length > 0 || filteredHosts.auto.length > 0) && (
-            <Divider sx={{ my: 1 }} />
+          <Box
+            onDragOver={handleRootDragOver}
+            onDrop={handleRootDrop}
+            sx={{
+              minHeight: 40,
+              bgcolor: dragOverTarget?.id === "root" ? "action.selected" : "transparent",
+              borderRadius: 1,
+              transition: "background-color 0.2s",
+              border: dragOverTarget?.id === "root" ? "1px dashed" : "none",
+              borderColor: "primary.main",
+            }}
+          >
+            {filteredHosts.treeNodes.length > 0 && filteredHosts.treeNodes.map((node) => renderTreeNode(node, 0))}
+          </Box>
+
+          {filteredHosts.auto.length > 0 && (
+            <>
+              <Divider sx={{ my: 1 }} />
+              <Box sx={{ px: 2, py: 0.5, display: "flex", alignItems: "center" }}>
+                <Typography
+                  variant="caption"
+                  sx={{ fontWeight: 700, color: "text.secondary", letterSpacing: "0.08em" }}
+                >
+                  AUTO SERVERS
+                </Typography>
+              </Box>
+              {filteredHosts.auto.map((host) => {
+                const itemIdx = flatList.findIndex((item) => item.id === `sidebar-auto-${host.name}`);
+                return (
+                  <HostListItem
+                    key={`auto-${host.name}`}
+                    id={`sidebar-auto-${host.name}`}
+                    filter={filterStr}
+                    host={host}
+                    onSelect={onSelect}
+                    onContextMenu={handleContextMenu}
+                    isSelected={selectedIndex === itemIdx}
+                  />
+                );
+              })}
+            </>
           )}
-
-          {filteredHosts.normal.map((host, idx) => {
-            const absIdx = filteredHosts.favourite.length + idx;
-            return (
-              <HostListItem
-                key={`normal-${idx}`}
-                id={`sidebar-host-normal-${idx}`}
-                filter={filterStr}
-                host={host}
-                onSelect={onSelect}
-                onContextMenu={handleContextMenu}
-                isSelected={selectedIndex === absIdx}
-              />
-            );
-          })}
-
-          {filteredHosts.normal.length > 0 && filteredHosts.auto.length > 0 && <Divider sx={{ my: 1 }} />}
-
-          {filteredHosts.auto.map((host, idx) => {
-            const absIdx = filteredHosts.favourite.length + filteredHosts.normal.length + idx;
-            return (
-              <HostListItem
-                key={`auto-${idx}`}
-                id={`sidebar-host-auto-${idx}`}
-                filter={filterStr}
-                host={host}
-                onSelect={onSelect}
-                onContextMenu={handleContextMenu}
-                isSelected={selectedIndex === absIdx}
-              />
-            );
-          })}
         </List>
       </Box>
 
@@ -1805,6 +2510,9 @@ export default function Sidebar({
             Delete Host
           </MenuItem>
         )}
+        {contextMenu && getHostGroupPath(contextMenu.target) === null && (
+          <MenuItem onClick={handleAddTopLevelGroupClick}>Add Top-Level Group</MenuItem>
+        )}
       </Menu>
 
       <Menu open={tagContextMenuOpen} onClose={() => setTagContextMenuOpen(false)} anchorEl={tagContextMenu?.element}>
@@ -1812,6 +2520,19 @@ export default function Sidebar({
         <MenuItem onClick={handleOpenSplitServers}>Open All (Split Screen)</MenuItem>
         <MenuItem onClick={handleOpenAllServersInNewWindow}>Open All (New Window)</MenuItem>
         <MenuItem onClick={handleCopyTagUrl}>Copy URL</MenuItem>
+      </Menu>
+
+      {/* Group Context Menu */}
+      <Menu
+        open={groupContextMenuOpen}
+        onClose={() => setGroupContextMenuOpen(false)}
+        anchorEl={groupContextMenu?.element}
+      >
+        <MenuItem onClick={handleAddSubGroupClick}>Add Sub-Group</MenuItem>
+        <MenuItem onClick={handleAddTopLevelGroupClick}>Add Top-Level Group</MenuItem>
+        <MenuItem onClick={handleDeleteGroupClick} sx={{ color: "error.main" }}>
+          Delete Group
+        </MenuItem>
       </Menu>
 
       {/* Dashboard Dialog */}
@@ -2735,7 +3456,304 @@ function HostListItem({
               <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 0.25 }}>
                 {host.tags &&
                   host.tags
-                    .filter((t) => t !== "fav")
+                    .filter((t) => t !== "fav" && !t.startsWith("g-") && !t.startsWith("o-"))
+                    .map((tag) => (
+                      <Typography
+                        key={tag}
+                        variant="caption"
+                        sx={{
+                          color: "primary.main",
+                          fontSize: "typography.caption.fontSize",
+                          fontWeight: 600,
+                          opacity: 0.8,
+                        }}
+                      >
+                        #{tag}
+                      </Typography>
+                    ))}
+              </Box>
+            </Box>
+          }
+          secondary={
+            (!host.is_auto || host.name !== `${host.user || "root"}@${host.hostname}`) && (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: "block", fontSize: "typography.caption.fontSize" }}
+              >
+                {secondaryText}
+              </Typography>
+            )
+          }
+        />
+      </ListItemButton>
+    </ListItem>
+  );
+}
+
+function TreeGroupItem({
+  node,
+  level,
+  isSelected,
+  expandedGroups,
+  toggleGroupExpanded,
+  setDraggedItem,
+  draggedItem,
+  dragOverTarget,
+  setDragOverTarget,
+  moveServer,
+  moveGroup,
+  setGroupContextMenu,
+  setGroupContextMenuOpen,
+}: {
+  node: GroupNode;
+  level: number;
+  isSelected: boolean;
+  expandedGroups: Set<string>;
+  toggleGroupExpanded: (path: string) => void;
+  setDraggedItem: (item: { type: "group"; path: string } | { type: "server"; name: string } | null) => void;
+  draggedItem: { type: "group"; path: string } | { type: "server"; name: string } | null;
+  dragOverTarget: { id: string; effect: "before" | "inside" } | null;
+  setDragOverTarget: (item: { id: string; effect: "before" | "inside" } | null) => void;
+  moveServer: (serverName: string, destGroupPath: string | null, beforeServerName: string | null) => Promise<void>;
+  moveGroup: (sourceGroupPath: string, destGroupPath: string) => Promise<void>;
+  setGroupContextMenu: (item: { element: Element; path: string; type: "group" } | null) => void;
+  setGroupContextMenuOpen: (open: boolean) => void;
+}) {
+  const itemRef = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (isSelected && itemRef.current) {
+      itemRef.current.scrollIntoView({
+        behavior: "auto",
+        block: "nearest",
+      });
+    }
+  }, [isSelected]);
+
+  const isExpanded = expandedGroups.has(node.path);
+  const isDragOver = dragOverTarget?.id === node.id;
+
+  return (
+    <ListItem
+      ref={itemRef}
+      id={`sidebar-tree-group-${node.path}`}
+      disablePadding
+      draggable
+      onDragStart={(e) => {
+        setDraggedItem({ type: "group", path: node.path });
+        e.dataTransfer.effectAllowed = "move";
+      }}
+      onDragOver={(e) => {
+        if (!draggedItem) return;
+        if (draggedItem.type === "group") {
+          if (node.path === draggedItem.path || node.path.startsWith(draggedItem.path + "/")) {
+            return;
+          }
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        setDragOverTarget({ id: node.id, effect: "before" });
+      }}
+      onDragLeave={(e) => {
+        e.stopPropagation();
+        setDragOverTarget(null);
+      }}
+      onDrop={async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragOverTarget(null);
+        if (!draggedItem) return;
+        if (draggedItem.type === "server") {
+          await moveServer(draggedItem.name, node.path, null);
+        } else if (draggedItem.type === "group") {
+          await moveGroup(draggedItem.path, node.path);
+        }
+        setDraggedItem(null);
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setGroupContextMenu({ element: e.currentTarget, path: node.path, type: "group" });
+        setGroupContextMenuOpen(true);
+      }}
+      sx={{
+        pl: level * 4,
+        bgcolor: isSelected ? "action.hover" : isDragOver ? "action.selected" : "transparent",
+        borderTop: isDragOver && dragOverTarget?.effect === "before" ? "2px solid" : "none",
+        borderTopColor: "primary.main",
+        "&:hover": {
+          bgcolor: "action.hover",
+        },
+        mb: 0.2,
+        outline: isSelected ? "1px solid" : "none",
+        outlineColor: "primary.main",
+        outlineOffset: "-1px",
+        borderRadius: 1,
+        cursor: "grab",
+      }}
+    >
+      <ListItemButton onClick={() => toggleGroupExpanded(node.path)} sx={{ py: 0.25, px: 1 }}>
+        <ListItemIcon sx={{ minWidth: 24 }}>
+          {isExpanded ? (
+            <ExpandMoreIcon fontSize="small" sx={{ color: "text.secondary" }} />
+          ) : (
+            <ChevronRightIcon fontSize="small" sx={{ color: "text.secondary" }} />
+          )}
+        </ListItemIcon>
+        <ListItemIcon sx={{ minWidth: 28, ml: -0.5 }}>
+          <FolderIcon fontSize="small" sx={{ color: "warning.main" }} />
+        </ListItemIcon>
+        <ListItemText
+          primary={
+            <Typography variant="body2" sx={{ fontWeight: 600, color: "text.primary" }}>
+              {node.name}
+            </Typography>
+          }
+        />
+      </ListItemButton>
+    </ListItem>
+  );
+}
+
+function TreeServerItem({
+  node,
+  level,
+  isSelected,
+  filterStr,
+  draggedItem,
+  dragOverTarget,
+  setDraggedItem,
+  setDragOverTarget,
+  moveServer,
+  getHostGroupPath,
+  handleContextMenu,
+  onSelect,
+}: {
+  node: ServerNode;
+  level: number;
+  isSelected: boolean;
+  filterStr: string;
+  draggedItem: { type: "group"; path: string } | { type: "server"; name: string } | null;
+  dragOverTarget: { id: string; effect: "before" | "inside" } | null;
+  setDraggedItem: (item: { type: "group"; path: string } | { type: "server"; name: string } | null) => void;
+  setDragOverTarget: (item: { id: string; effect: "before" | "inside" } | null) => void;
+  moveServer: (serverName: string, destGroupPath: string | null, beforeServerName: string | null) => Promise<void>;
+  getHostGroupPath: (host: HostData) => string | null;
+  handleContextMenu: (e: React.MouseEvent | React.KeyboardEvent, host: HostData) => void;
+  onSelect: (host: string) => void;
+}) {
+  const itemRef = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (isSelected && itemRef.current) {
+      itemRef.current.scrollIntoView({
+        behavior: "auto",
+        block: "nearest",
+      });
+    }
+  }, [isSelected]);
+
+  const host = node.host;
+  const isDragOver = dragOverTarget?.id === node.id;
+  const isFavourite = host.is_favourite;
+  let secondaryText = `${host.user || "root"}@${host.hostname}`;
+  if (filterStr && host.comment) {
+    const matchedComment = searchStringAny(host.comment, filterStr);
+    if (matchedComment) {
+      secondaryText += ` // ${matchedComment}`;
+    }
+  }
+
+  return (
+    <ListItem
+      ref={itemRef}
+      id={`sidebar-tree-server-${host.name}`}
+      disablePadding
+      draggable
+      onDragStart={(e) => {
+        setDraggedItem({ type: "server", name: host.name });
+        e.dataTransfer.effectAllowed = "move";
+      }}
+      onDragOver={(e) => {
+        if (!draggedItem) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setDragOverTarget({ id: node.id, effect: "before" });
+      }}
+      onDragLeave={(e) => {
+        e.stopPropagation();
+        setDragOverTarget(null);
+      }}
+      onDrop={async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragOverTarget(null);
+        if (!draggedItem) return;
+        if (draggedItem.type === "server") {
+          const targetGroup = getHostGroupPath(host);
+          await moveServer(draggedItem.name, targetGroup, host.name);
+        }
+        setDraggedItem(null);
+      }}
+      onContextMenu={(e) => handleContextMenu(e, host)}
+      data-name={host.name}
+      className="sidebar-host"
+      sx={{
+        pl: level * 1.5 + 1,
+        bgcolor: isSelected ? "action.hover" : isFavourite ? "action.selected" : "transparent",
+        borderTop: isDragOver ? "2px solid" : "none",
+        borderTopColor: "primary.main",
+        "&:hover": {
+          bgcolor: isSelected ? "action.hover" : isFavourite ? "action.focus" : "action.hover",
+        },
+        mb: 0.2,
+        outline: isSelected ? "1px solid" : "none",
+        outlineColor: "primary.main",
+        outlineOffset: "-1px",
+        borderRadius: 1,
+        cursor: "grab",
+      }}
+    >
+      <ListItemButton
+        title={host.comment || ""}
+        onClick={(e) => {
+          if (e.ctrlKey) {
+            openHostInNewWindow(host.name);
+          } else {
+            onSelect(host.name);
+          }
+        }}
+        sx={{ py: 0.5, px: 1 }}
+      >
+        <ListItemIcon sx={{ minWidth: 32 }}>
+          {isFavourite ? (
+            <StarIcon
+              fontSize="small"
+              sx={{
+                color: "primary.main",
+                filter: "drop-shadow(0 0 2px rgba(25, 118, 210, 0.3))",
+              }}
+            />
+          ) : (
+            <DnsIcon fontSize="small" color="action" />
+          )}
+        </ListItemIcon>
+        <ListItemText
+          primary={
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 0.5 }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: isFavourite ? 700 : 500,
+                  lineHeight: 1.2,
+                  color: isFavourite ? "primary.main" : "text.primary",
+                }}
+              >
+                {host.name}
+              </Typography>
+              <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 0.25 }}>
+                {host.tags &&
+                  host.tags
+                    .filter((t) => t !== "fav" && !t.startsWith("g-") && !t.startsWith("o-"))
                     .map((tag) => (
                       <Typography
                         key={tag}

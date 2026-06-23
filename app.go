@@ -175,6 +175,10 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 		if err != nil {
 			hosts = []*models.HostData{}
 		}
+		groups, err := sshmanager.ListGroups()
+		if err != nil {
+			groups = []string{}
+		}
 		pinned := session.GlobalManager.GetPinned()
 		return &models.FullData{
 			Sysinfo: models.Sysinfo{
@@ -185,6 +189,7 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				SavePassword:    cfg.SavePassword,
 			},
 			Hosts:   hosts,
+			Groups:  groups,
 			Buttons: cfg.GetButtons(), // Use thread-safe GetButtons()
 			Vars:    cfg.GetVars(),
 			Pinned:  pinned,
@@ -278,6 +283,24 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 			}
 			recents.Add(req.Host)
 			recents.Save()
+			w.WriteHeader(http.StatusNoContent)
+		}))))
+
+	mux.Handle("/api/groups", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var req []string
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+			if err := sshmanager.SaveGroups(req); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 			w.WriteHeader(http.StatusNoContent)
 		}))))
 
