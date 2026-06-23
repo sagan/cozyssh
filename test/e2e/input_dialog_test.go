@@ -95,10 +95,10 @@ func TestTerminalInputDialog(t *testing.T) {
 		t.Fatalf("failed to fill Terminal Input dialog: %v", err)
 	}
 
-	// Press Enter (without Shift) to send — this is what the dialog's onKeyDown
+	// Press Ctrl+Enter to send — this is what the dialog's onKeyDown
 	// handler expects to trigger sendParsedString and close the dialog.
-	if err := dialogTextarea.Press("Enter"); err != nil {
-		t.Fatalf("failed to press Enter in Terminal Input dialog: %v", err)
+	if err := dialogTextarea.Press("Control+Enter"); err != nil {
+		t.Fatalf("failed to press Control+Enter in Terminal Input dialog: %v", err)
 	}
 
 	// 5. Wait for the dialog to close, then verify the result.

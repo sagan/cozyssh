@@ -39,6 +39,7 @@ import {
   LOCAL_NAME,
   VAR_CS_SCROLL_ITEMS,
   ID_NEW_TAB_DIALOG_INPUT,
+  TAG_ORDER_PREFIX,
 } from "./constants";
 import {
   cutString,
@@ -54,6 +55,7 @@ import {
   changeNewTabDialogViewMode,
   fetchActiveTunnels,
   getStore,
+  notify,
   parseNewTabDialogFilter,
   setNewTabDialogFilter,
   updateRecentButtonId,
@@ -130,7 +132,7 @@ export default function NewTabDialog({
   const uniqueTags: { tag: string; count: number }[] = useMemo(() => {
     const set = new Map<string, number>();
     hosts.forEach((h) => {
-      h.tags?.forEach((t) => set.set(t, (set.get(t) || 0) + 1));
+      h.tags?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX)).forEach((t) => set.set(t, (set.get(t) || 0) + 1));
     });
     return Array.from(set.entries())
       .map(([t, count]) => ({ tag: t, count }))
@@ -371,7 +373,10 @@ export default function NewTabDialog({
           label: r.host,
           subtitle: knownHost ? `${knownHost.user || "root"}@${knownHost.hostname}` : undefined,
           tooltip: knownHost?.comment,
-          tag: knownHost?.tags?.map((t) => "#" + t).join(" "),
+          tag: knownHost?.tags
+            ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX))
+            .map((t) => "#" + t)
+            .join(" "),
         });
       });
       addSection("Recents", recentList);
@@ -400,7 +405,10 @@ export default function NewTabDialog({
           label: r.host,
           subtitle: knownHost ? `${knownHost.user || "root"}@${knownHost.hostname}` : undefined,
           tooltip: knownHost?.comment,
-          tag: knownHost?.tags?.map((t) => "#" + t).join(" "),
+          tag: knownHost?.tags
+            ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX))
+            .map((t) => "#" + t)
+            .join(" "),
         });
       });
       addSection("Older Recents", olderRecentList);
@@ -422,7 +430,10 @@ export default function NewTabDialog({
           subtitle,
           tooltip: h.comment,
           isFav: h.is_favourite,
-          tag: h.tags?.map((t) => "#" + t).join(" "),
+          tag: h.tags
+            ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX))
+            .map((t) => "#" + t)
+            .join(" "),
         });
       });
       addSection("Favourite Servers", favList);
@@ -444,7 +455,10 @@ export default function NewTabDialog({
           subtitle,
           tooltip: h.comment,
           isFav: h.is_favourite,
-          tag: h.tags?.map((t) => "#" + t).join(" "),
+          tag: h.tags
+            ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX))
+            .map((t) => "#" + t)
+            .join(" "),
         });
       });
       addSection("Normal Servers", normalList);
@@ -466,7 +480,10 @@ export default function NewTabDialog({
           subtitle,
           tooltip: h.comment,
           isFav: h.is_favourite,
-          tag: h.tags?.map((t) => "#" + t).join(" "),
+          tag: h.tags
+            ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX))
+            .map((t) => "#" + t)
+            .join(" "),
         });
       });
       addSection("Auto Servers", autoList);
@@ -605,7 +622,10 @@ export default function NewTabDialog({
       const tunnelItems: Omit<DialogItem, "flatIndex">[] = filteredActiveTunnels.map((t) => ({
         type: "tunnel",
         id: `${t.bindPort}-${t.remotePort}-${t.remoteHost}`,
-        value: "",
+        value:
+          t.type === "local"
+            ? `${t.bindAddr || "127.0.0.1"}:${t.bindPort}`
+            : `${t.remoteHost || "127.0.0.1"}:${t.remotePort}`,
         label:
           t.type === "local"
             ? `local ${t.bindAddr}:${t.bindPort} -> ${t.remoteHost}:${t.remotePort}`
@@ -654,6 +674,7 @@ export default function NewTabDialog({
           type: "help" as const,
           value: ":",
           label: ": Tunnels",
+          tag: "alt+:",
           subtitle: "Display active SSH tunnels",
         },
         {
@@ -733,7 +754,13 @@ export default function NewTabDialog({
           inputRef.current?.focus();
         }, 0);
       } else if (item.type === "tunnel") {
-        // do nothing
+        navigator.clipboard
+          .writeText(item.value)
+          .then(() =>
+            notify(`Tunnel entrypoint "${item.value}" copied to clipboard`, "info", "cs-copy-tunnel-entrypoint"),
+          )
+          .catch(() => {});
+        onClose();
       } else {
         onSelect(item.value);
         onClose();

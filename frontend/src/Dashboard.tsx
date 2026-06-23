@@ -55,6 +55,8 @@ import {
   ID_TERMINAL_SEARCH_INPUT,
   CACHE_API_DATA,
   CACHE_MANIFEST,
+  TAG_GROUP_PREFIX,
+  TAG_FAV,
 } from "./constants";
 import {
   type ContextMenu,
@@ -284,9 +286,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
     [],
   );
 
-  const handleSelectTagAsSplit = useCallback(
-    (tag: string, hosts: string[], hostOptions?: (Record<string, string> | undefined)[]) => {
-      const tabId = genTabId(tag);
+  const handleSelectHostsAsSplit = useCallback(
+    (title: string, hosts: string[], hostOptions?: (Record<string, string> | undefined)[]) => {
+      const tabId = genTabId(title);
       const panes: PaneData[] = hosts.map(
         (host, i) =>
           ({
@@ -297,8 +299,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
           }) satisfies PaneData,
       );
       const newTab: TabData = {
+        title,
         id: tabId,
-        title: tag,
         panes: panes,
         activePaneId: panes[0].id,
       };
@@ -1123,7 +1125,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
           break;
       }
     },
-    [groups, handleCloneSession, handleCloseTabOrPane, handleOpenScratchpad, handleSelectHost, sendParsedString],
+    [handleCloneSession, handleCloseTabOrPane, handleOpenScratchpad, handleSelectHost, sendParsedString],
   );
 
   useEffect(() => {
@@ -1223,14 +1225,14 @@ export default function Dashboard({ initialData }: DashboardProps) {
             return a.hostname.localeCompare(b.hostname);
           };
 
-          const favs = filtered.filter((h) => h.tags?.includes("fav")).sort(nameSorter);
-          const normals = filtered.filter((h) => !h.tags?.includes("fav") && !h.is_auto).sort(nameSorter);
-          const autos = filtered.filter((h) => !h.tags?.includes("fav") && h.is_auto).sort(hostNameSorter);
+          const favs = filtered.filter((h) => h.tags?.includes(TAG_FAV)).sort(nameSorter);
+          const normals = filtered.filter((h) => !h.tags?.includes(TAG_FAV) && !h.is_auto).sort(nameSorter);
+          const autos = filtered.filter((h) => !h.tags?.includes(TAG_FAV) && h.is_auto).sort(hostNameSorter);
 
           const targets = [...favs, ...normals, ...autos].slice(0, 4);
           if (targets.length > 0) {
-            handleSelectTagAsSplit(
-              tag,
+            handleSelectHostsAsSplit(
+              tag.startsWith(TAG_GROUP_PREFIX) ? tag.slice(TAG_GROUP_PREFIX.length) : tag,
               targets.map((h) => h.name),
             );
           } else {
@@ -1589,7 +1591,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     return setupPluginAPI({
       setTheme,
       handleSelectHost,
-      handleSelectTagAsSplit,
+      handleSelectTagAsSplit: handleSelectHostsAsSplit,
       handleAttach,
       handleRefresh,
       setApplets,
@@ -1603,7 +1605,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     handleAttach,
     handleRefresh,
     handleSelectHost,
-    handleSelectTagAsSplit,
+    handleSelectHostsAsSplit,
     isMobile,
     handleCloseTabOrPane,
     getTerminalRefs,
@@ -1781,7 +1783,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
           }}
           onSelectTagAsSplit={(tag, hosts) => {
             setMobileOpen(false);
-            handleSelectTagAsSplit(tag, hosts);
+            handleSelectHostsAsSplit(tag, hosts);
           }}
           onLogout={handleLogout}
           onLogoutAll={handleLogoutAll}

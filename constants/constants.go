@@ -33,4 +33,7 @@ const (
 	APP_DEFAULT_HEIGHT                      = 768
 	APP_MIN_WIDTH                           = 400
 	APP_MIN_HEIGHT                          = 300
+	TAG_GROUP_PREFIX                        = "g-"
+	TAG_ORDER_PREFIX                        = "o-"
+	TAG_FAV                                 = "fav"
 )

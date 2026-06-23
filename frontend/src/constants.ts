@@ -160,3 +160,9 @@ export const CACHE_MANIFEST = "manifest-cache";
 export const DEFAULT_SCROLL_ITEMS = 10;
 
 export const DEFAULT_FONT_SIZE = 14; // MUI default typegraphy fontSize
+
+export const TAG_GROUP_PREFIX = "g-";
+
+export const TAG_ORDER_PREFIX = "o-";
+
+export const TAG_FAV = "fav";

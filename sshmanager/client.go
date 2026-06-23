@@ -302,12 +302,12 @@ func DeleteHost(name string) error {
 func ParseGroups(lines []string) []string {
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "### #g-") {
+		if strings.HasPrefix(trimmed, "### #"+constants.TAG_GROUP_PREFIX) {
 			fields := strings.Fields(trimmed[4:]) // Skip the "### " prefix
 			var groups []string
 			for _, f := range fields {
-				if strings.HasPrefix(f, "#g-") {
-					groups = append(groups, strings.TrimPrefix(f, "#g-"))
+				if strings.HasPrefix(f, "#"+constants.TAG_GROUP_PREFIX) {
+					groups = append(groups, strings.TrimPrefix(f, "#"+constants.TAG_GROUP_PREFIX))
 				}
 			}
 			return groups
@@ -334,7 +334,7 @@ func SaveGroups(groups []string) error {
 	if len(groups) > 0 {
 		var parts []string
 		for _, g := range groups {
-			parts = append(parts, "#g-"+g)
+			parts = append(parts, "#"+constants.TAG_GROUP_PREFIX+g)
 		}
 		groupLine = "### " + strings.Join(parts, " ")
 	}
@@ -342,7 +342,7 @@ func SaveGroups(groups []string) error {
 	foundIdx := -1
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "### #g-") {
+		if strings.HasPrefix(trimmed, "### #"+constants.TAG_GROUP_PREFIX) {
 			foundIdx = i
 			break
 		}
@@ -457,7 +457,7 @@ func ListHosts() ([]*models.HostData, error) {
 				}
 				comment := strings.Join(commentParts, " ")
 
-				isFav := slices.Contains(tags, "fav")
+				isFav := slices.Contains(tags, constants.TAG_FAV)
 
 				u := user
 				if u == "" {

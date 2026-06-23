@@ -87,6 +87,9 @@ import {
   DEFAULT_SCROLL_ITEMS,
   VAR_CS_SCROLL_ITEMS,
   BROWSER_STORAGE_KEY_EXPANDED_GROUPS,
+  TAG_GROUP_PREFIX,
+  TAG_ORDER_PREFIX,
+  TAG_FAV,
 } from "./constants";
 import {
   type HostForm,
@@ -497,7 +500,11 @@ export default function Sidebar({
   // Context Menu State
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
   const [localShellContextMenuOpen, setLocalShellContextMenuOpen] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ element: Element; target: HostData } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    element: Element;
+    target: HostData;
+    section: "fav" | "tree" | "auto";
+  } | null>(null);
   const [tagContextMenuOpen, setTagContextMenuOpen] = useState(false);
   const [tagContextMenu, setTagContextMenu] = useState<{ element: Element; tag: string } | null>(null);
 
@@ -541,7 +548,7 @@ export default function Sidebar({
   const getHostOrder = useCallback((host: HostData): number => {
     if (!host.tags) return Infinity;
     for (const tag of host.tags) {
-      if (tag.startsWith("o-")) {
+      if (tag.startsWith(TAG_ORDER_PREFIX)) {
         const order = parseInt(tag.substring(2));
         if (!isNaN(order)) return order;
       }
@@ -552,8 +559,8 @@ export default function Sidebar({
   const getHostGroupPath = useCallback((host: HostData): string | null => {
     if (!host.tags) return null;
     for (const tag of host.tags) {
-      if (tag.startsWith("g-")) {
-        return tag.substring(2);
+      if (tag.startsWith(TAG_GROUP_PREFIX)) {
+        return tag.slice(TAG_GROUP_PREFIX.length);
       }
     }
     return null;
@@ -603,9 +610,11 @@ export default function Sidebar({
         const newGroupTag = destGroupPath ? `g-${destGroupPath}` : null;
 
         let tagsChanged = false;
-        let newTags = h.tags ? h.tags.filter((t) => !t.startsWith("o-") && !t.startsWith("g-")) : [];
+        const newTags = h.tags
+          ? h.tags.filter((t) => !t.startsWith(TAG_ORDER_PREFIX) && !t.startsWith(TAG_GROUP_PREFIX))
+          : [];
 
-        const oldGroupTag = h.tags ? h.tags.find((t) => t.startsWith("g-")) : null;
+        const oldGroupTag = h.tags ? h.tags.find((t) => t.startsWith(TAG_GROUP_PREFIX)) : null;
         const expectedGroupTag = newGroupTag;
         if (oldGroupTag !== expectedGroupTag) {
           tagsChanged = true;
@@ -1076,11 +1085,14 @@ export default function Sidebar({
     forceReload();
   }, []);
 
-  const handleContextMenu = useCallback((e: React.MouseEvent | React.KeyboardEvent, host: HostData) => {
-    e.preventDefault();
-    setContextMenu({ element: e.currentTarget, target: host });
-    setContextMenuOpen(true);
-  }, []);
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent | React.KeyboardEvent, host: HostData, section: "fav" | "tree" | "auto") => {
+      e.preventDefault();
+      setContextMenu({ element: e.currentTarget, target: host, section });
+      setContextMenuOpen(true);
+    },
+    [],
+  );
 
   const handleTagContextMenu = useCallback((e: React.MouseEvent, tag: string) => {
     e.preventDefault();
@@ -1241,10 +1253,10 @@ export default function Sidebar({
 
     let newTags = target.tags ? [...target.tags] : [];
     if (target.is_favourite) {
-      newTags = newTags.filter((t) => t !== "fav");
+      newTags = newTags.filter((t) => t !== TAG_FAV);
     } else {
-      if (!newTags.includes("fav")) {
-        newTags.push("fav");
+      if (!newTags.includes(TAG_FAV)) {
+        newTags.push(TAG_FAV);
       }
     }
 
@@ -1377,9 +1389,43 @@ export default function Sidebar({
     }
   }, [contextMenu]);
 
+  const handleOpenGroupAll = useCallback(() => {
+    setGroupContextMenuOpen(false);
+    if (!groupContextMenu) {
+      return;
+    }
+    const targets = hosts.filter((h) => h.tags && h.tags.includes(TAG_GROUP_PREFIX + groupContextMenu.path));
+    targets.forEach((h) => onSelect(h.name));
+  }, [groupContextMenu, hosts, onSelect]);
+
+  const handleOpenGroupAllInNewWindow = useCallback(() => {
+    setGroupContextMenuOpen(false);
+    if (!groupContextMenu) {
+      return;
+    }
+    openHostInNewWindow("#" + TAG_GROUP_PREFIX + groupContextMenu.path);
+  }, [groupContextMenu]);
+
+  const handleOpenGroupAllSplitScreen = useCallback(() => {
+    setGroupContextMenuOpen(false);
+    if (!groupContextMenu) {
+      return;
+    }
+    const filtered = hosts.filter((h) => h.tags && h.tags.includes(TAG_GROUP_PREFIX + groupContextMenu.path));
+    const targets = filtered.slice(0, 4);
+    if (targets.length > 0) {
+      onSelectTagAsSplit(
+        groupContextMenu.path,
+        targets.map((h) => h.name),
+      );
+    }
+  }, [groupContextMenu, hosts, onSelectTagAsSplit]);
+
   const handleAddSubGroupClick = useCallback(async () => {
     setGroupContextMenuOpen(false);
-    if (!groupContextMenu) return;
+    if (!groupContextMenu) {
+      return;
+    }
     const parentPath = groupContextMenu.path;
     const name = await dialogs.prompt("Enter sub-group name:", "", {
       validate: function (str: string): string | undefined {
@@ -1490,7 +1536,7 @@ export default function Sidebar({
           const rel = gp.substring(G.length + 1);
           newGp = parentPath ? `${parentPath}/${rel}` : rel;
         }
-        const newTags = host.tags ? host.tags.filter((t) => !t.startsWith("g-")) : [];
+        const newTags = host.tags ? host.tags.filter((t) => !t.startsWith(TAG_GROUP_PREFIX)) : [];
         if (newGp) {
           newTags.push(`g-${newGp}`);
         }
@@ -1948,7 +1994,7 @@ export default function Sidebar({
     hosts.forEach((h) => {
       if (h.tags) {
         h.tags.forEach((t) => {
-          if (t !== "fav" && !t.startsWith("g-") && !t.startsWith("o-")) {
+          if (t !== TAG_FAV && !t.startsWith(TAG_GROUP_PREFIX) && !t.startsWith(TAG_ORDER_PREFIX)) {
             set.add(t);
           }
         });
@@ -2264,6 +2310,7 @@ export default function Sidebar({
                 const itemIdx = flatList.findIndex((item) => item.id === `sidebar-fav-${host.name}`);
                 return (
                   <HostListItem
+                    section="fav"
                     key={`fav-${host.name}`}
                     id={`sidebar-fav-${host.name}`}
                     filter={filterStr}
@@ -2337,6 +2384,7 @@ export default function Sidebar({
                 const itemIdx = flatList.findIndex((item) => item.id === `sidebar-auto-${host.name}`);
                 return (
                   <HostListItem
+                    section="auto"
                     key={`auto-${host.name}`}
                     id={`sidebar-auto-${host.name}`}
                     filter={filterStr}
@@ -2510,7 +2558,7 @@ export default function Sidebar({
             Delete Host
           </MenuItem>
         )}
-        {contextMenu && getHostGroupPath(contextMenu.target) === null && (
+        {contextMenu && contextMenu.section === "tree" && getHostGroupPath(contextMenu.target) === null && (
           <MenuItem onClick={handleAddTopLevelGroupClick}>Add Top-Level Group</MenuItem>
         )}
       </Menu>
@@ -2528,6 +2576,9 @@ export default function Sidebar({
         onClose={() => setGroupContextMenuOpen(false)}
         anchorEl={groupContextMenu?.element}
       >
+        <MenuItem onClick={handleOpenGroupAll}>Open All ({groupContextMenu?.path})</MenuItem>
+        <MenuItem onClick={handleOpenGroupAllInNewWindow}>Open All (New Window)</MenuItem>
+        <MenuItem onClick={handleOpenGroupAllSplitScreen}>Open All (Split Screen)</MenuItem>
         <MenuItem onClick={handleAddSubGroupClick}>Add Sub-Group</MenuItem>
         <MenuItem onClick={handleAddTopLevelGroupClick}>Add Top-Level Group</MenuItem>
         <MenuItem onClick={handleDeleteGroupClick} sx={{ color: "error.main" }}>
@@ -3016,6 +3067,8 @@ export default function Sidebar({
                   <br />
                   <b>Alt + E / Ctrl + Shift + P</b> : Open new tab dialog - buttons view
                   <br />
+                  <b>Alt + :</b> : Open new tab dialog - tunnels view
+                  <br />
                   <b>Alt + ?</b> : Open new tab dialog - all view
                   <br />
                   <b>Alt + N</b> : Open new default local shell tab
@@ -3363,17 +3416,19 @@ export default function Sidebar({
 
 function HostListItem({
   id,
+  section,
   filter,
   host,
   onSelect,
   onContextMenu,
   isSelected,
 }: {
-  id?: string;
+  id: string;
+  section: "fav" | "tree" | "auto";
   filter: string;
   host: HostData;
   onSelect: (name: string) => void;
-  onContextMenu: (e: React.MouseEvent, host: HostData) => void;
+  onContextMenu: (e: React.MouseEvent, host: HostData, section: "fav" | "tree" | "auto") => void;
   isSelected?: boolean;
 }) {
   const itemRef = useRef<HTMLLIElement>(null);
@@ -3400,7 +3455,7 @@ function HostListItem({
       {...(id ? { id } : {})}
       ref={itemRef}
       disablePadding
-      onContextMenu={(e) => onContextMenu(e, host)}
+      onContextMenu={(e) => onContextMenu(e, host, section)}
       data-name={host.name}
       data-tags={host.tags?.join(" ") ?? ""}
       className="sidebar-host"
@@ -3456,7 +3511,7 @@ function HostListItem({
               <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 0.25 }}>
                 {host.tags &&
                   host.tags
-                    .filter((t) => t !== "fav" && !t.startsWith("g-") && !t.startsWith("o-"))
+                    .filter((t) => t !== TAG_FAV && !t.startsWith(TAG_GROUP_PREFIX) && !t.startsWith(TAG_ORDER_PREFIX))
                     .map((tag) => (
                       <Typography
                         key={tag}
@@ -3577,7 +3632,7 @@ function TreeGroupItem({
         setGroupContextMenuOpen(true);
       }}
       sx={{
-        pl: level * 4,
+        pl: level * 2.5 + 2,
         bgcolor: isSelected ? "action.hover" : isDragOver ? "action.selected" : "transparent",
         borderTop: isDragOver && dragOverTarget?.effect === "before" ? "2px solid" : "none",
         borderTopColor: "primary.main",
@@ -3639,7 +3694,11 @@ function TreeServerItem({
   setDragOverTarget: (item: { id: string; effect: "before" | "inside" } | null) => void;
   moveServer: (serverName: string, destGroupPath: string | null, beforeServerName: string | null) => Promise<void>;
   getHostGroupPath: (host: HostData) => string | null;
-  handleContextMenu: (e: React.MouseEvent | React.KeyboardEvent, host: HostData) => void;
+  handleContextMenu: (
+    e: React.MouseEvent | React.KeyboardEvent,
+    host: HostData,
+    section: "fav" | "tree" | "auto",
+  ) => void;
   onSelect: (host: string) => void;
 }) {
   const itemRef = useRef<HTMLLIElement>(null);
@@ -3694,11 +3753,11 @@ function TreeServerItem({
         }
         setDraggedItem(null);
       }}
-      onContextMenu={(e) => handleContextMenu(e, host)}
+      onContextMenu={(e) => handleContextMenu(e, host, "tree")}
       data-name={host.name}
       className="sidebar-host"
       sx={{
-        pl: level * 1.5 + 1,
+        pl: level * 2.5 + 2,
         bgcolor: isSelected ? "action.hover" : isFavourite ? "action.selected" : "transparent",
         borderTop: isDragOver ? "2px solid" : "none",
         borderTopColor: "primary.main",
@@ -3753,7 +3812,7 @@ function TreeServerItem({
               <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 0.25 }}>
                 {host.tags &&
                   host.tags
-                    .filter((t) => t !== "fav" && !t.startsWith("g-") && !t.startsWith("o-"))
+                    .filter((t) => t !== TAG_FAV && !t.startsWith(TAG_GROUP_PREFIX) && !t.startsWith(TAG_ORDER_PREFIX))
                     .map((tag) => (
                       <Typography
                         key={tag}

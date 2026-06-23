@@ -519,7 +519,7 @@ export function filterHosts(hosts: HostData[], filterStr: string): HostData[] {
         return false;
       }
 
-      const hasAllTags = requiredTags.every((tag) => host.tags!.includes(tag));
+      const hasAllTags = requiredTags.every((tag) => host.tags!.some((t) => t.toLowerCase() === tag));
       if (!hasAllTags) {
         return false;
       }

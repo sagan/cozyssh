@@ -164,6 +164,12 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           setNewTabDialogOpen(true);
           return;
 
+        case "alt+;":
+          e.preventDefault();
+          changeNewTabDialogViewMode("tunnels");
+          setNewTabDialogOpen(true);
+          return;
+
         case "alt+/":
           e.preventDefault();
           changeNewTabDialogViewMode("help");
