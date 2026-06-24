@@ -151,6 +151,8 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	sessionRemoteCommand := query.Get("remoteCommand")
 	execFlag := query.Get("exec") == "1"
 	noPublicKey := query.Get("noPublicKey") == "1"
+	localForwards := strings.Join(query["localForward"], "\n")
+	remoteForwards := strings.Join(query["remoteForward"], "\n")
 
 	user := common.User
 	// sessionID fallbacks to hostname if no unique ID provided
@@ -244,8 +246,13 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			})
 			s.SSHClient = pClient
 
-			// Set up port forwarding (only on the first SSH connection to this host)
-			localFwd, remoteFwd := sshmanager.GetHostForwardRules(host)
+			var localFwd, remoteFwd string
+			if localForwards != "" || remoteForwards != "" {
+				localFwd = localForwards
+				remoteFwd = remoteForwards
+			} else {
+				localFwd, remoteFwd = sshmanager.GetHostForwardRules(host)
+			}
 			if localFwd != "" || remoteFwd != "" {
 				hostKey := sshmanager.GetHostCanonicalKey(host)
 				cleanupTunnels := sshmanager.SetupPortForwarding(pClient.Client, host, hostKey, localFwd, remoteFwd)

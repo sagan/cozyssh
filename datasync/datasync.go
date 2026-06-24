@@ -2,7 +2,11 @@ package datasync
 
 import (
 	"bytes"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -23,7 +27,14 @@ import (
 	"cozyssh/constants"
 	"cozyssh/models"
 	"cozyssh/scratchpad"
+
+	"filippo.io/xaes256gcm"
+	"golang.org/x/crypto/hkdf"
 )
+
+const ROOT_DIR = "cozyssh"
+const FLAG_FILE = "encryption.flag"
+const FLAG_PLAINTEXT = "CZSSH_E2EE_OK"
 
 var (
 	syncDebounceTime       = 10 * time.Second
@@ -52,11 +63,12 @@ type syncMetadata struct {
 }
 
 type remoteFileInfo struct {
-	filename  string
-	itemType  string // "button" or "scratchpad"
-	id        string
-	timestamp int64
-	isDeleted bool
+	filename    string
+	itemType    string // "button" or "scratchpad"
+	id          string
+	timestamp   int64
+	isDeleted   bool
+	isEncrypted bool
 }
 
 func Init(cfg *config.Config) {
@@ -244,7 +256,7 @@ func makeRequest(method, urlStr string, body io.Reader, cfg *config.Config) (*ht
 }
 
 func ensureWebdavDir(cfg *config.Config) error {
-	davUrl := strings.TrimRight(cfg.WebdavUrl, "/") + "/cozyssh"
+	davUrl := strings.TrimRight(cfg.WebdavUrl, "/") + "/" + ROOT_DIR
 	resp, err := makeRequest("MKCOL", davUrl, nil, cfg)
 	if err != nil {
 		return err
@@ -256,24 +268,25 @@ func ensureWebdavDir(cfg *config.Config) error {
 	return nil
 }
 
-func listRemoteFiles(cfg *config.Config) ([]remoteFileInfo, error) {
-	davUrl := strings.TrimRight(cfg.WebdavUrl, "/") + "/cozyssh/"
+func listRemoteFiles(cfg *config.Config) ([]remoteFileInfo, bool, error) {
+	davUrl := strings.TrimRight(cfg.WebdavUrl, "/") + "/" + ROOT_DIR + "/"
 	resp, err := makeRequest("PROPFIND", davUrl, nil, cfg)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != 207 {
-		return nil, fmt.Errorf("PROPFIND returned status %d", resp.StatusCode)
+		return nil, false, fmt.Errorf("PROPFIND returned status %d", resp.StatusCode)
 	}
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	matches := hrefRegex.FindAllStringSubmatch(string(bodyBytes), -1)
 	var files []remoteFileInfo
+	var hasEncryptionFlag bool
 	for _, m := range matches {
 		rawHref := m[1]
 		decodedHref, err := url.PathUnescape(rawHref)
@@ -281,7 +294,20 @@ func listRemoteFiles(cfg *config.Config) ([]remoteFileInfo, error) {
 			decodedHref = rawHref
 		}
 		filename := path.Base(decodedHref)
-		if !strings.HasSuffix(filename, ".json") {
+		if filename == FLAG_FILE {
+			hasEncryptionFlag = true
+			continue
+		}
+
+		var isEncrypted bool
+		var suffix string
+		if strings.HasSuffix(filename, ".bin") {
+			isEncrypted = true
+			suffix = ".bin"
+		} else if strings.HasSuffix(filename, ".json") {
+			isEncrypted = false
+			suffix = ".json"
+		} else {
 			continue
 		}
 
@@ -303,7 +329,7 @@ func listRemoteFiles(cfg *config.Config) ([]remoteFileInfo, error) {
 			continue
 		}
 
-		nameWithoutExt := rawName[:len(rawName)-len(".json")]
+		nameWithoutExt := rawName[:len(rawName)-len(suffix)]
 		isDeleted := false
 		if strings.HasSuffix(nameWithoutExt, "_d") {
 			isDeleted = true
@@ -334,15 +360,16 @@ func listRemoteFiles(cfg *config.Config) ([]remoteFileInfo, error) {
 		}
 
 		files = append(files, remoteFileInfo{
-			filename:  filename,
-			itemType:  itemType,
-			id:        id,
-			timestamp: timestamp,
-			isDeleted: isDeleted,
+			filename:    filename,
+			itemType:    itemType,
+			id:          id,
+			timestamp:   timestamp,
+			isDeleted:   isDeleted,
+			isEncrypted: isEncrypted,
 		})
 	}
 
-	return files, nil
+	return files, hasEncryptionFlag, nil
 }
 
 func performSync() error {
@@ -350,9 +377,24 @@ func performSync() error {
 		return fmt.Errorf("failed to ensure WebDAV directory: %w", err)
 	}
 
+	var dek []byte
+	if gCfg.WebdavEncryptionEnabled {
+		if gCfg.WebdavMasterKey == "" {
+			return fmt.Errorf("webdav master key is missing")
+		}
+		masterKey, err := base64.StdEncoding.DecodeString(gCfg.WebdavMasterKey)
+		if err != nil || len(masterKey) != 32 {
+			return fmt.Errorf("invalid webdav master key")
+		}
+		dek, err = deriveDEK(masterKey)
+		if err != nil {
+			return fmt.Errorf("failed to derive DEK: %w", err)
+		}
+	}
+
 	cleanDeletedMaps()
 
-	remoteFiles, err := listRemoteFiles(gCfg)
+	remoteFiles, _, err := listRemoteFiles(gCfg)
 	if err != nil {
 		return fmt.Errorf("failed to list WebDAV files: %w", err)
 	}
@@ -401,7 +443,7 @@ func performSync() error {
 	var buttonsToUpsert []*models.ButtonData
 	var pagesToUpsert []*models.ScratchpadPage
 
-	davBaseUrl := strings.TrimRight(gCfg.WebdavUrl, "/") + "/cozyssh/"
+	davBaseUrl := strings.TrimRight(gCfg.WebdavUrl, "/") + "/" + ROOT_DIR + "/"
 
 	// Sync Buttons
 	buttonIDs := make(map[string]bool)
@@ -450,15 +492,41 @@ func performSync() error {
 				if err != nil {
 					return err
 				}
-				filename := fmt.Sprintf("button_%s_%d.json", id, localTS)
+				var ext string = ".json"
+				if gCfg.WebdavEncryptionEnabled {
+					ext = ".bin"
+					data, err = encryptData(data, dek)
+					if err != nil {
+						return err
+					}
+				}
+				filename := fmt.Sprintf("button_%s_%d%s", id, localTS, ext)
 				resp, err := makeRequest("PUT", davBaseUrl+filename, bytes.NewReader(data), gCfg)
 				if err != nil {
 					return err
 				}
 				resp.Body.Close()
 			} else if localDeleted {
-				filename := fmt.Sprintf("button_%s_%d_d.json", id, localTS)
-				resp, err := makeRequest("PUT", davBaseUrl+filename, bytes.NewReader([]byte("{}")), gCfg)
+				var ext string = ".json"
+				var data []byte = []byte("{}")
+				if gCfg.WebdavEncryptionEnabled {
+					ext = ".bin"
+					payload := map[string]interface{}{
+						"id":        id,
+						"mtime":     strconv.FormatInt(localTS, 10),
+						"$deleted$": true,
+					}
+					payloadBytes, err := json.Marshal(payload)
+					if err != nil {
+						return err
+					}
+					data, err = encryptData(payloadBytes, dek)
+					if err != nil {
+						return err
+					}
+				}
+				filename := fmt.Sprintf("button_%s_%d_d%s", id, localTS, ext)
+				resp, err := makeRequest("PUT", davBaseUrl+filename, bytes.NewReader(data), gCfg)
 				if err != nil {
 					return err
 				}
@@ -466,17 +534,53 @@ func performSync() error {
 			}
 		} else if remoteTS > localTS {
 			if remoteActive {
-				resp, err := makeRequest("GET", davBaseUrl+remoteWinner.filename, nil, gCfg)
+				b, err := downloadAndDecryptButton(remoteWinner.filename, remoteWinner.isEncrypted, id, remoteTS, dek)
 				if err != nil {
 					return err
 				}
-				var b models.ButtonData
-				err = json.NewDecoder(resp.Body).Decode(&b)
-				resp.Body.Close()
-				if err == nil {
-					buttonsToUpsert = append(buttonsToUpsert, &b)
+				if b != nil {
+					buttonsToUpsert = append(buttonsToUpsert, b)
 				}
 			} else if remoteDeleted {
+				if remoteWinner.isEncrypted {
+					resp, err := makeRequest("GET", davBaseUrl+remoteWinner.filename, nil, gCfg)
+					if err != nil {
+						return err
+					}
+					defer resp.Body.Close()
+					if resp.StatusCode != http.StatusOK {
+						return fmt.Errorf("GET returned status %d", resp.StatusCode)
+					}
+					bodyBytes, err := io.ReadAll(resp.Body)
+					if err != nil {
+						return err
+					}
+					decrypted, err := decryptData(bodyBytes, dek)
+					if err != nil {
+						return fmt.Errorf("failed to decrypt deletion marker: %w", err)
+					}
+					var marker struct {
+						Id      string      `json:"id"`
+						Mtime   interface{} `json:"mtime"`
+						Deleted bool        `json:"$deleted$"`
+					}
+					if err := json.Unmarshal(decrypted, &marker); err != nil {
+						return fmt.Errorf("failed to unmarshal deletion marker: %w", err)
+					}
+					var mtimeVal int64
+					switch v := marker.Mtime.(type) {
+					case float64:
+						mtimeVal = int64(v)
+					case int64:
+						mtimeVal = v
+					case string:
+						mtimeVal, _ = strconv.ParseInt(v, 10, 64)
+					}
+					if marker.Id != id || mtimeVal != remoteWinner.timestamp || !marker.Deleted {
+						return fmt.Errorf("decrypted deletion marker mismatch: got id=%s mtime=%d deleted=%t, expected id=%s timestamp=%d", marker.Id, mtimeVal, marker.Deleted, id, remoteWinner.timestamp)
+					}
+				}
+
 				buttonsToUpsert = append(buttonsToUpsert, &models.ButtonData{
 					Id:    constants.ID_DELETE_PREFIX + id,
 					Mtime: remoteTS,
@@ -541,15 +645,32 @@ func performSync() error {
 				if err != nil {
 					return err
 				}
-				filename := fmt.Sprintf("scratchpad_%s_%d.json", id, localTS)
+				var ext string = ".json"
+				if gCfg.WebdavEncryptionEnabled {
+					ext = ".bin"
+					data, err = encryptData(data, dek)
+					if err != nil {
+						return err
+					}
+				}
+				filename := fmt.Sprintf("scratchpad_%s_%d%s", id, localTS, ext)
 				resp, err := makeRequest("PUT", davBaseUrl+filename, bytes.NewReader(data), gCfg)
 				if err != nil {
 					return err
 				}
 				resp.Body.Close()
 			} else if localDeleted {
-				filename := fmt.Sprintf("scratchpad_%s_%d_d.json", id, localTS)
-				resp, err := makeRequest("PUT", davBaseUrl+filename, bytes.NewReader([]byte("{}")), gCfg)
+				var ext string = ".json"
+				var data []byte = []byte("{}")
+				if gCfg.WebdavEncryptionEnabled {
+					ext = ".bin"
+					data, err = encryptData([]byte("{}"), dek)
+					if err != nil {
+						return err
+					}
+				}
+				filename := fmt.Sprintf("scratchpad_%s_%d_d%s", id, localTS, ext)
+				resp, err := makeRequest("PUT", davBaseUrl+filename, bytes.NewReader(data), gCfg)
 				if err != nil {
 					return err
 				}
@@ -557,15 +678,12 @@ func performSync() error {
 			}
 		} else if remoteTS > localTS {
 			if remoteActive {
-				resp, err := makeRequest("GET", davBaseUrl+remoteWinner.filename, nil, gCfg)
+				p, err := downloadAndDecryptPage(remoteWinner.filename, remoteWinner.isEncrypted, dek)
 				if err != nil {
 					return err
 				}
-				var p models.ScratchpadPage
-				err = json.NewDecoder(resp.Body).Decode(&p)
-				resp.Body.Close()
-				if err == nil {
-					pagesToUpsert = append(pagesToUpsert, &p)
+				if p != nil {
+					pagesToUpsert = append(pagesToUpsert, p)
 				}
 			} else if remoteDeleted {
 				pagesToUpsert = append(pagesToUpsert, &models.ScratchpadPage{
@@ -609,27 +727,37 @@ func performSync() error {
 				defer resp.Body.Close()
 				bodyBytes, readErr := io.ReadAll(resp.Body)
 				if readErr == nil {
-					var raw struct {
-						Mtime json.RawMessage   `json:"mtime"`
-						Vars  map[string]string `json:"vars"`
+					if remoteWinner.isEncrypted {
+						var err error
+						bodyBytes, err = decryptData(bodyBytes, dek)
+						if err != nil {
+							log.Printf("sync decrypt vars err: %v", err)
+							bodyBytes = nil
+						}
 					}
-					if json.Unmarshal(bodyBytes, &raw) == nil {
-						remoteVars = raw.Vars
-						remoteMtime = make(map[string]int64)
-						if len(raw.Mtime) > 0 {
-							var mtimeMap map[string]int64
-							if json.Unmarshal(raw.Mtime, &mtimeMap) == nil {
-								remoteMtime = mtimeMap
-							} else {
-								var mtimeVal int64
-								if json.Unmarshal(raw.Mtime, &mtimeVal) == nil {
-									for k := range remoteVars {
-										remoteMtime[k] = mtimeVal
+					if bodyBytes != nil {
+						var raw struct {
+							Mtime json.RawMessage   `json:"mtime"`
+							Vars  map[string]string `json:"vars"`
+						}
+						if json.Unmarshal(bodyBytes, &raw) == nil {
+							remoteVars = raw.Vars
+							remoteMtime = make(map[string]int64)
+							if len(raw.Mtime) > 0 {
+								var mtimeMap map[string]int64
+								if json.Unmarshal(raw.Mtime, &mtimeMap) == nil {
+									remoteMtime = mtimeMap
+								} else {
+									var mtimeVal int64
+									if json.Unmarshal(raw.Mtime, &mtimeVal) == nil {
+										for k := range remoteVars {
+											remoteMtime[k] = mtimeVal
+										}
 									}
 								}
 							}
+							remoteWinnerLoaded = true
 						}
-						remoteWinnerLoaded = true
 					}
 				}
 			}
@@ -759,7 +887,16 @@ func performSync() error {
 				return err
 			}
 
-			filename := fmt.Sprintf("config_%d.json", maxTS)
+			var ext string = ".json"
+			if gCfg.WebdavEncryptionEnabled {
+				ext = ".bin"
+				data, err = encryptData(data, dek)
+				if err != nil {
+					return err
+				}
+			}
+
+			filename := fmt.Sprintf("config_%d%s", maxTS, ext)
 			resp, err := makeRequest("PUT", davBaseUrl+filename, bytes.NewReader(data), gCfg)
 			if err != nil {
 				return err
@@ -810,7 +947,7 @@ func removeFromStringSlice(slice []string, val string) []string {
 	return result
 }
 
-func DetectChanges(urlVal, userVal, passwordVal string) (*models.SyncDetectionResult, error) {
+func DetectChanges(urlVal, userVal, passwordVal, masterKeyVal string) (*models.SyncDetectionResult, error) {
 	if gCfg == nil {
 		return nil, fmt.Errorf("config not initialized")
 	}
@@ -829,15 +966,56 @@ func DetectChanges(urlVal, userVal, passwordVal string) (*models.SyncDetectionRe
 		return nil, fmt.Errorf("failed to connect or create folder on WebDAV: %w", err)
 	}
 
-	remoteFiles, err := listRemoteFiles(tempCfg)
+	remoteFiles, hasFlag, err := listRemoteFiles(tempCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list WebDAV files: %w", err)
 	}
 
-	if len(remoteFiles) == 0 {
+	if len(remoteFiles) == 0 && !hasFlag {
 		return &models.SyncDetectionResult{
 			BrandNew: true,
 		}, nil
+	}
+
+	// Determine which master key to use:
+	mKeyStr := masterKeyVal
+	if mKeyStr == "" {
+		mKeyStr = gCfg.WebdavMasterKey
+	}
+
+	var dek []byte
+	if hasFlag {
+		if mKeyStr == "" {
+			return &models.SyncDetectionResult{
+				Encrypted:   true,
+				KeyRequired: true,
+			}, nil
+		}
+
+		masterKey, err := base64.StdEncoding.DecodeString(mKeyStr)
+		if err != nil || len(masterKey) != 32 {
+			return &models.SyncDetectionResult{
+				Encrypted:  true,
+				KeyInvalid: true,
+			}, nil
+		}
+
+		dek, err = deriveDEK(masterKey)
+		if err != nil {
+			return &models.SyncDetectionResult{
+				Encrypted:  true,
+				KeyInvalid: true,
+			}, nil
+		}
+
+		// Verify the DEK using the encryption flag
+		ok, err := VerifyMasterKey(tempCfg, mKeyStr)
+		if err != nil || !ok {
+			return &models.SyncDetectionResult{
+				Encrypted:  true,
+				KeyInvalid: true,
+			}, nil
+		}
 	}
 
 	var uploadCount int
@@ -1007,32 +1185,42 @@ func DetectChanges(urlVal, userVal, passwordVal string) (*models.SyncDetectionRe
 		}
 
 		if remoteTS > 0 {
-			resp, err := makeRequest("GET", tempCfg.WebdavUrl+"/cozyssh/"+remoteWinner.filename, nil, tempCfg)
+			resp, err := makeRequest("GET", tempCfg.WebdavUrl+"/"+ROOT_DIR+"/"+remoteWinner.filename, nil, tempCfg)
 			if err == nil {
 				defer resp.Body.Close()
 				bodyBytes, readErr := io.ReadAll(resp.Body)
 				if readErr == nil {
-					var raw struct {
-						Mtime json.RawMessage   `json:"mtime"`
-						Vars  map[string]string `json:"vars"`
+					if remoteWinner.isEncrypted {
+						var err error
+						bodyBytes, err = decryptData(bodyBytes, dek)
+						if err != nil {
+							log.Printf("detect decrypt vars err: %v", err)
+							bodyBytes = nil
+						}
 					}
-					if json.Unmarshal(bodyBytes, &raw) == nil {
-						remoteVars = raw.Vars
-						remoteMtime = make(map[string]int64)
-						if len(raw.Mtime) > 0 {
-							var mtimeMap map[string]int64
-							if json.Unmarshal(raw.Mtime, &mtimeMap) == nil {
-								remoteMtime = mtimeMap
-							} else {
-								var mtimeVal int64
-								if json.Unmarshal(raw.Mtime, &mtimeVal) == nil {
-									for k := range remoteVars {
-										remoteMtime[k] = mtimeVal
+					if bodyBytes != nil {
+						var raw struct {
+							Mtime json.RawMessage   `json:"mtime"`
+							Vars  map[string]string `json:"vars"`
+						}
+						if json.Unmarshal(bodyBytes, &raw) == nil {
+							remoteVars = raw.Vars
+							remoteMtime = make(map[string]int64)
+							if len(raw.Mtime) > 0 {
+								var mtimeMap map[string]int64
+								if json.Unmarshal(raw.Mtime, &mtimeMap) == nil {
+									remoteMtime = mtimeMap
+								} else {
+									var mtimeVal int64
+									if json.Unmarshal(raw.Mtime, &mtimeVal) == nil {
+										for k := range remoteVars {
+											remoteMtime[k] = mtimeVal
+										}
 									}
 								}
 							}
+							remoteWinnerLoaded = true
 						}
-						remoteWinnerLoaded = true
 					}
 				}
 			}
@@ -1159,5 +1347,212 @@ func DetectChanges(urlVal, userVal, passwordVal string) (*models.SyncDetectionRe
 		DownloadCount:     downloadCount,
 		DeleteLocalCount:  deleteLocalCount,
 		DeleteRemoteCount: deleteRemoteCount,
+		Encrypted:         hasFlag,
 	}, nil
+}
+
+func deriveDEK(masterKey []byte) ([]byte, error) {
+	kdf := hkdf.New(sha256.New, masterKey, nil, []byte("data"))
+	dek := make([]byte, 32)
+	if _, err := io.ReadFull(kdf, dek); err != nil {
+		return nil, err
+	}
+	return dek, nil
+}
+
+func encryptData(plaintext []byte, dek []byte) ([]byte, error) {
+	aead, err := xaes256gcm.NewWithManualNonces(dek)
+	if err != nil {
+		return nil, err
+	}
+	nonce := make([]byte, xaes256gcm.NonceSize) // 24 bytes
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return nil, err
+	}
+	ciphertext := aead.Seal(nil, nonce, plaintext, nil)
+
+	var buf bytes.Buffer
+	buf.Write([]byte("CZSSH\x00\x00\x00"))
+	buf.Write(nonce)
+	buf.Write(ciphertext)
+	return buf.Bytes(), nil
+}
+
+func decryptData(data []byte, dek []byte) ([]byte, error) {
+	magic := []byte("CZSSH\x00\x00\x00")
+	if len(data) < len(magic)+xaes256gcm.NonceSize {
+		return nil, errors.New("data too short")
+	}
+	if !bytes.Equal(data[:len(magic)], magic) {
+		return nil, errors.New("invalid magic number")
+	}
+	nonceOffset := len(magic)
+	ciphertextOffset := nonceOffset + xaes256gcm.NonceSize
+
+	nonce := data[nonceOffset:ciphertextOffset]
+	ciphertext := data[ciphertextOffset:]
+
+	aead, err := xaes256gcm.NewWithManualNonces(dek)
+	if err != nil {
+		return nil, err
+	}
+	return aead.Open(nil, nonce, ciphertext, nil)
+}
+
+func EnsureWebdavDir(cfg *config.Config) error {
+	return ensureWebdavDir(cfg)
+}
+
+func CheckEncryptionFlag(cfg *config.Config) (bool, error) {
+	davUrl := strings.TrimRight(cfg.WebdavUrl, "/") + "/" + ROOT_DIR + "/" + FLAG_FILE
+	resp, err := makeRequest("GET", davUrl, nil, cfg)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		return true, nil
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		return false, nil
+	}
+	return false, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+}
+
+func VerifyMasterKey(cfg *config.Config, masterKeyStr string) (bool, error) {
+	masterKey, err := base64.StdEncoding.DecodeString(masterKeyStr)
+	if err != nil || len(masterKey) != 32 {
+		return false, fmt.Errorf("invalid master key length or encoding")
+	}
+
+	dek, err := deriveDEK(masterKey)
+	if err != nil {
+		return false, err
+	}
+
+	davUrl := strings.TrimRight(cfg.WebdavUrl, "/") + "/" + ROOT_DIR + "/" + FLAG_FILE
+	resp, err := makeRequest("GET", davUrl, nil, cfg)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("failed to fetch encryption flag: status %d", resp.StatusCode)
+	}
+
+	flagData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, err
+	}
+
+	decrypted, err := decryptData(flagData, dek)
+	if err != nil {
+		return false, nil // Decryption failure means incorrect key
+	}
+
+	return string(decrypted) == FLAG_PLAINTEXT, nil
+}
+
+func WriteEncryptionFlag(cfg *config.Config, masterKeyStr string) error {
+	masterKey, err := base64.StdEncoding.DecodeString(masterKeyStr)
+	if err != nil || len(masterKey) != 32 {
+		return fmt.Errorf("invalid master key length or encoding")
+	}
+
+	dek, err := deriveDEK(masterKey)
+	if err != nil {
+		return err
+	}
+
+	encrypted, err := encryptData([]byte(FLAG_PLAINTEXT), dek)
+	if err != nil {
+		return err
+	}
+
+	davUrl := strings.TrimRight(cfg.WebdavUrl, "/") + "/" + ROOT_DIR + "/" + FLAG_FILE
+	resp, err := makeRequest("PUT", davUrl, bytes.NewReader(encrypted), cfg)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("failed to write encryption flag: status %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+func downloadAndDecryptButton(filename string, isEncrypted bool, id string, timestamp int64, dek []byte) (*models.ButtonData, error) {
+	davBaseUrl := strings.TrimRight(gCfg.WebdavUrl, "/") + "/" + ROOT_DIR + "/"
+	resp, err := makeRequest("GET", davBaseUrl+filename, nil, gCfg)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GET returned status %d", resp.StatusCode)
+	}
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if isEncrypted {
+		decrypted, err := decryptData(bodyBytes, dek)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt button: %w", err)
+		}
+		var b models.ButtonData
+		if err := json.Unmarshal(decrypted, &b); err != nil {
+			return nil, err
+		}
+		if b.Id != id || b.Mtime != timestamp {
+			return nil, fmt.Errorf("decrypted button metadata mismatch: got id=%s mtime=%d, expected id=%s timestamp=%d", b.Id, b.Mtime, id, timestamp)
+		}
+		return &b, nil
+	} else {
+		var b models.ButtonData
+		if err := json.Unmarshal(bodyBytes, &b); err != nil {
+			log.Printf("failed to unmarshal remote button %s: %v", filename, err)
+			return nil, nil
+		}
+		return &b, nil
+	}
+}
+
+func downloadAndDecryptPage(filename string, isEncrypted bool, dek []byte) (*models.ScratchpadPage, error) {
+	davBaseUrl := strings.TrimRight(gCfg.WebdavUrl, "/") + "/" + ROOT_DIR + "/"
+	resp, err := makeRequest("GET", davBaseUrl+filename, nil, gCfg)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GET returned status %d", resp.StatusCode)
+	}
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if isEncrypted {
+		decrypted, err := decryptData(bodyBytes, dek)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt scratchpad: %w", err)
+		}
+		var p models.ScratchpadPage
+		if err := json.Unmarshal(decrypted, &p); err != nil {
+			return nil, err
+		}
+		return &p, nil
+	} else {
+		var p models.ScratchpadPage
+		if err := json.Unmarshal(bodyBytes, &p); err != nil {
+			log.Printf("failed to unmarshal remote scratchpad %s: %v", filename, err)
+			return nil, nil
+		}
+		return &p, nil
+	}
 }

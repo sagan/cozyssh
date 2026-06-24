@@ -978,6 +978,8 @@ export default function DialogManager({
                 treats&nbsp;
                 <code>remoteCommand</code> as a single program with args and execute it directly instead of executing it
                 using system shell.
+                <br />- <b>localForward</b> & <b>remoteForward</b> : OpenSSH syntax SSH tunnel rules. Use \n to seperate
+                multiple rules.
                 <br /> E.g. <b>local?id=local-abc&title=Local&remoteCommand=tmux attach || tmux new</b>
               </Typography>
             </Box>

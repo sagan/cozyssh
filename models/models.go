@@ -29,12 +29,15 @@ type Manifest struct {
 }
 
 type WebdavStatus struct {
-	WebdavUrl     string `json:"webdavUrl"`
-	WebdavUser    string `json:"webdavUser"`
-	WebdavEnabled bool   `json:"webdavEnabled"`
-	SyncStatus    string `json:"syncStatus" ts_type:"\"idle\" | \"syncing\" | \"error\" | \"success\" | \"disabled\""`
-	SyncError     string `json:"syncError"`
-	SyncTime      int64  `json:"syncTime"`
+	WebdavUrl       string `json:"webdavUrl"`
+	WebdavUser      string `json:"webdavUser"`
+	WebdavPassword  string `json:"webdavPassword"`
+	WebdavEnabled   bool   `json:"webdavEnabled"`
+	SyncStatus      string `json:"syncStatus" ts_type:"\"idle\" | \"syncing\" | \"error\" | \"success\" | \"disabled\""`
+	SyncError       string `json:"syncError"`
+	SyncTime        int64  `json:"syncTime"`
+	WebdavEncrypted bool   `json:"webdavEncrypted"`
+	MasterKey       string `json:"masterKey,omitempty"`
 }
 
 type Sysinfo struct {
@@ -46,10 +49,12 @@ type Sysinfo struct {
 }
 
 type SaveWebdavSettingsRequest struct {
-	Url      string `json:"url"`
-	User     string `json:"user"`
-	Password string `json:"password"`
-	Enabled  bool   `json:"enabled"`
+	Url           string `json:"url"`
+	User          string `json:"user"`
+	Password      string `json:"password"`
+	Enabled       bool   `json:"enabled"`
+	UseEncryption bool   `json:"useEncryption,omitempty"`
+	MasterKey     string `json:"masterKey,omitempty"`
 }
 
 type SyncDetectionResult struct {
@@ -58,6 +63,9 @@ type SyncDetectionResult struct {
 	DownloadCount     int  `json:"downloadCount"`
 	DeleteLocalCount  int  `json:"deleteLocalCount"`
 	DeleteRemoteCount int  `json:"deleteRemoteCount"`
+	Encrypted         bool `json:"encrypted"`
+	KeyRequired       bool `json:"keyRequired"`
+	KeyInvalid        bool `json:"keyInvalid"`
 }
 
 type HostData struct {

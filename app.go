@@ -3,7 +3,9 @@ package cozyssh
 import (
 	"bytes"
 	"context"
+	cryptoRand "crypto/rand"
 	"embed"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -571,15 +573,19 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 			cfg, err := config.LoadConfig(flags.ConfigDir)
 			if err != nil {
 				http.Error(w, "failed to load config", http.StatusInternalServerError)
+				return
 			}
 			status, errMsg, lastTime := datasync.GetStatus()
 			res := &models.WebdavStatus{
-				WebdavUrl:     cfg.WebdavUrl,
-				WebdavUser:    cfg.WebdavUser,
-				WebdavEnabled: cfg.WebdavEnabled,
-				SyncStatus:    status,
-				SyncError:     errMsg,
-				SyncTime:      lastTime,
+				WebdavUrl:       cfg.WebdavUrl,
+				WebdavUser:      cfg.WebdavUser,
+				WebdavPassword:  cfg.WebdavPassword,
+				WebdavEnabled:   cfg.WebdavEnabled,
+				SyncStatus:      status,
+				SyncError:       errMsg,
+				SyncTime:        lastTime,
+				WebdavEncrypted: cfg.WebdavEncryptionEnabled,
+				MasterKey:       cfg.WebdavMasterKey,
 			}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(res)
@@ -596,7 +602,58 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				http.Error(w, "Bad Request", http.StatusBadRequest)
 				return
 			}
-			if err := cfg.UpdateWebdavSettings(req.Url, req.User, req.Password, req.Enabled); err != nil {
+
+			var masterKeyStr = req.MasterKey
+			var encEnabled = req.UseEncryption
+
+			if encEnabled {
+				tempCfg := &config.Config{
+					WebdavUrl:      req.Url,
+					WebdavUser:     req.User,
+					WebdavPassword: req.Password,
+				}
+				if tempCfg.WebdavPassword == "" {
+					tempCfg.WebdavPassword = cfg.WebdavPassword
+				}
+
+				if err := datasync.EnsureWebdavDir(tempCfg); err != nil {
+					http.Error(w, "failed to connect or create folder on WebDAV: "+err.Error(), http.StatusInternalServerError)
+					return
+				}
+
+				hasFlag, err := datasync.CheckEncryptionFlag(tempCfg)
+				if err != nil {
+					http.Error(w, "failed to check encryption flag: "+err.Error(), http.StatusInternalServerError)
+					return
+				}
+
+				if hasFlag {
+					if masterKeyStr == "" {
+						http.Error(w, "master key is required for encrypted server", http.StatusBadRequest)
+						return
+					}
+					ok, err := datasync.VerifyMasterKey(tempCfg, masterKeyStr)
+					if err != nil || !ok {
+						http.Error(w, "invalid master key", http.StatusBadRequest)
+						return
+					}
+				} else {
+					if masterKeyStr == "" {
+						mKey := make([]byte, 32)
+						if _, err := io.ReadFull(cryptoRand.Reader, mKey); err != nil {
+							http.Error(w, "failed to generate master key: "+err.Error(), http.StatusInternalServerError)
+							return
+						}
+						masterKeyStr = base64.StdEncoding.EncodeToString(mKey)
+					}
+					if err := datasync.WriteEncryptionFlag(tempCfg, masterKeyStr); err != nil {
+						http.Error(w, "failed to write encryption flag: "+err.Error(), http.StatusInternalServerError)
+						return
+					}
+				}
+			}
+
+			if err := cfg.UpdateWebdavSettings(req.Url, req.User, req.Password, req.Enabled, encEnabled, masterKeyStr); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -617,7 +674,7 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				http.Error(w, "Bad Request", http.StatusBadRequest)
 				return
 			}
-			res, err := datasync.DetectChanges(req.Url, req.User, req.Password)
+			res, err := datasync.DetectChanges(req.Url, req.User, req.Password, req.MasterKey)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return

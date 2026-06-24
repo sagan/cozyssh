@@ -55,11 +55,13 @@ type Config struct {
 	// Each segment should be quoted if it contain space.
 	Shells []string `json:"shells,omitempty"`
 	// WebDAV Settings
-	WebdavUrl      string `json:"webdav_url,omitempty"`
-	WebdavUser     string `json:"webdav_user,omitempty"`
-	WebdavPassword string `json:"webdav_password,omitempty"`
-	WebdavEnabled  bool   `json:"webdav_enabled,omitempty"`
-	mu             sync.Mutex
+	WebdavUrl               string `json:"webdav_url,omitempty"`
+	WebdavUser              string `json:"webdav_user,omitempty"`
+	WebdavPassword          string `json:"webdav_password,omitempty"`
+	WebdavEnabled           bool   `json:"webdav_enabled,omitempty"`
+	WebdavEncryptionEnabled bool   `json:"webdav_encryption_enabled,omitempty"`
+	WebdavMasterKey         string `json:"webdav_master_key,omitempty"`
+	mu                      sync.Mutex
 }
 
 func LoadConfig(customDir string) (*Config, error) {
@@ -776,7 +778,7 @@ func (c *Config) UpdateSavePassword(value string) error {
 	return c.save()
 }
 
-func (c *Config) UpdateWebdavSettings(urlVal, userVal, passwordVal string, enabledVal bool) error {
+func (c *Config) UpdateWebdavSettings(urlVal, userVal, passwordVal string, enabledVal bool, encEnabledVal bool, masterKeyVal string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -784,8 +786,14 @@ func (c *Config) UpdateWebdavSettings(urlVal, userVal, passwordVal string, enabl
 	c.WebdavUser = userVal
 	if urlVal == "" && userVal == "" && passwordVal == "" {
 		c.WebdavPassword = ""
-	} else if passwordVal != "" {
-		c.WebdavPassword = passwordVal
+		c.WebdavEncryptionEnabled = false
+		c.WebdavMasterKey = ""
+	} else {
+		if passwordVal != "" {
+			c.WebdavPassword = passwordVal
+		}
+		c.WebdavEncryptionEnabled = encEnabledVal
+		c.WebdavMasterKey = masterKeyVal
 	}
 	c.WebdavEnabled = enabledVal
 

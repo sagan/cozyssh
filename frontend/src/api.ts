@@ -22,10 +22,13 @@ export interface Manifest {
 export interface WebdavStatus {
     webdavUrl: string;
     webdavUser: string;
+    webdavPassword: string;
     webdavEnabled: boolean;
     syncStatus: "idle" | "syncing" | "error" | "success" | "disabled";
     syncError: string;
     syncTime: number;
+    webdavEncrypted: boolean;
+    masterKey?: string;
 }
 export interface Sysinfo {
     hostname: string;
@@ -39,6 +42,8 @@ export interface SaveWebdavSettingsRequest {
     user: string;
     password: string;
     enabled: boolean;
+    useEncryption?: boolean;
+    masterKey?: string;
 }
 export interface SyncDetectionResult {
     brandNew: boolean;
@@ -46,6 +51,9 @@ export interface SyncDetectionResult {
     downloadCount: number;
     deleteLocalCount: number;
     deleteRemoteCount: number;
+    encrypted: boolean;
+    keyRequired: boolean;
+    keyInvalid: boolean;
 }
 export interface HostData {
     name: string;

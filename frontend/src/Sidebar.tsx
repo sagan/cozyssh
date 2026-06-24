@@ -37,6 +37,9 @@ import {
   Paper,
   Tooltip,
   Collapse,
+  FormControlLabel,
+  Checkbox,
+  InputAdornment,
 } from "@mui/material";
 import ComputerIcon from "@mui/icons-material/Computer";
 import DnsIcon from "@mui/icons-material/Dns";
@@ -263,6 +266,7 @@ export default function Sidebar({
   // WebDAV settings state
   const [currentWebdavUrl, setCurrentWebdavUrl] = useState("");
   const [currentWebdavUser, setCurrentWebdavUser] = useState("");
+  const [currentWebdavPassword, setCurrentWebdavPassword] = useState("");
   const [webdavUrl, setWebdavUrl] = useState("");
   const [webdavUser, setWebdavUser] = useState("");
   const [webdavPassword, setWebdavPassword] = useState("");
@@ -271,6 +275,10 @@ export default function Sidebar({
   const [syncError, setSyncError] = useState("");
   const [syncTime, setSyncTime] = useState<number | null>(null);
   const [isTestingWebdav, setIsTestingWebdav] = useState(false);
+  const [webdavEncrypted, setWebdavEncrypted] = useState(false);
+  const [useEncryption, setUseEncryption] = useState(false);
+  const [masterKey, setMasterKey] = useState("");
+  const [currentMasterKey, setCurrentMasterKey] = useState("");
 
   const fetchWebdavStatus = useCallback(async (onlyStatus = false) => {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
@@ -290,11 +298,16 @@ export default function Sidebar({
           setWebdavUser(data.webdavUser);
           setCurrentWebdavUser(data.webdavUser);
           setWebdavEnabled(!!data.webdavEnabled);
-          setWebdavPassword("");
+          setWebdavPassword(data.webdavPassword);
+          setCurrentWebdavPassword(data.webdavPassword);
+          setUseEncryption(!!data.webdavEncrypted);
+          setMasterKey(data.masterKey || "");
+          setCurrentMasterKey(data.masterKey || "");
         }
         setSyncStatus(data.syncStatus);
         setSyncError(data.syncError);
         setSyncTime(data.syncTime);
+        setWebdavEncrypted(!!data.webdavEncrypted);
       }
     } catch (e) {
       console.error("failed to fetch sync status", e);
@@ -309,7 +322,7 @@ export default function Sidebar({
   }, [settingsOpen, fetchWebdavStatus]);
 
   useEffect(() => {
-    if (settingsOpen && dialogTab === 3) {
+    if (settingsOpen && dialogTab === 4) {
       const interval = setInterval(() => fetchWebdavStatus(true), 3000);
       return () => clearInterval(interval);
     }
@@ -331,6 +344,8 @@ export default function Sidebar({
           user: currentWebdavUser,
           password: "",
           enabled: nextEnabled,
+          useEncryption: useEncryption,
+          masterKey: masterKey,
         }),
       });
 
@@ -367,6 +382,8 @@ export default function Sidebar({
             user: "",
             password: "",
             enabled: false,
+            useEncryption: false,
+            masterKey: "",
           } satisfies SaveWebdavSettingsRequest),
         });
 
@@ -377,7 +394,11 @@ export default function Sidebar({
           setWebdavUser("");
           setCurrentWebdavUser("");
           setWebdavPassword("");
+          setCurrentWebdavPassword("");
           setWebdavEnabled(false);
+          setUseEncryption(false);
+          setMasterKey("");
+          setCurrentMasterKey("");
           fetchWebdavStatus(false);
         } else {
           const text = await res.text();
@@ -386,7 +407,10 @@ export default function Sidebar({
         return;
       }
 
-      if (urlChanged) {
+      let localMasterKey = masterKey;
+      let finalUseEncryption = useEncryption;
+
+      if (urlChanged || useEncryption !== webdavEncrypted || masterKey !== currentMasterKey) {
         const detectRes = await fetch("/api/settings/webdav/detect", {
           method: METHOD_POST,
           headers: {
@@ -398,6 +422,8 @@ export default function Sidebar({
             user: webdavUser,
             password: webdavPassword,
             enabled: webdavEnabled,
+            useEncryption: useEncryption,
+            masterKey: localMasterKey,
           } satisfies SaveWebdavSettingsRequest),
         });
 
@@ -406,7 +432,49 @@ export default function Sidebar({
           throw new Error(text || "Failed to verify WebDAV connection");
         }
 
-        const data = (await detectRes.json()) as SyncDetectionResult;
+        let data = (await detectRes.json()) as SyncDetectionResult;
+
+        if (data.encrypted && (data.keyRequired || data.keyInvalid)) {
+          const keyInput = await dialogs.prompt(
+            "Encrypted WebDAV Session Detected. " + data.keyInvalid
+              ? "The master key you entered is invalid. Please enter the correct master key:"
+              : "This WebDAV server is encrypted. Please enter the master key to unlock and sync:",
+          );
+          if (keyInput === null) {
+            return;
+          }
+          localMasterKey = keyInput;
+          setMasterKey(keyInput);
+
+          const retryRes = await fetch("/api/settings/webdav/detect", {
+            method: METHOD_POST,
+            headers: {
+              [HEADER_CONTENT_TYPE]: MIME_JSON,
+              [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+            },
+            body: JSON.stringify({
+              url: webdavUrl,
+              user: webdavUser,
+              password: webdavPassword,
+              enabled: webdavEnabled,
+              useEncryption: true,
+              masterKey: localMasterKey,
+            } satisfies SaveWebdavSettingsRequest),
+          });
+
+          if (!retryRes.ok) {
+            const text = await retryRes.text();
+            throw new Error(text || "Failed to verify WebDAV connection with the provided key");
+          }
+
+          const retryData = (await retryRes.json()) as SyncDetectionResult;
+          if (retryData.keyInvalid) {
+            throw new Error("Invalid master key provided");
+          }
+          data = retryData;
+          finalUseEncryption = true;
+          setUseEncryption(true);
+        }
 
         let msg = "";
         let detail = "";
@@ -414,7 +482,10 @@ export default function Sidebar({
           msg = "WebDAV server connection ready";
           detail =
             `The server ${webdavUrl} is brand-new and contains no CozySSH data. ` +
-            `Your local data (buttons, vars, scratchpad) will be uploaded to it when synchronization is triggered.`;
+            `Your local data (buttons, vars, scratchpad) will be uploaded to it when synchronization is triggered.` +
+            (finalUseEncryption
+              ? "\n\nEnd-to-End Encryption (E2EE) is enabled. A new 32-byte master key will be automatically generated and saved if you don't specify one."
+              : "");
         } else {
           msg = "WebDAV server connection successful!";
           detail =
@@ -423,7 +494,8 @@ export default function Sidebar({
             `• ${data.uploadCount} local changes will be uploaded to the server\n` +
             `• ${data.downloadCount} remote changes will be downloaded and applied locally\n` +
             `• ${data.deleteLocalCount} local items will be deleted\n` +
-            `• ${data.deleteRemoteCount} remote items will be deleted from the server`;
+            `• ${data.deleteRemoteCount} remote items will be deleted from the server` +
+            (data.encrypted ? "\n\nEnd-to-End Encryption (E2EE) is active on this server." : "");
         }
 
         const confirmed = await dialogs.confirm(
@@ -445,7 +517,9 @@ export default function Sidebar({
           url: webdavUrl,
           user: webdavUser,
           password: webdavPassword,
-          enabled: urlChanged ? true : webdavEnabled,
+          enabled: urlChanged || finalUseEncryption !== webdavEncrypted ? true : webdavEnabled,
+          useEncryption: finalUseEncryption,
+          masterKey: localMasterKey,
         } satisfies SaveWebdavSettingsRequest),
       });
 
@@ -453,6 +527,7 @@ export default function Sidebar({
         notify("WebDAV settings saved successfully", "success");
         setCurrentWebdavUrl(webdavUrl.trim());
         setCurrentWebdavUser(webdavUser);
+        setCurrentWebdavPassword(webdavPassword);
         fetchWebdavStatus(false);
       } else {
         const text = await saveRes.text();
@@ -3266,20 +3341,66 @@ export default function Sidebar({
                 <TextField
                   fullWidth
                   label="WebDAV Password"
-                  type="password"
                   size="small"
                   margin="dense"
-                  placeholder={webdavEnabled ? "••••••••" : "Enter password"}
+                  placeholder="WebDAV password"
                   value={webdavPassword}
                   onChange={(e) => setWebdavPassword(e.target.value)}
                   disabled={isTestingWebdav}
                 />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={useEncryption}
+                      onChange={(e) => setUseEncryption(e.target.checked)}
+                      disabled={isTestingWebdav || !!currentWebdavUrl}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2">Enable End-to-End Encryption (E2EE)</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Encrypt data before uploading to WebDAV server.
+                      </Typography>
+                    </Box>
+                  }
+                  sx={{ mt: 1, mb: 1, alignItems: "flex-start" }}
+                />
+                {useEncryption && (
+                  <TextField
+                    fullWidth
+                    label="WebDAV Master Key (Base64)"
+                    size="small"
+                    margin="dense"
+                    placeholder="Auto-generated if left blank for new servers"
+                    value={masterKey}
+                    onChange={(e) => setMasterKey(e.target.value)}
+                    disabled={isTestingWebdav || !!currentWebdavUrl}
+                    helperText="Keep this key safe! You will need it to unlock your encrypted sync session on other devices."
+                    slotProps={{
+                      input: {
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton onClick={() => navigator.clipboard.writeText(masterKey)}>
+                              <ContentCopyIcon fontSize="small" />
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      },
+                    }}
+                  />
+                )}
                 <Button
                   variant="contained"
                   onClick={handleSaveWebdav}
                   disabled={
                     isTestingWebdav ||
-                    (webdavUrl === currentWebdavUrl && webdavUser === currentWebdavUser && !webdavPassword)
+                    (webdavUrl === currentWebdavUrl &&
+                      webdavUser === currentWebdavUser &&
+                      webdavPassword === currentWebdavPassword &&
+                      useEncryption === webdavEncrypted &&
+                      masterKey === currentMasterKey) ||
+                    (!!currentWebdavUrl && !webdavUrl && (!!webdavUser || !!webdavPassword))
                   }
                   sx={{ mt: 1, textTransform: "none" }}
                   disableElevation
