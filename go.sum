@@ -1,5 +1,7 @@
 codeberg.org/sdassow/atomic v1.2.1 h1:1U4jqLRcYFnYqY0TwKIuHDvv17GfsorH5GrIHa7b4ik=
 codeberg.org/sdassow/atomic v1.2.1/go.mod h1:68UDThlkDJQNuZF+NJaCcBBsE7QZMOAfTfGOjzCYaK8=
+filippo.io/xaes256gcm v0.1.0 h1:+opP7dqsAyc513rQG6/60HoO5brPrXvV6RPX02bRh8I=
+filippo.io/xaes256gcm v0.1.0/go.mod h1:Gk/PXkMGgPPCL6rxHXTcZeKwWG5dNVpav7sGVLugTp0=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/awnumar/memcall v0.5.0 h1:31zYqzH08fM1UBzr53ywXFvqVP4grhAIFFd1Pfd7Gtk=

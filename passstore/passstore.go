@@ -2,8 +2,6 @@ package passstore
 
 import (
 	"cozyssh/common"
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
@@ -14,6 +12,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"filippo.io/xaes256gcm"
 	"github.com/awnumar/memguard"
 	"golang.org/x/crypto/argon2"
 
@@ -497,20 +496,16 @@ func unpad(data []byte) ([]byte, error) {
 }
 
 func encrypt(plaintext []byte, key []byte) (string, error) {
-	block, err := aes.NewCipher(key)
+	aead, err := xaes256gcm.NewWithManualNonces(key)
 	if err != nil {
 		return "", err
 	}
-	aesgcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", err
-	}
-	nonce := make([]byte, aesgcm.NonceSize())
+	nonce := make([]byte, xaes256gcm.NonceSize) // 24 bytes
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return "", err
 	}
 	padded := pad(plaintext)
-	ciphertext := aesgcm.Seal(nonce, nonce, padded, nil)
+	ciphertext := aead.Seal(nonce, nonce, padded, nil)
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
@@ -519,20 +514,16 @@ func decrypt(ciphertextStr string, key []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	block, err := aes.NewCipher(key)
+	aead, err := xaes256gcm.NewWithManualNonces(key)
 	if err != nil {
 		return nil, err
 	}
-	aesgcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-	nonceSize := aesgcm.NonceSize()
+	nonceSize := xaes256gcm.NonceSize // 24 bytes
 	if len(ciphertext) < nonceSize {
 		return nil, errors.New("ciphertext too short")
 	}
 	nonce, actualCiphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
-	plaintext, err := aesgcm.Open(nil, nonce, actualCiphertext, nil)
+	plaintext, err := aead.Open(nil, nonce, actualCiphertext, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -540,19 +531,15 @@ func decrypt(ciphertextStr string, key []byte) ([]byte, error) {
 }
 
 func encryptDEK(dek []byte, kek []byte) (string, error) {
-	block, err := aes.NewCipher(kek)
+	aead, err := xaes256gcm.NewWithManualNonces(kek)
 	if err != nil {
 		return "", err
 	}
-	aesgcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", err
-	}
-	nonce := make([]byte, aesgcm.NonceSize())
+	nonce := make([]byte, xaes256gcm.NonceSize) // 24 bytes
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return "", err
 	}
-	ciphertext := aesgcm.Seal(nonce, nonce, dek, nil)
+	ciphertext := aead.Seal(nonce, nonce, dek, nil)
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
@@ -561,20 +548,16 @@ func decryptDEK(encryptedDEKStr string, kek []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	block, err := aes.NewCipher(kek)
+	aead, err := xaes256gcm.NewWithManualNonces(kek)
 	if err != nil {
 		return nil, err
 	}
-	aesgcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-	nonceSize := aesgcm.NonceSize()
+	nonceSize := xaes256gcm.NonceSize // 24 bytes
 	if len(encryptedDEK) < nonceSize {
 		return nil, errors.New("encrypted DEK too short")
 	}
 	nonce, actualCiphertext := encryptedDEK[:nonceSize], encryptedDEK[nonceSize:]
-	dek, err := aesgcm.Open(nil, nonce, actualCiphertext, nil)
+	dek, err := aead.Open(nil, nonce, actualCiphertext, nil)
 	if err != nil {
 		return nil, err
 	}
