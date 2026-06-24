@@ -19,7 +19,7 @@ var (
 	})
 	WsMsgStateDisconnectedFatal, _ = json.Marshal(&WsTerminalMessage{
 		Type:  WsTerminalMessageTypeState,
-		State: "disconnected", // TODO: fatal disconnected
+		State: "disconnected (fatal)",
 	})
 	WsMsgStateConnected, _ = json.Marshal(&WsTerminalMessage{
 		Type:  WsTerminalMessageTypeState,

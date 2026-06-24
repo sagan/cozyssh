@@ -106,6 +106,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - `Alt + O` : Open new tab dialog, use `← →` (or `Alt + H/L`) to switch view, `↓ ↑` (or `Alt + J/K`) to select, `Enter` to open. `Alt + Enter` to open context menu. Use `Alt + ↓↑` (or `Alt + Shift + J/K`) to jump through items quickly
   - `Alt + A` : Open new tab dialog - tabs view
   - `Alt + E / Ctrl + Shift + P` : Open new tab dialog - buttons view
+  - `Alt + P` : Open new tab dialog - tags view
   - `Alt + :` : Open new tab dialog - tunnels view
   - `Alt + ?` : Open new tab dialog - all view
   - `Alt + N` : Open new default local shell tab

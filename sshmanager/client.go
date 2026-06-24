@@ -300,20 +300,23 @@ func DeleteHost(name string) error {
 }
 
 func ParseGroups(lines []string) []string {
+	var groups []string
+	seen := make(map[string]bool)
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "### #"+constants.TAG_GROUP_PREFIX) {
-			fields := strings.Fields(trimmed[4:]) // Skip the "### " prefix
-			var groups []string
-			for _, f := range fields {
-				if strings.HasPrefix(f, "#"+constants.TAG_GROUP_PREFIX) {
-					groups = append(groups, strings.TrimPrefix(f, "#"+constants.TAG_GROUP_PREFIX))
+		if strings.HasPrefix(trimmed, "### ") {
+			fields := strings.FieldsSeq(trimmed[4:]) // Skip the "### " prefix
+			for f := range fields {
+				if after, ok := strings.CutPrefix(f, "#"+constants.TAG_GROUP_PREFIX); ok {
+					if after != "" && !seen[after] {
+						seen[after] = true
+						groups = append(groups, after)
+					}
 				}
 			}
-			return groups
 		}
 	}
-	return []string{}
+	return groups
 }
 
 func ListGroups() ([]string, error) {
@@ -1901,12 +1904,50 @@ func createCopyIDHostKeyCallback(name string, hostStr string, portStr string, ex
 			if khCallback != nil && !isKnownHostsNull {
 				errCheck := khCallback(hostname, remote, key)
 				var keyErr *knownhosts.KeyError
-				if errors.As(errCheck, &keyErr) && len(keyErr.Want) == 0 {
-					f, e := os.OpenFile(knownHostsFile, os.O_APPEND|os.O_WRONLY, 0600)
-					if e == nil {
-						line := knownhosts.Line([]string{hostname, remote.String()}, key)
-						f.WriteString(line + "\n")
-						f.Close()
+				if errors.As(errCheck, &keyErr) {
+					if len(keyErr.Want) == 0 {
+						f, e := os.OpenFile(knownHostsFile, os.O_APPEND|os.O_WRONLY, 0600)
+						if e == nil {
+							line := knownhosts.Line([]string{hostname, remote.String()}, key)
+							f.WriteString(line + "\n")
+							f.Close()
+						}
+					} else {
+						// Group mismatched line numbers by filename (usually knownHostsFile)
+						linesToRemove := make(map[string][]int)
+						for _, want := range keyErr.Want {
+							linesToRemove[want.Filename] = append(linesToRemove[want.Filename], want.Line)
+						}
+
+						for fname, lineNums := range linesToRemove {
+							content, errRead := os.ReadFile(fname)
+							if errRead != nil {
+								continue
+							}
+							lines := strings.Split(string(content), "\n")
+							skipMap := make(map[int]bool)
+							for _, ln := range lineNums {
+								skipMap[ln] = true
+							}
+							var newLines []string
+							for idx, line := range lines {
+								lineNum := idx + 1
+								if skipMap[lineNum] {
+									continue
+								}
+								newLines = append(newLines, line)
+							}
+							newContent := strings.Join(newLines, "\n")
+							_ = common.AtomicWriteFileContents(fname, []byte(newContent))
+						}
+
+						// Append the new correct key
+						f, e := os.OpenFile(knownHostsFile, os.O_APPEND|os.O_WRONLY, 0600)
+						if e == nil {
+							line := knownhosts.Line([]string{hostname, remote.String()}, key)
+							f.WriteString(line + "\n")
+							f.Close()
+						}
 					}
 				}
 			}

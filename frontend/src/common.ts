@@ -262,6 +262,7 @@ export const terminalKeyShortcuts = new Set([
   "delete",
   "insert",
   "enter",
+  "ctrl+j",
   "escape",
   "ctrl+[", // same as escape
   "ctrl+]", // telnet quit
@@ -972,6 +973,16 @@ export function cutString(s: string, sep: string): [before: string, after: strin
     return [s, "", false];
   }
   return [s.slice(0, i), s.slice(i + sep.length), true];
+}
+
+/**
+ * Similar to Go strings.CutPrefix
+ */
+export function cutPrefix(s: string, prefix: string): [after: string, found: boolean] {
+  if (s.startsWith(prefix)) {
+    return [s.slice(prefix.length), true];
+  }
+  return [s, false];
 }
 
 /**

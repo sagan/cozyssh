@@ -316,7 +316,7 @@ export const changeNewTabDialogViewMode = (target?: boolean | ViewMode) =>
     if (typeof target === "string") {
       nextMode = target;
     } else {
-      const modes: ViewMode[] = ["servers", "buttons", "tabs", "tunnels"];
+      const modes: ViewMode[] = ["servers", "buttons", "tabs", "tags", "tunnels", "help"];
       const idx = modes.indexOf(mode);
       if (idx === -1) {
         nextMode = "servers";
@@ -331,9 +331,11 @@ export const changeNewTabDialogViewMode = (target?: boolean | ViewMode) =>
           ? "@"
           : nextMode === "tunnels"
             ? ":"
-            : nextMode === "help"
-              ? "?"
-              : "";
+            : nextMode === "tags"
+              ? "#"
+              : nextMode === "help"
+                ? "?"
+                : "";
     return { newTabDialogFilter: prefix + f };
   });
 

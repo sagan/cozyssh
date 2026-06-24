@@ -2,9 +2,18 @@ package sshmanager
 
 import (
 	"cozyssh/common"
+	"cozyssh/config"
 	"cozyssh/models"
+	"errors"
 	"fmt"
+	"net"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 func TestExpandTokens(t *testing.T) {
@@ -80,5 +89,121 @@ func TestCopyIDHelpers(t *testing.T) {
 	got := GetIdentityPathForHost(h)
 	if got != expected {
 		t.Errorf("GetIdentityPathForHost() = %q, want %q", got, expected)
+	}
+}
+
+func TestParseGroups(t *testing.T) {
+	lines := []string{
+		"### #g-group1 #g-group2",
+		"",
+		"Host server1",
+		"    HostName server1.com",
+		"### #fav #g-group2 #g-group3",
+		"Host server2",
+		"    HostName server2.com",
+		"### This is a comment about #g-ignored group but should still parse because it starts with ###",
+		"### #g-group1",
+	}
+
+	got := ParseGroups(lines)
+	want := []string{"group1", "group2", "group3", "ignored"}
+
+	if len(got) != len(want) {
+		t.Fatalf("ParseGroups() returned %d elements, want %d: %v", len(got), len(want), got)
+	}
+
+	for i, v := range got {
+		if v != want[i] {
+			t.Errorf("ParseGroups()[%d] = %q, want %q", i, v, want[i])
+		}
+	}
+}
+
+func TestCopySSHID_HostKeyMismatchReplacement(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "cozyssh-test-sshdir-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Save original config and set mock
+	origConfig := globalConfig
+	defer func() {
+		globalConfig = origConfig
+	}()
+	globalConfig = &config.Config{
+		SSHDir: tempDir,
+	}
+
+	// Generate key1 and key2
+	key1Str := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJK38f61K+823j4u87l14G2sN2j3v4t5r6e7d8c9b0a1"
+	key2Str := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJK38f61K+823j4u87l14G2sN2j3v4t5r6e7d8c9b0a2"
+
+	key1, _, _, _, err := ssh.ParseAuthorizedKey([]byte(key1Str))
+	if err != nil {
+		t.Fatalf("failed to parse key1: %v", err)
+	}
+	key2, _, _, _, err := ssh.ParseAuthorizedKey([]byte(key2Str))
+	if err != nil {
+		t.Fatalf("failed to parse key2: %v", err)
+	}
+
+	// Write known_hosts with key1
+	knownHostsPath := filepath.Join(tempDir, "known_hosts")
+	hostPattern := "192.168.50.1:22"
+	initialLine := knownhosts.Line([]string{hostPattern}, key1)
+	err = os.WriteFile(knownHostsPath, []byte(initialLine+"\n"), 0600)
+	if err != nil {
+		t.Fatalf("failed to write initial known_hosts: %v", err)
+	}
+
+	// Calculate fingerprints
+	fingerprint2 := ssh.FingerprintSHA256(key2)
+
+	// 1. First test: expectedFingerprint is empty. It should return host key verification mismatch error.
+	var hkResult HostKeyResult
+	cb, _, err := createCopyIDHostKeyCallback("test-server", "192.168.50.1", "22", "", &hkResult)
+	if err != nil {
+		t.Fatalf("createCopyIDHostKeyCallback failed: %v", err)
+	}
+
+	remoteAddr := &net.TCPAddr{IP: net.ParseIP("192.168.50.1"), Port: 22}
+	errCheck := cb(hostPattern, remoteAddr, key2)
+	if errCheck == nil {
+		t.Fatalf("expected mismatch error, got nil")
+	}
+
+	var verifyErr *HostKeyVerificationError
+	if !errors.As(errCheck, &verifyErr) || !strings.HasPrefix(verifyErr.Reason, "mismatch:") {
+		t.Fatalf("expected HostKeyVerificationError with mismatch reason, got: %v", errCheck)
+	}
+
+	// 2. Second test: expectedFingerprint matches key2's fingerprint.
+	// It should replace key1 with key2, and return nil.
+	var hkResult2 HostKeyResult
+	cb2, _, err := createCopyIDHostKeyCallback("test-server", "192.168.50.1", "22", fingerprint2, &hkResult2)
+	if err != nil {
+		t.Fatalf("createCopyIDHostKeyCallback failed: %v", err)
+	}
+
+	errCheck2 := cb2(hostPattern, remoteAddr, key2)
+	if errCheck2 != nil {
+		t.Fatalf("expected nil when expectedFingerprint matches, got: %v", errCheck2)
+	}
+
+	// Read known_hosts and verify it contains key2 line, and not key1 line
+	content, err := os.ReadFile(knownHostsPath)
+	if err != nil {
+		t.Fatalf("failed to read known_hosts: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(content)), "\n")
+	if len(lines) != 1 {
+		t.Errorf("expected 1 line in known_hosts, got %d: %v", len(lines), lines)
+	}
+
+	expectedLine := knownhosts.Line([]string{hostPattern, remoteAddr.String()}, key2)
+	if strings.TrimSpace(lines[0]) != strings.TrimSpace(expectedLine) {
+		t.Errorf("expected known_hosts line to be:\n%s\ngot:\n%s", expectedLine, lines[0])
 	}
 }

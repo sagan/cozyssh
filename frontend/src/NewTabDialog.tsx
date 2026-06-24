@@ -646,6 +646,13 @@ export default function NewTabDialog({
       const helpOptions: Omit<DialogItem, "flatIndex">[] = [
         {
           type: "help" as const,
+          value: "",
+          label: "Servers / Connections",
+          subtitle: "Connect to saved servers, local shells, or a direct SSH address",
+          tag: "alt+o",
+        },
+        {
+          type: "help" as const,
           value: ">",
           label: "> Buttons (Commands)",
           subtitle: "Execute custom buttons, scripts, or built-in functions",
@@ -658,16 +665,11 @@ export default function NewTabDialog({
           subtitle: "Switch to active browser tabs or attach pinned sessions",
           tag: "alt+a",
         },
-        // {
-        //   type: "help" as const,
-        //   value: "?",
-        //   label: "? Help",
-        //   subtitle: "Show help guide for command palette prefixes",
-        // },
         {
           type: "help" as const,
           value: "#",
           label: "# Tag",
+          tag: "alt+p",
           subtitle: "Filter servers by tag",
         },
         {
@@ -679,10 +681,10 @@ export default function NewTabDialog({
         },
         {
           type: "help" as const,
-          value: "",
-          label: "Servers / Connections",
-          subtitle: "Connect to saved servers, local shells, or a direct SSH address",
-          tag: "alt+o",
+          value: "?",
+          label: "? Help",
+          tag: "alt+?",
+          subtitle: "Show help guide for command palette prefixes",
         },
       ];
 
@@ -913,15 +915,89 @@ export default function NewTabDialog({
       slotProps={{
         paper: {
           sx: {
-            mt: "10dvh",
+            mt: "5dvh",
             minHeight: "200px",
-            maxHeight: "80dvh",
+            maxHeight: "85dvh",
             borderRadius: 2,
           },
         },
       }}
     >
       <DialogTitle sx={{ p: 1.5, pb: 1 }}>
+        {/* View mode selector row */}
+        <Box
+          sx={{
+            display: "flex",
+            gap: 0.5,
+            mb: 1,
+            overflowX: "auto",
+            "&::-webkit-scrollbar": { display: "none" },
+            scrollbarWidth: "none",
+          }}
+        >
+          {(
+            [
+              { mode: "servers" as const, icon: <DnsIcon fontSize="small" />, label: "Servers", shortcut: "alt+o" },
+              {
+                mode: "buttons" as const,
+                icon: <SmartButtonIcon fontSize="small" />,
+                label: "Buttons",
+                shortcut: "alt+e",
+              },
+              { mode: "tabs" as const, icon: <TabIcon fontSize="small" />, label: "Tabs", shortcut: "alt+a" },
+              { mode: "tags" as const, icon: <TagIcon fontSize="small" />, label: "Tags", shortcut: "alt+p" },
+              {
+                mode: "tunnels" as const,
+                icon: <ShortcutIcon fontSize="small" />,
+                label: "Tunnels",
+                shortcut: "alt+:",
+              },
+              { mode: "help" as const, icon: <HelpIcon fontSize="small" />, label: "Help", shortcut: "?" },
+            ] as const
+          ).map(({ mode, icon, label, shortcut }) => (
+            <Box
+              key={mode}
+              onClick={() => {
+                changeNewTabDialogViewMode(mode);
+                inputRef.current?.focus();
+              }}
+              title={`${label} (${shortcut})`}
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 0.25,
+                px: 1,
+                py: 0.5,
+                cursor: "pointer",
+                borderRadius: 1,
+                flex: "1 0 auto",
+                color: viewMode === mode ? "primary.main" : "text.secondary",
+                bgcolor: viewMode === mode ? "action.selected" : "transparent",
+                borderBottom: viewMode === mode ? 2 : 2,
+                borderColor: viewMode === mode ? "primary.main" : "transparent",
+                transition: "all 0.15s ease",
+                "&:hover": {
+                  bgcolor: "action.hover",
+                  color: viewMode === mode ? "primary.main" : "text.primary",
+                },
+              }}
+            >
+              {icon}
+              <Typography
+                variant="caption"
+                sx={{
+                  fontSize: "0.6rem",
+                  lineHeight: 1,
+                  fontWeight: 400,
+                  userSelect: "none",
+                }}
+              >
+                {label}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
         <TextField
           id={ID_NEW_TAB_DIALOG_INPUT}
           autoFocus

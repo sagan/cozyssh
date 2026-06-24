@@ -120,6 +120,7 @@ func (s *Session) run() {
 						errStr := strings.ToLower(rErr.Error())
 						if strings.Contains(errStr, "authenticate") || strings.Contains(errStr, "auth") ||
 							strings.Contains(errStr, "mismatch") || strings.HasPrefix(errStr, "fatal:") {
+							s.Broadcast(append([]byte(models.WS_MSG_PREFIX_STATE), models.WsMsgStateDisconnectedFatal...))
 							break
 						}
 						continue
