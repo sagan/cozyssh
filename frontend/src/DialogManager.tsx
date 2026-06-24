@@ -966,7 +966,8 @@ export default function DialogManager({
               <Typography variant="body2" color="text.secondary">
                 Server name or <b>[username[:password]@]hostname[:port]</b>. Use <b>{LOCAL_NAME}</b> for local shell.
                 <br />
-                Append <b>?id=abc&title=Local</b> style query string to set optional session-scope parameters:
+                Append <b>?id=abc&title=Local</b> style query string to set optional session-scope parameters (URL
+                Encoded):
                 <br />- <b>id</b> : The terminal pane id. If the same id pane exists, switch to it instead of opening a
                 new one
                 <br />- <b>title</b> : The opened tab title
@@ -978,8 +979,8 @@ export default function DialogManager({
                 treats&nbsp;
                 <code>remoteCommand</code> as a single program with args and execute it directly instead of executing it
                 using system shell.
-                <br />- <b>localForward</b> & <b>remoteForward</b> : OpenSSH syntax SSH tunnel rules. Use \n to seperate
-                multiple rules.
+                <br />- <b>localForward</b> & <b>remoteForward</b> : OpenSSH syntax SSH tunnel rules. Use&nbsp;
+                <code>%0A</code> (\n) to seperate multiple rules.
                 <br /> E.g. <b>local?id=local-abc&title=Local&remoteCommand=tmux attach || tmux new</b>
               </Typography>
             </Box>

@@ -22,7 +22,7 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
   - [`csFocus(tabOrPaneId?: string): void`](#csfocustaborpaneid-string-void)
   - [`csNotify(msg: string, severity: 'success' | 'info' | 'warning' | 'error' = 'info'): void`](#csnotifymsg-string-severity-success--info--warning--error--info-void)
   - [`csGetAll(): AllObject`](#csgetall-allobject)
-  - [`csOpen(target: HostData | string | (HostData | string)[], options?: { name?: string }): void`](#csopentarget-hostdata--string--hostdata--string-options--name-string--void)
+  - [`csOpen(host: HostData | string | (HostData | string)[], options?: { title?: string, target?: string }): void`](#csopenhost-hostdata--string--hostdata--string-options--title-string-target-string--void)
   - [`csClose(tabOrPaneId?: string): void`](#csclosetaborpaneid-string-void)
   - [`csFetch(url: string, options?: RequestInit): Promise<Response>`](#csfetchurl-string-options-requestinit-promiseresponse)
   - [`csExec(cmdline: string): Promise<{ error: unknown, stdout: string, stderr: string }>`](#csexeccmdline-string-promise-error-unknown-stdout-string-stderr-string-)
@@ -263,12 +263,14 @@ Returns an object containing all the data from the CozySSH application. Sample o
 }
 ```
 
-### `csOpen(target: HostData | string | (HostData | string)[], options?: { name?: string }): void`
+### `csOpen(host: HostData | string | (HostData | string)[], options?: { title?: string, target?: string }): void`
 
 Opens a new tab or split-screen tab.
 
-- `target`: The host object, connection string or array of up to 4 host objects or connection strings for split-screen. The connection string is either fixed `local` string (for local shell) or in `[username[:password]@]hostname[:port]` format. E.g. `user@host`. Note we don't recommend putting password in connection string. CozySSH does not log or store password anywhere but scripts are stored on server in plain text files. So be careful with any secrets in scripts.
-- `options.name`: Optional title for the new tab.
+- `host`: The host object, connection string or array of up to 4 host objects or connection strings for split-screen. The connection string is either fixed `local` string (for local shell) or in `[username[:password]@]hostname[:port]` format. E.g. `user@host`. Note we don't recommend putting password in connection string. CozySSH does not log or store password anywhere but scripts are stored on server in plain text files. So be careful with any secrets in scripts.
+  - The connection string can contain optional `?foo=bar` query string to set session scope parameters. For available parameters, see "Open Terminal" type Button help.
+- `options.title`: Optional title for the new tab.
+- `options.target`: Optional target tab id for the opened terminal. `_self` for active tab.
 
 ### `csClose(tabOrPaneId?: string): void`
 

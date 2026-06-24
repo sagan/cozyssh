@@ -103,6 +103,70 @@ interface NewTabDialogProps {
   onExecuteButton: (btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">) => void;
 }
 
+const modes = [
+  { type: "servers", icon: <DnsIcon fontSize="small" />, label: "Servers", shortcut: "alt+o" },
+  {
+    type: "buttons",
+    icon: <SmartButtonIcon fontSize="small" />,
+    label: "Buttons",
+    shortcut: "alt+e",
+  },
+  { type: "tabs", icon: <TabIcon fontSize="small" />, label: "Tabs", shortcut: "alt+a" },
+  { type: "tags", icon: <TagIcon fontSize="small" />, label: "Tags", shortcut: "alt+p" },
+  {
+    type: "tunnels",
+    icon: <ShortcutIcon fontSize="small" />,
+    label: "Tunnels",
+    shortcut: "alt+:",
+  },
+  { type: "help", icon: <HelpIcon fontSize="small" />, label: "Help", shortcut: "alt+?" },
+] as const;
+
+const helpOptions: Omit<DialogItem, "flatIndex">[] = [
+  {
+    type: "help",
+    value: "",
+    label: "Servers / Connections",
+    subtitle: "Connect to saved servers, local shells, or a direct SSH address",
+    tag: "alt+o",
+  },
+  {
+    type: "help",
+    value: ">",
+    label: "> Buttons (Commands)",
+    subtitle: "Execute custom buttons, scripts, or built-in functions",
+    tag: "alt+e / ctrl+shift+p",
+  },
+  {
+    type: "help",
+    value: "@",
+    label: "@ Tabs",
+    subtitle: "Switch to active browser tabs or attach pinned sessions",
+    tag: "alt+a",
+  },
+  {
+    type: "help",
+    value: "#",
+    label: "# Tag",
+    tag: "alt+p",
+    subtitle: "Filter servers by tag",
+  },
+  {
+    type: "help",
+    value: ":",
+    label: ": Tunnels",
+    tag: "alt+:",
+    subtitle: "Display active SSH tunnels",
+  },
+  {
+    type: "help",
+    value: "?",
+    label: "? Help",
+    tag: "alt+?",
+    subtitle: "Show help guide for command palette prefixes",
+  },
+] as const;
+
 export default function NewTabDialog({
   open,
   onClose,
@@ -643,55 +707,9 @@ export default function NewTabDialog({
       }));
       addSection("Tags", tagItems);
     } else if (viewMode === "help") {
-      const helpOptions: Omit<DialogItem, "flatIndex">[] = [
-        {
-          type: "help" as const,
-          value: "",
-          label: "Servers / Connections",
-          subtitle: "Connect to saved servers, local shells, or a direct SSH address",
-          tag: "alt+o",
-        },
-        {
-          type: "help" as const,
-          value: ">",
-          label: "> Buttons (Commands)",
-          subtitle: "Execute custom buttons, scripts, or built-in functions",
-          tag: "alt+e / ctrl+shift+p",
-        },
-        {
-          type: "help" as const,
-          value: "@",
-          label: "@ Tabs",
-          subtitle: "Switch to active browser tabs or attach pinned sessions",
-          tag: "alt+a",
-        },
-        {
-          type: "help" as const,
-          value: "#",
-          label: "# Tag",
-          tag: "alt+p",
-          subtitle: "Filter servers by tag",
-        },
-        {
-          type: "help" as const,
-          value: ":",
-          label: ": Tunnels",
-          tag: "alt+:",
-          subtitle: "Display active SSH tunnels",
-        },
-        {
-          type: "help" as const,
-          value: "?",
-          label: "? Help",
-          tag: "alt+?",
-          subtitle: "Show help guide for command palette prefixes",
-        },
-      ];
-
       const filteredHelp = helpOptions.filter(
         (o) => o.label.toLowerCase().includes(f) || o.subtitle?.toLowerCase().includes(f) || o.value.includes(f),
       );
-
       addSection("Command Palette Prefix Guide", filteredHelp);
     }
 
@@ -935,30 +953,11 @@ export default function NewTabDialog({
             scrollbarWidth: "none",
           }}
         >
-          {(
-            [
-              { mode: "servers" as const, icon: <DnsIcon fontSize="small" />, label: "Servers", shortcut: "alt+o" },
-              {
-                mode: "buttons" as const,
-                icon: <SmartButtonIcon fontSize="small" />,
-                label: "Buttons",
-                shortcut: "alt+e",
-              },
-              { mode: "tabs" as const, icon: <TabIcon fontSize="small" />, label: "Tabs", shortcut: "alt+a" },
-              { mode: "tags" as const, icon: <TagIcon fontSize="small" />, label: "Tags", shortcut: "alt+p" },
-              {
-                mode: "tunnels" as const,
-                icon: <ShortcutIcon fontSize="small" />,
-                label: "Tunnels",
-                shortcut: "alt+:",
-              },
-              { mode: "help" as const, icon: <HelpIcon fontSize="small" />, label: "Help", shortcut: "?" },
-            ] as const
-          ).map(({ mode, icon, label, shortcut }) => (
+          {modes.map(({ type, icon, label, shortcut }) => (
             <Box
-              key={mode}
+              key={type}
               onClick={() => {
-                changeNewTabDialogViewMode(mode);
+                changeNewTabDialogViewMode(type);
                 inputRef.current?.focus();
               }}
               title={`${label} (${shortcut})`}
@@ -972,14 +971,14 @@ export default function NewTabDialog({
                 cursor: "pointer",
                 borderRadius: 1,
                 flex: "1 0 auto",
-                color: viewMode === mode ? "primary.main" : "text.secondary",
-                bgcolor: viewMode === mode ? "action.selected" : "transparent",
-                borderBottom: viewMode === mode ? 2 : 2,
-                borderColor: viewMode === mode ? "primary.main" : "transparent",
+                color: viewMode === type ? "primary.main" : "text.secondary",
+                bgcolor: viewMode === type ? "action.selected" : "transparent",
+                borderBottom: viewMode === type ? 2 : 2,
+                borderColor: viewMode === type ? "primary.main" : "transparent",
                 transition: "all 0.15s ease",
                 "&:hover": {
                   bgcolor: "action.hover",
-                  color: viewMode === mode ? "primary.main" : "text.primary",
+                  color: viewMode === type ? "primary.main" : "text.primary",
                 },
               }}
             >

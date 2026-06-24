@@ -2281,6 +2281,7 @@ export default function Sidebar({
             node={node}
             level={level}
             isSelected={isSelected}
+            isMobile={isMobile}
             expandedGroups={expandedGroups}
             toggleGroupExpanded={toggleGroupExpanded}
             setDraggedItem={setDraggedItem}
@@ -2308,6 +2309,7 @@ export default function Sidebar({
           node={node}
           level={level}
           isSelected={isSelected}
+          isMobile={isMobile}
           filterStr={filterStr}
           draggedItem={draggedItem}
           dragOverTarget={dragOverTarget}
@@ -2631,7 +2633,7 @@ export default function Sidebar({
                 <ChevronRightIcon fontSize="small" sx={{ mr: 0.5, opacity: 0.7 }} />
               )}
               <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary", letterSpacing: "0.08em" }}>
-                ALL SERVERS
+                ALL
               </Typography>
             </Box>
             <IconButton
@@ -2689,7 +2691,7 @@ export default function Sidebar({
                   variant="caption"
                   sx={{ fontWeight: 700, color: "text.secondary", letterSpacing: "0.08em" }}
                 >
-                  AUTO SERVERS
+                  AUTO
                 </Typography>
               </Box>
               <Collapse in={autoExpanded} timeout={0} unmountOnExit>
@@ -3915,6 +3917,7 @@ function TreeGroupItem({
   node,
   level,
   isSelected,
+  isMobile,
   expandedGroups,
   toggleGroupExpanded,
   setDraggedItem,
@@ -3929,6 +3932,7 @@ function TreeGroupItem({
   node: GroupNode;
   level: number;
   isSelected: boolean;
+  isMobile: boolean;
   expandedGroups: Set<string>;
   toggleGroupExpanded: (path: string) => void;
   setDraggedItem: (item: { type: "group"; path: string } | { type: "server"; name: string } | null) => void;
@@ -3958,7 +3962,7 @@ function TreeGroupItem({
       ref={itemRef}
       id={`sidebar-tree-group-${node.path}`}
       disablePadding
-      draggable
+      draggable={!isMobile}
       onDragStart={(e) => {
         setDraggedItem({ type: "group", path: node.path });
         e.dataTransfer.effectAllowed = "move";
@@ -4039,6 +4043,7 @@ function TreeServerItem({
   node,
   level,
   isSelected,
+  isMobile,
   filterStr,
   draggedItem,
   dragOverTarget,
@@ -4052,6 +4057,7 @@ function TreeServerItem({
   node: ServerNode;
   level: number;
   isSelected: boolean;
+  isMobile: boolean;
   filterStr: string;
   draggedItem: { type: "group"; path: string } | { type: "server"; name: string } | null;
   dragOverTarget: { id: string; effect: "before" | "inside" } | null;
@@ -4092,7 +4098,7 @@ function TreeServerItem({
       ref={itemRef}
       id={`sidebar-tree-server-${host.name}`}
       disablePadding
-      draggable
+      draggable={!isMobile}
       onDragStart={(e) => {
         setDraggedItem({ type: "server", name: host.name });
         e.dataTransfer.effectAllowed = "move";
