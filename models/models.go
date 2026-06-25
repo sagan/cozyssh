@@ -1,6 +1,11 @@
 package models
 
-import "cozyssh/localpty"
+import (
+	"cozyssh/constants"
+	"cozyssh/localpty"
+	"strconv"
+	"strings"
+)
 
 // go run github.com/tkrajina/typescriptify-golang-structs/tscriptify@latest -interface -package=cozyssh/models -target="frontend/src/api.ts" models/models.go
 // Generates (overwrite) frontend/src/api.ts
@@ -355,3 +360,15 @@ type ActiveTunnel struct {
 
 // current it's not converted to TS automatically
 const WS_MSG_PREFIX_STATE = "STATE:"
+
+func (h *HostData) GetOrder() int {
+	for _, tag := range h.Tags {
+		if after, ok := strings.CutPrefix(tag, constants.TAG_ORDER_PREFIX); ok {
+			order, err := strconv.Atoi(after)
+			if err == nil {
+				return order
+			}
+		}
+	}
+	return 0
+}

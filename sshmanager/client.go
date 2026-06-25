@@ -502,6 +502,10 @@ func ListHosts() ([]*models.HostData, error) {
 		}
 	}
 
+	slices.SortStableFunc(hosts, func(a, b *models.HostData) int {
+		return a.GetOrder() - b.GetOrder()
+	})
+
 	return hosts, nil
 }
 

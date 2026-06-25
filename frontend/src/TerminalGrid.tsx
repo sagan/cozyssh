@@ -179,7 +179,9 @@ export default function TerminalGrid({
             sx={{
               position: "absolute",
               inset: 0,
-              display: activeTabId === tab.id ? "flex" : "none",
+              display: "flex",
+              zIndex: activeTabId === tab.id ? 1 : 0,
+              visibility: activeTabId === tab.id ? "visible" : "hidden",
               flexDirection: "column",
             }}
           >
