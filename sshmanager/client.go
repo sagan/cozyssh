@@ -300,7 +300,7 @@ func DeleteHost(name string) error {
 }
 
 func ParseGroups(lines []string) []string {
-	var groups []string
+	groups := []string{}
 	seen := make(map[string]bool)
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)

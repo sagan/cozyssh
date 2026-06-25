@@ -45,10 +45,7 @@ import {
   type ScratchpadSyncState,
   defaultThemeOptions,
   genTabId,
-  getIntVar,
   genPaneId,
-  parseHostName,
-  getCanonicalHostString,
   getTemplateVariables,
   liquidEngine,
 } from "./common";
@@ -59,19 +56,11 @@ import {
   setTabs,
   setActiveTabId,
   setActivePaneId,
-  setHosts,
-  setGroups,
-  setButtons,
-  setVars,
   triggerFocus,
-  setSysHostname,
-  setEditButtonDialogOpen,
   notify,
-  setRecents,
   setMobileOpen,
   setMobileAppletsOpen,
   setSearchOpen,
-  setShells,
   resetFontSize,
   decreseFontSize,
   increaseFontSize,
@@ -87,6 +76,9 @@ import {
   closeTabOrPane,
   openScratchpad,
   openHostsAsSplit2,
+  getIntVar,
+  setSysinfo,
+  refreshData,
 } from "./store";
 import { setupPluginAPI, runScript } from "./pluginAPI";
 import { useKeyboardManager } from "./useKeyboardManager";
@@ -148,44 +140,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, [applets]);
 
   const hasSidebarApplet = useMemo(() => !!applets.find((a) => a.position === "sidebar"), [applets]);
-
-  const [appVersion, setAppVersion] = useState<string>("dev");
-  const [savePassword, setSavePassword] = useState<ConfigRequest["save_password"]>("ask");
-
-  const loadFullData = useCallback((data: FullData) => {
-    setSysHostname(data.sysinfo.hostname || "unknown");
-    setAppVersion(data.sysinfo.version || "dev");
-    setSavePassword(data.sysinfo.savePassword);
-    setHosts(data.hosts);
-    setGroups(data.groups || []);
-    setShells(data.shells);
-    setButtons(data.buttons);
-    setVars(data.vars);
-    setRecents(data.recents);
-  }, []);
-
-  const handleRefresh = useCallback(
-    async ({ sync = 0, refresh = 0 } = {}) => {
-      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-      try {
-        const r = await fetch(`/api/fulldata?sync=${sync}&refresh=${refresh}`, {
-          headers: {
-            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-          },
-        });
-        if (r.status === 401) {
-          localStorage.removeItem(BROWSER_STORAGE_KEY_TOKEN);
-          window.location.href = "/login";
-          return;
-        }
-        const data: FullData = await r.json();
-        loadFullData(data);
-      } catch (e) {
-        console.error(e);
-      }
-    },
-    [loadFullData],
-  );
 
   const [muiTheme, setMuiTheme] = useState(() => createTheme(defaultThemeOptions({ fontSize: __CS_FONT_SIZE__ })));
 
@@ -763,7 +717,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         }
       }
 
-      loadFullData(data);
+      useStore.setState(data);
 
       __CS_AUTORUN_DONE__ = 0;
       if (autorun) {
@@ -834,25 +788,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
             setActivePaneId(paneId);
           }
         } else if (!hash.startsWith("$")) {
-          // Single host mode /#host
-          let qs = "";
-          let host = hash;
-          const qIdx = host.lastIndexOf("?");
-          if (qIdx >= 0) {
-            qs = host.slice(qIdx);
-            host = host.slice(0, qIdx);
-          }
-          if (host !== LOCAL_NAME) {
-            const parsedHost = parseHostName(host);
-            const parsedHostString = getCanonicalHostString(parsedHost);
-            const matchedHost = hostsData.find((h) => getCanonicalHostString(h) === parsedHostString);
-            if (matchedHost) {
-              host = matchedHost.name;
-            }
-          }
-          host += qs;
-          if (host) {
-            openHost(host);
+          // Directly open host(s): /#host1,host2
+          const hosts: string[] = hash.split(/\s*,\s*/);
+          if (hosts.length > 0) {
+            openHostsAsSplit2(hosts);
           } else {
             const tabId = genTabId(LOCAL_NAME);
             const paneId = genPaneId(LOCAL_NAME);
@@ -984,29 +923,19 @@ export default function Dashboard({ initialData }: DashboardProps) {
   useEffect(() => {
     return setupPluginAPI({
       setTheme,
-      handleRefresh,
       setApplets,
       isMobile,
       maxZIndexRef,
       getTerminalRefs,
       getApplets,
     });
-  }, [handleRefresh, isMobile, getTerminalRefs, getApplets, setTheme]);
+  }, [isMobile, getTerminalRefs, getApplets, setTheme]);
 
   // ── Keyboard shortcuts (reads fresh state from store — tiny stable dep array) ──
   useKeyboardManager({
     handleButtonClick,
     getTerminalRefs,
   });
-
-  const handleCloseBtnDialog = useCallback((_e: unknown, reason: string) => {
-    const { buttonFormData, initialBtnFormData } = getStore();
-    const isDirty = initialBtnFormData && JSON.stringify(buttonFormData) !== JSON.stringify(initialBtnFormData);
-    if (isDirty && (reason === "backdropClick" || reason === "escapeKeyDown")) {
-      return;
-    }
-    setEditButtonDialogOpen(false);
-  }, []);
 
   const [lastKeyboardHeight, setLastKeyboardHeight] = useState(0);
 
@@ -1058,8 +987,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
       <Box id="main-ui" sx={{ display: "flex", height: viewportHeight, overflow: "hidden" }}>
         <CssBaseline />
         <Sidebar
-          appVersion={appVersion}
-          savePassword={savePassword}
+          isMobile={isMobile}
+          isTouch={isTouch}
           onSavePasswordChange={async (val) => {
             const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
             try {
@@ -1072,7 +1001,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                 body: JSON.stringify({ save_password: val } satisfies ConfigRequest),
               });
               if (res.ok) {
-                setSavePassword(val);
+                setSysinfo({ savePassword: val });
                 notify("Settings saved successfully!");
               } else {
                 const errText = await res.text();
@@ -1087,7 +1016,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             setMobileOpen(false);
           }}
           onRefresh={() => {
-            handleRefresh({ sync: 2 });
+            refreshData({ sync: 2 });
             setMobileOpen(false);
           }}
           onOpenScratchpad={() => {
@@ -1310,16 +1239,16 @@ export default function Dashboard({ initialData }: DashboardProps) {
         ))}
 
       <DialogManager
+        isMobile={isMobile}
+        isTouch={isTouch}
         contextMenu={contextMenu}
         handleCloseMenu={handleCloseMenu}
         memoTabId={memoTabId}
         handleToggleFiles={handleToggleFiles}
         handleReconnectTab={handleReconnectTab}
-        handleCloseBtnDialog={handleCloseBtnDialog}
         groups={groups}
         sendParsedString={sendParsedString}
         handleButtonClick={handleButtonClick}
-        handleRefresh={handleRefresh}
       />
       <SideEffect />
     </ThemeProvider>

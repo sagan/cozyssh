@@ -25,6 +25,8 @@ import type {
   SessionsCloseRequest,
   TabsRenameRequest,
   ButtonsMoveRequest,
+  Sysinfo,
+  FullData,
 } from "./api";
 import {
   type HostForm,
@@ -72,7 +74,6 @@ import {
   VAR_CS_TERMINAL_FONT_SIZE,
 } from "./constants";
 import { dialogs } from "./Dialogs";
-import { moduleCache } from "./pluginAPI";
 
 export interface PaneData {
   id: string;
@@ -128,7 +129,6 @@ interface Store {
   inputLiquid: boolean;
   newTabDialogOpen: boolean;
   newTabDialogFilter: string;
-  sysHostname: string;
   unreadTabIds: Set<string>;
   focusTrigger: number;
   focusSearchInputTrigger: number;
@@ -139,6 +139,7 @@ interface Store {
   groups: string[];
   shells: LocalShell[];
   buttons: ButtonData[];
+  sysinfo: Sysinfo;
   tagsExpanded: number;
   vars: Record<string, string>;
   /** Local (browser-only) vars. All names have a "local_" (case-insensitive) prefix. */
@@ -147,6 +148,19 @@ interface Store {
   shellIntegrations: Record<string, ShellIntegration>;
   activeTunnels: ActiveTunnel[];
 }
+
+/**
+ * The module type of custom script
+ */
+export interface CsScriptModule {
+  default?: CsScript;
+  // [key: string]: unknown;
+}
+
+/**
+ * id => moduleObj
+ */
+export const moduleCache: Record<string, CsScriptModule> = {};
 
 function loadFromStorage<T>(key: string, defaultValue: T): T {
   const varsStr = localStorage.getItem(key);
@@ -211,7 +225,6 @@ export const useStore = create<Store>(() => ({
   inputDialogDirty: false,
   inputValue: "",
   inputLiquid: false,
-  sysHostname: "",
   unreadTabIds: new Set<string>(),
   focusTrigger: 0,
   focusSearchInputTrigger: 0,
@@ -222,6 +235,13 @@ export const useStore = create<Store>(() => ({
   groups: [],
   shells: [],
   buttons: [],
+  sysinfo: {
+    hostname: "",
+    version: "dev",
+    savePassword: "ask",
+    isSecure: false,
+    insecureAllowed: false,
+  },
   tagsExpanded: loadFromStorage(BROWSER_STORAGE_KEY_TAGS_EXPANDED, 0),
   vars: loadFromStorage(BROWSER_STORAGE_KEY_VARS, {}),
   localVars: loadFromStorage(BROWSER_STORAGE_KEY_LOCAL_VARS, {}),
@@ -392,7 +412,6 @@ export const openInputDialog = ({
     inputLiquid,
     sendScope,
   });
-export const setSysHostname = (sysHostname: string) => useStore.setState({ sysHostname });
 
 export const setUnreadTabIds = (unreadTabIds: Set<string>) => useStore.setState({ unreadTabIds });
 
@@ -499,6 +518,9 @@ export const setGroups = (groups: string[]) => useStore.setState({ groups });
 export const setShells = (shells: LocalShell[]) => useStore.setState({ shells });
 
 export const setButtons = (buttons: ButtonData[]) => useStore.setState({ buttons });
+
+export const setSysinfo = (sysinfo: Partial<Sysinfo>) =>
+  useStore.setState((state) => ({ sysinfo: { ...state.sysinfo, ...sysinfo } }));
 
 export const prevButtonGroup = (includeHidden = false) => {
   useStore.setState((state) => {
@@ -1346,6 +1368,16 @@ export function openNewButtonDialog() {
   setEditButtonDialogOpen(true);
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function onButtonDialogClose(_e: unknown, _reason: "backdropClick" | "escapeKeyDown") {
+  const { buttonFormData, initialBtnFormData } = getStore();
+  const isDirty = initialBtnFormData && JSON.stringify(buttonFormData) !== JSON.stringify(initialBtnFormData);
+  if (isDirty) {
+    return;
+  }
+  setEditButtonDialogOpen(false);
+}
+
 export function openScratchpad() {
   const existing = getStore().tabs.find((t) => t.type === "scratchpad");
   if (existing) {
@@ -1458,4 +1490,59 @@ export async function moveButton(id: string, direction: number) {
   });
   const data: ButtonData[] = await res.json();
   setButtons(data || []);
+}
+
+/**
+ * Return effective value for a variable:
+ * 1. Lookup in localVars (with "local_" prefix)
+ * 2. Lookup in vars
+ * 3. Return defaultValue
+ * @param name variable name
+ * @param defaultValue fallback value, default is ""
+ */
+export function getVar(name: string, defaultValue = ""): string {
+  const { vars, localVars } = getStore();
+  if (localVars["local_" + name]) {
+    return localVars["local_" + name]!;
+  }
+  if (vars[name]) {
+    return vars[name]!;
+  }
+  return defaultValue;
+}
+
+/**
+ * Return integer variable value:
+ * 1. Lookup in localVars (with "local_" prefix)
+ * 2. Lookup in vars
+ * @param name variable name
+ * @param defaultValue fallback value, default is 0. Used if variable not found, or not a valid integer.
+ */
+export function getIntVar(name: string, defaultValue = 0): number {
+  const value = getVar(name);
+  if (value === "") {
+    return defaultValue;
+  }
+  const parsed = parseInt(value);
+  return isNaN(parsed) ? defaultValue : parsed;
+}
+
+export async function refreshData({ sync = 0, refresh = 0 } = {}) {
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+  try {
+    const r = await fetch(`/api/fulldata?sync=${sync}&refresh=${refresh}`, {
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      },
+    });
+    if (r.status === 401) {
+      localStorage.removeItem(BROWSER_STORAGE_KEY_TOKEN);
+      window.location.href = "/login";
+      return;
+    }
+    const data: FullData = await r.json();
+    useStore.setState(data);
+  } catch (e) {
+    console.error(e);
+  }
 }

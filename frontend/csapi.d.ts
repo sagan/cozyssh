@@ -1680,6 +1680,13 @@ export interface IModes {
 	 */
 	readonly wraparoundMode: boolean;
 }
+export interface Sysinfo {
+	hostname: string;
+	version: string;
+	insecureAllowed: boolean;
+	isSecure: boolean;
+	savePassword: "ask" | "always" | "never";
+}
 export interface HostData {
 	name: string;
 	hostname: string;
@@ -2002,7 +2009,6 @@ export interface Store {
 	inputLiquid: boolean;
 	newTabDialogOpen: boolean;
 	newTabDialogFilter: string;
-	sysHostname: string;
 	unreadTabIds: Set<string>;
 	focusTrigger: number;
 	focusSearchInputTrigger: number;
@@ -2013,6 +2019,7 @@ export interface Store {
 	groups: string[];
 	shells: LocalShell[];
 	buttons: ButtonData[];
+	sysinfo: Sysinfo;
 	tagsExpanded: number;
 	vars: Record<string, string>;
 	/** Local (browser-only) vars. All names have a "local_" (case-insensitive) prefix. */
@@ -2020,6 +2027,12 @@ export interface Store {
 	recentButtonIds: string[];
 	shellIntegrations: Record<string, ShellIntegration>;
 	activeTunnels: ActiveTunnel[];
+}
+/**
+ * The module type of custom script
+ */
+export interface CsScriptModule {
+	default?: CsScript;
 }
 declare const useStore: import("zustand").UseBoundStore<import("zustand").StoreApi<Store>>;
 export type UseStore = typeof useStore;
@@ -2032,12 +2045,6 @@ export interface AppletData {
 	height?: number | string;
 	zIndex?: number;
 	fullScreen?: boolean;
-}
-/**
- * The module type of custom script
- */
-export interface CsScriptModule {
-	default?: CsScript;
 }
 export interface CsExecResult {
 	error: unknown;

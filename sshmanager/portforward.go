@@ -4,7 +4,6 @@ import (
 	"cozyssh/models"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"strings"
 	"sync"
@@ -173,42 +172,23 @@ func SetupPortForwarding(client *ssh.Client, hostName string, hostKey string,
 
 	// Only apply port forwarding on the first SSH connection to this host
 	if globalTunnelRegistry.HasTunnels(hostKey) {
-		log.Printf("[portforward] Tunnels already active for %s, skipping", hostKey)
 		return func() {}
 	}
 
 	// Parse local forwards
-	localRules, localErrs := ParseForwardRules(localForwards)
-	for _, err := range localErrs {
-		log.Printf("[portforward] Warning: %v", err)
-	}
+	localRules, _ := ParseForwardRules(localForwards)
 
 	// Parse remote forwards
-	remoteRules, remoteErrs := ParseForwardRules(remoteForwards)
-	for _, err := range remoteErrs {
-		log.Printf("[portforward] Warning: %v", err)
-	}
+	remoteRules, _ := ParseForwardRules(remoteForwards)
 
 	// Set up local forwards
 	for _, rule := range localRules {
-		if err := startLocalForward(client, hostKey, hostName, rule); err != nil {
-			log.Printf("[portforward] Failed to set up local forward %s:%s -> %s:%s for %s: %v",
-				rule.BindAddress, rule.BindPort, rule.Host, rule.HostPort, hostName, err)
-		} else {
-			log.Printf("[portforward] Local forward %s:%s -> %s:%s established for %s",
-				rule.BindAddress, rule.BindPort, rule.Host, rule.HostPort, hostName)
-		}
+		startLocalForward(client, hostKey, hostName, rule)
 	}
 
 	// Set up remote forwards
 	for _, rule := range remoteRules {
-		if err := startRemoteForward(client, hostKey, hostName, rule); err != nil {
-			log.Printf("[portforward] Failed to set up remote forward %s:%s -> %s:%s for %s: %v",
-				rule.BindAddress, rule.BindPort, rule.Host, rule.HostPort, hostName, err)
-		} else {
-			log.Printf("[portforward] Remote forward %s:%s -> %s:%s established for %s",
-				rule.BindAddress, rule.BindPort, rule.Host, rule.HostPort, hostName)
-		}
+		startRemoteForward(client, hostKey, hostName, rule)
 	}
 
 	return func() {
@@ -251,7 +231,6 @@ func startLocalForward(client *ssh.Client, hostKey string, hostName string, rule
 				defer lc.Close()
 				remoteConn, err := client.Dial("tcp", remoteAddr)
 				if err != nil {
-					log.Printf("[portforward] Failed to dial remote %s via SSH: %v", remoteAddr, err)
 					return
 				}
 				defer remoteConn.Close()
@@ -299,7 +278,6 @@ func startRemoteForward(client *ssh.Client, hostKey string, hostName string, rul
 				defer rc.Close()
 				localConn, err := net.Dial("tcp", localAddr)
 				if err != nil {
-					log.Printf("[portforward] Failed to dial local %s: %v", localAddr, err)
 					return
 				}
 				defer localConn.Close()

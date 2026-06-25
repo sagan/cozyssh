@@ -1,24 +1,14 @@
 import { createTheme, type ThemeOptions } from "@mui/material";
 import { z } from "zod";
-import type { ButtonData, HostData, LocalShell } from "./api";
 import type { ITerminalOptions, Terminal } from "@xterm/xterm";
-import { DEFAULT_BUTTON_GROUP, DEFAULT_FONT_SIZE, LOCAL_NAME } from "./constants";
 import { Liquid } from "liquidjs";
-import { getStore } from "./store";
 import { join } from "shlex";
+
+import type { ButtonData, HostData, LocalShell } from "./api";
+import { DEFAULT_BUTTON_GROUP, DEFAULT_FONT_SIZE, LOCAL_NAME } from "./constants";
 
 export type Expect<T extends true> = T;
 export type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2 ? true : false;
-
-export type OpenHostFunction = (
-  host: string,
-  options?: {
-    title?: string;
-    target?: string;
-    options?: Record<string, string>;
-    noUpdateRecent?: boolean;
-  },
-) => Promise<void>;
 
 export type ContextMenu = {
   mouseX: number;
@@ -375,41 +365,6 @@ export const DefaultXtermOptions: ITerminalOptions = {
   },
   fontFamily: 'Consolas, "Courier New", monospace',
 };
-
-/**
- * Return effective value for a variable:
- * 1. Lookup in localVars (with "local_" prefix)
- * 2. Lookup in vars
- * 3. Return defaultValue
- * @param name variable name
- * @param defaultValue fallback value, default is ""
- */
-export function getVar(name: string, defaultValue = ""): string {
-  const { vars, localVars } = getStore();
-  if (localVars["local_" + name]) {
-    return localVars["local_" + name]!;
-  }
-  if (vars[name]) {
-    return vars[name]!;
-  }
-  return defaultValue;
-}
-
-/**
- * Return integer variable value:
- * 1. Lookup in localVars (with "local_" prefix)
- * 2. Lookup in vars
- * @param name variable name
- * @param defaultValue fallback value, default is 0. Used if variable not found, or not a valid integer.
- */
-export function getIntVar(name: string, defaultValue = 0): number {
-  const value = getVar(name);
-  if (value === "") {
-    return defaultValue;
-  }
-  const parsed = parseInt(value);
-  return isNaN(parsed) ? defaultValue : parsed;
-}
 
 /**
  * Get a key combination string from a KeyboardEvent

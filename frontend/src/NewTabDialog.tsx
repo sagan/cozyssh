@@ -13,8 +13,6 @@ import {
   Box,
   IconButton,
   InputAdornment,
-  useMediaQuery,
-  useTheme,
 } from "@mui/material";
 import ComputerIcon from "@mui/icons-material/Computer";
 import DnsIcon from "@mui/icons-material/Dns";
@@ -45,7 +43,6 @@ import {
   cutString,
   filterButtons,
   filterHosts,
-  getIntVar,
   isValidHostname,
   localShellHost,
   parseHostName,
@@ -60,6 +57,7 @@ import {
   setNewTabDialogFilter,
   updateRecentButtonId,
   useStore,
+  getIntVar,
 } from "./store";
 
 interface DialogItem {
@@ -95,6 +93,8 @@ interface DialogSection {
 }
 
 interface NewTabDialogProps {
+  isMobile: boolean;
+  isTouch: boolean;
   open: boolean;
   onClose: () => void;
   onSelect: (host: string) => void;
@@ -168,6 +168,8 @@ const helpOptions: Omit<DialogItem, "flatIndex">[] = [
 ] as const;
 
 export default function NewTabDialog({
+  isMobile,
+  isTouch,
   open,
   onClose,
   onSelect,
@@ -246,10 +248,6 @@ export default function NewTabDialog({
         .catch((e) => console.error(e));
     }
   }, [open]);
-
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-  const isTouch = useMediaQuery("(pointer: coarse)");
 
   const filteredActiveTunnels = useMemo(() => {
     if (viewMode !== "tunnels") {

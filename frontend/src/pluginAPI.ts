@@ -42,12 +42,12 @@ import {
   defaultThemeOptions,
   DefaultXtermOptions,
   generatePassword,
-  getIntVar,
   isMuiModalOpen,
   liquidEngine,
   terminalKeyShortcuts,
 } from "./common";
 import {
+  type CsScriptModule,
   type TerminalRefMap,
   activatePane,
   attachSession,
@@ -62,25 +62,15 @@ import {
   setVars,
   triggerFocus,
   useStore,
+  getIntVar,
+  refreshData,
 } from "./store";
 import { dialogs } from "./Dialogs";
 import type { AppletData } from "./AppletWrapper";
 import { blackholeShortcuts, disableShortcuts } from "./useKeyboardManager";
 import type { ITerminalOptions } from "@xterm/xterm";
 import { openMenu } from "./DynamicMenu";
-
-/**
- * The module type of custom script
- */
-export interface CsScriptModule {
-  default?: CsScript;
-  // [key: string]: unknown;
-}
-
-/**
- * id => moduleObj
- */
-export const moduleCache: Record<string, CsScriptModule> = {};
+import { moduleCache } from "./store";
 
 window.__CS_REMAP_CTRL_L__ = undefined;
 window.__CS_AUTORUN_DONE__ = undefined;
@@ -192,6 +182,9 @@ window.csRunScript = runScript;
 window.csNotify = notify;
 window.csOpen = openHostsAsSplit2;
 window.csOpenMenu = openMenu;
+window.csAttach = attachSession;
+window.csRefresh = refreshData;
+window.csClose = closeTabOrPane;
 
 window.csFocus = (tabOrPaneId?: string) => {
   if (isMuiModalOpen()) {
@@ -413,8 +406,6 @@ window.csGetShellIntegration = (paneId?: string) => {
 export interface PluginAPICallbacks {
   /** Apply a new MUI theme */
   setTheme: (options: unknown, ...args: unknown[]) => void;
-  /** Refresh all data from the server */
-  handleRefresh: (options?: { sync?: number; refresh?: number }) => Promise<void>;
   /** React state setter for applets */
   setApplets: React.Dispatch<React.SetStateAction<AppletData[]>>;
   /** Whether we're in mobile layout */
@@ -631,9 +622,6 @@ window.csDeleteHost = async (name: string): Promise<void> => {
  *   useEffect(() => setupPluginAPI(callbacks), []);
  */
 export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
-  window.csAttach = attachSession;
-  window.csRefresh = cb.handleRefresh;
-  window.csClose = closeTabOrPane;
   window.csSetTheme = cb.setTheme;
 
   window.csGetApplet = ((name?: string) => {

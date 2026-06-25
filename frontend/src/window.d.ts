@@ -20,8 +20,8 @@ import type {
   CSEventDetailVars,
   Severity,
 } from "./common";
-import type { CsExecResult, CsScriptModule } from "./pluginAPI";
-import type { TerminalRefMap, TabData, UseStore } from "./store";
+import type { CsExecResult } from "./pluginAPI";
+import type { TerminalRefMap, TabData, UseStore, CsScriptModule } from "./store";
 import type { AppletData } from "./AppletWrapper";
 import type { ShellIntegration, TerminalHandle } from "./Terminal";
 import type { Liquid } from "liquidjs";

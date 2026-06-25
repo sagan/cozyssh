@@ -52,7 +52,7 @@ export default function TabBar({
   const activeTabId = useStore((state) => state.activeTabId);
   const activePaneId = useStore((state) => state.activePaneId);
   const unreadTabIds = useStore((state) => state.unreadTabIds);
-  const sysHostname = useStore((state) => state.sysHostname);
+  const sysHostname = useStore((state) => state.sysinfo.hostname);
   const searchOpen = useStore((state) => state.searchOpen);
 
   const [searchQuery, setSearchQuery] = useState("");

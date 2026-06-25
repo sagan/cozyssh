@@ -19,7 +19,7 @@ import {
   LOCAL_NAME,
   VAR_CS_SCROLL_LINES,
 } from "./constants";
-import { closeModal, forceReload, getIntVar, getKeyCombination, isMuiModalOpen, localShellHost } from "./common";
+import { closeModal, forceReload, getKeyCombination, isMuiModalOpen, localShellHost } from "./common";
 import {
   type TerminalRefMap,
   activatePane,
@@ -45,6 +45,8 @@ import {
   setSearchOpen,
   triggerFocus,
   triggerFocusSearchInput,
+  getIntVar,
+  setToasts,
 } from "./store";
 
 export interface KeyboardManagerOptions {
@@ -102,6 +104,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           setEditButtonDialogOpen(false);
           setEditHostDialogOpen(false);
           closeModal(true);
+          setToasts([]);
           return;
         }
         case "alt+enter": {

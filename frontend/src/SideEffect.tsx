@@ -9,8 +9,8 @@ import {
   VAR_CS_REMAP_CTRL_L,
   VAR_CS_TERMINAL_FONT_SIZE,
 } from "./constants";
-import { CS_EVENT_VARS, getIntVar, type CSEventDetailVars } from "./common";
-import { triggerFocus, useStore } from "./store";
+import { type CSEventDetailVars, CS_EVENT_VARS } from "./common";
+import { triggerFocus, useStore, getIntVar } from "./store";
 import { useWakeLock } from "./useWakeLock";
 import type { ButtonData } from "./api";
 

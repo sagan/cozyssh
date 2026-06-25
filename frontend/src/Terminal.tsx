@@ -34,7 +34,6 @@ import {
   CS_EVENT_TERMINAL_DISCONNECTED,
   CS_EVENT_SHELL_INTEGRATION,
   CS_EVENT_TERMINAL_RESIZE,
-  getIntVar,
   getKeyCombination,
   base64urlEncode,
   terminalKeyShortcuts,
@@ -42,7 +41,7 @@ import {
   DefaultXtermOptions,
   applyFilters,
 } from "./common";
-import { notify, type PaneData } from "./store";
+import { type PaneData, notify, getIntVar } from "./store";
 
 export interface TerminalHandle {
   sendData: (data: string) => void;

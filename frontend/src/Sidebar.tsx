@@ -22,7 +22,6 @@ import {
   TextField,
   Button,
   ButtonGroup,
-  useMediaQuery,
   useTheme,
   Tabs,
   Tab,
@@ -100,7 +99,6 @@ import {
   cutPrefix,
   filterHosts,
   forceReload,
-  getIntVar,
   isValidHostname,
   localShellHost,
   openHostInNewWindow,
@@ -126,6 +124,7 @@ import {
   logout,
   logoutAll,
   fetchHosts,
+  getIntVar,
 } from "./store";
 import { useShallow } from "zustand/react/shallow";
 
@@ -167,20 +166,23 @@ type SelectableItem = SelectableGroupItem | SelectableServerItem;
 const PASSWORD_PLACEHOLDER = "***";
 
 export default function Sidebar({
-  appVersion,
-  savePassword,
+  isMobile,
+  isTouch,
   onSavePasswordChange,
   onOpenScratchpad,
   onAttach,
   onRefresh,
 }: {
-  appVersion: string;
-  savePassword: ConfigRequest["save_password"];
+  isMobile: boolean;
+  isTouch: boolean;
   onSavePasswordChange: (val: ConfigRequest["save_password"]) => void;
   onOpenScratchpad: () => void;
   onAttach: (id: string, host: string, title: string, isLocked: boolean) => void;
   onRefresh: () => void;
 }) {
+  const appVersion = useStore((state) => state.sysinfo.version);
+  const savePassword = useStore((state) => state.sysinfo.savePassword);
+  const sysHostname = useStore((state) => state.sysinfo.hostname);
   const activeSessionIds = useStore(
     useShallow((state) =>
       state.tabs.flatMap((t) => t.panes.filter((p) => p.state !== "stolen").map((p) => p.sessionId || p.id)),
@@ -188,14 +190,12 @@ export default function Sidebar({
   );
   const mobileOpen = useStore((state) => state.mobileOpen);
   const hostFormData = useStore((state) => state.hostFormData);
-  const sysHostname = useStore((state) => state.sysHostname);
   const hosts = useStore((state) => state.hosts);
   const groups = useStore((state) => state.groups);
   const shells = useStore((state) => state.shells);
   const tagsExpanded = useStore((state) => state.tagsExpanded);
 
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const [loading, setLoading] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   // Settings State
@@ -1426,7 +1426,7 @@ export default function Sidebar({
       body: JSON.stringify(payload),
     });
     fetchHosts();
-  }, [contextMenu, fetchHosts]);
+  }, [contextMenu]);
 
   const handleRunCopyID = useCallback(async () => {
     if (!contextMenu) {
@@ -1962,7 +1962,7 @@ export default function Sidebar({
     setInitialHostFormData(null); // Reset dirty state on successful save
     setEditHostDialogOpen(false);
     fetchHosts();
-  }, [fetchHosts]);
+  }, []);
 
   const handleCloseHostDialog = useCallback((_e: unknown, reason: string) => {
     const { hostFormData, initialHostFormData } = getStore();
@@ -2223,7 +2223,7 @@ export default function Sidebar({
     if (selectedIndex >= flatList.length) {
       setSelectedIndex(flatList.length - 1);
     }
-  }, [flatList, flatListIds, filterStr]);
+  }, [flatList, flatListIds, filterStr, selectedIndex]);
 
   const handleFilterKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -2295,6 +2295,7 @@ export default function Sidebar({
             level={level}
             isSelected={isSelected}
             isMobile={isMobile}
+            isTouch={isTouch}
             expandedGroups={expandedGroups}
             toggleGroupExpanded={toggleGroupExpanded}
             setDraggedItem={setDraggedItem}
@@ -2323,6 +2324,7 @@ export default function Sidebar({
           level={level}
           isSelected={isSelected}
           isMobile={isMobile}
+          isTouch={isTouch}
           filterStr={filterStr}
           draggedItem={draggedItem}
           dragOverTarget={dragOverTarget}
@@ -3396,7 +3398,7 @@ export default function Sidebar({
                       input: {
                         endAdornment: (
                           <InputAdornment position="end">
-                            <IconButton onClick={() => navigator.clipboard.writeText(masterKey)}>
+                            <IconButton disabled={!masterKey} onClick={() => navigator.clipboard.writeText(masterKey)}>
                               <ContentCopyIcon fontSize="small" />
                             </IconButton>
                           </InputAdornment>
@@ -3405,29 +3407,31 @@ export default function Sidebar({
                     }}
                   />
                 )}
-                <Button
-                  variant="contained"
-                  onClick={handleSaveWebdav}
-                  disabled={
-                    isTestingWebdav ||
-                    (webdavUrl === currentWebdavUrl &&
-                      webdavUser === currentWebdavUser &&
-                      webdavPassword === currentWebdavPassword &&
-                      useEncryption === webdavEncrypted &&
-                      masterKey === currentMasterKey) ||
-                    (!!currentWebdavUrl && !webdavUrl && (!!webdavUser || !!webdavPassword))
-                  }
-                  sx={{ mt: 1, textTransform: "none" }}
-                  disableElevation
-                >
-                  {isTestingWebdav
-                    ? "Verifying & Saving..."
-                    : isCleared && currentWebdavUrl
-                      ? "Clear Sync Settings"
-                      : urlChanged
-                        ? "Verify & Save Sync Settings"
-                        : "Save Sync Settings"}
-                </Button>
+                <Typography>
+                  <Button
+                    variant="contained"
+                    onClick={handleSaveWebdav}
+                    disabled={
+                      isTestingWebdav ||
+                      (webdavUrl === currentWebdavUrl &&
+                        webdavUser === currentWebdavUser &&
+                        webdavPassword === currentWebdavPassword &&
+                        useEncryption === webdavEncrypted &&
+                        masterKey === currentMasterKey) ||
+                      (!!currentWebdavUrl && !webdavUrl && (!!webdavUser || !!webdavPassword))
+                    }
+                    sx={{ mt: 1, textTransform: "none" }}
+                    disableElevation
+                  >
+                    {isTestingWebdav
+                      ? "Verifying & Saving..."
+                      : isCleared && currentWebdavUrl
+                        ? "Clear Sync Settings"
+                        : urlChanged
+                          ? "Verify & Save Sync Settings"
+                          : "Save Sync Settings"}
+                  </Button>
+                </Typography>
               </>
             )}
 
@@ -3500,7 +3504,7 @@ export default function Sidebar({
                   <b>Alt + Backquote</b> : Close any modal (Dialog / Menu / Popover). Similar to <b>Escape</b> but works
                   even if terminal is in fullscreen mode
                   <br />
-                  <b>Alt + Shift + Backquote</b> : Force close all modals
+                  <b>Alt + Shift + Backquote</b> : Force close all modals. Also close all toasts.
                   <br />
                   <b>Alt + - / Alt + +</b> : Decrease / increase terminal font size
                   <br />
@@ -3930,6 +3934,7 @@ function TreeGroupItem({
   level,
   isSelected,
   isMobile,
+  isTouch,
   expandedGroups,
   toggleGroupExpanded,
   setDraggedItem,
@@ -3945,6 +3950,7 @@ function TreeGroupItem({
   level: number;
   isSelected: boolean;
   isMobile: boolean;
+  isTouch: boolean;
   expandedGroups: Set<string>;
   toggleGroupExpanded: (path: string) => void;
   setDraggedItem: (item: { type: "group"; path: string } | { type: "server"; name: string } | null) => void;
@@ -3974,7 +3980,7 @@ function TreeGroupItem({
       ref={itemRef}
       id={`sidebar-tree-group-${node.path}`}
       disablePadding
-      draggable={!isMobile}
+      draggable={!isMobile && !isTouch}
       onDragStart={(e) => {
         setDraggedItem({ type: "group", path: node.path });
         e.dataTransfer.effectAllowed = "move";
@@ -4056,6 +4062,7 @@ function TreeServerItem({
   level,
   isSelected,
   isMobile,
+  isTouch,
   filterStr,
   draggedItem,
   dragOverTarget,
@@ -4069,6 +4076,7 @@ function TreeServerItem({
   level: number;
   isSelected: boolean;
   isMobile: boolean;
+  isTouch: boolean;
   filterStr: string;
   draggedItem: { type: "group"; path: string } | { type: "server"; name: string } | null;
   dragOverTarget: { id: string; effect: "before" | "inside" } | null;
@@ -4108,7 +4116,7 @@ function TreeServerItem({
       ref={itemRef}
       id={`sidebar-tree-server-${host.name}`}
       disablePadding
-      draggable={!isMobile}
+      draggable={!isMobile && !isTouch}
       onDragStart={(e) => {
         setDraggedItem({ type: "server", name: host.name });
         e.dataTransfer.effectAllowed = "move";

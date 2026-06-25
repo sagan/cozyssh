@@ -87,20 +87,22 @@ import {
   saveButton,
   deleteButton,
   moveButton,
+  onButtonDialogClose,
+  refreshData,
 } from "./store";
 import NewTabDialog from "./NewTabDialog";
 import { dialogs } from "./Dialogs";
 
 export interface DialogManagerProps {
+  isMobile: boolean;
+  isTouch: boolean;
   groups: string[];
   memoTabId: string | null;
   contextMenu: ContextMenu | null;
   handleCloseMenu: () => void;
   handleToggleFiles: () => void;
   handleReconnectTab: (id: string) => void;
-  handleCloseBtnDialog: (e: unknown, reason: string) => void;
   sendParsedString: (s: string, isLiquid?: boolean, userVars?: Record<string, string>) => void;
-  handleRefresh: () => void;
   handleButtonClick: (btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">) => Promise<void>;
 }
 
@@ -119,6 +121,8 @@ const buttonTypes: [ButtonData["type"], string][] = [
 ];
 
 export default function DialogManager({
+  isMobile,
+  isTouch,
   groups,
   memoTabId,
   contextMenu,
@@ -126,9 +130,7 @@ export default function DialogManager({
   handleToggleFiles,
   handleReconnectTab,
   handleButtonClick,
-  handleCloseBtnDialog,
   sendParsedString,
-  handleRefresh,
 }: DialogManagerProps) {
   const hosts = useStore((state) => state.hosts);
   const lastMenuBtn = useStore((state) => state.lastMenuBtn);
@@ -441,6 +443,7 @@ export default function DialogManager({
                     ) : tab.panes.length === 1 ? (
                       <MenuItem
                         onClick={() => {
+                          handleCloseMenu();
                           pinTab(memoTabId);
                           triggerFocus();
                         }}
@@ -634,8 +637,9 @@ export default function DialogManager({
         <MenuItem
           onClick={() => {
             if (btnMenuAnchor) {
+              const host = btnMenuAnchor.btn.payload;
               setBtnMenuAnchor(null);
-              openHostInNewWindow(btnMenuAnchor.btn.payload);
+              openHostInNewWindow(host);
             }
           }}
           sx={{
@@ -647,8 +651,11 @@ export default function DialogManager({
         <MenuItem
           onClick={() => {
             if (btnMenuAnchor) {
+              const hosts = btnMenuAnchor.btn.payload.split(/\s*,\s*/);
               setBtnMenuAnchor(null);
-              openHost(btnMenuAnchor.btn.payload, { target: "_self" });
+              for (const host of hosts) {
+                openHost(host, { target: "_self" });
+              }
             }
           }}
           sx={{
@@ -724,7 +731,7 @@ export default function DialogManager({
         disableRestoreFocus
         data-id={editButton?.id || ""}
         open={editButtonDialogOpen}
-        onClose={handleCloseBtnDialog}
+        onClose={onButtonDialogClose}
         fullWidth
         maxWidth="lg"
       >
@@ -1009,6 +1016,7 @@ export default function DialogManager({
                 <br />- <b>localForward</b> & <b>remoteForward</b> : OpenSSH syntax SSH tunnel rules. Use&nbsp;
                 <code>%0A</code> (\n) to seperate multiple rules.
                 <br /> E.g. <b>local?id=local-abc&title=Local&remoteCommand=tmux attach || tmux new</b>
+                <br /> It's possible to set multiple (up to 4) comma-separated servers to open them in split screen.
               </Typography>
             </Box>
           ) : (
@@ -1308,6 +1316,8 @@ export default function DialogManager({
       </Dialog>
 
       <NewTabDialog
+        isMobile={isMobile}
+        isTouch={isTouch}
         key={newTabDialogOpen ? "open" : "closed"}
         open={newTabDialogOpen}
         onClose={closeNewTabDialog}
@@ -1353,7 +1363,7 @@ export default function DialogManager({
                   password: undefined, // don't save password from direct connect string
                 } satisfies HostData),
               });
-              handleRefresh(); // Refresh hosts list
+              refreshData();
             } catch (e) {
               console.error("Failed to auto-add host:", e);
             }

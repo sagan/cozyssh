@@ -144,7 +144,7 @@ export interface LocalShell {
 export interface FullData {
     sysinfo: Sysinfo;
     hosts: HostData[];
-    groups?: string[];
+    groups: string[];
     buttons: ButtonData[];
     vars: {[key: string]: string};
     pinned: SessionPinned[];
