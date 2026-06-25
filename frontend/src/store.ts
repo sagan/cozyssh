@@ -10,16 +10,37 @@
 
 import { create } from "zustand";
 
-import type { HostData, ButtonData, WsTerminalMessage, Recent, LocalShell, ActiveTunnel } from "./api";
+import type {
+  HostData,
+  ButtonData,
+  WsTerminalMessage,
+  Recent,
+  LocalShell,
+  ActiveTunnel,
+  RecentUpdateRequest,
+  SessionsAttachRequest,
+  TabsUnpinRequest,
+  TabsPinRequest,
+  TabsLockRequest,
+  SessionsCloseRequest,
+  TabsRenameRequest,
+  ButtonsMoveRequest,
+} from "./api";
 import {
   type HostForm,
   type Severity,
   type ShellIntegration,
   type Toast,
   type ViewMode,
+  genPaneId,
+  genTabId,
+  getTemplateVariables,
+  hostTitle,
   isMuiModalOpen,
+  nextName,
   nextTerminalFontSize,
   prevTerminalFontSize,
+  removePassFromHost,
 } from "./common";
 import type { TerminalHandle } from "./Terminal";
 import type { ScratchpadHandle } from "./Scratchpad";
@@ -28,19 +49,30 @@ import {
   BROWSER_STORAGE_KEY_LOCAL_VARS,
   BROWSER_STORAGE_KEY_RECENT_BUTTONS,
   BROWSER_STORAGE_KEY_RECENTS,
+  BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE,
   BROWSER_STORAGE_KEY_TAGS_EXPANDED,
   BROWSER_STORAGE_KEY_TOKEN,
   BROWSER_STORAGE_KEY_VARS,
+  CACHE_API_DATA,
+  CACHE_MANIFEST,
   DEFAULT_BUTTON_GROUP,
   DEFAULT_FONT_SIZE,
   DEFAULT_TERMINAL_FONT_SIZE,
   HEADER_AUTHORIZATION,
   HEADER_AUTHORIZATION_BEARER_PREFIX,
+  HEADER_CONTENT_TYPE,
+  LOCAL_NAME,
   LOCAL_VAR_PREFIX,
+  METHOD_DELETE,
+  METHOD_POST,
+  METHOD_PUT,
+  MIME_JSON,
   TOAST_KEY_FONT_SIZE,
   VAR_CS_FONT_SIZE,
   VAR_CS_TERMINAL_FONT_SIZE,
 } from "./constants";
+import { dialogs } from "./Dialogs";
+import { moduleCache } from "./pluginAPI";
 
 export interface PaneData {
   id: string;
@@ -715,4 +747,715 @@ export async function fetchActiveTunnels() {
   } catch (e) {
     console.error("Failed to fetch active tunnels:", e);
   }
+}
+
+export function openHostsAsSplit(title: string, hosts: string[], hostOptions?: (Record<string, string> | undefined)[]) {
+  const tabId = genTabId(title);
+  const panes: PaneData[] = hosts.map(
+    (host, i) =>
+      ({
+        id: genPaneId(host),
+        host,
+        options: hostOptions?.[i],
+        state: "",
+      }) satisfies PaneData,
+  );
+  const newTab: TabData = {
+    title,
+    id: tabId,
+    panes: panes,
+    activePaneId: panes[0].id,
+  };
+  setTabs((prev) => [...prev, newTab]);
+  setActiveTabId(newTab.id);
+  setActivePaneId(panes[0].id);
+}
+
+export function openHostsAsSplit2(
+  host: HostData | string | (HostData | string)[],
+  { title, target }: { title?: string; target?: string } = {},
+) {
+  const { hosts } = getStore();
+  const targetHosts = Array.isArray(host) ? host.slice(0, 4) : [host];
+  const hostNames: string[] = [];
+  const hostOptions: (Record<string, string> | undefined)[] = [];
+  for (let targetHost of targetHosts) {
+    if (typeof targetHost === "object") {
+      hostNames.push(targetHost.name);
+      hostOptions.push(undefined);
+    } else if (typeof targetHost === "string") {
+      let option: Record<string, string> | undefined = undefined;
+      const i = targetHost.lastIndexOf("?");
+      if (i !== -1) {
+        option = Object.fromEntries(new URLSearchParams(targetHost.slice(i)));
+        targetHost = targetHost.slice(0, i);
+      }
+      hostOptions.push(option);
+      if (targetHost === LOCAL_NAME) {
+        hostNames.push(LOCAL_NAME);
+      } else {
+        const known = hosts.find((h) => h.name === targetHost || h.hostname === targetHost);
+        if (known) {
+          hostNames.push(known.name);
+        } else {
+          hostNames.push(targetHost);
+        }
+      }
+    }
+  }
+  title = title || hostNames[0];
+  if (target === "_self") {
+    target = getStore().activeTabId;
+  } else if (target === "_blank") {
+    target = undefined;
+  }
+  if (hostNames.length > 1) {
+    openHostsAsSplit(title, hostNames, hostOptions);
+  } else {
+    openHost(hostNames[0], { title, target, options: hostOptions[0] });
+  }
+}
+
+export async function openHost(
+  host: string,
+  {
+    title,
+    target,
+    options,
+    noUpdateRecent,
+  }: {
+    title?: string;
+    target?: string;
+    options?: Record<string, string>;
+    noUpdateRecent?: boolean;
+  } = {},
+) {
+  const i = host.lastIndexOf("?");
+  if (i !== -1) {
+    options = { ...Object.fromEntries(new URLSearchParams(host.slice(i))), ...options };
+    host = host.slice(0, i);
+  }
+  if (options) {
+    const { title: _title, target: _target, ...otherOptions } = options;
+    title = title || _title;
+    target = target || _target;
+    options = otherOptions;
+  }
+  if (options?.id) {
+    for (const tab of getStore().tabs) {
+      for (const pane of tab.panes) {
+        if (pane.id === options.id) {
+          activatePane(pane.id, tab.id);
+          triggerFocus();
+          return;
+        }
+      }
+    }
+  }
+  const paneId = options?.id || genPaneId(host);
+  const sessionId = options?.id || undefined;
+  let targetTab: TabData | undefined;
+  if (target === "_blank") {
+    target = "";
+  } else if (target === "_self") {
+    target = getStore().activeTabId;
+  }
+  if (target) {
+    targetTab = getStore().tabs.find((t) => t.id === target);
+    if (targetTab && targetTab.panes.length >= 4) {
+      // target = "";
+      // targetTab = undefined;
+      return; // do nothing
+    }
+  }
+  if (targetTab) {
+    const newPane: PaneData = { id: paneId, sessionId, host, options, state: "" };
+    setTabs((prev) =>
+      prev.map((t) => (t.id === target ? { ...t, panes: [...t.panes, newPane], activePaneId: paneId } : t)),
+    );
+    setActiveTabId(targetTab.id);
+    setActivePaneId(paneId);
+  } else {
+    const tabId = target || genTabId(host);
+    const newTab: TabData = {
+      id: tabId,
+      title: title || hostTitle(host),
+      panes: [{ id: paneId, host, options, state: "" }],
+      activePaneId: paneId,
+    };
+    setTabs((prev) => [...prev, newTab]);
+    setActiveTabId(tabId);
+    setActivePaneId(paneId);
+  }
+
+  host = removePassFromHost(host);
+
+  // Record recent
+  if (!noUpdateRecent && host !== LOCAL_NAME) {
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+    try {
+      fetch("/api/recents", {
+        method: METHOD_POST,
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+          [HEADER_CONTENT_TYPE]: MIME_JSON,
+        },
+        body: JSON.stringify({ host } satisfies RecentUpdateRequest),
+      });
+
+      // Optimistic update for local recents
+      setRecents((prev) => {
+        const now = Math.floor(Date.now() / 1000);
+        const idx = prev.findIndex((r) => r.host === host);
+        const next = [...prev];
+        if (idx >= 0) {
+          next[idx] = { ...next[idx], last_used: now };
+        } else {
+          next.push({ host, last_used: now });
+        }
+        return next.sort((a, b) => b.last_used - a.last_used).slice(0, 50);
+      });
+    } catch (e) {
+      console.error("Failed to record recent:", e);
+    }
+  }
+}
+
+export async function logout() {
+  const syncState = localStorage.getItem(BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE);
+  if (syncState && syncState !== "synced") {
+    if (
+      !(await dialogs.confirm(
+        "Scratchpad data is not fully synced to the server. Are you sure you want to log out and clear the local cache?",
+      ))
+    ) {
+      return;
+    }
+  }
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+  if (token) {
+    await fetch("/api/sessions/close_all_normal", {
+      method: METHOD_POST,
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      },
+    });
+    await fetch("/api/logout", {
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      },
+    });
+  }
+  localStorage.clear();
+  sessionStorage.clear();
+  clearData();
+  if (window.caches) {
+    await caches.delete(CACHE_API_DATA);
+    await caches.delete(CACHE_MANIFEST);
+  }
+  window.location.href = "/login";
+}
+
+export async function logoutAll() {
+  const syncState = localStorage.getItem(BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE);
+  if (syncState && syncState !== "synced") {
+    if (
+      !(await dialogs.confirm(
+        "Scratchpad data is not fully synced to the server. Are you sure you want to log out of all browser sessions and clear the local cache?",
+      ))
+    ) {
+      return;
+    }
+  }
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+  if (token) {
+    await fetch("/api/sessions/close_all_normal", {
+      method: METHOD_POST,
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      },
+    }).catch((e) => console.error(e));
+    await fetch("/api/logout_all", {
+      method: METHOD_POST,
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      },
+    }).catch((e) => console.error(e));
+  }
+  localStorage.clear();
+  sessionStorage.clear();
+  clearData();
+  if (window.caches) {
+    await caches.delete(CACHE_API_DATA);
+    await caches.delete(CACHE_MANIFEST);
+  }
+  window.location.href = "/login";
+}
+
+export async function cloneSession(id: string, cloneInSameTab?: boolean) {
+  let pane: PaneData | undefined;
+  let tab: TabData | undefined;
+  outer: for (const t of getStore().tabs) {
+    if (t.id === id) {
+      if (t.panes.length === 0) {
+        // impossible case
+        return;
+      }
+      tab = t;
+      pane = t.panes[0];
+      break;
+    }
+    for (const p of t.panes) {
+      if (p.id === id) {
+        pane = p;
+        tab = t;
+        break outer;
+      }
+    }
+  }
+  if (!tab || !pane || (cloneInSameTab && tab.panes.length >= 4)) {
+    return;
+  }
+  const newPaneId = genPaneId(pane.host);
+  const newTabId = genTabId(pane.host);
+  const backendSessionId = pane.sessionId || pane.id;
+  setTabs((prev) => {
+    const newPane = { id: newPaneId, host: pane.host, cloneFrom: backendSessionId, state: pane.state };
+    if (cloneInSameTab) {
+      return prev.map((t) =>
+        t.id === tab.id && t.panes.length < 4 ? { ...t, panes: [...t.panes, newPane], activePaneId: newPaneId } : t,
+      );
+    }
+    return [
+      ...prev,
+      {
+        id: newTabId,
+        title: nextName(tab.title),
+        panes: [newPane],
+        activePaneId: newPaneId,
+        showFiles: false,
+      },
+    ];
+  });
+  if (!cloneInSameTab) {
+    setActiveTabId(newTabId);
+  }
+  setActivePaneId(newPaneId);
+}
+
+export async function attachSession(id: string, host: string, title: string, isLocked: boolean = false) {
+  const existing = getStore().tabs.find((t) =>
+    t.panes.some((p) => (p.sessionId || p.id) === id && p.state !== "stolen"),
+  );
+  if (existing) {
+    setActiveTabId(existing.id);
+    setActivePaneId(
+      existing.panes.find((p) => (p.sessionId || p.id) === id && p.state !== "stolen")?.id || existing.activePaneId,
+    );
+    return;
+  }
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+  await fetch("/api/sessions/attach", {
+    method: METHOD_POST,
+    headers: {
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      [HEADER_CONTENT_TYPE]: MIME_JSON,
+    },
+    body: JSON.stringify({ id } satisfies SessionsAttachRequest),
+  });
+  const tabId = genTabId(host);
+  const paneId = genPaneId(host);
+  setTabs((prev) => [
+    ...prev,
+    {
+      id: tabId,
+      panes: [{ id: paneId, sessionId: id, host, state: "" }],
+      activePaneId: paneId,
+      title,
+      isPinned: true,
+      isLocked,
+    },
+  ]);
+  setActiveTabId(tabId);
+  setActivePaneId(paneId);
+}
+
+export async function unpinTab(id: string) {
+  const tab = getStore().tabs.find((t) => t.id === id);
+  if (!tab) {
+    return;
+  }
+  const backendSessionId = tab.panes[0]?.sessionId || tab.panes[0]?.id || id;
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+  await fetch("/api/tabs/unpin", {
+    method: METHOD_POST,
+    headers: {
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      [HEADER_CONTENT_TYPE]: MIME_JSON,
+    },
+    body: JSON.stringify({ id: backendSessionId } satisfies TabsUnpinRequest),
+  });
+}
+
+export async function pinTab(id: string) {
+  const tab = getStore().tabs.find((t) => t.id === id);
+  if (!tab) {
+    return;
+  }
+  if (tab.panes.length > 1) {
+    dialogs.alert("Only single-pane tabs can be pinned.");
+    return;
+  }
+  const pane = tab.panes[0];
+  if (!pane) {
+    return;
+  }
+  const backendSessionId = pane.sessionId || pane.id;
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+  // Pinning only supports single-pane tabs for now (backend requirement)
+  const host = pane.host || LOCAL_NAME;
+  await fetch("/api/tabs/pin", {
+    method: METHOD_POST,
+    headers: {
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      [HEADER_CONTENT_TYPE]: MIME_JSON,
+    },
+    body: JSON.stringify({ id: backendSessionId, host, title: tab.title } satisfies TabsPinRequest),
+  });
+  setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, isPinned: true } : t)));
+}
+
+export async function unlockTab(id: string) {
+  const tab = getStore().tabs.find((t) => t.id === id);
+  if (!tab) {
+    return;
+  }
+  if (tab.panes.length > 1) {
+    dialogs.alert("Only single-pane tabs can be unlocked.");
+    return;
+  }
+  const pane = tab.panes[0];
+  if (!pane) {
+    return;
+  }
+  const paneId = pane.sessionId || pane.id;
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+  const host = pane.host || LOCAL_NAME;
+  await fetch("/api/tabs/pin", {
+    method: METHOD_POST,
+    headers: {
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      [HEADER_CONTENT_TYPE]: MIME_JSON,
+    },
+    body: JSON.stringify({ id: paneId, host, title: tab.title } satisfies TabsPinRequest),
+  });
+  setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, isLocked: false } : t)));
+}
+
+export async function lockTab(id: string) {
+  const tab = getStore().tabs.find((t) => t.id === id);
+  if (!tab) {
+    return;
+  }
+  if (tab.panes.length > 1) {
+    dialogs.alert("Only single-pane tabs can be locked.");
+    return;
+  }
+  const pane = tab.panes[0];
+  if (!pane) {
+    return;
+  }
+  const backendSessionId = pane.sessionId || pane.id;
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+  const host = pane.host || LOCAL_NAME;
+  await fetch("/api/tabs/lock", {
+    method: METHOD_POST,
+    headers: {
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      [HEADER_CONTENT_TYPE]: MIME_JSON,
+    },
+    body: JSON.stringify({ id: backendSessionId, host, title: tab.title } satisfies TabsLockRequest),
+  });
+  setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, isLocked: true } : t)));
+}
+
+export function closeTab(id: string) {
+  const { activeTabId, tabs } = getStore();
+  const targetTab = tabs.find((t) => t.id === id);
+  if (targetTab?.isPinned && !targetTab?.isLocked) {
+    unpinTab(id);
+  }
+  if (targetTab && !targetTab.isLocked) {
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+    targetTab.panes.forEach((p) => {
+      if (p.state !== "stolen") {
+        fetch("/api/sessions/close", {
+          method: METHOD_POST,
+          headers: {
+            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+            [HEADER_CONTENT_TYPE]: MIME_JSON,
+          },
+          body: JSON.stringify({ id: p.sessionId || p.id } satisfies SessionsCloseRequest),
+        }).catch((e) => console.error(e));
+      }
+    });
+  }
+
+  setTabs((prev) => {
+    const idx = prev.findIndex((t) => t.id === id);
+    const newTabs = prev.filter((t) => t.id !== id);
+    if (activeTabId === id && newTabs.length > 0) {
+      const nextIdx = idx > 0 ? idx - 1 : 0;
+      const nextTab = newTabs[nextIdx];
+      setActiveTabId(nextTab.id);
+      setActivePaneId(nextTab.activePaneId);
+    } else if (newTabs.length === 0) {
+      setActiveTabId("");
+      setActivePaneId("");
+    }
+    return newTabs;
+  });
+  triggerFocus();
+}
+
+export function closeTabOrPane(tabOrPaneId?: string) {
+  const { activeTabId, activePaneId, tabs } = getStore();
+  tabOrPaneId = tabOrPaneId || activePaneId;
+  if (!tabOrPaneId) {
+    return;
+  }
+
+  // 1. Check if targetId is a Tab ID
+  const targetTab = tabs.find((t) => t.id === tabOrPaneId);
+  if (targetTab) {
+    closeTab(tabOrPaneId);
+    return;
+  }
+
+  // 2. Check if targetId is a Pane ID
+  let parentTab: TabData | undefined;
+  let targetPane: PaneData | undefined;
+  for (const t of tabs) {
+    const p = t.panes.find((pane) => pane.id === tabOrPaneId);
+    if (p) {
+      parentTab = t;
+      targetPane = p;
+      break;
+    }
+  }
+
+  if (parentTab && targetPane) {
+    if (parentTab.panes.length > 1) {
+      // Multi-pane tab: close the pane
+      const paneIdx = parentTab.panes.findIndex((p) => p.id === tabOrPaneId);
+      const newPanes = parentTab.panes.filter((p) => p.id !== tabOrPaneId);
+      let nextPaneId = parentTab.activePaneId;
+      if (parentTab.activePaneId === tabOrPaneId) {
+        nextPaneId = newPanes[Math.max(0, paneIdx - 1)].id;
+      }
+
+      if (!parentTab.isLocked && targetPane.state !== "stolen") {
+        const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+        fetch("/api/sessions/close", {
+          method: METHOD_POST,
+          headers: {
+            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+            [HEADER_CONTENT_TYPE]: MIME_JSON,
+          },
+          body: JSON.stringify({ id: targetPane.sessionId || targetPane.id } satisfies SessionsCloseRequest),
+        }).catch((e) => console.error(e));
+      }
+
+      setTabs((prev) =>
+        prev.map((t) => (t.id === parentTab.id ? { ...t, panes: newPanes, activePaneId: nextPaneId } : t)),
+      );
+
+      if (activeTabId === parentTab.id) {
+        setActivePaneId(nextPaneId);
+        triggerFocus();
+      }
+    } else {
+      closeTab(parentTab.id);
+    }
+  }
+}
+
+export async function renameTab(targetId: string) {
+  const targetTab = getStore().tabs.find((t) => t.id === targetId);
+  if (!targetTab) {
+    return;
+  }
+  let newTitle = await dialogs.prompt("Enter new tab title:", targetTab.title);
+  if (!newTitle) {
+    return;
+  }
+  newTitle = newTitle.trim();
+  if (newTitle && newTitle !== targetTab.title) {
+    if (targetTab.isPinned) {
+      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+      const backendSessionId = targetTab.panes[0]?.sessionId || targetTab.panes[0]?.id || targetId;
+      await fetch("/api/tabs/rename", {
+        method: METHOD_POST,
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+          [HEADER_CONTENT_TYPE]: MIME_JSON,
+        },
+        body: JSON.stringify({ id: backendSessionId, title: newTitle } satisfies TabsRenameRequest),
+      });
+    }
+    setTabs((prev) => prev.map((t) => (t.id === targetId ? { ...t, title: newTitle } : t)));
+  }
+}
+
+export async function fetchHosts() {
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+  try {
+    const r = await fetch("/api/hosts", {
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      },
+    });
+    if (r.status === 401) {
+      localStorage.removeItem(BROWSER_STORAGE_KEY_TOKEN);
+      window.location.href = "/login"; // @todo : move side effect out of it
+      return;
+    }
+    const data: HostData[] = await r.json();
+    setHosts(data || []);
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+export function openNewButtonDialog() {
+  const { activeGroup, buttons } = getStore();
+  const maxOrder = buttons.length > 0 ? Math.max(...buttons.map((b) => b.order || 0)) : 0;
+  const data: ButtonData = {
+    id: "",
+    name: "",
+    type: "send_string",
+    payload: "",
+    group: activeGroup,
+    autorun: 0,
+    order: maxOrder + 10 || 10,
+    shortcut: "",
+  };
+  setEditButton(null);
+  setButtonFormData(data);
+  setInitialBtnFormData(data);
+  setEditButtonDialogOpen(true);
+}
+
+export function openScratchpad() {
+  const existing = getStore().tabs.find((t) => t.type === "scratchpad");
+  if (existing) {
+    setActiveTabId(existing.id);
+    setActivePaneId(existing.panes[0].id);
+    triggerFocus();
+    return;
+  }
+  const tabId = `scratchpad-${Date.now()}`;
+  const newTab: TabData = {
+    id: tabId,
+    title: "Scratchpad",
+    panes: [{ id: tabId, host: "scratchpad", state: "" }],
+    activePaneId: tabId,
+    type: "scratchpad",
+  };
+  setTabs((prev) => [...prev, newTab]);
+  setActiveTabId(tabId);
+  setActivePaneId(tabId);
+  triggerFocus();
+}
+
+export async function saveButton() {
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+  const { editButton, buttonFormData } = getStore();
+
+  // Auto-update liquidjs value based on detected user variables
+  const finalButtonFormData = { ...buttonFormData };
+  if (finalButtonFormData.type === "send_string") {
+    if (finalButtonFormData.liquidjs !== 0) {
+      const varsList = getTemplateVariables(finalButtonFormData.payload);
+      finalButtonFormData.liquidjs = varsList.length > 0 ? 2 : 1;
+    } else {
+      finalButtonFormData.liquidjs = 0;
+    }
+  } else {
+    finalButtonFormData.liquidjs = 0;
+  }
+
+  const method = editButton ? METHOD_PUT : METHOD_POST;
+  const url = editButton ? `/api/buttons/${editButton.id}` : "/api/buttons";
+  if (editButton) {
+    const id = editButton.id;
+    if (moduleCache[id]?.default?.unload) {
+      await moduleCache[id].default.unload();
+    }
+    delete moduleCache[id];
+  }
+  await fetch(url, {
+    method,
+    headers: {
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      [HEADER_CONTENT_TYPE]: MIME_JSON,
+    },
+    body: JSON.stringify(finalButtonFormData),
+  });
+  setInitialBtnFormData(null);
+  setEditButtonDialogOpen(false);
+  const r = await fetch("/api/buttons", {
+    headers: {
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+    },
+  });
+  const data = (await r.json()) as ButtonData[];
+  setButtons(data || []);
+  setActiveGroup(getStore().buttonFormData.group || DEFAULT_BUTTON_GROUP);
+}
+
+export async function deleteButton(id: string, name: string) {
+  setBtnMenuAnchor(null);
+  if (!(await dialogs.confirm(`Delete button "${name}"?`))) {
+    return;
+  }
+  if (moduleCache[id]) {
+    if (moduleCache[id].default?.unload) {
+      moduleCache[id].default.unload();
+    }
+    delete moduleCache[id];
+  }
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+  await fetch(`/api/buttons/${id}`, {
+    method: METHOD_DELETE,
+    headers: {
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+    },
+  });
+  const res = await fetch("/api/buttons", {
+    headers: {
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+    },
+  });
+  const data: ButtonData[] = await res.json();
+  setButtons(data || []);
+}
+
+export async function moveButton(id: string, direction: number) {
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+  await fetch("/api/buttons/move", {
+    method: METHOD_POST,
+    headers: {
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      [HEADER_CONTENT_TYPE]: MIME_JSON,
+    },
+    body: JSON.stringify({ id, direction } satisfies ButtonsMoveRequest),
+  });
+  const res = await fetch("/api/buttons", {
+    headers: {
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+    },
+  });
+  const data: ButtonData[] = await res.json();
+  setButtons(data || []);
 }

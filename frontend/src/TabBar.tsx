@@ -26,6 +26,7 @@ import {
   triggerFocus,
   useStore,
   setNewTabDialogFilter,
+  closeTab,
 } from "./store";
 import { APP_NAME, ID_TERMINAL_SEARCH_INPUT, LOCAL_NAME } from "./constants";
 
@@ -35,7 +36,6 @@ export interface TabBarProps {
   hasSidebarApplet: boolean;
   scratchpadSyncState: ScratchpadSyncState;
   handleContextMenu: (e: React.MouseEvent, tabId: string) => void;
-  handleCloseTab: (e: React.MouseEvent, tabId: string) => void;
   handleCloseSearch: () => void;
 }
 
@@ -45,7 +45,6 @@ export default function TabBar({
   hasSidebarApplet,
   scratchpadSyncState,
   handleContextMenu,
-  handleCloseTab,
   handleCloseSearch,
 }: TabBarProps) {
   const focusSearchInputTrigger = useStore((state) => state.focusSearchInputTrigger);
@@ -194,7 +193,14 @@ export default function TabBar({
                         )}
                       </Box>
                       <span>{tab.title}</span>
-                      <IconButton size="small" onClick={(e) => handleCloseTab(e, tab.id)} sx={{ ml: 1, p: 0.5 }}>
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          closeTab(tab.id);
+                        }}
+                        sx={{ ml: 1, p: 0.5 }}
+                      >
                         <CloseIcon fontSize="small" />
                       </IconButton>
                     </Box>

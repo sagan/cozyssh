@@ -286,6 +286,7 @@ func listRemoteFiles(cfg *config.Config) ([]remoteFileInfo, bool, error) {
 
 	matches := hrefRegex.FindAllStringSubmatch(string(bodyBytes), -1)
 	var files []remoteFileInfo
+	isEncrypted := cfg.WebdavEncryptionEnabled
 	var hasEncryptionFlag bool
 	for _, m := range matches {
 		rawHref := m[1]
@@ -299,13 +300,10 @@ func listRemoteFiles(cfg *config.Config) ([]remoteFileInfo, bool, error) {
 			continue
 		}
 
-		var isEncrypted bool
 		var suffix string
-		if strings.HasSuffix(filename, ".bin") {
-			isEncrypted = true
+		if isEncrypted && strings.HasSuffix(filename, ".bin") {
 			suffix = ".bin"
-		} else if strings.HasSuffix(filename, ".json") {
-			isEncrypted = false
+		} else if !isEncrypted && strings.HasSuffix(filename, ".json") {
 			suffix = ".json"
 		} else {
 			continue

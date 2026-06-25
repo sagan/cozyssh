@@ -24,13 +24,17 @@ import {
   type TerminalRefMap,
   activatePane,
   changeNewTabDialogViewMode,
+  cloneSession,
   closeInputDialog,
   closeOtherTabs,
+  closeTabOrPane,
   decreseFontSize,
   getStore,
   increaseFontSize,
   nextButtonGroup,
+  openHost,
   openInputDialog,
+  openScratchpad,
   prevButtonGroup,
   resetFontSize,
   setActivePaneId,
@@ -44,15 +48,8 @@ import {
 } from "./store";
 
 export interface KeyboardManagerOptions {
-  handleCloneSession: (id: string, cloneInSameTab?: boolean) => void;
   /** Called when a button shortcut is triggered */
   handleButtonClick: (btn: ButtonData, isAutoRun?: boolean) => void;
-  /** Open a local terminal tab */
-  handleSelectHost: (host: string) => void;
-  /** Open (or switch to) the scratchpad tab */
-  handleOpenScratchpad: () => void;
-  /** Close the active pane, or the whole tab if it's the last pane */
-  handleCloseTabOrPane: (tabOrPaneId?: string) => void;
   /** Getter for the live terminal ref map */
   getTerminalRefs: () => TerminalRefMap;
 }
@@ -65,14 +62,7 @@ export const blackholeShortcuts = new Set<string>(["ctrl+alt", "ctrl+alt+shift",
 export const disableShortcuts = new Set<string>();
 
 export function useKeyboardManager(options: KeyboardManagerOptions): void {
-  const {
-    handleCloneSession,
-    handleButtonClick,
-    handleSelectHost,
-    handleOpenScratchpad,
-    handleCloseTabOrPane,
-    getTerminalRefs,
-  } = options;
+  const { handleButtonClick, getTerminalRefs } = options;
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -150,12 +140,12 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         }
         case "alt+c":
           e.preventDefault();
-          handleCloneSession(getStore().activePaneId);
+          cloneSession(getStore().activePaneId);
           return;
 
         case "alt+shift+c":
           e.preventDefault();
-          handleCloneSession(getStore().activePaneId, true);
+          cloneSession(getStore().activePaneId, true);
           return;
 
         case "alt+o":
@@ -197,19 +187,19 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
 
         case "alt+n":
           e.preventDefault();
-          handleSelectHost(LOCAL_NAME);
+          openHost(LOCAL_NAME);
           return;
 
         case "alt+shift+n": {
           e.preventDefault();
           const shells = getStore().shells;
-          handleSelectHost(shells[1] ? localShellHost(shells[1]) : LOCAL_NAME);
+          openHost(shells[1] ? localShellHost(shells[1]) : LOCAL_NAME);
           return;
         }
 
         case "alt+s":
           e.preventDefault();
-          handleOpenScratchpad();
+          openScratchpad();
           return;
 
         case "alt+i":
@@ -293,7 +283,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
 
         case "alt+w":
           e.preventDefault();
-          handleCloseTabOrPane();
+          closeTabOrPane();
           return;
 
         case "ctrl+alt+shift+w":
@@ -303,7 +293,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
 
         case "alt+shift+w":
           e.preventDefault();
-          handleCloseTabOrPane(getStore().activeTabId);
+          closeTabOrPane(getStore().activeTabId);
           return;
 
         case "alt+g": {
@@ -466,12 +456,5 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [
-    handleButtonClick,
-    handleSelectHost,
-    handleOpenScratchpad,
-    handleCloseTabOrPane,
-    getTerminalRefs,
-    handleCloneSession,
-  ]);
+  }, [handleButtonClick, getTerminalRefs]);
 }

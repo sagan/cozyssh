@@ -48,7 +48,6 @@ import {
   getTemplateVariables,
   liquidEngine,
   openHostInNewWindow,
-  type OpenHostFunction,
   cutString,
 } from "./common";
 import {
@@ -77,6 +76,17 @@ import {
   openInputDialog,
   closeInputDialog,
   setInputDialogDirty,
+  openHost,
+  cloneSession,
+  attachSession,
+  unpinTab,
+  pinTab,
+  unlockTab,
+  lockTab,
+  renameTab,
+  saveButton,
+  deleteButton,
+  moveButton,
 } from "./store";
 import NewTabDialog from "./NewTabDialog";
 import { dialogs } from "./Dialogs";
@@ -86,22 +96,11 @@ export interface DialogManagerProps {
   memoTabId: string | null;
   contextMenu: ContextMenu | null;
   handleCloseMenu: () => void;
-  handleUnpinTab: (id: string) => void;
-  handlePinTab: (id: string) => void;
-  handleUnlockTab: (id: string) => void;
-  handleLockTab: (id: string) => void;
-  handleCloneSession: (id: string, cloneInSameTab?: boolean) => void;
   handleToggleFiles: () => void;
   handleReconnectTab: (id: string) => void;
-  handleRename: () => void;
-  handleMoveButton: (id: string, dir: number) => void;
-  handleDeleteButton: (id: string, name: string) => void;
   handleCloseBtnDialog: (e: unknown, reason: string) => void;
-  handleSaveButton: () => void;
   sendParsedString: (s: string, isLiquid?: boolean, userVars?: Record<string, string>) => void;
-  handleAttach: (id: string, host: string, title: string, isLocked: boolean) => void;
   handleRefresh: () => void;
-  handleSelectHost: OpenHostFunction;
   handleButtonClick: (btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">) => Promise<void>;
 }
 
@@ -124,23 +123,12 @@ export default function DialogManager({
   memoTabId,
   contextMenu,
   handleCloseMenu,
-  handleUnpinTab,
-  handlePinTab,
-  handleUnlockTab,
-  handleLockTab,
-  handleCloneSession,
   handleToggleFiles,
   handleReconnectTab,
-  handleRename,
   handleButtonClick,
-  handleMoveButton,
-  handleDeleteButton,
   handleCloseBtnDialog,
-  handleSaveButton,
   sendParsedString,
-  handleAttach,
   handleRefresh,
-  handleSelectHost,
 }: DialogManagerProps) {
   const hosts = useStore((state) => state.hosts);
   const lastMenuBtn = useStore((state) => state.lastMenuBtn);
@@ -443,7 +431,8 @@ export default function DialogManager({
                     {tab.isPinned ? (
                       <MenuItem
                         onClick={() => {
-                          handleUnpinTab(memoTabId);
+                          handleCloseMenu();
+                          unpinTab(memoTabId);
                           triggerFocus();
                         }}
                       >
@@ -452,7 +441,7 @@ export default function DialogManager({
                     ) : tab.panes.length === 1 ? (
                       <MenuItem
                         onClick={() => {
-                          handlePinTab(memoTabId);
+                          pinTab(memoTabId);
                           triggerFocus();
                         }}
                       >
@@ -463,7 +452,8 @@ export default function DialogManager({
                       (tab.isLocked ? (
                         <MenuItem
                           onClick={() => {
-                            handleUnlockTab(memoTabId);
+                            handleCloseMenu();
+                            unlockTab(memoTabId);
                             triggerFocus();
                           }}
                         >
@@ -472,7 +462,8 @@ export default function DialogManager({
                       ) : (
                         <MenuItem
                           onClick={() => {
-                            handleLockTab(memoTabId);
+                            handleCloseMenu();
+                            lockTab(memoTabId);
                             triggerFocus();
                           }}
                         >
@@ -497,9 +488,23 @@ export default function DialogManager({
                 )}
                 {tab.type !== "scratchpad" && (
                   <>
-                    <MenuItem onClick={() => handleCloneSession(memoTabId)}>Clone Session</MenuItem>
+                    <MenuItem
+                      onClick={() => {
+                        handleCloseMenu();
+                        cloneSession(memoTabId);
+                      }}
+                    >
+                      Clone Session
+                    </MenuItem>
                     {tab.panes.length < 4 && (
-                      <MenuItem onClick={() => handleCloneSession(memoTabId, true)}>Clone Session (Split)</MenuItem>
+                      <MenuItem
+                        onClick={() => {
+                          handleCloseMenu();
+                          cloneSession(memoTabId, true);
+                        }}
+                      >
+                        Clone Session (Split)
+                      </MenuItem>
                     )}
                     {tab.panes.length === 1 && (
                       <MenuItem onClick={handleToggleFiles}>
@@ -518,7 +523,15 @@ export default function DialogManager({
                     >
                       Reconnect
                     </MenuItem>
-                    <MenuItem onClick={handleRename}>Rename Tab</MenuItem>
+                    <MenuItem
+                      onClick={() => {
+                        handleCloseMenu();
+                        renameTab(memoTabId);
+                        triggerFocus();
+                      }}
+                    >
+                      Rename Tab
+                    </MenuItem>
                   </>
                 )}
                 <MenuItem
@@ -635,7 +648,7 @@ export default function DialogManager({
           onClick={() => {
             if (btnMenuAnchor) {
               setBtnMenuAnchor(null);
-              handleSelectHost(btnMenuAnchor.btn.payload, { target: "_self" });
+              openHost(btnMenuAnchor.btn.payload, { target: "_self" });
             }
           }}
           sx={{
@@ -678,14 +691,28 @@ export default function DialogManager({
         >
           Copy Contents
         </MenuItem>
-        <MenuItem onClick={() => btnMenuAnchor && handleMoveButton(btnMenuAnchor.btn.id, -1)}>
+        <MenuItem
+          onClick={() => {
+            if (btnMenuAnchor) {
+              setBtnMenuAnchor(null);
+              moveButton(btnMenuAnchor.btn.id, -1);
+            }
+          }}
+        >
           Move Button Left
         </MenuItem>
-        <MenuItem onClick={() => btnMenuAnchor && handleMoveButton(btnMenuAnchor.btn.id, 1)}>
+        <MenuItem
+          onClick={() => {
+            if (btnMenuAnchor) {
+              setBtnMenuAnchor(null);
+              moveButton(btnMenuAnchor.btn.id, 1);
+            }
+          }}
+        >
           Move Button Right
         </MenuItem>
         <MenuItem
-          onClick={() => btnMenuAnchor && handleDeleteButton(btnMenuAnchor.btn.id, btnMenuAnchor.btn.name)}
+          onClick={() => btnMenuAnchor && deleteButton(btnMenuAnchor.btn.id, btnMenuAnchor.btn.name)}
           sx={{ color: "error.main" }}
         >
           Delete Button
@@ -1031,11 +1058,7 @@ export default function DialogManager({
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditButtonDialogOpen(false)}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={handleSaveButton}
-            disabled={!buttonFormData.name || !buttonFormData.payload}
-          >
+          <Button variant="contained" onClick={saveButton} disabled={!buttonFormData.name || !buttonFormData.payload}>
             Save
           </Button>
         </DialogActions>
@@ -1301,7 +1324,7 @@ export default function DialogManager({
           }
         }}
         onAttachPinned={(id, host, title, isLocked) => {
-          handleAttach(id, host, title, isLocked);
+          attachSession(id, host, title, isLocked);
           closeNewTabDialog();
         }}
         onSelect={async (host) => {
@@ -1335,7 +1358,7 @@ export default function DialogManager({
               console.error("Failed to auto-add host:", e);
             }
           }
-          handleSelectHost((known?.name || parsedHostString) + (query ? "?" + query : ""));
+          openHost((known?.name || parsedHostString) + (query ? "?" + query : ""));
         }}
       />
       <Box

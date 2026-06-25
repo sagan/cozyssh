@@ -34,7 +34,6 @@ import {
   METHOD_POST,
   METHOD_PUT,
   MIME_JSON,
-  LOCAL_NAME,
   LOCAL_VAR_PREFIX,
   DEFAULT_FONT_SIZE,
   VAR_CS_FONT_SIZE,
@@ -51,8 +50,11 @@ import {
 import {
   type TerminalRefMap,
   activatePane,
+  attachSession,
+  closeTabOrPane,
   getStore,
   notify,
+  openHostsAsSplit2,
   setButtons,
   setHosts,
   setLocalVars,
@@ -188,6 +190,7 @@ window.csPromptPassword = dialogs.promptPassword;
 window.csChoose = dialogs.choose;
 window.csRunScript = runScript;
 window.csNotify = notify;
+window.csOpen = openHostsAsSplit2;
 window.csOpenMenu = openMenu;
 
 window.csFocus = (tabOrPaneId?: string) => {
@@ -410,15 +413,6 @@ window.csGetShellIntegration = (paneId?: string) => {
 export interface PluginAPICallbacks {
   /** Apply a new MUI theme */
   setTheme: (options: unknown, ...args: unknown[]) => void;
-  /** Open a new terminal tab */
-  handleSelectHost: (
-    host: string,
-    options?: { title?: string; target?: string; options?: Record<string, string> },
-  ) => Promise<void>;
-  /** Open a split-pane tab from a tag */
-  handleSelectTagAsSplit: (tag: string, hosts: string[], hostOptions?: (Record<string, string> | undefined)[]) => void;
-  /** Attach to an existing backend session */
-  handleAttach: (id: string, host: string, title: string, isLocked?: boolean) => Promise<void>;
   /** Refresh all data from the server */
   handleRefresh: (options?: { sync?: number; refresh?: number }) => Promise<void>;
   /** React state setter for applets */
@@ -430,8 +424,6 @@ export interface PluginAPICallbacks {
   /** Getter for the live terminal ref map (avoids store coupling) */
   getTerminalRefs: () => TerminalRefMap;
   getApplets: () => AppletData[];
-  /** Close tab or pane */
-  handleCloseTabOrPane: (tabOrPaneId?: string) => void;
 }
 
 window.csSetVar = async (nameOrVars: string | Record<string, string | undefined>, value?: string | undefined) => {
@@ -639,9 +631,9 @@ window.csDeleteHost = async (name: string): Promise<void> => {
  *   useEffect(() => setupPluginAPI(callbacks), []);
  */
 export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
-  window.csAttach = cb.handleAttach;
+  window.csAttach = attachSession;
   window.csRefresh = cb.handleRefresh;
-  window.csClose = cb.handleCloseTabOrPane;
+  window.csClose = closeTabOrPane;
   window.csSetTheme = cb.setTheme;
 
   window.csGetApplet = ((name?: string) => {
@@ -710,48 +702,6 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
       }
     }
     return lines.join("\n");
-  };
-
-  window.csOpen = (host, { title, target }: { title?: string; target?: string } = {}) => {
-    const { hosts } = getStore();
-    const targetHosts = Array.isArray(host) ? host.slice(0, 4) : [host];
-    const hostNames: string[] = [];
-    const hostOptions: (Record<string, string> | undefined)[] = [];
-    for (let targetHost of targetHosts) {
-      if (typeof targetHost === "object") {
-        hostNames.push(targetHost.name);
-        hostOptions.push(undefined);
-      } else if (typeof targetHost === "string") {
-        let option: Record<string, string> | undefined = undefined;
-        const i = targetHost.lastIndexOf("?");
-        if (i !== -1) {
-          option = Object.fromEntries(new URLSearchParams(targetHost.slice(i)));
-          targetHost = targetHost.slice(0, i);
-        }
-        hostOptions.push(option);
-        if (targetHost === LOCAL_NAME) {
-          hostNames.push(LOCAL_NAME);
-        } else {
-          const known = hosts.find((h) => h.name === targetHost || h.hostname === targetHost);
-          if (known) {
-            hostNames.push(known.name);
-          } else {
-            hostNames.push(targetHost);
-          }
-        }
-      }
-    }
-    title = title || hostNames[0];
-    if (target === "_self") {
-      target = getStore().activeTabId;
-    } else if (target === "_blank") {
-      target = undefined;
-    }
-    if (hostNames.length > 1) {
-      cb.handleSelectTagAsSplit(title, hostNames, hostOptions);
-    } else {
-      cb.handleSelectHost(hostNames[0], { title, target, options: hostOptions[0] });
-    }
   };
 
   window.csOpenApplet = (name, node, options = {}) => {

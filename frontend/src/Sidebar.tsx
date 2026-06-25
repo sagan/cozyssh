@@ -96,7 +96,6 @@ import {
 } from "./constants";
 import {
   type HostForm,
-  type OpenHostFunction,
   type ServiceWorkerStatus,
   cutPrefix,
   filterHosts,
@@ -122,6 +121,11 @@ import {
   triggerFocus,
   useStore,
   setGroups,
+  openHost,
+  openHostsAsSplit,
+  logout,
+  logoutAll,
+  fetchHosts,
 } from "./store";
 import { useShallow } from "zustand/react/shallow";
 
@@ -166,26 +170,16 @@ export default function Sidebar({
   appVersion,
   savePassword,
   onSavePasswordChange,
-  onSelect,
-  onSelectTagAsSplit,
-  onLogout,
-  onLogoutAll,
   onOpenScratchpad,
   onAttach,
   onRefresh,
-  fetchHosts,
 }: {
   appVersion: string;
   savePassword: ConfigRequest["save_password"];
   onSavePasswordChange: (val: ConfigRequest["save_password"]) => void;
-  onSelect: OpenHostFunction;
-  onSelectTagAsSplit: (tag: string, hosts: string[]) => void;
-  onLogout: () => void;
-  onLogoutAll: () => void;
   onOpenScratchpad: () => void;
   onAttach: (id: string, host: string, title: string, isLocked: boolean) => void;
   onRefresh: () => void;
-  fetchHosts: () => void;
 }) {
   const activeSessionIds = useStore(
     useShallow((state) =>
@@ -367,6 +361,21 @@ export default function Sidebar({
 
   const handleSaveWebdav = async () => {
     setIsTestingWebdav(true);
+    if (
+      isCleared &&
+      !(await dialogs.confirm(
+        "Are you sure you want to clear WebDAV settings?",
+        `It will not remove any existing files from WebDAV server.` +
+          (webdavEncrypted
+            ? ` The WebDAV remote directory is encrypted with key ${masterKey}.` +
+              ` If you proceed, the master key will be deleted from CozySSH server. Make sure you have a backup of it.`
+            : ""),
+        webdavEncrypted,
+      ))
+    ) {
+      setIsTestingWebdav(false);
+      return;
+    }
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
 
     try {
@@ -783,7 +792,7 @@ export default function Sidebar({
 
       fetchHosts();
     },
-    [hosts, getHostGroupPath, getHostOrder, fetchHosts],
+    [hosts, getHostGroupPath, getHostOrder],
   );
 
   // Group move/reorder function (drag & drop)
@@ -1159,7 +1168,7 @@ export default function Sidebar({
 
             if (retryRes.ok) {
               await dialogs.alert("Password updated! You will be logged out.");
-              onLogout();
+              logout();
               return;
             } else {
               const retryErr = await retryRes.text();
@@ -1186,7 +1195,7 @@ export default function Sidebar({
 
             if (forceRes.ok) {
               dialogs.alert("App password updated and saved passwords wiped! You will be logged out.");
-              onLogout();
+              logout();
               return;
             } else {
               const forceErr = await forceRes.text();
@@ -1201,12 +1210,12 @@ export default function Sidebar({
 
     if (res.ok) {
       await dialogs.alert("Password updated! You will be logged out.");
-      onLogout();
+      logout();
     } else {
       const errText = await res.text();
       dialogs.alert("Failed to update password: " + (errText || res.statusText));
     }
-  }, [confirmPwd, newPwd, onLogout]);
+  }, [confirmPwd, newPwd]);
 
   const handleClearCache = useCallback(async () => {
     if (!(await dialogs.confirm("This will unregister the Service Worker, clear all caches and reload. Proceed?"))) {
@@ -1247,11 +1256,12 @@ export default function Sidebar({
     setTagContextMenuOpen(false);
     setFilterStr(`#${tag} `);
     const targets = hosts.filter((h) => h.tags && h.tags.includes(tag));
-    targets.forEach((h) => onSelect(h.name));
-  }, [hosts, onSelect, tagContextMenu]);
+    targets.forEach((h) => openHost(h.name));
+    setMobileOpen(false);
+  }, [hosts, tagContextMenu]);
 
   const handleOpenSplitServers = useCallback(() => {
-    if (!tagContextMenu || !onSelectTagAsSplit) {
+    if (!tagContextMenu) {
       return;
     }
     const tag = tagContextMenu.tag;
@@ -1272,12 +1282,13 @@ export default function Sidebar({
 
     const targets = [...favs, ...normals, ...autos].slice(0, 4);
     if (targets.length > 0) {
-      onSelectTagAsSplit(
+      openHostsAsSplit(
         tag,
         targets.map((h) => h.name),
       );
+      setMobileOpen(false);
     }
-  }, [hosts, onSelectTagAsSplit, tagContextMenu]);
+  }, [hosts, tagContextMenu]);
 
   const handleCopyTagUrl = useCallback(() => {
     if (!tagContextMenu) {
@@ -1371,7 +1382,7 @@ export default function Sidebar({
       });
       fetchHosts();
     }
-  }, [contextMenu, fetchHosts]);
+  }, [contextMenu]);
 
   const handleToggleFavourite = useCallback(async () => {
     if (!contextMenu) {
@@ -1525,8 +1536,9 @@ export default function Sidebar({
       return;
     }
     const targets = hosts.filter((h) => h.tags && h.tags.includes(TAG_GROUP_PREFIX + groupContextMenu.path));
-    targets.forEach((h) => onSelect(h.name));
-  }, [groupContextMenu, hosts, onSelect]);
+    targets.forEach((h) => openHost(h.name));
+    setMobileOpen(false);
+  }, [groupContextMenu, hosts]);
 
   const handleOpenGroupAllInNewWindow = useCallback(() => {
     setGroupContextMenuOpen(false);
@@ -1544,12 +1556,13 @@ export default function Sidebar({
     const filtered = hosts.filter((h) => h.tags && h.tags.includes(TAG_GROUP_PREFIX + groupContextMenu.path));
     const targets = filtered.slice(0, 4);
     if (targets.length > 0) {
-      onSelectTagAsSplit(
+      openHostsAsSplit(
         groupContextMenu.path,
         targets.map((h) => h.name),
       );
+      setMobileOpen(false);
     }
-  }, [groupContextMenu, hosts, onSelectTagAsSplit]);
+  }, [groupContextMenu, hosts]);
 
   const handleAddSubGroupClick = useCallback(async () => {
     setGroupContextMenuOpen(false);
@@ -2239,14 +2252,14 @@ export default function Sidebar({
             if (selectedItem.type === "group") {
               toggleGroupExpanded(selectedItem.path);
             } else {
-              onSelect(selectedItem.host.name);
+              openHost(selectedItem.host.name);
               document.getElementById(ID_SIDEBAR_FILTER)?.blur();
             }
           }
         }
       }
     },
-    [flatListIds, flatList, onSelect, selectedIndex],
+    [flatListIds, flatList, selectedIndex],
   );
 
   const uniqueTags = useMemo(() => {
@@ -2318,7 +2331,6 @@ export default function Sidebar({
           moveServer={moveServer}
           getHostGroupPath={getHostGroupPath}
           handleContextMenu={handleContextMenu}
-          onSelect={onSelect}
         />
       );
     }
@@ -2401,7 +2413,7 @@ export default function Sidebar({
               if (
                 await dialogs.confirm("Log out of current device?", "All data stored in this browser will be cleared.")
               ) {
-                onLogout();
+                logout();
               }
             }}
           >
@@ -2419,7 +2431,7 @@ export default function Sidebar({
                     " All data stored in this browser will be cleared.",
                 )
               ) {
-                onLogoutAll();
+                logoutAll();
               }
             }}
           >
@@ -2543,7 +2555,8 @@ export default function Sidebar({
                 if (e.ctrlKey) {
                   openHostInNewWindow(LOCAL_NAME);
                 } else {
-                  onSelect(LOCAL_NAME);
+                  openHost(LOCAL_NAME);
+                  setMobileOpen(false);
                 }
               }}
             >
@@ -2595,7 +2608,6 @@ export default function Sidebar({
                         id={`sidebar-fav-${host.name}`}
                         filter={filterStr}
                         host={host}
-                        onSelect={onSelect}
                         onContextMenu={handleContextMenu}
                         isSelected={selectedIndex === itemIdx}
                       />
@@ -2705,7 +2717,6 @@ export default function Sidebar({
                         id={`sidebar-auto-${host.name}`}
                         filter={filterStr}
                         host={host}
-                        onSelect={onSelect}
                         onContextMenu={handleContextMenu}
                         isSelected={selectedIndex === itemIdx}
                       />
@@ -2728,7 +2739,8 @@ export default function Sidebar({
             key={idx}
             onClick={() => {
               setLocalShellContextMenuOpen(false);
-              onSelect(idx > 0 ? localShellHost(shell) : LOCAL_NAME);
+              openHost(idx > 0 ? localShellHost(shell) : LOCAL_NAME);
+              setMobileOpen(false);
             }}
           >
             {shell.name + (idx === 0 ? " (Default)" : idx === 1 ? " (Alternative)" : "")}
@@ -2758,7 +2770,8 @@ export default function Sidebar({
             }
             const target = contextMenu.target;
             setContextMenuOpen(false);
-            onSelect(target.name, { target: "_self" });
+            openHost(target.name, { target: "_self" });
+            setMobileOpen(false);
           }}
         >
           Open (In Current Tab)
@@ -3786,7 +3799,6 @@ function HostListItem({
   section,
   filter,
   host,
-  onSelect,
   onContextMenu,
   isSelected,
 }: {
@@ -3794,7 +3806,6 @@ function HostListItem({
   section: "fav" | "tree" | "auto";
   filter: string;
   host: HostData;
-  onSelect: (name: string) => void;
   onContextMenu: (e: React.MouseEvent, host: HostData, section: "fav" | "tree" | "auto") => void;
   isSelected?: boolean;
 }) {
@@ -3844,7 +3855,8 @@ function HostListItem({
           if (e.ctrlKey) {
             openHostInNewWindow(host.name);
           } else {
-            onSelect(host.name);
+            openHost(host.name);
+            setMobileOpen(false);
           }
         }}
         sx={{ py: 0.5 }}
@@ -4052,7 +4064,6 @@ function TreeServerItem({
   moveServer,
   getHostGroupPath,
   handleContextMenu,
-  onSelect,
 }: {
   node: ServerNode;
   level: number;
@@ -4070,7 +4081,6 @@ function TreeServerItem({
     host: HostData,
     section: "fav" | "tree" | "auto",
   ) => void;
-  onSelect: (host: string) => void;
 }) {
   const itemRef = useRef<HTMLLIElement>(null);
   useEffect(() => {
@@ -4149,7 +4159,8 @@ function TreeServerItem({
           if (e.ctrlKey) {
             openHostInNewWindow(host.name);
           } else {
-            onSelect(host.name);
+            openHost(host.name);
+            setMobileOpen(false);
           }
         }}
         sx={{ py: 0.5, px: 1 }}

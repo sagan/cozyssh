@@ -19,20 +19,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import ViewSidebarIcon from "@mui/icons-material/ViewSidebar";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 
-import type {
-  FullData,
-  HostData,
-  ButtonData,
-  RecentUpdateRequest,
-  SessionsAttachRequest,
-  TabsPinRequest,
-  TabsUnpinRequest,
-  SessionsCloseRequest,
-  TabsRenameRequest,
-  ButtonsMoveRequest,
-  TabsLockRequest,
-  ConfigRequest,
-} from "./api";
+import type { FullData, HostData, ButtonData, ConfigRequest } from "./api";
 import {
   DEFAULT_SCROLL_LINES,
   BROWSER_STORAGE_KEY_TOKEN,
@@ -41,9 +28,7 @@ import {
   HEADER_AUTHORIZATION_BEARER_PREFIX,
   HEADER_CONTENT_TYPE,
   LOCAL_NAME,
-  METHOD_DELETE,
   METHOD_POST,
-  METHOD_PUT,
   MIME_JSON,
   VAR_CS_NOAUTOLOAD,
   VAR_CS_NOAUTORUN,
@@ -51,24 +36,17 @@ import {
   VAR_NOAUTOLOAD,
   VAR_NOAUTORUN,
   VIBRATE_PATTERN,
-  BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE,
   ID_TERMINAL_SEARCH_INPUT,
-  CACHE_API_DATA,
-  CACHE_MANIFEST,
   TAG_GROUP_PREFIX,
   TAG_FAV,
 } from "./constants";
 import {
   type ContextMenu,
   type ScratchpadSyncState,
-  type OpenHostFunction,
   defaultThemeOptions,
   genTabId,
   getIntVar,
-  nextName,
   genPaneId,
-  hostTitle,
-  removePassFromHost,
   parseHostName,
   getCanonicalHostString,
   getTemplateVariables,
@@ -76,7 +54,6 @@ import {
 } from "./common";
 import {
   type TabData,
-  type PaneData,
   useStore,
   getStore,
   setTabs,
@@ -89,18 +66,11 @@ import {
   triggerFocus,
   setSysHostname,
   setEditButtonDialogOpen,
-  setButtonFormData,
-  setInitialBtnFormData,
   notify,
-  setActiveGroup,
   setRecents,
-  setEditButton,
-  setBtnMenuAnchor,
   setMobileOpen,
   setMobileAppletsOpen,
   setSearchOpen,
-  activatePane,
-  clearData,
   setShells,
   resetFontSize,
   decreseFontSize,
@@ -110,8 +80,15 @@ import {
   closeOtherTabs,
   closeRightTabs,
   openInputDialog,
+  openHostsAsSplit,
+  openHost,
+  cloneSession,
+  attachSession,
+  closeTabOrPane,
+  openScratchpad,
+  openHostsAsSplit2,
 } from "./store";
-import { setupPluginAPI, runScript, moduleCache } from "./pluginAPI";
+import { setupPluginAPI, runScript } from "./pluginAPI";
 import { useKeyboardManager } from "./useKeyboardManager";
 import Sidebar from "./Sidebar";
 import type { TerminalHandle } from "./Terminal";
@@ -166,187 +143,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const isTouch = useMediaQuery("(pointer: coarse)");
 
-  const handleNewButtonClick = useCallback(() => {
-    const { activeGroup, buttons } = getStore();
-    const maxOrder = buttons.length > 0 ? Math.max(...buttons.map((b) => b.order || 0)) : 0;
-    const data: ButtonData = {
-      id: "",
-      name: "",
-      type: "send_string",
-      payload: "",
-      group: activeGroup,
-      autorun: 0,
-      order: maxOrder + 10 || 10,
-      shortcut: "",
-    };
-    setEditButton(null);
-    setButtonFormData(data);
-    setInitialBtnFormData(data);
-    setEditButtonDialogOpen(true);
-  }, []);
-
   useEffect(() => {
     appletRefs.current = applets;
   }, [applets]);
 
   const hasSidebarApplet = useMemo(() => !!applets.find((a) => a.position === "sidebar"), [applets]);
-
-  const handleSelectHost: OpenHostFunction = useCallback(
-    async (host, { title, target, options, noUpdateRecent } = {}) => {
-      const i = host.lastIndexOf("?");
-      if (i !== -1) {
-        options = { ...Object.fromEntries(new URLSearchParams(host.slice(i))), ...options };
-        host = host.slice(0, i);
-      }
-      if (options) {
-        const { title: _title, target: _target, ...otherOptions } = options;
-        title = title || _title;
-        target = target || _target;
-        options = otherOptions;
-      }
-      if (options?.id) {
-        for (const tab of getStore().tabs) {
-          for (const pane of tab.panes) {
-            if (pane.id === options.id) {
-              activatePane(pane.id, tab.id);
-              triggerFocus();
-              return;
-            }
-          }
-        }
-      }
-      const paneId = options?.id || genPaneId(host);
-      const sessionId = options?.id || undefined;
-      let targetTab: TabData | undefined;
-      if (target === "_blank") {
-        target = "";
-      } else if (target === "_self") {
-        target = getStore().activeTabId;
-      }
-      if (target) {
-        targetTab = getStore().tabs.find((t) => t.id === target);
-        if (targetTab && targetTab.panes.length >= 4) {
-          // target = "";
-          // targetTab = undefined;
-          return; // do nothing
-        }
-      }
-      if (targetTab) {
-        const newPane: PaneData = { id: paneId, sessionId, host, options, state: "" };
-        setTabs((prev) =>
-          prev.map((t) => (t.id === target ? { ...t, panes: [...t.panes, newPane], activePaneId: paneId } : t)),
-        );
-        setActiveTabId(targetTab.id);
-        setActivePaneId(paneId);
-      } else {
-        const tabId = target || genTabId(host);
-        const newTab: TabData = {
-          id: tabId,
-          title: title || hostTitle(host),
-          panes: [{ id: paneId, host, options, state: "" }],
-          activePaneId: paneId,
-        };
-        setTabs((prev) => [...prev, newTab]);
-        setActiveTabId(tabId);
-        setActivePaneId(paneId);
-      }
-
-      host = removePassFromHost(host);
-
-      // Record recent
-      if (!noUpdateRecent && host !== LOCAL_NAME) {
-        const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-        try {
-          fetch("/api/recents", {
-            method: METHOD_POST,
-            headers: {
-              [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-              [HEADER_CONTENT_TYPE]: MIME_JSON,
-            },
-            body: JSON.stringify({ host } satisfies RecentUpdateRequest),
-          });
-
-          // Optimistic update for local recents
-          setRecents((prev) => {
-            const now = Math.floor(Date.now() / 1000);
-            const idx = prev.findIndex((r) => r.host === host);
-            const next = [...prev];
-            if (idx >= 0) {
-              next[idx] = { ...next[idx], last_used: now };
-            } else {
-              next.push({ host, last_used: now });
-            }
-            return next.sort((a, b) => b.last_used - a.last_used).slice(0, 50);
-          });
-        } catch (e) {
-          console.error("Failed to record recent:", e);
-        }
-      }
-    },
-    [],
-  );
-
-  const handleSelectHostsAsSplit = useCallback(
-    (title: string, hosts: string[], hostOptions?: (Record<string, string> | undefined)[]) => {
-      const tabId = genTabId(title);
-      const panes: PaneData[] = hosts.map(
-        (host, i) =>
-          ({
-            id: genPaneId(host),
-            host,
-            options: hostOptions?.[i],
-            state: "",
-          }) satisfies PaneData,
-      );
-      const newTab: TabData = {
-        title,
-        id: tabId,
-        panes: panes,
-        activePaneId: panes[0].id,
-      };
-      setTabs((prev) => [...prev, newTab]);
-      setActiveTabId(newTab.id);
-      setActivePaneId(panes[0].id);
-    },
-    [],
-  );
-
-  const handleAttach = useCallback(async (id: string, host: string, title: string, isLocked: boolean = false) => {
-    const existing = getStore().tabs.find((t) =>
-      t.panes.some((p) => (p.sessionId || p.id) === id && p.state !== "stolen"),
-    );
-    if (existing) {
-      setActiveTabId(existing.id);
-      setActivePaneId(
-        existing.panes.find((p) => (p.sessionId || p.id) === id && p.state !== "stolen")?.id || existing.activePaneId,
-      );
-      return;
-    }
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    await fetch("/api/sessions/attach", {
-      method: METHOD_POST,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        [HEADER_CONTENT_TYPE]: MIME_JSON,
-      },
-      body: JSON.stringify({ id } satisfies SessionsAttachRequest),
-    });
-    const tabId = genTabId(host);
-    const paneId = genPaneId(host);
-    setTabs((prev) => [
-      ...prev,
-      {
-        id: tabId,
-        panes: [{ id: paneId, sessionId: id, host, state: "" }],
-        activePaneId: paneId,
-        title,
-        isPinned: true,
-        isLocked,
-      },
-    ]);
-    setActiveTabId(tabId);
-    setActivePaneId(paneId);
-  }, []);
 
   const [appVersion, setAppVersion] = useState<string>("dev");
   const [savePassword, setSavePassword] = useState<ConfigRequest["save_password"]>("ask");
@@ -627,228 +428,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
     return () => clearTimeout(t);
   }, [extraKeysOpen]);
 
-  const fetchHosts = useCallback(async () => {
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    try {
-      const r = await fetch("/api/hosts", {
-        headers: {
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        },
-      });
-      if (r.status === 401) {
-        localStorage.removeItem(BROWSER_STORAGE_KEY_TOKEN);
-        window.location.href = "/login";
-        return;
-      }
-      const data: HostData[] = await r.json();
-      setHosts(data || []);
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
-
   // these variables are only used in initial phrase, so don't add them to dependency array
   const [startupParams] = useSearchParams();
-
-  const handleCloneSession = useCallback((id: string, cloneInSameTab?: boolean) => {
-    setContextMenu(null);
-    let pane: PaneData | undefined;
-    let tab: TabData | undefined;
-    outer: for (const t of getStore().tabs) {
-      if (t.id === id) {
-        if (t.panes.length === 0) {
-          // impossible case
-          return;
-        }
-        tab = t;
-        pane = t.panes[0];
-        break;
-      }
-      for (const p of t.panes) {
-        if (p.id === id) {
-          pane = p;
-          tab = t;
-          break outer;
-        }
-      }
-    }
-    if (!tab || !pane || (cloneInSameTab && tab.panes.length >= 4)) {
-      return;
-    }
-    const newPaneId = genPaneId(pane.host);
-    const newTabId = genTabId(pane.host);
-    const backendSessionId = pane.sessionId || pane.id;
-    setTabs((prev) => {
-      const newPane = { id: newPaneId, host: pane.host, cloneFrom: backendSessionId, state: pane.state };
-      if (cloneInSameTab) {
-        return prev.map((t) =>
-          t.id === tab.id && t.panes.length < 4 ? { ...t, panes: [...t.panes, newPane], activePaneId: newPaneId } : t,
-        );
-      }
-      return [
-        ...prev,
-        {
-          id: newTabId,
-          title: nextName(tab.title),
-          panes: [newPane],
-          activePaneId: newPaneId,
-          showFiles: false,
-        },
-      ];
-    });
-    if (!cloneInSameTab) {
-      setActiveTabId(newTabId);
-    }
-    setActivePaneId(newPaneId);
-  }, []);
-
-  const handleUnpinTab = useCallback(async (id: string) => {
-    setContextMenu(null);
-    const tab = getStore().tabs.find((t) => t.id === id);
-    if (!tab) {
-      return;
-    }
-    const backendSessionId = tab.panes[0]?.sessionId || tab.panes[0]?.id || id;
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    await fetch("/api/tabs/unpin", {
-      method: METHOD_POST,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        [HEADER_CONTENT_TYPE]: MIME_JSON,
-      },
-      body: JSON.stringify({ id: backendSessionId } satisfies TabsUnpinRequest),
-    });
-  }, []);
-
-  const handleCloseTab = useCallback(
-    (e: React.MouseEvent | null, id: string) => {
-      e?.stopPropagation();
-      const { activeTabId, tabs } = getStore();
-      const targetTab = tabs.find((t) => t.id === id);
-      if (targetTab?.isPinned && !targetTab?.isLocked) {
-        handleUnpinTab(id);
-      }
-      if (targetTab && !targetTab.isLocked) {
-        const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-        targetTab.panes.forEach((p) => {
-          if (p.state !== "stolen") {
-            fetch("/api/sessions/close", {
-              method: METHOD_POST,
-              headers: {
-                [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-                [HEADER_CONTENT_TYPE]: MIME_JSON,
-              },
-              body: JSON.stringify({ id: p.sessionId || p.id } satisfies SessionsCloseRequest),
-            }).catch((e) => console.error(e));
-          }
-        });
-      }
-
-      setTabs((prev) => {
-        const idx = prev.findIndex((t) => t.id === id);
-        const newTabs = prev.filter((t) => t.id !== id);
-        if (activeTabId === id && newTabs.length > 0) {
-          const nextIdx = idx > 0 ? idx - 1 : 0;
-          const nextTab = newTabs[nextIdx];
-          setActiveTabId(nextTab.id);
-          setActivePaneId(nextTab.activePaneId);
-        } else if (newTabs.length === 0) {
-          setActiveTabId("");
-          setActivePaneId("");
-        }
-        return newTabs;
-      });
-      triggerFocus();
-    },
-    [handleUnpinTab],
-  );
-
-  const handleCloseTabOrPane = useCallback(
-    (tabOrPaneId?: string) => {
-      const { activeTabId, activePaneId, tabs } = getStore();
-      tabOrPaneId = tabOrPaneId || activePaneId;
-      if (!tabOrPaneId) {
-        return;
-      }
-
-      // 1. Check if targetId is a Tab ID
-      const targetTab = tabs.find((t) => t.id === tabOrPaneId);
-      if (targetTab) {
-        handleCloseTab(null, tabOrPaneId);
-        return;
-      }
-
-      // 2. Check if targetId is a Pane ID
-      let parentTab: TabData | undefined;
-      let targetPane: PaneData | undefined;
-      for (const t of tabs) {
-        const p = t.panes.find((pane) => pane.id === tabOrPaneId);
-        if (p) {
-          parentTab = t;
-          targetPane = p;
-          break;
-        }
-      }
-
-      if (parentTab && targetPane) {
-        if (parentTab.panes.length > 1) {
-          // Multi-pane tab: close the pane
-          const paneIdx = parentTab.panes.findIndex((p) => p.id === tabOrPaneId);
-          const newPanes = parentTab.panes.filter((p) => p.id !== tabOrPaneId);
-          let nextPaneId = parentTab.activePaneId;
-          if (parentTab.activePaneId === tabOrPaneId) {
-            nextPaneId = newPanes[Math.max(0, paneIdx - 1)].id;
-          }
-
-          if (!parentTab.isLocked && targetPane.state !== "stolen") {
-            const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-            fetch("/api/sessions/close", {
-              method: METHOD_POST,
-              headers: {
-                [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-                [HEADER_CONTENT_TYPE]: MIME_JSON,
-              },
-              body: JSON.stringify({ id: targetPane.sessionId || targetPane.id } satisfies SessionsCloseRequest),
-            }).catch((e) => console.error(e));
-          }
-
-          setTabs((prev) =>
-            prev.map((t) => (t.id === parentTab.id ? { ...t, panes: newPanes, activePaneId: nextPaneId } : t)),
-          );
-
-          if (activeTabId === parentTab.id) {
-            setActivePaneId(nextPaneId);
-            triggerFocus();
-          }
-        } else {
-          handleCloseTab(null, parentTab.id);
-        }
-      }
-    },
-    [handleCloseTab],
-  );
-
-  const handleOpenScratchpad = useCallback(() => {
-    const existing = getStore().tabs.find((t) => t.type === "scratchpad");
-    if (existing) {
-      setActiveTabId(existing.id);
-      setActivePaneId(existing.panes[0].id);
-      triggerFocus();
-      return;
-    }
-    const tabId = `scratchpad-${Date.now()}`;
-    const newTab: TabData = {
-      id: tabId,
-      title: "Scratchpad",
-      panes: [{ id: tabId, host: "scratchpad", state: "" }],
-      activePaneId: tabId,
-      type: "scratchpad",
-    };
-    setTabs((prev) => [...prev, newTab]);
-    setActiveTabId(tabId);
-    setActivePaneId(tabId);
-    triggerFocus();
-  }, []);
 
   const handleButtonClick = useCallback(
     async (btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">) => {
@@ -873,9 +454,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
           triggerFocus();
           break;
 
-        case "open_terminal":
-          handleSelectHost(btn.payload || LOCAL_NAME);
+        case "open_terminal": {
+          const hosts = btn.payload.split(/\s*,\s*/);
+          openHostsAsSplit2(hosts);
           break;
+        }
 
         case "terminal_function": {
           const term = terminalRefs.current[getStore().activePaneId];
@@ -992,11 +575,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
               break;
 
             case "CLOSE":
-              handleCloseTabOrPane();
+              closeTabOrPane();
               break;
 
             case "CLOSE_TAB": {
-              handleCloseTabOrPane(getStore().activeTabId);
+              closeTabOrPane(getStore().activeTabId);
               break;
             }
 
@@ -1035,11 +618,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
               break;
 
             case "CLONE_SESSION":
-              handleCloneSession(getStore().activePaneId);
+              cloneSession(getStore().activePaneId);
               break;
 
             case "CLONE_SESSION_IN_SAME_TAB":
-              handleCloneSession(getStore().activePaneId, true);
+              cloneSession(getStore().activePaneId, true);
               break;
 
             case "SEARCH":
@@ -1109,7 +692,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               break;
             }
             case "OPEN_SCRATCHPAD":
-              handleOpenScratchpad();
+              openScratchpad();
               break;
             default:
               break;
@@ -1125,7 +708,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
           break;
       }
     },
-    [handleCloneSession, handleCloseTabOrPane, handleOpenScratchpad, handleSelectHost, sendParsedString],
+    [sendParsedString],
   );
 
   useEffect(() => {
@@ -1188,7 +771,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         if (!hash) {
           for (const button of buttons) {
             if (button.type === "open_terminal" && button.autorun === 1) {
-              await handleSelectHost(button.payload, { noUpdateRecent: true });
+              await openHost(button.payload, { noUpdateRecent: true });
             }
           }
         }
@@ -1231,7 +814,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
           const targets = [...favs, ...normals, ...autos].slice(0, 4);
           if (targets.length > 0) {
-            handleSelectHostsAsSplit(
+            openHostsAsSplit(
               tag.startsWith(TAG_GROUP_PREFIX) ? tag.slice(TAG_GROUP_PREFIX.length) : tag,
               targets.map((h) => h.name),
             );
@@ -1269,7 +852,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
           }
           host += qs;
           if (host) {
-            handleSelectHost(host);
+            openHost(host);
           } else {
             const tabId = genTabId(LOCAL_NAME);
             const paneId = genPaneId(LOCAL_NAME);
@@ -1362,195 +945,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleLogout = useCallback(async () => {
-    const syncState = localStorage.getItem(BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE);
-    if (syncState && syncState !== "synced") {
-      if (
-        !(await dialogs.confirm(
-          "Scratchpad data is not fully synced to the server. Are you sure you want to log out and clear the local cache?",
-        ))
-      ) {
-        return;
-      }
-    }
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    if (token) {
-      await fetch("/api/sessions/close_all_normal", {
-        method: METHOD_POST,
-        headers: {
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        },
-      });
-      await fetch("/api/logout", {
-        headers: {
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        },
-      });
-    }
-    localStorage.clear();
-    sessionStorage.clear();
-    clearData();
-    if (window.caches) {
-      await caches.delete(CACHE_API_DATA);
-      await caches.delete(CACHE_MANIFEST);
-    }
-    window.location.href = "/login";
-  }, []);
-
-  const handleLogoutAll = useCallback(async () => {
-    const syncState = localStorage.getItem(BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE);
-    if (syncState && syncState !== "synced") {
-      if (
-        !(await dialogs.confirm(
-          "Scratchpad data is not fully synced to the server. Are you sure you want to log out of all browser sessions and clear the local cache?",
-        ))
-      ) {
-        return;
-      }
-    }
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    if (token) {
-      await fetch("/api/sessions/close_all_normal", {
-        method: METHOD_POST,
-        headers: {
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        },
-      }).catch((e) => console.error(e));
-      await fetch("/api/logout_all", {
-        method: METHOD_POST,
-        headers: {
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        },
-      }).catch((e) => console.error(e));
-    }
-    localStorage.clear();
-    sessionStorage.clear();
-    clearData();
-    if (window.caches) {
-      await caches.delete(CACHE_API_DATA);
-      await caches.delete(CACHE_MANIFEST);
-    }
-    window.location.href = "/login";
-  }, []);
-
-  const handlePinTab = useCallback(async (id: string) => {
-    setContextMenu(null);
-    const tab = getStore().tabs.find((t) => t.id === id);
-    if (!tab) {
-      return;
-    }
-    if (tab.panes.length > 1) {
-      dialogs.alert("Only single-pane tabs can be pinned.");
-      return;
-    }
-    const pane = tab.panes[0];
-    if (!pane) {
-      return;
-    }
-    const backendSessionId = pane.sessionId || pane.id;
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    // Pinning only supports single-pane tabs for now (backend requirement)
-    const host = pane.host || LOCAL_NAME;
-    await fetch("/api/tabs/pin", {
-      method: METHOD_POST,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        [HEADER_CONTENT_TYPE]: MIME_JSON,
-      },
-      body: JSON.stringify({ id: backendSessionId, host, title: tab.title } satisfies TabsPinRequest),
-    });
-    setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, isPinned: true } : t)));
-  }, []);
-
-  const handleLockTab = useCallback(async (id: string) => {
-    setContextMenu(null);
-    const tab = getStore().tabs.find((t) => t.id === id);
-    if (!tab) {
-      return;
-    }
-    if (tab.panes.length > 1) {
-      dialogs.alert("Only single-pane tabs can be locked.");
-      return;
-    }
-    const pane = tab.panes[0];
-    if (!pane) {
-      return;
-    }
-    const backendSessionId = pane.sessionId || pane.id;
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    const host = pane.host || LOCAL_NAME;
-    await fetch("/api/tabs/lock", {
-      method: METHOD_POST,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        [HEADER_CONTENT_TYPE]: MIME_JSON,
-      },
-      body: JSON.stringify({ id: backendSessionId, host, title: tab.title } satisfies TabsLockRequest),
-    });
-    setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, isLocked: true } : t)));
-  }, []);
-
-  const handleUnlockTab = useCallback(async (id: string) => {
-    setContextMenu(null);
-    const tab = getStore().tabs.find((t) => t.id === id);
-    if (!tab) {
-      return;
-    }
-    if (tab.panes.length > 1) {
-      dialogs.alert("Only single-pane tabs can be unlocked.");
-      return;
-    }
-    const pane = tab.panes[0];
-    if (!pane) {
-      return;
-    }
-    const paneId = pane.sessionId || pane.id;
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    const host = pane.host || LOCAL_NAME;
-    await fetch("/api/tabs/pin", {
-      method: METHOD_POST,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        [HEADER_CONTENT_TYPE]: MIME_JSON,
-      },
-      body: JSON.stringify({ id: paneId, host, title: tab.title } satisfies TabsPinRequest),
-    });
-    setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, isLocked: false } : t)));
-  }, []);
-
-  const handleRename = useCallback(async () => {
-    if (!contextMenu) {
-      return;
-    }
-    const targetId = contextMenu.targetTabId;
-    setContextMenu(null);
-    const targetTab = getStore().tabs.find((t) => t.id === targetId);
-    if (!targetTab) {
-      return;
-    }
-    let newTitle = await dialogs.prompt("Enter new tab title:", targetTab.title);
-    if (!newTitle) {
-      return;
-    }
-    newTitle = newTitle.trim();
-    if (newTitle && newTitle !== targetTab.title) {
-      if (targetTab.isPinned) {
-        const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-        const backendSessionId = targetTab.panes[0]?.sessionId || targetTab.panes[0]?.id || targetId;
-        await fetch("/api/tabs/rename", {
-          method: METHOD_POST,
-          headers: {
-            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-            [HEADER_CONTENT_TYPE]: MIME_JSON,
-          },
-          body: JSON.stringify({ id: backendSessionId, title: newTitle } satisfies TabsRenameRequest),
-        });
-      }
-      setTabs((prev) => prev.map((t) => (t.id === targetId ? { ...t, title: newTitle } : t)));
-    }
-    triggerFocus();
-  }, [contextMenu]);
-
   const handleReconnectTab = useCallback((id: string) => {
     setContextMenu(null);
     const targetTab = getStore().tabs.find((t) => t.id === id);
@@ -1590,133 +984,20 @@ export default function Dashboard({ initialData }: DashboardProps) {
   useEffect(() => {
     return setupPluginAPI({
       setTheme,
-      handleSelectHost,
-      handleSelectTagAsSplit: handleSelectHostsAsSplit,
-      handleAttach,
       handleRefresh,
       setApplets,
       isMobile,
       maxZIndexRef,
       getTerminalRefs,
       getApplets,
-      handleCloseTabOrPane,
     });
-  }, [
-    handleAttach,
-    handleRefresh,
-    handleSelectHost,
-    handleSelectHostsAsSplit,
-    isMobile,
-    handleCloseTabOrPane,
-    getTerminalRefs,
-    getApplets,
-    setTheme,
-  ]);
+  }, [handleRefresh, isMobile, getTerminalRefs, getApplets, setTheme]);
 
   // ── Keyboard shortcuts (reads fresh state from store — tiny stable dep array) ──
   useKeyboardManager({
-    handleCloneSession,
     handleButtonClick,
-    handleSelectHost,
-    handleOpenScratchpad,
-    handleCloseTabOrPane,
     getTerminalRefs,
   });
-
-  const handleSaveButton = useCallback(async () => {
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    const { editButton, buttonFormData } = getStore();
-
-    // Auto-update liquidjs value based on detected user variables
-    const finalButtonFormData = { ...buttonFormData };
-    if (finalButtonFormData.type === "send_string") {
-      if (finalButtonFormData.liquidjs !== 0) {
-        const varsList = getTemplateVariables(finalButtonFormData.payload);
-        finalButtonFormData.liquidjs = varsList.length > 0 ? 2 : 1;
-      } else {
-        finalButtonFormData.liquidjs = 0;
-      }
-    } else {
-      finalButtonFormData.liquidjs = 0;
-    }
-
-    const method = editButton ? METHOD_PUT : METHOD_POST;
-    const url = editButton ? `/api/buttons/${editButton.id}` : "/api/buttons";
-    if (editButton) {
-      const id = editButton.id;
-      if (moduleCache[id]?.default?.unload) {
-        await moduleCache[id].default.unload();
-      }
-      delete moduleCache[id];
-    }
-    await fetch(url, {
-      method,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        [HEADER_CONTENT_TYPE]: MIME_JSON,
-      },
-      body: JSON.stringify(finalButtonFormData),
-    });
-    setInitialBtnFormData(null);
-    setEditButtonDialogOpen(false);
-    fetch("/api/buttons", {
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      },
-    })
-      .then((r) => r.json() as Promise<ButtonData[]>)
-      .then((data) => {
-        setButtons(data || []);
-        setActiveGroup(getStore().buttonFormData.group || DEFAULT_BUTTON_GROUP);
-      });
-  }, []);
-
-  const handleDeleteButton = useCallback(async (id: string, name: string) => {
-    setBtnMenuAnchor(null);
-    if (!(await dialogs.confirm(`Delete button "${name}"?`))) {
-      return;
-    }
-    if (moduleCache[id]) {
-      if (moduleCache[id].default?.unload) {
-        moduleCache[id].default.unload();
-      }
-      delete moduleCache[id];
-    }
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    await fetch(`/api/buttons/${id}`, {
-      method: METHOD_DELETE,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      },
-    });
-    const res = await fetch("/api/buttons", {
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      },
-    });
-    const data: ButtonData[] = await res.json();
-    setButtons(data || []);
-  }, []);
-
-  const handleMoveButton = useCallback(async (id: string, direction: number) => {
-    setBtnMenuAnchor(null);
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    await fetch("/api/buttons/move", {
-      method: METHOD_POST,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        [HEADER_CONTENT_TYPE]: MIME_JSON,
-      },
-      body: JSON.stringify({ id, direction } satisfies ButtonsMoveRequest),
-    });
-    const res = await fetch("/api/buttons", {
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      },
-    });
-    const data: ButtonData[] = await res.json();
-    setButtons(data || []);
-  }, []);
 
   const handleCloseBtnDialog = useCallback((_e: unknown, reason: string) => {
     const { buttonFormData, initialBtnFormData } = getStore();
@@ -1777,16 +1058,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
       <Box id="main-ui" sx={{ display: "flex", height: viewportHeight, overflow: "hidden" }}>
         <CssBaseline />
         <Sidebar
-          onSelect={async (host, options) => {
-            setMobileOpen(false);
-            await handleSelectHost(host, options);
-          }}
-          onSelectTagAsSplit={(tag, hosts) => {
-            setMobileOpen(false);
-            handleSelectHostsAsSplit(tag, hosts);
-          }}
-          onLogout={handleLogout}
-          onLogoutAll={handleLogoutAll}
           appVersion={appVersion}
           savePassword={savePassword}
           onSavePasswordChange={async (val) => {
@@ -1812,16 +1083,15 @@ export default function Dashboard({ initialData }: DashboardProps) {
             }
           }}
           onAttach={(id, host, title, isLocked) => {
-            handleAttach(id, host, title, isLocked);
+            attachSession(id, host, title, isLocked);
             setMobileOpen(false);
           }}
           onRefresh={() => {
             handleRefresh({ sync: 2 });
             setMobileOpen(false);
           }}
-          fetchHosts={fetchHosts}
           onOpenScratchpad={() => {
-            handleOpenScratchpad();
+            openScratchpad();
             setMobileOpen(false);
           }}
         />
@@ -1842,7 +1112,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
             hasSidebarApplet={hasSidebarApplet}
             scratchpadSyncState={scratchpadSyncState}
             handleContextMenu={handleContextMenu}
-            handleCloseTab={handleCloseTab}
             handleCloseSearch={handleCloseSearch}
           />
           <TerminalGrid
@@ -1863,7 +1132,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             onExtraKeysOpenChange={setExtraKeysOpen}
             keyboardHeight={keyboardHeight}
           />
-          <ButtonBar groups={groups} handleButtonClick={handleButtonClick} onNewButtonClick={handleNewButtonClick} />
+          <ButtonBar groups={groups} handleButtonClick={handleButtonClick} />
           <Box
             id="mobile-keyboard-spacer"
             sx={{
@@ -2044,24 +1313,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
         contextMenu={contextMenu}
         handleCloseMenu={handleCloseMenu}
         memoTabId={memoTabId}
-        handleUnpinTab={handleUnpinTab}
-        handlePinTab={handlePinTab}
-        handleUnlockTab={handleUnlockTab}
-        handleLockTab={handleLockTab}
-        handleCloneSession={handleCloneSession}
         handleToggleFiles={handleToggleFiles}
         handleReconnectTab={handleReconnectTab}
-        handleRename={handleRename}
-        handleMoveButton={handleMoveButton}
-        handleDeleteButton={handleDeleteButton}
         handleCloseBtnDialog={handleCloseBtnDialog}
-        handleSaveButton={handleSaveButton}
         groups={groups}
         sendParsedString={sendParsedString}
         handleButtonClick={handleButtonClick}
-        handleAttach={handleAttach}
         handleRefresh={handleRefresh}
-        handleSelectHost={handleSelectHost}
       />
       <SideEffect />
     </ThemeProvider>

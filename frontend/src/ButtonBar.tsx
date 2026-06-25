@@ -3,7 +3,7 @@ import { Box, TextField, Tabs, Tab, IconButton } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 
 import type { ButtonData } from "./api";
-import { setActiveGroup, setBtnMenuAnchor, setLastMenuBtn, useStore } from "./store";
+import { openNewButtonDialog, setActiveGroup, setBtnMenuAnchor, setLastMenuBtn, useStore } from "./store";
 import { useShallow } from "zustand/react/shallow";
 import { DEFAULT_BUTTON_GROUP } from "./constants";
 
@@ -52,10 +52,9 @@ const getButtonStyle = (btn: Pick<ButtonData, "type" | "liquidjs">) => {
 export interface ButtonBarProps {
   groups: string[];
   handleButtonClick: (btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">) => void;
-  onNewButtonClick: () => void;
 }
 
-export default function ButtonBar({ groups, handleButtonClick, onNewButtonClick }: ButtonBarProps) {
+export default function ButtonBar({ groups, handleButtonClick }: ButtonBarProps) {
   const activeGroup = useStore((state) => state.activeGroup);
   const filteredButtons = useStore(
     useShallow((state) => state.buttons.filter((b) => (b.group || DEFAULT_BUTTON_GROUP) === state.activeGroup)),
@@ -173,7 +172,7 @@ export default function ButtonBar({ groups, handleButtonClick, onNewButtonClick 
         })}
       </Tabs>
       <Box sx={{ flexShrink: 0, px: 1, borderLeft: 1, borderColor: "divider" }}>
-        <IconButton size="small" title="New Button" onClick={onNewButtonClick} sx={{ p: 0.5 }}>
+        <IconButton size="small" title="New Button" onClick={openNewButtonDialog} sx={{ p: 0.5 }}>
           <AddIcon fontSize="small" />
         </IconButton>
       </Box>
