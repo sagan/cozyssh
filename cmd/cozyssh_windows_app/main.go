@@ -63,6 +63,11 @@ var (
 	procTranslateMessage = user32dll.NewProc("TranslateMessage")
 	procDispatchMessage  = user32dll.NewProc("DispatchMessageW")
 
+	// Additional procedures required for single-instance inter-process communication
+	procPostMessage           = user32dll.NewProc("PostMessageW")
+	procSetForegroundWindow   = user32dll.NewProc("SetForegroundWindow")
+	procRegisterWindowMessage = user32dll.NewProc("RegisterWindowMessageW")
+
 	ole32dll           = windows.NewLazySystemDLL("ole32.dll")
 	procCoInitialize   = ole32dll.NewProc("CoInitializeEx")
 	procCoUninitialize = ole32dll.NewProc("CoUninitialize")
@@ -119,10 +124,11 @@ const (
 	appIconResourceId = 2
 )
 
-// Global state sync orchestration references
+// Global state references
 var (
-	originalWndProc uintptr
-	trayInstance    *systray.SystemTray
+	originalWndProc   uintptr
+	trayInstance      *systray.SystemTray
+	customActivateMsg uint32 // Registered dynamically per data directory
 )
 
 type monitorInfo struct {
@@ -149,12 +155,11 @@ func isVisible(hwnd uintptr) bool {
 
 // setWindowIcon loads the app icon from the embedded resource and sets it on
 // the window via WM_SETICON for both the title bar (ICON_SMALL) and taskbar
-// (ICON_BIG). This is more reliable than relying on the window class icon alone.
+// (ICON_BIG).
 func setWindowIcon(hwnd uintptr) {
 	var hinstance windows.Handle
 	_ = windows.GetModuleHandleEx(0, nil, &hinstance)
 
-	// Load big icon (typically 32x32, for taskbar / Alt-Tab)
 	bigCx, _, _ := procGetSystemMetrics.Call(uintptr(smCxIcon))
 	bigCy, _, _ := procGetSystemMetrics.Call(uintptr(smCyIcon))
 	bigIcon, _, _ := user32dll.NewProc("LoadImageW").Call(
@@ -165,7 +170,6 @@ func setWindowIcon(hwnd uintptr) {
 		procSendMessage.Call(hwnd, wmSetIcon, iconBig, bigIcon)
 	}
 
-	// Load small icon (typically 16x16, for title bar)
 	smCx, _, _ := procGetSystemMetrics.Call(uintptr(smCxSmIcon))
 	smCy, _, _ := procGetSystemMetrics.Call(uintptr(smCySmIcon))
 	smallIcon, _, _ := user32dll.NewProc("LoadImageW").Call(
@@ -178,7 +182,7 @@ func setWindowIcon(hwnd uintptr) {
 }
 
 // windowState returns the outer pixel size of the window and whether it is
-// currently maximized. Returns 0,0,false if the HWND is invalid.
+// currently maximized.
 func windowState(hwnd uintptr) (width, height int, maximized bool) {
 	var r winRect
 	ret, _, _ := procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&r)))
@@ -200,7 +204,6 @@ func loadAppConfig(cfgDir string) *AppConfig {
 	if err := json.Unmarshal(data, &ac); err != nil {
 		return nil
 	}
-	// Discard configurations with unreasonably small dimensions (e.g. from previous bugs)
 	if ac.Width < constants.APP_MIN_WIDTH || ac.Height < constants.APP_MIN_HEIGHT {
 		return nil
 	}
@@ -220,12 +223,10 @@ func main() {
 	if flags.DoResetPassword || flags.Err == flag.ErrHelp {
 		// CLI mode
 		attachToParentConsole()
-		flags = cozyssh.ParseFlags(os.Args[1:]) // parse again since stdout changed so it can output help
+		flags = cozyssh.ParseFlags(os.Args[1:])
 		err := cozyssh.RunWithFlags(context.Background(), flags, nil)
 
-		// Force flush to make sure everything hits the terminal screen
 		os.Stdout.Sync()
-		// Send the mock keystroke to force a fresh prompt line down below
 		releaseConsoleCleanly()
 
 		if err != nil && err != context.Canceled {
@@ -235,100 +236,60 @@ func main() {
 		}
 	}
 
-	// Desktop (windowsgui) build has no console; write initial password to file.
 	config.SetWritePasswordToFile(true)
 
-	// Load config to discover the server address and data directory.
 	cfg, err := config.LoadConfig("")
 	if err != nil {
 		messageBox("CozySSH startup error", fmt.Sprintf("Failed to load config: %v", err))
 		os.Exit(1)
 	}
 
-	// 1. Initialize Leader Election Mutex
+	// Register unique window message string for inter-process window activation
+	msgName, err := windows.UTF16PtrFromString("CozySSH_Activate_" + strings.ReplaceAll(cfg.ConfigDir, "\\", "_"))
+	if err == nil {
+		regMsg, _, _ := procRegisterWindowMessage.Call(uintptr(unsafe.Pointer(msgName)))
+		customActivateMsg = uint32(regMsg)
+	}
+
+	// 1. Initialize Global Named Mutex unique to this configuration directory
 	mutexName, err := windows.UTF16PtrFromString("Local\\CozySSH_Mutex_" + strings.ReplaceAll(cfg.ConfigDir, "\\", "_"))
 	if err != nil {
 		fmt.Printf("Error creating mutex name: %v\n", err)
 		os.Exit(1)
 	}
 	mutexHandle, err := windows.CreateMutex(nil, false, mutexName)
-	// FIX: Explicitly bypass the ERROR_ALREADY_EXISTS error since it means the object exists successfully
 	if err != nil && !errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
 		fmt.Printf("Failed to create mutex: %v\n", err)
 		os.Exit(1)
 	}
-	defer windows.CloseHandle(mutexHandle)
 
-	// 2. Initialize Readiness Cross-Process Event (Manual Reset, Unsignaled initially)
-	eventName, err := windows.UTF16PtrFromString("Local\\CozySSH_Event_" + strings.ReplaceAll(cfg.ConfigDir, "\\", "_"))
-	if err != nil {
-		fmt.Printf("Error creating event name: %v\n", err)
-		os.Exit(1)
+	// 2. Check for an already running instance
+	if errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
+		if customActivateMsg != 0 {
+			// Broadcast activation message to all top-level windows; the running instance will intercept it
+			procPostMessage.Call(uintptr(0xFFFF), uintptr(customActivateMsg), 0, 0)
+		}
+		os.Exit(0)
 	}
-	eventHandle, err := windows.CreateEvent(nil, 1, 0, eventName)
-	// FIX: Explicitly bypass the ERROR_ALREADY_EXISTS error since it means the object exists successfully
-	if err != nil && !errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
-		fmt.Printf("Failed to create event: %v\n", err)
-		os.Exit(1)
-	}
-	defer windows.CloseHandle(eventHandle)
+	defer windows.CloseHandle(mutexHandle)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	serverErr := make(chan error, 1)
+	readyChan := make(chan string, 1)
 
-	// Channel to safely pass UI window pointers to the background failover thread
-	uiReady := make(chan uiReferences, 1)
-
-	// 3. Launch pure kernel-level background manager handling failovers (0% CPU idle overhead)
+	// 3. Launch pure background manager safely on the unique leader instance
 	go func() {
-		// This blocks entirely in the OS kernel until the mutex becomes free
-		event, err := windows.WaitForSingleObject(mutexHandle, windows.INFINITE)
-		if err != nil {
-			return
-		}
-
-		if event == windows.WAIT_OBJECT_0 || event == windows.WAIT_ABANDONED {
-			serverCtx, serverCancel := context.WithCancel(ctx)
-			defer serverCancel()
-
-			readyChan := make(chan string, 1)
-			go func() { serverErr <- cozyssh.RunWithFlags(serverCtx, flags, readyChan) }()
-
-			select {
-			case <-ctx.Done():
-				return
-			case err := <-serverErr:
-				messageBox("CozySSH startup error", fmt.Sprintf("Server exited early: %v", err))
-				os.Exit(1)
-			case <-readyChan:
-				// Engine server port opened successfully
-			}
-
-			// Latch cross-process event open to unblock any future or launching UIs
-			windows.SetEvent(eventHandle)
-
-			// Wait until local WebView2 parameters are safely generated on the main thread
-			ui := <-uiReady
-
-			// Inject tray and window handler interceptions onto running UI window thread
-			ui.w.Dispatch(func() {
-				setupSystemTrayAndHook(ui.w, ui.hwnd)
-			})
-
-			// Keep this background thread alive to maintain ownership of the Win32 Mutex
-			<-ctx.Done()
-			windows.ResetEvent(eventHandle)
-			windows.ReleaseMutex(mutexHandle)
-		}
+		serverErr <- cozyssh.RunWithFlags(ctx, flags, readyChan)
 	}()
 
-	// 4. Block UI initialization completely until SOME instance has the engine ready
-	for {
-		state, _ := windows.WaitForSingleObject(eventHandle, 100)
-		if state == windows.WAIT_OBJECT_0 {
-			break
-		}
+	// Wait explicitly until the internal backend server engine is ready
+	select {
+	case err := <-serverErr:
+		messageBox("CozySSH startup error", fmt.Sprintf("Server exited early: %v", err))
+		os.Exit(1)
+	case <-readyChan:
+		// Backend engine server port ready
 	}
 
 	// Normalize the address
@@ -343,14 +304,14 @@ func main() {
 	initWidth, initHeight, startMaximized, _ := GetWindowSize(cfg)
 
 	w := webview2.NewWithOptions(webview2.WebViewOptions{
-		Debug:     true, // allow F12 DevTools
+		Debug:     true,
 		AutoFocus: true,
 		DataPath:  filepath.Join(cfg.ConfigDir, constants.WEBVIEW2_DATA_DIR),
 		WindowOptions: webview2.WindowOptions{
 			Title:     constants.APP_NAME,
 			Width:     initWidth,
 			Height:    initHeight,
-			IconId:    2, // RT_GROUP_ICON ID assigned by rsrc (manifest=1, group_icon=2)
+			IconId:    2,
 			Center:    true,
 			Maximized: startMaximized,
 		},
@@ -365,8 +326,8 @@ func main() {
 	hwnd := uintptr(w.Window())
 	setWindowIcon(hwnd)
 
-	// Push UI references into the buffered channel for the background manager
-	uiReady <- uiReferences{w: w, hwnd: hwnd}
+	// 4. Directly hook system tray interface and window interceptions on the main loop thread
+	setupSystemTrayAndHook(w, hwnd)
 
 	var isFullscreen bool
 	var savedWindowRect winRect
@@ -429,7 +390,7 @@ func main() {
 					Title:     constants.APP_NAME,
 					Width:     width,
 					Height:    height,
-					IconId:    2, // RT_GROUP_ICON ID assigned by rsrc (manifest=1, group_icon=2)
+					IconId:    2,
 					Maximized: maximized,
 					Center:    true,
 				},
@@ -520,7 +481,7 @@ func main() {
 	}
 }
 
-// setupSystemTrayAndHook builds the tray interface and window procedures on the active leader.
+// setupSystemTrayAndHook builds the tray interface and window procedures on the active thread.
 func setupSystemTrayAndHook(w webview2.WebView, hwnd uintptr) {
 	trayInstance = systray.New()
 
@@ -530,7 +491,7 @@ func setupSystemTrayAndHook(w webview2.WebView, hwnd uintptr) {
 	menu := systray.NewMenu()
 	onClick := func() {
 		w.Dispatch(func() {
-			procShowWindow.Call(hwnd, uintptr(swShow))
+			activateWindow(hwnd)
 		})
 	}
 	menu.Add("Open "+constants.APP_NAME, onClick)
@@ -549,17 +510,18 @@ func setupSystemTrayAndHook(w webview2.WebView, hwnd uintptr) {
 func messageBox(title, message string) {
 	textPtr, _ := windows.UTF16PtrFromString(message)
 	titlePtr, _ := windows.UTF16PtrFromString(title)
-	// Define the style flags (Combine buttons and icons using the bitwise OR '|' operator)
-	// You can customize buttons (e.g., MB_YESNO) and icons (e.g., MB_ICONWARNING)
 	boxType := windows.MB_OK | windows.MB_ICONINFORMATION
-	// Trigger the native Windows Message Box
-	// The first argument is the handle to the owner window. Passing 0 means no owner.
 	windows.MessageBox(windows.HWND(0), textPtr, titlePtr, uint32(boxType))
 }
 
 func windowProc(hwnd uintptr, msg uint32, wparam uintptr, lparam uintptr) uintptr {
 	if msg == wmClose {
 		procShowWindow.Call(hwnd, uintptr(swHide))
+		return 0
+	}
+	// Intercept the dynamic custom window activation message from a secondary instance
+	if customActivateMsg != 0 && msg == customActivateMsg {
+		activateWindow(hwnd)
 		return 0
 	}
 	ret, _, _ := procCallWindowProc.Call(originalWndProc, hwnd, uintptr(msg), wparam, lparam)
@@ -572,4 +534,23 @@ func GetWindowSize(cfg *config.Config) (width uint, height uint, maximized bool,
 		return constants.APP_DEFAULT_WIDTH, constants.APP_DEFAULT_HEIGHT, true, true
 	}
 	return uint(appCfg.Width), uint(appCfg.Height), appCfg.Maximized, false
+}
+
+func activateWindow(hwnd uintptr) {
+	// Check if the window is currently minimized to the taskbar
+	minimized, _, _ := procIsIconic.Call(hwnd)
+	if minimized != 0 {
+		// If it was minimized, check if it was maximized prior to minimization
+		maximized, _, _ := procIsZoomed.Call(hwnd)
+		if maximized != 0 {
+			procShowWindow.Call(hwnd, uintptr(swShowMaximized))
+		} else {
+			procShowWindow.Call(hwnd, uintptr(swShowNormal))
+		}
+	} else {
+		// If it was hidden via close-to-tray, swShow (SW_SHOW) unhides it
+		// while perfectly preserving its maximized or normal state.
+		procShowWindow.Call(hwnd, uintptr(swShow))
+	}
+	procSetForegroundWindow.Call(hwnd)
 }
