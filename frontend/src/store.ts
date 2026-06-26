@@ -93,7 +93,7 @@ export interface TabData {
   isPinned?: boolean;
   isLocked?: boolean;
   showFiles?: boolean;
-  type?: "terminal" | "scratchpad";
+  type: "terminal" | "scratchpad";
 }
 
 export type TerminalRefMap = Record<string, TerminalHandle | ScratchpadHandle | null>;
@@ -787,6 +787,7 @@ export function openHostsAsSplit(title: string, hosts: string[], hostOptions?: (
     id: tabId,
     panes: panes,
     activePaneId: panes[0].id,
+    type: "terminal",
   };
   setTabs((prev) => [...prev, newTab]);
   setActiveTabId(newTab.id);
@@ -811,6 +812,14 @@ export function openHostsAsSplit2(
       if (i !== -1) {
         option = Object.fromEntries(new URLSearchParams(targetHost.slice(i)));
         targetHost = targetHost.slice(0, i);
+        if (option.title) {
+          title = option.title;
+          delete option.title;
+        }
+        if (option.target) {
+          target = option.target;
+          delete option.target;
+        }
       }
       hostOptions.push(option);
       if (targetHost === LOCAL_NAME) {
@@ -904,6 +913,7 @@ export async function openHost(
       title: title || hostTitle(host),
       panes: [{ id: paneId, host, options, state: "" }],
       activePaneId: paneId,
+      type: "terminal",
     };
     setTabs((prev) => [...prev, newTab]);
     setActiveTabId(tabId);
@@ -1056,6 +1066,7 @@ export async function cloneSession(id: string, cloneInSameTab?: boolean) {
         panes: [newPane],
         activePaneId: newPaneId,
         showFiles: false,
+        type: "terminal",
       },
     ];
   });
@@ -1096,6 +1107,7 @@ export async function attachSession(id: string, host: string, title: string, isL
       title,
       isPinned: true,
       isLocked,
+      type: "terminal",
     },
   ]);
   setActiveTabId(tabId);
@@ -1357,6 +1369,60 @@ export function openNewButtonDialog() {
     name: "",
     type: "send_string",
     payload: "",
+    group: activeGroup,
+    autorun: 0,
+    order: maxOrder + 10 || 10,
+    shortcut: "",
+  };
+  setEditButton(null);
+  setButtonFormData(data);
+  setInitialBtnFormData(data);
+  setEditButtonDialogOpen(true);
+}
+
+export async function openSaveTabToButtonDialog(tabId?: string) {
+  const { activeTabId, tabs, activeGroup, buttons } = getStore();
+  tabId = tabId || activeTabId;
+  const targetTab = tabs.find((t) => t.id === tabId);
+  if (!targetTab || targetTab.type !== "terminal") {
+    return;
+  }
+  const maxOrder = buttons.length > 0 ? Math.max(...buttons.map((b) => b.order || 0)) : 0;
+  const hostConnectionStrings: string[] = targetTab.panes.map((p, idx) => {
+    let s = p.host;
+    const params = new URLSearchParams(p.options);
+    if (idx === 0 && targetTab.title !== p.host) {
+      params.set("title", targetTab.title);
+    }
+    if (params.size > 0) {
+      s += "?" + params.toString();
+    }
+    return s;
+  });
+  const payload = hostConnectionStrings.join(",");
+  const existingButton = buttons.find((b) => b.type === "open_terminal" && b.payload === payload);
+  if (existingButton) {
+    const action = await dialogs.choose(
+      `This tab is already bound to button "${existingButton.name}" in group "${existingButton.group}"`,
+      "",
+      ["Edit existing button", "Create new button"],
+    );
+    if (action === "Edit existing button") {
+      setEditButton(existingButton);
+      setButtonFormData(existingButton);
+      setInitialBtnFormData(existingButton);
+      setEditButtonDialogOpen(true);
+      return;
+    }
+    if (!action) {
+      return;
+    }
+  }
+  const data: ButtonData = {
+    id: "",
+    name: targetTab.title,
+    type: "open_terminal",
+    payload,
     group: activeGroup,
     autorun: 0,
     order: maxOrder + 10 || 10,

@@ -709,6 +709,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               panes: [{ id: paneId, host: LOCAL_NAME, state: "" }],
               activePaneId: paneId,
               title: LOCAL_NAME,
+              type: "terminal",
             },
           ]);
           setActiveTabId(tabId);
@@ -782,6 +783,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                 panes: [{ id: paneId, host: LOCAL_NAME, state: "" }],
                 activePaneId: paneId,
                 title: LOCAL_NAME,
+                type: "terminal",
               },
             ]);
             setActiveTabId(tabId);
@@ -802,6 +804,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                 panes: [{ id: paneId, host: LOCAL_NAME, state: "" }],
                 activePaneId: paneId,
                 title: LOCAL_NAME,
+                type: "terminal",
               },
             ]);
             setActiveTabId(tabId);
@@ -822,6 +825,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               title: p.title,
               isPinned: true,
               isLocked: p.isLocked,
+              type: "terminal",
             } satisfies TabData;
           });
           if (pinnedTabs.length > 0) {
@@ -844,6 +848,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                       panes: [{ id: paneId, host: LOCAL_NAME, state: "" }],
                       activePaneId: paneId,
                       title: LOCAL_NAME,
+                      type: "terminal",
                     },
                   ],
             );
@@ -866,6 +871,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                     panes: [{ id: paneId, host: LOCAL_NAME, state: "" }],
                     activePaneId: paneId,
                     title: LOCAL_NAME,
+                    type: "terminal",
                   },
                 ],
           );

@@ -103,7 +103,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   ```
 
 - **Full keyboard Shortcuts**: It supports a complete set of keyboard shortcuts.
-  - `Alt + O` : Open new tab dialog, use `← →` (or `Alt + H/L`) to switch view, `↓ ↑` (or `Alt + J/K`) to select, `Enter` to open. `Alt + Enter` to open context menu. Use `Alt + ↓↑` (or `Alt + Shift + J/K`) to jump through items quickly
+  - `Alt + O` : Open new tab dialog, use `← →` (or `Alt + H/L`) to switch view, `↓ ↑` (or `Alt + J/K`) to select, `Enter` to open, `Alt + Enter` to open in current tab. Use `Alt + ↓↑` (or `Alt + Shift + J/K`) to jump through items quickly
   - `Alt + A` : Open new tab dialog - tabs view
   - `Alt + E / Ctrl + Shift + P` : Open new tab dialog - buttons view
   - `Alt + P` : Open new tab dialog - tags view
@@ -120,7 +120,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - `Alt + W` : Close active pane
   - `Alt + Shift + W` : Close active tab
   - `Ctrl + Alt + Shift + W` : Close other tabs
-  - `Alt + I` : Focus sidebar search filter, then use `↑ ↓` to select, `Enter` to open
+  - `Alt + I` : Focus sidebar search filter, then use `↑ ↓` to select, `Enter` to open, `Alt + Enter` to open context menu
   - `Alt + Shift + I` : Focus sidebar search filter and clear current value
   - `Alt + G` : Focus active terminal session
   - `Alt + Shift + G` : Focus the first pane of the active tab

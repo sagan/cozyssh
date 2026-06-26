@@ -89,6 +89,7 @@ import {
   moveButton,
   onButtonDialogClose,
   refreshData,
+  openSaveTabToButtonDialog,
 } from "./store";
 import NewTabDialog from "./NewTabDialog";
 import { dialogs } from "./Dialogs";
@@ -534,6 +535,14 @@ export default function DialogManager({
                       }}
                     >
                       Rename Tab
+                    </MenuItem>
+                    <MenuItem
+                      onClick={() => {
+                        handleCloseMenu();
+                        openSaveTabToButtonDialog(memoTabId);
+                      }}
+                    >
+                      Save Tab to Button
                     </MenuItem>
                   </>
                 )}
@@ -1337,7 +1346,7 @@ export default function DialogManager({
           attachSession(id, host, title, isLocked);
           closeNewTabDialog();
         }}
-        onSelect={async (host) => {
+        onSelect={async (host, alternativeMode = false) => {
           const [hostname, query] = cutString(host, "?");
           // Check if it's a direct connection and not in known hosts
           const parsedHost = parseHostName(hostname);
@@ -1368,7 +1377,9 @@ export default function DialogManager({
               console.error("Failed to auto-add host:", e);
             }
           }
-          openHost((known?.name || parsedHostString) + (query ? "?" + query : ""));
+          openHost((known?.name || parsedHostString) + (query ? "?" + query : ""), {
+            target: alternativeMode ? "_self" : undefined,
+          });
         }}
       />
       <Box

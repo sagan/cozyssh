@@ -3442,7 +3442,8 @@ export default function Sidebar({
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
                   <b>Alt + O</b> : Open new tab dialog, use <b>← →</b> (or <b>Alt + H/L</b>) to switch view,&nbsp;
-                  <b>↓ ↑</b> (or <b>Alt + J/K</b>) to select, <b>Enter</b> to open. Use <b>Alt + ↓↑</b> (or&nbsp;
+                  <b>↓ ↑</b> (or <b>Alt + J/K</b>) to select, <b>Enter</b> to open, <b>Alt + Enter</b> to open in
+                  current tab. Use <b>Alt + ↓↑</b> (or&nbsp;
                   <b>Alt + Shift + J/K</b>) to jump through items quickly
                   <br />
                   <b>Alt + A</b> : Open new tab dialog - tabs view

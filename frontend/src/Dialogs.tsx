@@ -157,7 +157,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
         open={open}
         onClose={() => handleClose(null)}
         fullWidth
-        maxWidth="xs"
+        maxWidth="md"
       >
         <DialogTitle sx={{ pb: 1 }}>{config.message}</DialogTitle>
         <DialogContent>
@@ -239,8 +239,11 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           {config.type === "choose" ? (
-            (config.actions || []).map((action) => {
-              const item = typeof action === "string" ? { id: action } : action;
+            (config.actions || []).map((action, idx) => {
+              const item =
+                typeof action === "string"
+                  ? ({ id: action, variant: idx === 0 ? "primary" : "secondary" } satisfies CsChooseAction)
+                  : action;
               const label = item.label ?? item.id;
 
               // Map custom style variants cleanly to MUI Button props
@@ -254,6 +257,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
                   variant={btnVariant}
                   color={btnColor}
                   disableElevation
+                  autoFocus={idx === 0}
                 >
                   {label}
                 </Button>

@@ -97,7 +97,7 @@ interface NewTabDialogProps {
   isTouch: boolean;
   open: boolean;
   onClose: () => void;
-  onSelect: (host: string) => void;
+  onSelect: (host: string, alternativeMode?: boolean) => void;
   onSelectTab: (tabId: string) => void;
   onAttachPinned: (id: string, host: string, title: string, isLocked: boolean) => void;
   onExecuteButton: (btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">) => void;
@@ -746,7 +746,7 @@ export default function NewTabDialog({
   }, [selectedIndex]);
 
   const handleSelect = useCallback(
-    (item: (typeof items)[number]) => {
+    (item: (typeof items)[number], alternativeMode = false) => {
       if (item.type === "tab") {
         onSelectTab(item.id!);
         onClose();
@@ -780,7 +780,7 @@ export default function NewTabDialog({
           .catch(() => {});
         onClose();
       } else {
-        onSelect(item.value);
+        onSelect(item.value, alternativeMode);
         onClose();
       }
     },
@@ -808,11 +808,11 @@ export default function NewTabDialog({
         e.stopPropagation();
         e.preventDefault();
         changeNewTabDialogViewMode();
-      } else if (key === "enter" && !e.altKey) {
+      } else if (key === "enter") {
         e.preventDefault();
         e.stopPropagation();
         if (items[selectedIndex]) {
-          handleSelect(items[selectedIndex]);
+          handleSelect(items[selectedIndex], e.altKey);
         }
       } else if (key === "escape") {
         onClose();
@@ -1000,7 +1000,7 @@ export default function NewTabDialog({
           autoFocus
           fullWidth
           variant="outlined"
-          placeholder="Search server... ? for help"
+          placeholder="Search server. ? for help. Hold Alt to open in current tab"
           value={newTabDialogFilter}
           onChange={(e) => {
             setNewTabDialogFilter(e.target.value);
@@ -1060,7 +1060,7 @@ export default function NewTabDialog({
                   key={item.flatIndex}
                   selected={selectedIndex === item.flatIndex}
                   ref={selectedIndex === item.flatIndex ? selectedItemRef : null}
-                  onClick={() => handleSelect(item)}
+                  onClick={(e) => handleSelect(item, e.altKey)}
                   title={item.tooltip}
                   data-type={item.type}
                   data-value={item.value}
