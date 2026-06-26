@@ -95,8 +95,9 @@ type HostData struct {
 	HostKeyAlgorithms     string `json:"host_key_algorithms,omitempty"`
 
 	// Port forwarding (OpenSSH syntax, one rule per line)
-	LocalForward  string `json:"local_forward,omitempty"`
-	RemoteForward string `json:"remote_forward,omitempty"`
+	LocalForward   string `json:"local_forward,omitempty"`
+	RemoteForward  string `json:"remote_forward,omitempty"`
+	DynamicForward string `json:"dynamic_forward,omitempty"` // SOCKS5 proxy: [bind_address:]port
 
 	// Password storage support
 	Password       string `json:"password,omitempty"`
@@ -344,17 +345,18 @@ type ConfigRequest struct {
 type TunnelType string
 
 const (
-	TunnelTypeLocal  TunnelType = "local"
-	TunnelTypeRemote TunnelType = "remote"
+	TunnelTypeLocal   TunnelType = "local"
+	TunnelTypeRemote  TunnelType = "remote"
+	TunnelTypeDynamic TunnelType = "dynamic" // SOCKS5 dynamic forward
 )
 
 // ActiveTunnel represents a currently running port forwarding tunnel.
 type ActiveTunnel struct {
-	Type       TunnelType `json:"type" ts_type:"\"local\" | \"remote\""`
+	Type       TunnelType `json:"type" ts_type:"\"local\" | \"remote\" | \"dynamic\""`
 	BindAddr   string     `json:"bindAddr"`
 	BindPort   string     `json:"bindPort"`
-	RemoteHost string     `json:"remoteHost"`
-	RemotePort string     `json:"remotePort"`
+	RemoteHost string     `json:"remoteHost,omitempty"` // empty for dynamic tunnels
+	RemotePort string     `json:"remotePort,omitempty"` // empty for dynamic tunnels
 	HostName   string     `json:"hostName"` // the SSH host alias this tunnel belongs to
 }
 

@@ -204,6 +204,14 @@ func SaveHost(oldAlias string, h models.HostData) error {
 			}
 		}
 	}
+	if h.DynamicForward != "" {
+		for line := range strings.SplitSeq(h.DynamicForward, "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" && !strings.HasPrefix(line, "#") {
+				block = append(block, fmt.Sprintf("    DynamicForward %s", line))
+			}
+		}
+	}
 	block = append(block, "")
 
 	if oldAlias != "" && oldAlias != h.Name {
@@ -417,6 +425,7 @@ func ListHosts() ([]*models.HostData, error) {
 				var commentParts []string
 				var localForwards []string
 				var remoteForwards []string
+				var dynamicForwards []string
 				start, end := findHostBlock(lines, name)
 				if start != -1 {
 					for i := start; i < end; i++ {
@@ -443,7 +452,7 @@ func ListHosts() ([]*models.HostData, error) {
 								commentParts = append(commentParts, content)
 							}
 						}
-						// Read LocalForward / RemoteForward directives
+						// Read LocalForward / RemoteForward / DynamicForward directives
 						lower := strings.ToLower(line)
 						if strings.HasPrefix(lower, "localforward ") {
 							val := strings.TrimSpace(line[len("localforward "):])
@@ -454,6 +463,11 @@ func ListHosts() ([]*models.HostData, error) {
 							val := strings.TrimSpace(line[len("remoteforward "):])
 							if val != "" {
 								remoteForwards = append(remoteForwards, val)
+							}
+						} else if strings.HasPrefix(lower, "dynamicforward ") {
+							val := strings.TrimSpace(line[len("dynamicforward "):])
+							if val != "" {
+								dynamicForwards = append(dynamicForwards, val)
 							}
 						}
 					}
@@ -481,6 +495,7 @@ func ListHosts() ([]*models.HostData, error) {
 					HostKeyAlgorithms:     hostKeyAlgorithmsOption,
 					LocalForward:          strings.Join(localForwards, "\n"),
 					RemoteForward:         strings.Join(remoteForwards, "\n"),
+					DynamicForward:        strings.Join(dynamicForwards, "\n"),
 					Tags:                  tags,
 					Comment:               comment,
 					Source:                "config",
@@ -1126,17 +1141,18 @@ func getSSHClient(name string, term TerminalUI, identity string,
 	return client, closers, remoteCommand, nil
 }
 
-// GetHostForwardRules reads LocalForward and RemoteForward directives
+// GetHostForwardRules reads LocalForward, RemoteForward, and DynamicForward directives
 // from the ssh_config for the given host name. Returns them as multi-line strings.
-func GetHostForwardRules(name string) (localForward, remoteForward string) {
+func GetHostForwardRules(name string) (localForward, remoteForward, dynamicForward string) {
 	lines, _ := readConfigLines()
 	start, end := findHostBlock(lines, name)
 	if start == -1 {
-		return "", ""
+		return "", "", ""
 	}
 
 	var localForwards []string
 	var remoteForwards []string
+	var dynamicForwards []string
 	for i := start; i < end; i++ {
 		line := strings.TrimSpace(lines[i])
 		lower := strings.ToLower(line)
@@ -1150,9 +1166,14 @@ func GetHostForwardRules(name string) (localForward, remoteForward string) {
 			if val != "" {
 				remoteForwards = append(remoteForwards, val)
 			}
+		} else if strings.HasPrefix(lower, "dynamicforward ") {
+			val := strings.TrimSpace(line[len("dynamicforward "):])
+			if val != "" {
+				dynamicForwards = append(dynamicForwards, val)
+			}
 		}
 	}
-	return strings.Join(localForwards, "\n"), strings.Join(remoteForwards, "\n")
+	return strings.Join(localForwards, "\n"), strings.Join(remoteForwards, "\n"), strings.Join(dynamicForwards, "\n")
 }
 
 // GetHostCanonicalKey returns the canonical key (user@host:port) for a named SSH host.

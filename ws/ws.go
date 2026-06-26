@@ -153,6 +153,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	noPublicKey := query.Get("noPublicKey") == "1"
 	localForwards := strings.Join(query["localForward"], "\n")
 	remoteForwards := strings.Join(query["remoteForward"], "\n")
+	dynamicForwards := strings.Join(query["dynamicForward"], "\n")
 
 	user := common.User
 	// sessionID fallbacks to hostname if no unique ID provided
@@ -246,16 +247,17 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			})
 			s.SSHClient = pClient
 
-			var localFwd, remoteFwd string
-			if localForwards != "" || remoteForwards != "" {
+			var localFwd, remoteFwd, dynamicFwd string
+			if localForwards != "" || remoteForwards != "" || dynamicForwards != "" {
 				localFwd = localForwards
 				remoteFwd = remoteForwards
+				dynamicFwd = dynamicForwards
 			} else {
-				localFwd, remoteFwd = sshmanager.GetHostForwardRules(host)
+				localFwd, remoteFwd, dynamicFwd = sshmanager.GetHostForwardRules(host)
 			}
-			if localFwd != "" || remoteFwd != "" {
+			if localFwd != "" || remoteFwd != "" || dynamicFwd != "" {
 				hostKey := sshmanager.GetHostCanonicalKey(host)
-				cleanupTunnels := sshmanager.SetupPortForwarding(pClient.Client, host, hostKey, localFwd, remoteFwd)
+				cleanupTunnels := sshmanager.SetupPortForwarding(pClient.Client, host, hostKey, localFwd, remoteFwd, dynamicFwd)
 				originalClose := s.CloseFunc
 				s.CloseFunc = func() error {
 					cleanupTunnels()

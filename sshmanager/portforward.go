@@ -1,6 +1,7 @@
 package sshmanager
 
 import (
+	"context"
 	"cozyssh/models"
 	"fmt"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	socks5 "github.com/things-go/go-socks5"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -19,6 +21,13 @@ type PortForwardRule struct {
 	BindPort    string // e.g. "8080"
 	Host        string // e.g. "remote-host"
 	HostPort    string // e.g. "80"
+}
+
+// DynamicForwardRule represents a parsed DynamicForward rule following OpenSSH syntax.
+// DynamicForward: [bind_address:]port
+type DynamicForwardRule struct {
+	BindAddress string // e.g. "localhost", "0.0.0.0"
+	BindPort    string // e.g. "1080"
 }
 
 // tunnelRegistry tracks active tunnels globally and prevents duplicate port forwarding
@@ -71,7 +80,7 @@ func (r *tunnelRegistry) RemoveTunnels(hostKey string) {
 func (r *tunnelRegistry) GetAllTunnels() []*models.ActiveTunnel {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	var result []*models.ActiveTunnel
+	result := []*models.ActiveTunnel{}
 	for _, entries := range r.tunnels {
 		for _, e := range entries {
 			result = append(result, e.info)
@@ -159,14 +168,108 @@ func ParseForwardRules(rules string) ([]*PortForwardRule, []error) {
 	return parsed, errs
 }
 
+// ParseDynamicForwardRule parses an OpenSSH-style DynamicForward rule.
+// Accepted formats:
+//   - "port"               → bind=localhost, port=port
+//   - "bind_address:port"  → bind=bind_address, port=port
+//   - "*:port"             → bind=0.0.0.0, port=port
+func ParseDynamicForwardRule(rule string) (*DynamicForwardRule, error) {
+	rule = strings.TrimSpace(rule)
+	if rule == "" {
+		return nil, fmt.Errorf("empty dynamic forwarding rule")
+	}
+
+	bindAddr := "localhost"
+	bindPort := rule
+	if i := strings.LastIndex(rule, ":"); i != -1 {
+		bindAddr = rule[:i]
+		bindPort = rule[i+1:]
+	}
+	if bindAddr == "*" {
+		bindAddr = "0.0.0.0"
+	}
+	if bindAddr == "" {
+		bindAddr = "localhost"
+	}
+	if bindPort == "" {
+		return nil, fmt.Errorf("invalid dynamic forwarding rule %q: missing port", rule)
+	}
+
+	return &DynamicForwardRule{
+		BindAddress: bindAddr,
+		BindPort:    bindPort,
+	}, nil
+}
+
+// ParseDynamicForwardRules parses multiple DynamicForward rules (one per line).
+func ParseDynamicForwardRules(rules string) ([]*DynamicForwardRule, []error) {
+	var parsed []*DynamicForwardRule
+	var errs []error
+	for line := range strings.SplitSeq(rules, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		rule, err := ParseDynamicForwardRule(line)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		parsed = append(parsed, rule)
+	}
+	return parsed, errs
+}
+
+// sshDialer is a custom socks5 dialer that routes all connections through the SSH client.
+type sshDialer struct {
+	client *ssh.Client
+}
+
+func (d *sshDialer) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	return d.client.Dial(network, addr)
+}
+
+// startDynamicForward starts a local SOCKS5 proxy server that tunnels all traffic
+// through the SSH connection. This is equivalent to OpenSSH's DynamicForward directive.
+func startDynamicForward(client *ssh.Client, hostKey string, hostName string, rule *DynamicForwardRule) error {
+	listenAddr := net.JoinHostPort(rule.BindAddress, rule.BindPort)
+	listener, err := net.Listen("tcp", listenAddr)
+	if err != nil {
+		return fmt.Errorf("failed to listen on %s for SOCKS5: %w", listenAddr, err)
+	}
+
+	entry := &activeTunnelEntry{
+		info: &models.ActiveTunnel{
+			Type:     models.TunnelTypeDynamic,
+			BindAddr: rule.BindAddress,
+			BindPort: rule.BindPort,
+			HostName: hostName,
+		},
+		closer: listener,
+	}
+	globalTunnelRegistry.AddTunnel(hostKey, entry)
+
+	// Build SOCKS5 server with our custom SSH dialer so all traffic goes through SSH
+	srv := socks5.NewServer(
+		socks5.WithDial((&sshDialer{client: client}).DialContext),
+	)
+
+	go func() {
+		// Serve accepts connections until listener is closed
+		srv.Serve(listener)
+	}()
+
+	return nil
+}
+
 // SetupPortForwarding sets up port forwarding tunnels on the given SSH client.
 // It only sets up forwarding if this is the first connection to the host (no tunnels exist yet).
 // Errors are logged but not returned as fatal.
 // Returns a cleanup function that should be called when the SSH connection is closed.
 func SetupPortForwarding(client *ssh.Client, hostName string, hostKey string,
-	localForwards string, remoteForwards string) func() {
+	localForwards string, remoteForwards string, dynamicForwards string) func() {
 
-	if localForwards == "" && remoteForwards == "" {
+	if localForwards == "" && remoteForwards == "" && dynamicForwards == "" {
 		return func() {}
 	}
 
@@ -181,6 +284,9 @@ func SetupPortForwarding(client *ssh.Client, hostName string, hostKey string,
 	// Parse remote forwards
 	remoteRules, _ := ParseForwardRules(remoteForwards)
 
+	// Parse dynamic forwards
+	dynamicRules, _ := ParseDynamicForwardRules(dynamicForwards)
+
 	// Set up local forwards
 	for _, rule := range localRules {
 		startLocalForward(client, hostKey, hostName, rule)
@@ -189,6 +295,11 @@ func SetupPortForwarding(client *ssh.Client, hostName string, hostKey string,
 	// Set up remote forwards
 	for _, rule := range remoteRules {
 		startRemoteForward(client, hostKey, hostName, rule)
+	}
+
+	// Set up dynamic (SOCKS5) forwards
+	for _, rule := range dynamicRules {
+		startDynamicForward(client, hostKey, hostName, rule)
 	}
 
 	return func() {

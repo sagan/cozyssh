@@ -2229,12 +2229,20 @@ export default function Sidebar({
     (e: React.KeyboardEvent) => {
       const key = e.key.toLowerCase();
       if (key === "arrowdown" || (e.altKey && key === "j")) {
-        const step = (key === "j" ? e.shiftKey : e.altKey) ? getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS) : 1;
+        const step = (key === "j" ? e.shiftKey : e.altKey)
+          ? e.ctrlKey
+            ? flatList.length
+            : getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS)
+          : 1;
         e.preventDefault();
         e.stopPropagation();
         setSelectedIndex((prev) => Math.min(prev + step, flatList.length - 1));
       } else if (key === "arrowup" || (e.altKey && key === "k")) {
-        const step = (key === "k" ? e.shiftKey : e.altKey) ? getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS) : 1;
+        const step = (key === "k" ? e.shiftKey : e.altKey)
+          ? e.ctrlKey
+            ? flatList.length
+            : getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS)
+          : 1;
         e.preventDefault();
         e.stopPropagation();
         setSelectedIndex((prev) => Math.max(prev - step, 0));
@@ -3444,7 +3452,7 @@ export default function Sidebar({
                   <b>Alt + O</b> : Open new tab dialog, use <b>← →</b> (or <b>Alt + H/L</b>) to switch view,&nbsp;
                   <b>↓ ↑</b> (or <b>Alt + J/K</b>) to select, <b>Enter</b> to open, <b>Alt + Enter</b> to open in
                   current tab. Use <b>Alt + ↓↑</b> (or&nbsp;
-                  <b>Alt + Shift + J/K</b>) to jump through items quickly
+                  <b>Alt + Shift + J/K</b>) to jump through items quickly; Hold <b>Ctrl</b> to jump to top/bottom
                   <br />
                   <b>Alt + A</b> : Open new tab dialog - tabs view
                   <br />
@@ -3775,6 +3783,16 @@ export default function Sidebar({
               value={hostFormData.remote_forward || ""}
               onChange={(e) => setHostFormData({ ...hostFormData, remote_forward: e.target.value })}
               placeholder="e.g. 8080 localhost:80&#10;One rule per line"
+            />
+            <TextField
+              fullWidth
+              label="DynamicForward (Optional)"
+              size="small"
+              multiline
+              rows={2}
+              value={hostFormData.dynamic_forward || ""}
+              onChange={(e) => setHostFormData({ ...hostFormData, dynamic_forward: e.target.value })}
+              placeholder="e.g. 1080&#10;or 127.0.0.1:1080&#10;One port per line"
             />
             <TextField
               fullWidth

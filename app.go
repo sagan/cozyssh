@@ -781,9 +781,6 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				return
 			}
 			tunnels := sshmanager.GetActiveTunnels()
-			if tunnels == nil {
-				tunnels = []*models.ActiveTunnel{}
-			}
 			w.Header().Set(headers.ContentType, constants.MIME_JSON)
 			json.NewEncoder(w).Encode(tunnels)
 		}))))

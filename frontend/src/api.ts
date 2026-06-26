@@ -74,6 +74,7 @@ export interface HostData {
     host_key_algorithms?: string;
     local_forward?: string;
     remote_forward?: string;
+    dynamic_forward?: string;
     password?: string;
     password_exists?: boolean;
     clear_password?: boolean;
@@ -260,10 +261,10 @@ export interface ConfigRequest {
     save_password: "ask" | "always" | "never";
 }
 export interface ActiveTunnel {
-    type: "local" | "remote";
+    type: "local" | "remote" | "dynamic";
     bindAddr: string;
     bindPort: string;
-    remoteHost: string;
-    remotePort: string;
+    remoteHost?: string;
+    remotePort?: string;
     hostName: string;
 }

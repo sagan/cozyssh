@@ -257,8 +257,8 @@ export default function NewTabDialog({
       (t) =>
         t.bindAddr.toLowerCase().includes(f) ||
         t.bindPort.toLowerCase().includes(f) ||
-        t.remoteHost.toLowerCase().includes(f) ||
-        t.remotePort.toLowerCase().includes(f) ||
+        (t.remoteHost || "").toLowerCase().includes(f) ||
+        (t.remotePort || "").toLowerCase().includes(f) ||
         t.hostName.toLowerCase().includes(f),
     );
   }, [activeTunnels, f, viewMode]);
@@ -683,16 +683,20 @@ export default function NewTabDialog({
     } else if (viewMode === "tunnels") {
       const tunnelItems: Omit<DialogItem, "flatIndex">[] = filteredActiveTunnels.map((t) => ({
         type: "tunnel",
-        id: `${t.bindPort}-${t.remotePort}-${t.remoteHost}`,
+        id: `${t.bindPort}-${t.remotePort || "socks5"}-${t.remoteHost || "dynamic"}`,
         value:
-          t.type === "local"
+          t.type === "dynamic"
             ? `${t.bindAddr || "127.0.0.1"}:${t.bindPort}`
-            : `${t.remoteHost || "127.0.0.1"}:${t.remotePort}`,
+            : t.type === "local"
+              ? `${t.bindAddr || "127.0.0.1"}:${t.bindPort}`
+              : `${t.remoteHost || "127.0.0.1"}:${t.remotePort}`,
         label:
-          t.type === "local"
-            ? `local ${t.bindAddr}:${t.bindPort} -> ${t.remoteHost}:${t.remotePort}`
-            : `remote ${t.remoteHost}:${t.remotePort} -> ${t.bindAddr}:${t.bindPort}`,
-        subtitle: `Type: ${t.type} | Server: ${t.hostName}`,
+          t.type === "dynamic"
+            ? `SOCKS5 proxy ${t.bindAddr}:${t.bindPort} (via ${t.hostName})`
+            : t.type === "local"
+              ? `local ${t.bindAddr}:${t.bindPort} -> ${t.remoteHost}:${t.remotePort}`
+              : `remote ${t.remoteHost}:${t.remotePort} -> ${t.bindAddr}:${t.bindPort}`,
+        subtitle: `Type: ${t.type === "dynamic" ? "SOCKS5" : t.type} | Server: ${t.hostName}`,
       }));
       addSection("Active SSH Tunnels", tunnelItems);
     } else if (viewMode === "tags") {
@@ -791,12 +795,20 @@ export default function NewTabDialog({
     (e: React.KeyboardEvent) => {
       const key = e.key.toLowerCase();
       if (key === "arrowdown" || (e.altKey && key === "j")) {
-        const step = (key === "j" ? e.shiftKey : e.altKey) ? getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS) : 1;
+        const step = (key === "j" ? e.shiftKey : e.altKey)
+          ? e.ctrlKey
+            ? items.length
+            : getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS)
+          : 1;
         e.preventDefault();
         e.stopPropagation();
         setSelectedIndex((prev) => Math.min(prev + step, items.length - 1));
       } else if (key === "arrowup" || (e.altKey && key === "k")) {
-        const step = (key === "k" ? e.shiftKey : e.altKey) ? getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS) : 1;
+        const step = (key === "k" ? e.shiftKey : e.altKey)
+          ? e.ctrlKey
+            ? items.length
+            : getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS)
+          : 1;
         e.preventDefault();
         e.stopPropagation();
         setSelectedIndex((prev) => Math.max(prev - step, 0));

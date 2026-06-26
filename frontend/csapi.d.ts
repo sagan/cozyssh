@@ -1706,6 +1706,7 @@ export interface HostData {
 	host_key_algorithms?: string;
 	local_forward?: string;
 	remote_forward?: string;
+	dynamic_forward?: string;
 	password?: string;
 	password_exists?: boolean;
 	clear_password?: boolean;
@@ -1739,11 +1740,11 @@ export interface WsTerminalMessage {
 	isLocked: boolean;
 }
 export interface ActiveTunnel {
-	type: "local" | "remote";
+	type: "local" | "remote" | "dynamic";
 	bindAddr: string;
 	bindPort: string;
-	remoteHost: string;
-	remotePort: string;
+	remoteHost?: string;
+	remotePort?: string;
 	hostName: string;
 }
 export type Severity = "success" | "info" | "warning" | "error";
@@ -1972,7 +1973,7 @@ export interface TabData {
 	isPinned?: boolean;
 	isLocked?: boolean;
 	showFiles?: boolean;
-	type?: "terminal" | "scratchpad";
+	type: "terminal" | "scratchpad";
 }
 export type TerminalRefMap = Record<string, TerminalHandle | ScratchpadHandle | null>;
 export interface Store {

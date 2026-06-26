@@ -17,6 +17,7 @@ require (
 	github.com/ory/dockertest/v4 v4.0.0
 	github.com/pkg/sftp v1.13.10
 	github.com/playwright-community/playwright-go v0.5700.1
+	github.com/things-go/go-socks5 v0.1.1
 	github.com/tkrajina/typescriptify-golang-structs v0.2.0
 	golang.org/x/crypto v0.53.0
 	golang.org/x/sys v0.46.0

@@ -83,3 +83,68 @@ func TestParseForwardRule(t *testing.T) {
 		})
 	}
 }
+
+func TestParseDynamicForwardRule(t *testing.T) {
+	tests := []struct {
+		name    string
+		rule    string
+		want    *DynamicForwardRule
+		wantErr bool
+	}{
+		{
+			name: "port only",
+			rule: "1080",
+			want: &DynamicForwardRule{
+				BindAddress: "localhost",
+				BindPort:    "1080",
+			},
+			wantErr: false,
+		},
+		{
+			name: "bind address:port",
+			rule: "127.0.0.1:1080",
+			want: &DynamicForwardRule{
+				BindAddress: "127.0.0.1",
+				BindPort:    "1080",
+			},
+			wantErr: false,
+		},
+		{
+			name: "wildcard bind address",
+			rule: "*:1080",
+			want: &DynamicForwardRule{
+				BindAddress: "0.0.0.0",
+				BindPort:    "1080",
+			},
+			wantErr: false,
+		},
+		{
+			name: "empty bind address (colon prefix)",
+			rule: ":1080",
+			want: &DynamicForwardRule{
+				BindAddress: "localhost",
+				BindPort:    "1080",
+			},
+			wantErr: false,
+		},
+		{
+			name:    "empty rule",
+			rule:    "",
+			want:    nil,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseDynamicForwardRule(tt.rule)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseDynamicForwardRule() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ParseDynamicForwardRule() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
