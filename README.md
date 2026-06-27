@@ -109,8 +109,8 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - `Alt + P` : Open new tab dialog - tags view
   - `Alt + :` : Open new tab dialog - tunnels view
   - `Alt + ?` : Open new tab dialog - all view
-  - `Alt + N` : Open new default local shell tab
-  - `Alt + Shift + N` : Open new alternative local shell tab
+  - `Alt + N` : Open new default local shell tab; Hold `Ctrl` to open in current tab
+  - `Alt + Shift + N` : Open new alternative local shell tab; Hold `Ctrl` to open in current tab
   - `Alt + S` : Open scratchpad
   - `Alt + H / Alt + L` : Switch to previous / next pane
   - `Alt + Shift + H / Alt + Shift + L` : Switch to previous / next tab
@@ -120,6 +120,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - `Alt + W` : Close active pane
   - `Alt + Shift + W` : Close active tab
   - `Ctrl + Alt + Shift + W` : Close other tabs
+  - `Ctrl + Alt + Shift + L` : Toggle Lock/Unlock current tab
   - `Alt + I` : Focus sidebar search filter, then use `↑ ↓` to select, `Enter` to open, `Alt + Enter` to open context menu
   - `Alt + Shift + I` : Focus sidebar search filter and clear current value
   - `Alt + G` : Focus active terminal session

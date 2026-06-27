@@ -10,6 +10,7 @@ import {
   Button,
   FormControlLabel,
   Checkbox,
+  MenuItem,
 } from "@mui/material";
 import { triggerFocus } from "./store";
 import { isMuiModalOpen } from "./common";
@@ -31,7 +32,7 @@ interface DialogConfig {
   validate?: ((value: string) => string | undefined) | null;
   inputType?: string;
   verification?: boolean | string;
-  actions?: (string | CsChooseAction)[];
+  options?: (string | CsChooseAction)[];
 }
 // 1. Internal registry to bridge the static export to the React provider instance
 const registry = {
@@ -66,7 +67,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
     validate: null,
     inputType: "",
     verification: undefined,
-    actions: [],
+    options: [],
   });
 
   const resolveRef = useRef<((value: string | boolean | null) => void) | null>(null);
@@ -92,8 +93,8 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
         triggerDialog({ type: "prompt", message, defaultValue, ...options })) as DialogApi["prompt"],
       promptPassword: ((message, defaultValue) =>
         triggerDialog({ type: "prompt", inputType: "password", message, defaultValue })) as DialogApi["promptPassword"],
-      choose: ((title, message, actions) =>
-        triggerDialog({ type: "choose", message: title, detail: message, actions })) as DialogApi["choose"],
+      choose: ((title, message, options) =>
+        triggerDialog({ type: "choose", message: title, detail: message, options })) as DialogApi["choose"],
     };
   }, []);
 
@@ -215,6 +216,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
               autoFocus
               margin="dense"
               fullWidth
+              select={!!config.options?.length}
               variant="outlined"
               type={config.inputType || "text"}
               placeholder={config.placeholder}
@@ -234,17 +236,23 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
                   handleClose(true);
                 }
               }}
-            />
+            >
+              {config.options?.map((option, idx) => (
+                <MenuItem key={idx} value={typeof option === "object" ? option.value : option}>
+                  {typeof option === "object" ? option.label : option}
+                </MenuItem>
+              ))}
+            </TextField>
           )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           {config.type === "choose" ? (
-            (config.actions || []).map((action, idx) => {
+            (config.options || []).map((action, idx) => {
               const item =
                 typeof action === "string"
-                  ? ({ id: action, variant: idx === 0 ? "primary" : "secondary" } satisfies CsChooseAction)
+                  ? ({ value: action, variant: idx === 0 ? "primary" : "secondary" } satisfies CsChooseAction)
                   : action;
-              const label = item.label ?? item.id;
+              const label = item.label ?? item.value;
 
               // Map custom style variants cleanly to MUI Button props
               const btnVariant = item.variant === "secondary" ? "outlined" : "contained";
@@ -252,8 +260,8 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
 
               return (
                 <Button
-                  key={item.id}
-                  onClick={() => handleClose(item.id)}
+                  key={item.value}
+                  onClick={() => handleClose(item.value)}
                   variant={btnVariant}
                   color={btnColor}
                   disableElevation

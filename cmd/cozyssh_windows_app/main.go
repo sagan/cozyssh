@@ -11,6 +11,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -327,7 +328,7 @@ func main() {
 	setWindowIcon(hwnd)
 
 	// 4. Directly hook system tray interface and window interceptions on the main loop thread
-	setupSystemTrayAndHook(w, hwnd)
+	setupSystemTrayAndHook(w, hwnd, cfg)
 
 	var isFullscreen bool
 	var savedWindowRect winRect
@@ -482,7 +483,7 @@ func main() {
 }
 
 // setupSystemTrayAndHook builds the tray interface and window procedures on the active thread.
-func setupSystemTrayAndHook(w webview2.WebView, hwnd uintptr) {
+func setupSystemTrayAndHook(w webview2.WebView, hwnd uintptr, cfg *config.Config) {
 	trayInstance = systray.New()
 
 	iconBytes, _ := cozyssh.FrontendFS.ReadFile("frontend/dist/favicon.png")
@@ -495,7 +496,15 @@ func setupSystemTrayAndHook(w webview2.WebView, hwnd uintptr) {
 		})
 	}
 	menu.Add("Open "+constants.APP_NAME, onClick)
-	menu.AddSeparator()
+	menu.Add("Open Data Dir", func() {
+		exec.Command("explorer", cfg.ConfigDir).Run()
+	})
+	menu.Add("Open SSH Dir", func() {
+		exec.Command("explorer", cfg.SSHDir).Run()
+	})
+	menu.Add("Check update", func() {
+		go checkAppUpdate(hwnd)
+	})
 	menu.Add("Quit", func() {
 		w.Terminate()
 	})

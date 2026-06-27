@@ -22,7 +22,7 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w -X cozyssh.version={{.Version}} -X cozyssh.commit={{.Commit}} -X cozyssh.date={{.Date}}
+      - -s -w -X cozyssh.Version={{.Version}} -X cozyssh.Commit={{.Commit}} -X cozyssh.Date={{.Date}}
 
   - id: cozyssh-app
     env:
@@ -37,7 +37,7 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w -H windowsgui -X cozyssh.version={{.Version}} -X cozyssh.commit={{.Commit}} -X cozyssh.date={{.Date}}
+      - -s -w -H windowsgui -X cozyssh.Version={{.Version}} -X cozyssh.Commit={{.Commit}} -X cozyssh.Date={{.Date}}
 
 archives:
   - id: cozyssh

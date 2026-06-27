@@ -47,6 +47,8 @@ import {
   triggerFocusSearchInput,
   getIntVar,
   setToasts,
+  unlockTab,
+  lockTab,
 } from "./store";
 
 export interface KeyboardManagerOptions {
@@ -189,14 +191,18 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           return;
 
         case "alt+n":
+        case "ctrl+alt+n":
           e.preventDefault();
-          openHost(LOCAL_NAME);
+          openHost(LOCAL_NAME, { target: keycomb === "ctrl+alt+n" ? "_self" : undefined });
           return;
 
-        case "alt+shift+n": {
+        case "alt+shift+n":
+        case "ctrl+alt+shift+n": {
           e.preventDefault();
           const shells = getStore().shells;
-          openHost(shells[1] ? localShellHost(shells[1]) : LOCAL_NAME);
+          openHost(shells[1] ? localShellHost(shells[1]) : LOCAL_NAME, {
+            target: keycomb === "ctrl+alt+shift+n" ? "_self" : undefined,
+          });
           return;
         }
 
@@ -293,6 +299,20 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           e.preventDefault();
           closeOtherTabs();
           return;
+
+        case "ctrl+alt+shift+l": {
+          e.preventDefault();
+          const { activeTabId, tabs } = getStore();
+          const activeTab = tabs.find((t) => t.id === activeTabId);
+          if (activeTab && activeTab.type === "terminal") {
+            if (activeTab.isLocked) {
+              unlockTab(activeTab.id);
+            } else {
+              lockTab(activeTab.id);
+            }
+          }
+          return;
+        }
 
         case "alt+shift+w":
           e.preventDefault();

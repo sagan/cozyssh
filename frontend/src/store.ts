@@ -36,6 +36,8 @@ import {
   type ViewMode,
   genPaneId,
   genTabId,
+  getHostGroupPath,
+  getHostOrder,
   getTemplateVariables,
   hostTitle,
   isMuiModalOpen,
@@ -69,6 +71,8 @@ import {
   METHOD_POST,
   METHOD_PUT,
   MIME_JSON,
+  TAG_GROUP_PREFIX,
+  TAG_ORDER_PREFIX,
   TOAST_KEY_FONT_SIZE,
   VAR_CS_FONT_SIZE,
   VAR_CS_TERMINAL_FONT_SIZE,
@@ -1159,7 +1163,8 @@ export async function pinTab(id: string) {
   setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, isPinned: true } : t)));
 }
 
-export async function unlockTab(id: string) {
+export async function unlockTab(id?: string) {
+  id = id || getStore().activeTabId;
   const tab = getStore().tabs.find((t) => t.id === id);
   if (!tab) {
     return;
@@ -1186,7 +1191,8 @@ export async function unlockTab(id: string) {
   setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, isLocked: false } : t)));
 }
 
-export async function lockTab(id: string) {
+export async function lockTab(id?: string) {
+  id = id || getStore().activeTabId;
   const tab = getStore().tabs.find((t) => t.id === id);
   if (!tab) {
     return;
@@ -1610,5 +1616,113 @@ export async function refreshData({ sync = 0, refresh = 0 } = {}) {
     useStore.setState(data);
   } catch (e) {
     console.error(e);
+  }
+}
+
+export async function moveServer(serverName: string, destGroupPath: string | null, beforeServerName: string | null) {
+  const hosts = getStore().hosts;
+  const host = hosts.find((h) => h.name === serverName);
+  if (!host) return;
+
+  const siblingHosts = hosts.filter(
+    (h) => !h.is_auto && h.name !== serverName && getHostGroupPath(h) === destGroupPath,
+  );
+  siblingHosts.sort((a, b) => {
+    const orderA = getHostOrder(a);
+    const orderB = getHostOrder(b);
+    if (orderA !== orderB) return orderA - orderB;
+    return a.name.localeCompare(b.name);
+  });
+
+  const newSortedList = [...siblingHosts];
+  if (beforeServerName) {
+    const idx = newSortedList.findIndex((h) => h.name === beforeServerName);
+    if (idx !== -1) {
+      newSortedList.splice(idx, 0, host);
+    } else {
+      newSortedList.push(host);
+    }
+  } else {
+    newSortedList.push(host);
+  }
+
+  const updatedHosts: HostData[] = [];
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+  for (let i = 0; i < newSortedList.length; i++) {
+    const h = newSortedList[i];
+    const newOrder = (i + 1) * 10;
+    const newGroupTag = destGroupPath ? `g-${destGroupPath}` : null;
+
+    let tagsChanged = false;
+    const newTags = h.tags
+      ? h.tags.filter((t) => !t.startsWith(TAG_ORDER_PREFIX) && !t.startsWith(TAG_GROUP_PREFIX))
+      : [];
+
+    const oldGroupTag = h.tags ? h.tags.find((t) => t.startsWith(TAG_GROUP_PREFIX)) : null;
+    const expectedGroupTag = newGroupTag;
+    if (oldGroupTag !== expectedGroupTag) {
+      tagsChanged = true;
+    }
+    if (newGroupTag) {
+      newTags.push(newGroupTag);
+    }
+
+    const oldOrder = getHostOrder(h);
+    if (oldOrder !== newOrder) {
+      tagsChanged = true;
+    }
+    newTags.push(`o-${newOrder}`);
+
+    if (h.name === serverName || tagsChanged) {
+      const updatedHost = {
+        ...h,
+        tags: newTags,
+      };
+      updatedHosts.push(updatedHost);
+    }
+  }
+
+  for (const h of updatedHosts) {
+    const url = h.source === "config" ? `/api/hosts/${h.name}` : `/api/hosts`;
+    const method = h.source === "config" ? METHOD_PUT : METHOD_POST;
+    await fetch(url, {
+      method,
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        [HEADER_CONTENT_TYPE]: MIME_JSON,
+      },
+      body: JSON.stringify(h),
+    });
+  }
+
+  fetchHosts();
+}
+
+export async function moveGroup(srcPath: string, beforeSiblingPath: string) {
+  const groups = getStore().groups;
+  const draggedGroupList = groups.filter((g) => g === srcPath || g.startsWith(srcPath + "/"));
+  const remainingGroups = groups.filter((g) => g !== srcPath && !g.startsWith(srcPath + "/"));
+
+  const idx = remainingGroups.indexOf(beforeSiblingPath);
+  const nextGroups = [...remainingGroups];
+  if (idx !== -1) {
+    nextGroups.splice(idx, 0, ...draggedGroupList);
+  } else {
+    nextGroups.push(...draggedGroupList);
+  }
+
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+  const res = await fetch("/api/groups", {
+    method: METHOD_POST,
+    headers: {
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      [HEADER_CONTENT_TYPE]: MIME_JSON,
+    },
+    body: JSON.stringify(nextGroups),
+  });
+  if (res.ok) {
+    setGroups(nextGroups);
+  } else {
+    dialogs.alert("Failed to save group order");
   }
 }

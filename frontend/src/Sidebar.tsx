@@ -99,6 +99,11 @@ import {
   cutPrefix,
   filterHosts,
   forceReload,
+  getHostGroupPath,
+  getHostOrder,
+  getSSHCommand,
+  getSSHConfigBlock,
+  getSSHCopyIdCommand,
   isValidHostname,
   localShellHost,
   openHostInNewWindow,
@@ -125,6 +130,8 @@ import {
   logoutAll,
   fetchHosts,
   getIntVar,
+  moveServer,
+  moveGroup,
 } from "./store";
 import { useShallow } from "zustand/react/shallow";
 
@@ -683,146 +690,10 @@ export default function Sidebar({
   >(null);
   const [dragOverTarget, setDragOverTarget] = useState<{ id: string; effect: "before" | "inside" } | null>(null);
 
-  // Helper functions for tree view
-  const getHostOrder = useCallback((host: HostData): number => {
-    if (!host.tags) return Infinity;
-    for (const tag of host.tags) {
-      if (tag.startsWith(TAG_ORDER_PREFIX)) {
-        const order = parseInt(tag.substring(2));
-        if (!isNaN(order)) return order;
-      }
-    }
-    return Infinity;
-  }, []);
-
-  const getHostGroupPath = useCallback((host: HostData): string | null => {
-    if (!host.tags) return null;
-    for (const tag of host.tags) {
-      if (tag.startsWith(TAG_GROUP_PREFIX)) {
-        return tag.slice(TAG_GROUP_PREFIX.length);
-      }
-    }
-    return null;
-  }, []);
-
   const getGroupOrder = useCallback(
     (path: string): number => {
       const idx = groups.indexOf(path);
       return idx === -1 ? Infinity : idx;
-    },
-    [groups],
-  );
-
-  // Server move function (drag & drop)
-  const moveServer = useCallback(
-    async (serverName: string, destGroupPath: string | null, beforeServerName: string | null) => {
-      const host = hosts.find((h) => h.name === serverName);
-      if (!host) return;
-
-      const siblingHosts = hosts.filter(
-        (h) => !h.is_auto && h.name !== serverName && getHostGroupPath(h) === destGroupPath,
-      );
-      siblingHosts.sort((a, b) => {
-        const orderA = getHostOrder(a);
-        const orderB = getHostOrder(b);
-        if (orderA !== orderB) return orderA - orderB;
-        return a.name.localeCompare(b.name);
-      });
-
-      const newSortedList = [...siblingHosts];
-      if (beforeServerName) {
-        const idx = newSortedList.findIndex((h) => h.name === beforeServerName);
-        if (idx !== -1) {
-          newSortedList.splice(idx, 0, host);
-        } else {
-          newSortedList.push(host);
-        }
-      } else {
-        newSortedList.push(host);
-      }
-
-      const updatedHosts: HostData[] = [];
-      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-      for (let i = 0; i < newSortedList.length; i++) {
-        const h = newSortedList[i];
-        const newOrder = (i + 1) * 10;
-        const newGroupTag = destGroupPath ? `g-${destGroupPath}` : null;
-
-        let tagsChanged = false;
-        const newTags = h.tags
-          ? h.tags.filter((t) => !t.startsWith(TAG_ORDER_PREFIX) && !t.startsWith(TAG_GROUP_PREFIX))
-          : [];
-
-        const oldGroupTag = h.tags ? h.tags.find((t) => t.startsWith(TAG_GROUP_PREFIX)) : null;
-        const expectedGroupTag = newGroupTag;
-        if (oldGroupTag !== expectedGroupTag) {
-          tagsChanged = true;
-        }
-        if (newGroupTag) {
-          newTags.push(newGroupTag);
-        }
-
-        const oldOrder = getHostOrder(h);
-        if (oldOrder !== newOrder) {
-          tagsChanged = true;
-        }
-        newTags.push(`o-${newOrder}`);
-
-        if (h.name === serverName || tagsChanged) {
-          const updatedHost = {
-            ...h,
-            tags: newTags,
-          };
-          updatedHosts.push(updatedHost);
-        }
-      }
-
-      for (const h of updatedHosts) {
-        const url = h.source === "config" ? `/api/hosts/${h.name}` : `/api/hosts`;
-        const method = h.source === "config" ? METHOD_PUT : METHOD_POST;
-        await fetch(url, {
-          method,
-          headers: {
-            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-            [HEADER_CONTENT_TYPE]: MIME_JSON,
-          },
-          body: JSON.stringify(h),
-        });
-      }
-
-      fetchHosts();
-    },
-    [hosts, getHostGroupPath, getHostOrder],
-  );
-
-  // Group move/reorder function (drag & drop)
-  const moveGroup = useCallback(
-    async (srcPath: string, beforeSiblingPath: string) => {
-      const draggedGroupList = groups.filter((g) => g === srcPath || g.startsWith(srcPath + "/"));
-      const remainingGroups = groups.filter((g) => g !== srcPath && !g.startsWith(srcPath + "/"));
-
-      const idx = remainingGroups.indexOf(beforeSiblingPath);
-      const nextGroups = [...remainingGroups];
-      if (idx !== -1) {
-        nextGroups.splice(idx, 0, ...draggedGroupList);
-      } else {
-        nextGroups.push(...draggedGroupList);
-      }
-
-      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-      const res = await fetch("/api/groups", {
-        method: METHOD_POST,
-        headers: {
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-          [HEADER_CONTENT_TYPE]: MIME_JSON,
-        },
-        body: JSON.stringify(nextGroups),
-      });
-      if (res.ok) {
-        setGroups(nextGroups);
-      } else {
-        dialogs.alert("Failed to save group order");
-      }
     },
     [groups],
   );
@@ -1729,7 +1600,7 @@ export default function Sidebar({
     }
 
     fetchHosts();
-  }, [groupContextMenu, groups, hosts, getHostGroupPath, fetchHosts]);
+  }, [groupContextMenu, groups, hosts, getHostGroupPath]);
 
   const handleRenameGroupClick = useCallback(async () => {
     setGroupContextMenuOpen(false);
@@ -2310,8 +2181,6 @@ export default function Sidebar({
             draggedItem={draggedItem}
             dragOverTarget={dragOverTarget}
             setDragOverTarget={setDragOverTarget}
-            moveServer={moveServer}
-            moveGroup={moveGroup}
             setGroupContextMenu={setGroupContextMenu}
             setGroupContextMenuOpen={setGroupContextMenuOpen}
           />
@@ -2338,8 +2207,6 @@ export default function Sidebar({
           dragOverTarget={dragOverTarget}
           setDraggedItem={setDraggedItem}
           setDragOverTarget={setDragOverTarget}
-          moveServer={moveServer}
-          getHostGroupPath={getHostGroupPath}
           handleContextMenu={handleContextMenu}
         />
       );
@@ -2809,63 +2676,7 @@ export default function Sidebar({
             }
             const target = contextMenu.target;
             setContextMenuOpen(false);
-            let command = `ssh`;
-            if (target.identity_file) {
-              command += ` -i "${target.identity_file}"`;
-            }
-            if (target.proxy_jump) {
-              const jumpServers = target.proxy_jump.split(",").map((name) => {
-                name = name.trim();
-                const server = hosts.find((h) => h.name === name);
-                if (!server) {
-                  return name;
-                }
-                if (server.port !== "22") {
-                  return `${server.user}@${server.hostname}:${server.port}`;
-                }
-                return `${server.user}@${server.hostname}`;
-              });
-              command += ` -J ${jumpServers.join(",")}`;
-            }
-            if (target.remote_command) {
-              if (/\b(?:sudo|vim|vi|nano|top|htop|btop|tmux|screen)\b/.test(target.remote_command)) {
-                command += ` -t`;
-              }
-              command += ` -o "RemoteCommand=${target.remote_command}"`;
-            }
-            if (target.address_family) {
-              command += ` -o "AddressFamily=${target.address_family}"`;
-            }
-            if (target.user_known_hosts_file) {
-              command += ` -o "UserKnownHostsFile=${target.user_known_hosts_file}"`;
-            }
-            if (target.strict_host_key_checking) {
-              command += ` -o "StrictHostKeyChecking=${target.strict_host_key_checking}"`;
-            }
-            if (target.host_key_algorithms) {
-              command += ` -o "HostKeyAlgorithms=${target.host_key_algorithms}"`;
-            }
-            if (target.local_forward) {
-              const forwards = target.local_forward
-                .split(/[\r\n]+/)
-                .map((forward) => forward.trim())
-                .filter((forward) => forward && !forward.startsWith("#"))
-                .map((forward) => ` -L "${forward.split(/\s+/).join(":")}"`);
-              command += forwards.join("");
-            }
-            if (target.remote_forward) {
-              const forwards = target.remote_forward
-                .split(/[\r\n]+/)
-                .map((forward) => forward.trim())
-                .filter((forward) => forward && !forward.startsWith("#"))
-                .map((forward) => ` -R "${forward.split(/\s+/).join(":")}"`);
-              command += forwards.join("");
-            }
-            if (target.port && target.port !== "22") {
-              command += ` -p ${target.port}`;
-            }
-            command += ` ${target.user}@${target.hostname}`;
-            navigator.clipboard.writeText(command);
+            navigator.clipboard.writeText(getSSHCommand(target));
           }}
         >
           Copy SSH Command
@@ -2877,30 +2688,56 @@ export default function Sidebar({
             }
             const target = contextMenu.target;
             setContextMenuOpen(false);
-            let command = `ssh-copy-id`;
-            if (target.identity_file) {
-              command += ` -i "${target.identity_file}"`;
-            }
-            if (target.port !== "22") {
-              command += ` -p ${target.port}`;
-            }
-            command += ` ${target.user}@${target.hostname}`;
-            navigator.clipboard.writeText(command);
+            navigator.clipboard.writeText(getSSHCopyIdCommand(target));
           }}
         >
           Copy ssh-copy-id Command
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            if (!contextMenu) {
+              return;
+            }
+            const target = contextMenu.target;
+            setContextMenuOpen(false);
+            navigator.clipboard.writeText(getSSHConfigBlock(target));
+          }}
+        >
+          Copy SSH Config Block
         </MenuItem>
         <MenuItem onClick={handleRunCopyID}>Run ssh-copy-id</MenuItem>
         <MenuItem onClick={handleToggleFavourite}>
           {contextMenu?.target.is_favourite ? "Remove From Favourite" : "Add To Favourite"}
         </MenuItem>
+        {contextMenu?.section === "tree" && (
+          <MenuItem
+            onClick={async () => {
+              if (!contextMenu) {
+                return;
+              }
+              const target = contextMenu.target;
+              setContextMenuOpen(false);
+              const groups = getStore().groups;
+              const currentGroup = getHostGroupPath(target);
+              const dstGroup = await dialogs.prompt(`Move server "${target.name}" to group:`, currentGroup || "", {
+                options: [{ value: "", label: "(no group)" }, ...groups],
+              });
+              if (dstGroup === null) {
+                return;
+              }
+              if ((dstGroup || null) === currentGroup) {
+                return;
+              }
+              await moveServer(target.name, dstGroup || null, null);
+            }}
+          >
+            Move to Group
+          </MenuItem>
+        )}
         {contextMenu?.target.source === "config" && (
           <MenuItem onClick={handleDelete} sx={{ color: "error.main" }}>
             Delete Host
           </MenuItem>
-        )}
-        {contextMenu && contextMenu.section === "tree" && getHostGroupPath(contextMenu.target) === null && (
-          <MenuItem onClick={handleAddTopLevelGroupClick}>Add Top-Level Group</MenuItem>
         )}
       </Menu>
 
@@ -2921,7 +2758,6 @@ export default function Sidebar({
         <MenuItem onClick={handleOpenGroupAllInNewWindow}>Open All (New Window)</MenuItem>
         <MenuItem onClick={handleOpenGroupAllSplitScreen}>Open All (Split Screen)</MenuItem>
         <MenuItem onClick={handleAddSubGroupClick}>Add Sub-Group</MenuItem>
-        <MenuItem onClick={handleAddTopLevelGroupClick}>Add Top-Level Group</MenuItem>
         {groupContextMenu?.path && <MenuItem onClick={handleRenameGroupClick}>Rename Group</MenuItem>}
         <MenuItem onClick={handleDeleteGroupClick} sx={{ color: "error.main" }}>
           Delete Group
@@ -3248,6 +3084,16 @@ export default function Sidebar({
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1, mt: -1 }}>
                   <b>WebDAV Synchronization</b>: Sync CozySSH data (buttons, vars, scratchpad) with a custom WebDAV
                   directory.
+                  <br />
+                  <b>Note</b>: OpenSSH hosts data and saved passwords will <b>NOT</b> be synced, see&nbsp;
+                  <a
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    href="https://github.com/sagan/cozyssh/blob/master/docs/DATA.md#sync"
+                  >
+                    CozySSH Data doccument
+                  </a>
+                  &nbsp; for more details.
                 </Typography>
                 <Box
                   sx={{
@@ -3464,9 +3310,9 @@ export default function Sidebar({
                   <br />
                   <b>Alt + ?</b> : Open new tab dialog - all view
                   <br />
-                  <b>Alt + N</b> : Open new default local shell tab
+                  <b>Alt + N</b> : Open new default local shell tab; Hold <b>Ctrl</b> to open in current tab
                   <br />
-                  <b>Alt + Shift + N</b> : Open new alternative local shell tab
+                  <b>Alt + Shift + N</b> : Open new alternative local shell tab; Hold <b>Ctrl</b> to open in current tab
                   <br />
                   <b>Alt + S</b> : Open scratchpad
                   <br />
@@ -3485,6 +3331,8 @@ export default function Sidebar({
                   <b>Alt + Shift + W</b> : Close active tab
                   <br />
                   <b>Ctrl + Alt + Shift + W</b> : Close other tabs
+                  <br />
+                  <b>Ctrl + Alt + Shift + L</b> : Toggle Lock/Unlock current tab
                   <br />
                   <b>Alt + I</b> : Focus sidebar search filter, use <b>↑ ↓</b> to select, <b>Enter</b> to open or&nbsp;
                   <b>Alt + Enter</b> to open context menu.
@@ -3960,8 +3808,6 @@ function TreeGroupItem({
   draggedItem,
   dragOverTarget,
   setDragOverTarget,
-  moveServer,
-  moveGroup,
   setGroupContextMenu,
   setGroupContextMenuOpen,
 }: {
@@ -3976,8 +3822,6 @@ function TreeGroupItem({
   draggedItem: { type: "group"; path: string } | { type: "server"; name: string } | null;
   dragOverTarget: { id: string; effect: "before" | "inside" } | null;
   setDragOverTarget: (item: { id: string; effect: "before" | "inside" } | null) => void;
-  moveServer: (serverName: string, destGroupPath: string | null, beforeServerName: string | null) => Promise<void>;
-  moveGroup: (sourceGroupPath: string, destGroupPath: string) => Promise<void>;
   setGroupContextMenu: (item: { element: Element; path: string; type: "group" } | null) => void;
   setGroupContextMenuOpen: (open: boolean) => void;
 }) {
@@ -4087,8 +3931,6 @@ function TreeServerItem({
   dragOverTarget,
   setDraggedItem,
   setDragOverTarget,
-  moveServer,
-  getHostGroupPath,
   handleContextMenu,
 }: {
   node: ServerNode;
@@ -4101,8 +3943,6 @@ function TreeServerItem({
   dragOverTarget: { id: string; effect: "before" | "inside" } | null;
   setDraggedItem: (item: { type: "group"; path: string } | { type: "server"; name: string } | null) => void;
   setDragOverTarget: (item: { id: string; effect: "before" | "inside" } | null) => void;
-  moveServer: (serverName: string, destGroupPath: string | null, beforeServerName: string | null) => Promise<void>;
-  getHostGroupPath: (host: HostData) => string | null;
   handleContextMenu: (
     e: React.MouseEvent | React.KeyboardEvent,
     host: HostData,

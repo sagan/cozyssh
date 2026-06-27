@@ -79,6 +79,8 @@ import {
   getIntVar,
   setSysinfo,
   refreshData,
+  lockTab,
+  unlockTab,
 } from "./store";
 import { setupPluginAPI, runScript } from "./pluginAPI";
 import { useKeyboardManager } from "./useKeyboardManager";
@@ -583,6 +585,16 @@ export default function Dashboard({ initialData }: DashboardProps) {
               setSearchOpen(true);
               setTimeout(() => document.getElementById(ID_TERMINAL_SEARCH_INPUT)?.focus(), 100);
               break;
+
+            case "LOCK_TAB": {
+              lockTab();
+              break;
+            }
+
+            case "UNLOCK_TAB": {
+              unlockTab();
+              break;
+            }
 
             default:
               break;

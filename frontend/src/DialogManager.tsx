@@ -433,6 +433,7 @@ export default function DialogManager({
                   <>
                     {tab.isPinned ? (
                       <MenuItem
+                        className="hide-desktop"
                         onClick={() => {
                           handleCloseMenu();
                           unpinTab(memoTabId);
@@ -443,6 +444,7 @@ export default function DialogManager({
                       </MenuItem>
                     ) : tab.panes.length === 1 ? (
                       <MenuItem
+                        className="hide-desktop"
                         onClick={() => {
                           handleCloseMenu();
                           pinTab(memoTabId);
@@ -452,28 +454,27 @@ export default function DialogManager({
                         Pin Tab
                       </MenuItem>
                     ) : null}
-                    {tab.isPinned &&
-                      (tab.isLocked ? (
-                        <MenuItem
-                          onClick={() => {
-                            handleCloseMenu();
-                            unlockTab(memoTabId);
-                            triggerFocus();
-                          }}
-                        >
-                          Unlock Tab
-                        </MenuItem>
-                      ) : (
-                        <MenuItem
-                          onClick={() => {
-                            handleCloseMenu();
-                            lockTab(memoTabId);
-                            triggerFocus();
-                          }}
-                        >
-                          Lock Tab
-                        </MenuItem>
-                      ))}
+                    {tab.isLocked ? (
+                      <MenuItem
+                        onClick={() => {
+                          handleCloseMenu();
+                          unlockTab(memoTabId);
+                          triggerFocus();
+                        }}
+                      >
+                        Unlock Tab
+                      </MenuItem>
+                    ) : (
+                      <MenuItem
+                        onClick={() => {
+                          handleCloseMenu();
+                          lockTab(memoTabId);
+                          triggerFocus();
+                        }}
+                      >
+                        Lock Tab
+                      </MenuItem>
+                    )}
                     <MenuItem
                       onClick={() => {
                         handleCloseMenu();
@@ -1022,7 +1023,8 @@ export default function DialogManager({
                 treats&nbsp;
                 <code>remoteCommand</code> as a single program with args and execute it directly instead of executing it
                 using system shell.
-                <br />- <b>localForward</b> & <b>remoteForward</b> : OpenSSH syntax SSH tunnel rules. Use&nbsp;
+                <br />- <b>localForward</b> & <b>remoteForward</b> & <b>dynamicForward</b> : OpenSSH syntax SSH tunnel
+                rules. Use&nbsp;
                 <code>%0A</code> (\n) to seperate multiple rules.
                 <br /> E.g. <b>local?id=local-abc&title=Local&remoteCommand=tmux attach || tmux new</b>
                 <br /> It's possible to set multiple (up to 4) comma-separated servers to open them in split screen.

@@ -5,7 +5,7 @@ import { Liquid } from "liquidjs";
 import { join } from "shlex";
 
 import type { ButtonData, HostData, LocalShell } from "./api";
-import { DEFAULT_BUTTON_GROUP, DEFAULT_FONT_SIZE, LOCAL_NAME } from "./constants";
+import { DEFAULT_BUTTON_GROUP, DEFAULT_FONT_SIZE, LOCAL_NAME, TAG_GROUP_PREFIX, TAG_ORDER_PREFIX } from "./constants";
 
 export type Expect<T extends true> = T;
 export type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2 ? true : false;
@@ -954,4 +954,180 @@ export function applyFilters<T>(filters: ((t: T) => T)[], data: T): T {
     data = filter(data);
   }
   return data;
+}
+
+export const getHostOrder = (host: HostData): number => {
+  if (!host.tags) {
+    return Infinity;
+  }
+  for (const tag of host.tags) {
+    if (tag.startsWith(TAG_ORDER_PREFIX)) {
+      const order = parseInt(tag.substring(2));
+      if (!isNaN(order)) {
+        return order;
+      }
+    }
+  }
+  return Infinity;
+};
+
+export const getHostGroupPath = (host: HostData): string | null => {
+  if (!host.tags) {
+    return null;
+  }
+  for (const tag of host.tags) {
+    if (tag.startsWith(TAG_GROUP_PREFIX)) {
+      return tag.slice(TAG_GROUP_PREFIX.length);
+    }
+  }
+  return null;
+};
+
+export function getSSHCommand(host: HostData, hosts?: HostData[]): string {
+  let command = `ssh`;
+  if (host.identity_file) {
+    command += ` -i "${host.identity_file}"`;
+  }
+  if (host.proxy_jump) {
+    const jumpServers = host.proxy_jump.split(",").map((name) => {
+      name = name.trim();
+      const server = hosts ? hosts.find((h) => h.name === name) : undefined;
+      if (!server) {
+        return name;
+      }
+      if (server.port !== "22") {
+        return `${server.user}@${server.hostname}:${server.port}`;
+      }
+      return `${server.user}@${server.hostname}`;
+    });
+    command += ` -J ${jumpServers.join(",")}`;
+  }
+  if (host.remote_command) {
+    if (/\b(?:sudo|vim|vi|nano|top|htop|btop|tmux|screen)\b/.test(host.remote_command)) {
+      command += ` -t`;
+    }
+    command += ` -o "RemoteCommand=${host.remote_command}"`;
+  }
+  if (host.address_family) {
+    command += ` -o "AddressFamily=${host.address_family}"`;
+  }
+  if (host.user_known_hosts_file) {
+    command += ` -o "UserKnownHostsFile=${host.user_known_hosts_file}"`;
+  }
+  if (host.strict_host_key_checking) {
+    command += ` -o "StrictHostKeyChecking=${host.strict_host_key_checking}"`;
+  }
+  if (host.host_key_algorithms) {
+    command += ` -o "HostKeyAlgorithms=${host.host_key_algorithms}"`;
+  }
+  if (host.local_forward) {
+    const forwards = host.local_forward
+      .split(/[\r\n]+/)
+      .map((forward) => forward.trim())
+      .filter((forward) => forward && !forward.startsWith("#"))
+      .map((forward) => ` -L "${forward.split(/\s+/).join(":")}"`);
+    command += forwards.join("");
+  }
+  if (host.remote_forward) {
+    const forwards = host.remote_forward
+      .split(/[\r\n]+/)
+      .map((forward) => forward.trim())
+      .filter((forward) => forward && !forward.startsWith("#"))
+      .map((forward) => ` -R "${forward.split(/\s+/).join(":")}"`);
+    command += forwards.join("");
+  }
+  if (host.port && host.port !== "22") {
+    command += ` -p ${host.port}`;
+  }
+  command += ` ${host.user}@${host.hostname}`;
+  return command;
+}
+
+export function getSSHCopyIdCommand(host: HostData): string {
+  let command = `ssh-copy-id`;
+  if (host.identity_file) {
+    command += ` -i "${host.identity_file}"`;
+  }
+  if (host.port !== "22") {
+    command += ` -p ${host.port}`;
+  }
+  command += ` ${host.user}@${host.hostname}`;
+  return command;
+}
+
+export function getSSHConfigBlock(host: HostData): string {
+  let block = "";
+  if (host.comment) {
+    block += host.comment
+      .trim()
+      .split("\n")
+      .map((c) => "### " + c)
+      .join("\n");
+    block += "\n";
+  }
+  if (host.tags?.length) {
+    block += `### ${host.tags.map((t) => "#" + t).join(" ")}`;
+    block += "\n";
+  }
+  block += `Host ${host.name}\n`;
+  block += `    HostName ${host.hostname}\n`;
+  if (host.user) {
+    block += `    User ${host.user}\n`;
+  }
+  if (host.port) {
+    block += `    Port ${host.port}\n`;
+  }
+  if (host.identity_file) {
+    block += `    IdentityFile ${host.identity_file}\n`;
+  }
+  if (host.proxy_jump) {
+    block += `    ProxyJump ${host.proxy_jump}\n`;
+  }
+  if (host.remote_command) {
+    block += `    RemoteCommand ${host.remote_command}\n`;
+  }
+  if (host.address_family) {
+    block += `    AddressFamily ${host.address_family}\n`;
+  }
+  if (host.user_known_hosts_file) {
+    block += `    UserKnownHostsFile ${host.user_known_hosts_file}\n`;
+  }
+  if (host.strict_host_key_checking) {
+    block += `    StrictHostKeyChecking ${host.strict_host_key_checking}\n`;
+  }
+  if (host.host_key_algorithms) {
+    block += `    HostKeyAlgorithms ${host.host_key_algorithms}\n`;
+  }
+  if (host.local_forward) {
+    const forwards = host.local_forward
+      .split("\n")
+      .map((f) => f.trim())
+      .filter((f) => f && !f.startsWith("#"));
+    for (const forward of forwards) {
+      block += `    LocalForward ${forward}\n`;
+    }
+  }
+  if (host.remote_forward) {
+    const forwards = host.remote_forward
+      .split("\n")
+      .map((f) => f.trim())
+      .filter((f) => f && !f.startsWith("#"));
+    for (const forward of forwards) {
+      block += `    RemoteForward ${forward}\n`;
+    }
+  }
+  if (host.dynamic_forward) {
+    const forwards = host.dynamic_forward
+      .split("\n")
+      .map((f) => f.trim())
+      .filter((f) => f && !f.startsWith("#"));
+    for (const forward of forwards) {
+      block += `    DynamicForward ${forward}\n`;
+    }
+  }
+
+  if (!block.endsWith("\n")) {
+    block += "\n";
+  }
+  return block;
 }

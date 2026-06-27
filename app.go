@@ -46,9 +46,9 @@ var FrontendFS embed.FS
 
 // injected by GoReleaser during build
 var (
-	version = "dev" // "v" prefix is trimmed
-	commit  = "none"
-	date    = "unknown"
+	Version = "dev" // "v" prefix is trimmed
+	Commit  = "none"
+	Date    = "unknown"
 )
 
 type CozysshFlags struct {
@@ -150,7 +150,7 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 	if home, err := os.UserHomeDir(); err == nil {
 		os.Chdir(home)
 	}
-	log.Printf("CozySSH %s; Config file: %s", version, cfg.ConfigPath)
+	log.Printf("CozySSH %s; Config file: %s", Version, cfg.ConfigPath)
 
 	passstore.Init(cfg.ConfigDir, cfg.AppPasswordHash)
 	auth.Init(cfg)
@@ -185,7 +185,7 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 		return &models.FullData{
 			Sysinfo: models.Sysinfo{
 				Hostname:        displayHostname,
-				Version:         version,
+				Version:         Version,
 				InsecureAllowed: flags.AllowInsecure,
 				IsSecure:        isSecureRequest(r),
 				SavePassword:    cfg.SavePassword,

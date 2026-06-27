@@ -89,6 +89,8 @@ export const TERMINAL_FUNCTIONS: BuiltinButton[] = [
   { value: "CLONE_SESSION", label: "CLONE (Session)", shortcut: "alt+c" },
   { value: "CLONE_SESSION_IN_SAME_TAB", label: "CLONE (Session In Same Tab)", shortcut: "alt+shift+c" },
   { value: "SEARCH", label: "SEARCH (Buffer)", shortcut: "ctrl+shift+f" },
+  { value: "LOCK_TAB", label: "Lock (Tab)", shortcut: "ctrl+alt+shift+l" },
+  { value: "UNLOCK_TAB", label: "Unlock (Tab)", shortcut: "ctrl+alt+shift+l" },
 ] as const;
 
 export const MISC_FUNCTIONS: BuiltinButton[] = [
