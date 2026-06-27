@@ -12,7 +12,7 @@ import {
   Checkbox,
   MenuItem,
 } from "@mui/material";
-import { triggerFocus } from "./store";
+import { setAsyncDialogOpen, triggerFocus, useStore } from "./store";
 import { isMuiModalOpen } from "./common";
 
 export interface DialogApi {
@@ -54,7 +54,8 @@ export const dialogs: DialogApi = {
 };
 
 export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
-  const [open, setOpen] = useState(false);
+  const asyncDialogOpen = useStore((state) => state.asyncDialogOpen);
+
   const [inputValue, setInputValue] = useState("");
   const [checked, setChecked] = useState(false);
   const [error, setError] = useState("");
@@ -77,7 +78,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
     setInputValue(config.defaultValue || "");
     setChecked(false);
     setError("");
-    setOpen(true);
+    setAsyncDialogOpen(true);
     return new Promise<unknown>((resolve) => {
       resolveRef.current = resolve;
     });
@@ -105,7 +106,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
 
     // Backdrop click / ESC press or explicitly passing cancel states
     if (outcome === false || outcome === null) {
-      setOpen(false);
+      setAsyncDialogOpen(false);
       if (!isMuiModalOpen()) {
         triggerFocus();
       }
@@ -130,7 +131,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
       }
     }
 
-    setOpen(false);
+    setAsyncDialogOpen(false);
     if (!isMuiModalOpen()) {
       triggerFocus();
     }
@@ -155,7 +156,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
       <Dialog
         id="async-modal-dialog"
         data-type={config.type}
-        open={open}
+        open={asyncDialogOpen}
         onClose={() => handleClose(null)}
         fullWidth
         maxWidth="md"

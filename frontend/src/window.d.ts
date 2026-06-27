@@ -363,6 +363,8 @@ declare global {
   /**
    * Display an async prompt dialog.
    * The behavior is the same as `window.prompt` except it's non-blocking.
+   * @param options.options Set to render text input as a select dropdown that
+   * the user can only choose from the list of pre-defied values.
    */
   function csPrompt(
     message?: string,

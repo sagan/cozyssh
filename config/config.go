@@ -50,6 +50,7 @@ type Config struct {
 	InsecureIgnoreHostKey bool                 `json:"insecure_ignore_host_key,omitempty"`
 	SavePassword          string               `json:"save_password,omitempty" ts_type:"\"ask\" | \"always\" | \"never\""`
 	SessionSecret         string               `json:"session_secret,omitempty"`
+	Dns                   string               `json:"dns,omitempty"`
 	// Control local shells order. Each item is shell path. Use "-<path>" to exclude a shell.
 	// Use "+<name> <path> [args [run_cmdline_args]]" to add a new shell.
 	// Each segment should be quoted if it contain space.
@@ -150,13 +151,6 @@ func LoadConfig(customDir string) (*Config, error) {
 	}
 
 	return &cfg, nil
-}
-
-func (c *Config) ApplyConfig() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	os.Setenv("COZYSSH_HOME", c.ConfigDir)
-	os.Setenv("COZYSSH_SSHDIR", c.SSHDir)
 }
 
 // Return a cryptographically secure random string of format /[a-zA-Z0-9]{length}/ .

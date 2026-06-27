@@ -26,6 +26,7 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
   - [`csClose(tabOrPaneId?: string): void`](#csclosetaborpaneid-string-void)
   - [`csFetch(url: string, options?: RequestInit): Promise<Response>`](#csfetchurl-string-options-requestinit-promiseresponse)
   - [`csExec(cmdline: string): Promise<{ error: unknown, stdout: string, stderr: string }>`](#csexeccmdline-string-promise-error-unknown-stdout-string-stderr-string-)
+  - [`csExecInTerminal(cmdline: string, paneId?: string): Promise<CsExecResult>`](#csexecinterminalcmdline-string-paneid-string-promisecsexecresult)
   - [`csRefresh(): Promise<void>`](#csrefresh-promisevoid)
   - [`csSetTheme(options: unknown, ...args: unknown[]): void`](#cssetthemeoptions-unknown-args-unknown-void)
   - [`csUpdateButton(btn: ButtonData | ButtonData[]): Promise<void>`](#csupdatebuttonbtn-buttondata--buttondata-promisevoid)
@@ -291,6 +292,12 @@ Execute a shell command on the CozySSH backend.
 - **Linux/macOS**: Uses `bash -l -c`.
 - **Windows**: Uses `pwsh -l -c` (if `pwsh` is present) or `powershell -Command`.
 
+### `csExecInTerminal(cmdline: string, paneId?: string): Promise<CsExecResult>`
+
+Execute a shell command in the context of a specific terminal pane. For SSH terminals, the command is run over a new background SSH channel opened from the existing connection — it is invisible to the visible terminal and does not disturb the interactive session. For local-shell terminals , the behaviour is identical to `csExec`.
+
+- `paneId`: The id of the active pane. Fallbacks to the active pane.
+
 ### `csRefresh(): Promise<void>`
 
 Asynchronously refreshes all application data (server list, buttons, system info). Can be awaited.
@@ -384,11 +391,15 @@ csNotify("Host deleted");
 
 - `csAlert: (message?: string, detail?: string) => Promise<void>`
 - `csConfirm: (message?: string, detail?: string, verification?: boolean | string) => Promise<boolean>`,
-- `csPrompt: (message?: string, defaultValue?: string, options?: {placeholder?: string; validate?: (value: string) => string; inputType?: string;}) => Promise<string | null>`
+- `csPrompt: (message?: string, defaultValue?: string, options?: {placeholder?: string; options?: (string | CsChooseAction)[]; validate?: (value: string) => string; inputType?: string;}) => Promise<string | null>`
 - `csPromptPassword(message?: string, defaultValue?: string): Promise<string | null>`
 - `csChoose(title: string, message: string, actions: (string | CsChooseAction)[]): Promise<string | null>`
 
-The async (non-blocking) version of DOM `alert, confirm, prompt` functions using MUI Dialog. The additional `csPromptPassword` and `csChoose` can be used to display a password input dialog and a choice dialog, respectively.
+The async (non-blocking) version of DOM `alert, confirm, prompt` functions using MUI Dialog.
+
+The `csPrompt` function has some additioal options.
+
+The additional `csPromptPassword` and `csChoose` functions can be used to display a password input dialog and a choice dialog, respectively.
 
 ## Client-side Events
 

@@ -97,7 +97,7 @@ interface NewTabDialogProps {
   isTouch: boolean;
   open: boolean;
   onClose: () => void;
-  onSelect: (host: string, alternativeMode?: boolean) => void;
+  onSelect: (host: string, alternativeMode?: number) => void;
   onSelectTab: (tabId: string) => void;
   onAttachPinned: (id: string, host: string, title: string, isLocked: boolean) => void;
   onExecuteButton: (btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">) => void;
@@ -743,14 +743,14 @@ export default function NewTabDialog({
   useEffect(() => {
     if (selectedItemRef.current) {
       selectedItemRef.current.scrollIntoView({
+        behavior: "auto",
         block: "nearest",
-        behavior: "smooth",
       });
     }
   }, [selectedIndex]);
 
   const handleSelect = useCallback(
-    (item: (typeof items)[number], alternativeMode = false) => {
+    (item: (typeof items)[number], alternativeMode = 0) => {
       if (item.type === "tab") {
         onSelectTab(item.id!);
         onClose();
@@ -824,7 +824,7 @@ export default function NewTabDialog({
         e.preventDefault();
         e.stopPropagation();
         if (items[selectedIndex]) {
-          handleSelect(items[selectedIndex], e.altKey);
+          handleSelect(items[selectedIndex], e.ctrlKey ? 2 : e.altKey ? 1 : 0);
         }
       } else if (key === "escape") {
         onClose();
@@ -934,7 +934,7 @@ export default function NewTabDialog({
       onClose={onClose}
       disableRestoreFocus
       fullWidth
-      maxWidth="sm"
+      maxWidth="md"
       sx={{
         "& .MuiDialog-container": {
           alignItems: "flex-start",
@@ -1012,7 +1012,7 @@ export default function NewTabDialog({
           autoFocus
           fullWidth
           variant="outlined"
-          placeholder="Search server. ? for help. Hold Alt to open in current tab"
+          placeholder="Search server. ? for help. Hold Alt/Ctrl to open in current tab / new window"
           value={newTabDialogFilter}
           onChange={(e) => {
             setNewTabDialogFilter(e.target.value);
@@ -1072,7 +1072,7 @@ export default function NewTabDialog({
                   key={item.flatIndex}
                   selected={selectedIndex === item.flatIndex}
                   ref={selectedIndex === item.flatIndex ? selectedItemRef : null}
-                  onClick={(e) => handleSelect(item, e.altKey)}
+                  onClick={(e) => handleSelect(item, e.ctrlKey ? 2 : e.altKey ? 1 : 0)}
                   title={item.tooltip}
                   data-type={item.type}
                   data-value={item.value}

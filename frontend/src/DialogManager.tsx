@@ -49,6 +49,7 @@ import {
   liquidEngine,
   openHostInNewWindow,
   cutString,
+  cutSuffix,
 } from "./common";
 import {
   type TabData,
@@ -532,7 +533,6 @@ export default function DialogManager({
                       onClick={() => {
                         handleCloseMenu();
                         renameTab(memoTabId);
-                        triggerFocus();
                       }}
                     >
                       Rename Tab
@@ -1332,10 +1332,7 @@ export default function DialogManager({
         key={newTabDialogOpen ? "open" : "closed"}
         open={newTabDialogOpen}
         onClose={closeNewTabDialog}
-        onExecuteButton={(btn) => {
-          handleButtonClick(btn);
-          closeNewTabDialog();
-        }}
+        onExecuteButton={handleButtonClick}
         onSelectTab={(tabId) => {
           setActiveTabId(tabId);
           const t = tabs.find((x) => x.id === tabId);
@@ -1348,7 +1345,7 @@ export default function DialogManager({
           attachSession(id, host, title, isLocked);
           closeNewTabDialog();
         }}
-        onSelect={async (host, alternativeMode = false) => {
+        onSelect={async (host, alternativeMode = 0) => {
           const [hostname, query] = cutString(host, "?");
           // Check if it's a direct connection and not in known hosts
           const parsedHost = parseHostName(hostname);
@@ -1379,9 +1376,12 @@ export default function DialogManager({
               console.error("Failed to auto-add host:", e);
             }
           }
-          openHost((known?.name || parsedHostString) + (query ? "?" + query : ""), {
-            target: alternativeMode ? "_self" : undefined,
-          });
+          const hostStr = (known?.name || cutSuffix(parsedHostString, ":22")[0]) + (query ? "?" + query : "");
+          if (alternativeMode === 2) {
+            openHostInNewWindow(hostStr);
+          } else {
+            openHost(hostStr, { target: alternativeMode ? "_self" : undefined });
+          }
         }}
       />
       <Box

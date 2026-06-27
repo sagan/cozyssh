@@ -81,6 +81,10 @@ import {
   refreshData,
   lockTab,
   unlockTab,
+  pinTab,
+  unpinTab,
+  renameTab,
+  openSaveTabToButtonDialog,
 } from "./store";
 import { setupPluginAPI, runScript } from "./pluginAPI";
 import { useKeyboardManager } from "./useKeyboardManager";
@@ -390,6 +394,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const handleButtonClick = useCallback(
     async (btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">) => {
       window.navigator.vibrate?.(VIBRATE_PATTERN);
+      let noFocus = false;
       switch (btn.type) {
         case "send_string":
           if (btn.liquidjs === 1 || btn.liquidjs === 2) {
@@ -596,8 +601,33 @@ export default function Dashboard({ initialData }: DashboardProps) {
               break;
             }
 
+            case "PIN_TAB": {
+              pinTab();
+              break;
+            }
+
+            case "UNPIN_TAB": {
+              unpinTab();
+              break;
+            }
+
+            case "RENAME_TAB": {
+              noFocus = true;
+              renameTab();
+              break;
+            }
+
+            case "SAVE_TAB": {
+              noFocus = true;
+              openSaveTabToButtonDialog();
+              break;
+            }
+
             default:
               break;
+          }
+          if (!noFocus) {
+            triggerFocus();
           }
           break;
         }
@@ -663,7 +693,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
             default:
               break;
           }
-          triggerFocus();
+          if (!noFocus) {
+            triggerFocus();
+          }
           break;
 
         case "run_script":

@@ -91,6 +91,10 @@ export const TERMINAL_FUNCTIONS: BuiltinButton[] = [
   { value: "SEARCH", label: "SEARCH (Buffer)", shortcut: "ctrl+shift+f" },
   { value: "LOCK_TAB", label: "Lock (Tab)", shortcut: "ctrl+alt+shift+l" },
   { value: "UNLOCK_TAB", label: "Unlock (Tab)", shortcut: "ctrl+alt+shift+l" },
+  { value: "PIN_TAB", label: "Pin (Tab)" },
+  { value: "UNPIN_TAB", label: "Unpin (Tab)" },
+  { value: "RENAME_TAB", label: "Rename (Tab)" },
+  { value: "SAVE_TAB", label: "Save (Tab)" },
 ] as const;
 
 export const MISC_FUNCTIONS: BuiltinButton[] = [

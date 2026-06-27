@@ -103,6 +103,7 @@ export interface TabData {
 export type TerminalRefMap = Record<string, TerminalHandle | ScratchpadHandle | null>;
 
 interface Store {
+  asyncDialogOpen: boolean;
   sendScope: 0 | 1 | 2;
   /**
    * Terminal Input dialog: Append new line (\n) checkbox
@@ -182,6 +183,7 @@ function loadFromStorage<T>(key: string, defaultValue: T): T {
 }
 
 export const useStore = create<Store>(() => ({
+  asyncDialogOpen: false,
   sendScope: 0,
   appendNewLine: true,
   searchOpen: false,
@@ -292,6 +294,11 @@ export const updateRecentButtonId = (id: string) => {
     return { recentButtonIds: updated };
   });
 };
+
+export const setAsyncDialogOpen = (update: boolean | ((data: boolean) => boolean)) =>
+  useStore.setState((state) => ({
+    asyncDialogOpen: typeof update === "function" ? update(state.asyncDialogOpen) : update,
+  }));
 
 export const setSendScope = (sendScope: 0 | 1 | 2) => useStore.setState({ sendScope });
 
@@ -1119,7 +1126,8 @@ export async function attachSession(id: string, host: string, title: string, isL
   setActivePaneId(paneId);
 }
 
-export async function unpinTab(id: string) {
+export async function unpinTab(id?: string) {
+  id = id || getStore().activeTabId;
   const tab = getStore().tabs.find((t) => t.id === id);
   if (!tab) {
     return;
@@ -1136,7 +1144,8 @@ export async function unpinTab(id: string) {
   });
 }
 
-export async function pinTab(id: string) {
+export async function pinTab(id?: string) {
+  id = id || getStore().activeTabId;
   const tab = getStore().tabs.find((t) => t.id === id);
   if (!tab) {
     return;
@@ -1321,7 +1330,8 @@ export function closeTabOrPane(tabOrPaneId?: string) {
   }
 }
 
-export async function renameTab(targetId: string) {
+export async function renameTab(targetId?: string) {
+  targetId = targetId || getStore().activeTabId;
   const targetTab = getStore().tabs.find((t) => t.id === targetId);
   if (!targetTab) {
     return;

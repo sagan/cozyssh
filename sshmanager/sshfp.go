@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -12,10 +13,24 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+const DEFAULT_DNS = "1.1.1.1:53"
+
+var dnsResolver = DEFAULT_DNS
+
+// Update dnsResolver.
 // dnsResolver is the recursive resolver used for all SSHFP lookups.
 // It MUST be a validating resolver (e.g. Cloudflare 1.1.1.1 / Google 8.8.8.8)
 // so that we can rely on the AD (Authenticated Data) flag from DNSSEC.
-const dnsResolver = "1.1.1.1:53"
+// If addr is empty, it fallbacks to 1.1.1.1.
+func UpdateDns(addr string) {
+	if addr == "" {
+		dnsResolver = DEFAULT_DNS
+	} else if _, _, err := net.SplitHostPort(addr); err != nil { // addr is host only
+		dnsResolver = addr + ":53"
+	} else {
+		dnsResolver = addr
+	}
+}
 
 // sshfpAlgorithm maps ssh key-type strings to the SSHFP algorithm numbers
 // defined in RFC 4255 / RFC 6594 / RFC 7479.

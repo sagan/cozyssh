@@ -146,7 +146,12 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 	localpty.Load(cfg.Shells)
 	log.Printf("local shells:")
 	json.NewEncoder(os.Stderr).Encode(localpty.GetShells())
-	cfg.ApplyConfig()
+
+	// apply config
+	os.Setenv("COZYSSH_HOME", cfg.ConfigDir)
+	os.Setenv("COZYSSH_SSHDIR", cfg.SSHDir)
+	sshmanager.UpdateDns(cfg.Dns)
+
 	if home, err := os.UserHomeDir(); err == nil {
 		os.Chdir(home)
 	}

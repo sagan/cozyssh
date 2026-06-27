@@ -10,7 +10,7 @@ import {
   VAR_CS_TERMINAL_FONT_SIZE,
 } from "./constants";
 import { type CSEventDetailVars, CS_EVENT_VARS } from "./common";
-import { triggerFocus, useStore, getIntVar } from "./store";
+import { useStore, getIntVar, triggerFocus } from "./store";
 import { useWakeLock } from "./useWakeLock";
 import type { ButtonData } from "./api";
 
@@ -23,12 +23,16 @@ export default function SideEffect() {
 
   const anyDialogOpen = useStore(
     (state) =>
-      state.editButtonDialogOpen || state.newTabDialogOpen || state.inputDialogOpen || state.editHostDialogOpen,
+      state.editButtonDialogOpen ||
+      state.newTabDialogOpen ||
+      state.inputDialogOpen ||
+      state.editHostDialogOpen ||
+      state.asyncDialogOpen,
   );
 
   useEffect(() => {
     if (!anyDialogOpen) {
-      triggerFocus();
+      setTimeout(triggerFocus, 0);
     }
   }, [anyDialogOpen]);
 

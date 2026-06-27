@@ -1602,7 +1602,7 @@ export default function Sidebar({
     }
 
     fetchHosts();
-  }, [groupContextMenu, groups, hosts, getHostGroupPath]);
+  }, [groupContextMenu, groups, hosts]);
 
   const handleRenameGroupClick = useCallback(async () => {
     setGroupContextMenuOpen(false);
@@ -2122,7 +2122,7 @@ export default function Sidebar({
       } else if (key === "enter") {
         e.preventDefault();
         e.stopPropagation();
-        if (e.altKey) {
+        if (e.shiftKey) {
           const el = document.getElementById(flatListIds[selectedIndex]);
           if (el) {
             el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
@@ -2133,7 +2133,11 @@ export default function Sidebar({
             if (selectedItem.type === "group") {
               toggleGroupExpanded(selectedItem.path);
             } else {
-              openHost(selectedItem.host.name);
+              if (e.ctrlKey) {
+                openHostInNewWindow(selectedItem.host.name);
+              } else {
+                openHost(selectedItem.host.name, { target: e.altKey ? "_self" : undefined });
+              }
               document.getElementById(ID_SIDEBAR_FILTER)?.blur();
             }
           }
@@ -2434,7 +2438,7 @@ export default function Sidebar({
                 if (e.ctrlKey) {
                   openHostInNewWindow(LOCAL_NAME);
                 } else {
-                  openHost(LOCAL_NAME);
+                  openHost(LOCAL_NAME, { target: e.altKey ? "_self" : undefined });
                   setMobileOpen(false);
                 }
               }}
@@ -3296,10 +3300,10 @@ export default function Sidebar({
                 <Typography variant="subtitle2" gutterBottom>
                   Keyboard Shortcuts
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }} gutterBottom>
                   <b>Alt + O</b> : Open new tab dialog, use <b>← →</b> (or <b>Alt + H/L</b>) to switch view,&nbsp;
                   <b>↓ ↑</b> (or <b>Alt + J/K</b>) to select, <b>Enter</b> to open, <b>Alt + Enter</b> to open in
-                  current tab. Use <b>Alt + ↓↑</b> (or&nbsp;
+                  current tab, <b>Ctrl + Enter</b> to open in new window. Use <b>Alt + ↓↑</b> (or&nbsp;
                   <b>Alt + Shift + J/K</b>) to jump through items quickly; Hold <b>Ctrl</b> to jump to top/bottom
                   <br />
                   <b>Alt + A</b> : Open new tab dialog - tabs view
@@ -3336,8 +3340,9 @@ export default function Sidebar({
                   <br />
                   <b>Ctrl + Alt + Shift + L</b> : Toggle Lock/Unlock current tab
                   <br />
-                  <b>Alt + I</b> : Focus sidebar search filter, use <b>↑ ↓</b> to select, <b>Enter</b> to open or&nbsp;
-                  <b>Alt + Enter</b> to open context menu.
+                  <b>Alt + I</b> : Focus sidebar search filter, use <b>↑ ↓</b> to select, <b>Enter</b> to open,&nbsp;
+                  <b>Alt + Enter</b> to open in current tab, <b>Ctrl + Enter</b> to open in new window,&nbsp;
+                  <b>Shift + Enter</b> to open context menu
                   <br />
                   <b>Alt + Shift + I</b> : Focus sidebar search filter and clear current value
                   <br />
@@ -3387,6 +3392,24 @@ export default function Sidebar({
                   <br />
                   <b>Alt + Mouse Wheel</b> in terminal to fast scroll up / down
                 </Typography>
+                {__CS_ENV__ === 1 && (
+                  <>
+                    <Typography variant="subtitle2" gutterBottom>
+                      Windows App Keyboard Shortcuts (Same as Browser)
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }} gutterBottom>
+                      <b>Ctl + -</b> & <b>Ctrl + +</b> : Change zoom level
+                      <br />
+                      <b>Alt + F4</b> : Close window
+                      <br />
+                      <b>F5</b> : Refresh page
+                      <br />
+                      <b>F11</b> : Toggle full screen
+                      <br />
+                      <b>F12</b> : Open Web DevTools
+                    </Typography>
+                  </>
+                )}
               </>
             )}
 
@@ -3453,7 +3476,7 @@ export default function Sidebar({
             />
             <Autocomplete
               freeSolo
-              options={["root", "ubuntu", "administrator"]}
+              options={["root", "ubuntu", "user", "administrator"]}
               value={hostFormData.user}
               onChange={(_event, newValue) => {
                 setHostFormData({ ...hostFormData, user: newValue || "" });
@@ -3748,7 +3771,7 @@ function HostListItem({
           if (e.ctrlKey) {
             openHostInNewWindow(host.name);
           } else {
-            openHost(host.name);
+            openHost(host.name, { target: e.altKey ? "_self" : undefined });
             setMobileOpen(false);
           }
         }}
@@ -4048,7 +4071,7 @@ function TreeServerItem({
           if (e.ctrlKey) {
             openHostInNewWindow(host.name);
           } else {
-            openHost(host.name);
+            openHost(host.name, { target: e.altKey ? "_self" : undefined });
             setMobileOpen(false);
           }
         }}

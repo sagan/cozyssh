@@ -1978,6 +1978,7 @@ export interface TabData {
 }
 export type TerminalRefMap = Record<string, TerminalHandle | ScratchpadHandle | null>;
 export interface Store {
+	asyncDialogOpen: boolean;
 	sendScope: 0 | 1 | 2;
 	/**
 	 * Terminal Input dialog: Append new line (\n) checkbox
@@ -2390,6 +2391,8 @@ declare global {
 	/**
 	 * Display an async prompt dialog.
 	 * The behavior is the same as `window.prompt` except it's non-blocking.
+	 * @param options.options Set to render text input as a select dropdown that
+	 * the user can only choose from the list of pre-defied values.
 	 */
 	function csPrompt(message?: string, defaultValue?: string, options?: {
 		placeholder?: string;
