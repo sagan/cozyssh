@@ -622,6 +622,7 @@ export function hostTitle(name: string): string {
   if (i !== -1) {
     name = name.slice(i + 1);
   }
+  name = cutSuffix(name, ":22")[0];
   return name || "server";
 }
 
@@ -936,6 +937,13 @@ export function cutString(s: string, sep: string): [before: string, after: strin
 export function cutPrefix(s: string, prefix: string): [after: string, found: boolean] {
   if (s.startsWith(prefix)) {
     return [s.slice(prefix.length), true];
+  }
+  return [s, false];
+}
+
+export function cutSuffix(s: string, suffix: string): [before: string, found: boolean] {
+  if (s.endsWith(suffix)) {
+    return [s.slice(0, s.length - suffix.length), true];
   }
   return [s, false];
 }

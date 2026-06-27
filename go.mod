@@ -13,6 +13,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/jchv/go-webview2 v0.0.0-20260205173254-56598839c808
 	github.com/kevinburke/ssh_config v1.6.0
+	github.com/miekg/dns v1.1.72
 	github.com/openwall/yescrypt-go v1.0.0
 	github.com/ory/dockertest/v4 v4.0.0
 	github.com/pkg/sftp v1.13.10
@@ -61,6 +62,9 @@ require (
 	go.opentelemetry.io/otel v1.43.0 // indirect
 	go.opentelemetry.io/otel/metric v1.43.0 // indirect
 	go.opentelemetry.io/otel/trace v1.43.0 // indirect
+	golang.org/x/mod v0.35.0 // indirect
+	golang.org/x/net v0.55.0 // indirect
+	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/tools v0.44.0 // indirect
 )
 

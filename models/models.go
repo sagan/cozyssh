@@ -93,6 +93,8 @@ type HostData struct {
 	UserKnownHostsFile    string `json:"user_known_hosts_file,omitempty"`
 	StrictHostKeyChecking string `json:"strict_host_key_checking,omitempty" ts_type:"\"yes\" | \"no\" | \"ask\" | \"\""`
 	HostKeyAlgorithms     string `json:"host_key_algorithms,omitempty"`
+	// VerifyHostKeyDNS controls SSHFP DNS verification (yes / no / ask), consistent with OpenSSH.
+	VerifyHostKeyDNS string `json:"verify_host_key_dns,omitempty" ts_type:"\"yes\" | \"no\" | \"ask\" | \"\""`
 
 	// Port forwarding (OpenSSH syntax, one rule per line)
 	LocalForward   string `json:"local_forward,omitempty"`

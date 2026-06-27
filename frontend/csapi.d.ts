@@ -1704,6 +1704,7 @@ export interface HostData {
 	user_known_hosts_file?: string;
 	strict_host_key_checking?: "yes" | "no" | "ask" | "";
 	host_key_algorithms?: string;
+	verify_host_key_dns?: "yes" | "no" | "ask" | "";
 	local_forward?: string;
 	remote_forward?: string;
 	dynamic_forward?: string;
@@ -2054,7 +2055,7 @@ export interface CsExecResult {
 }
 declare global {
 	interface CsChooseAction {
-		id: string; // The unique value returned when clicked (e.g., 'discard')
+		value: string; // The unique value returned when clicked (e.g., 'discard')
 		label?: string; // The text displayed on the button (e.g., 'Save as Draft'), default to id
 		variant?: "primary" | "secondary" | "error" | "warning"; // Optional styling hint
 	}
@@ -2392,6 +2393,7 @@ declare global {
 	 */
 	function csPrompt(message?: string, defaultValue?: string, options?: {
 		placeholder?: string;
+		options?: (string | CsChooseAction)[];
 		validate?: (value: string) => string | undefined;
 	}): Promise<string | null>;
 	/**

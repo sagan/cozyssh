@@ -205,6 +205,7 @@ export const useStore = create<Store>(() => ({
     remote_command: "",
     local_forward: "",
     remote_forward: "",
+    verify_host_key_dns: "",
     tags: "",
     comment: "",
   },

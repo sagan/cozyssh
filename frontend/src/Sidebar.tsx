@@ -1185,6 +1185,7 @@ export default function Sidebar({
       user_known_hosts_file: "",
       strict_host_key_checking: "",
       host_key_algorithms: "",
+      verify_host_key_dns: "",
       local_forward: "",
       remote_forward: "",
       tags: "",
@@ -1219,6 +1220,7 @@ export default function Sidebar({
       user_known_hosts_file: target.user_known_hosts_file || "",
       strict_host_key_checking: target.strict_host_key_checking || "",
       host_key_algorithms: target.host_key_algorithms || "",
+      verify_host_key_dns: target.verify_host_key_dns || "",
       local_forward: target.local_forward || "",
       remote_forward: target.remote_forward || "",
       tags: target.tags ? target.tags.join(" ") : "",
@@ -3592,6 +3594,26 @@ export default function Sidebar({
                   label="HostKeyAlgorithms (Optional)"
                   size="small"
                   placeholder="e.g. +ssh-rsa"
+                />
+              )}
+            />
+            <Autocomplete
+              options={["ask", "yes", "no"]}
+              value={hostFormData.verify_host_key_dns || ""}
+              onChange={(_event, newValue) => {
+                setHostFormData({
+                  ...hostFormData,
+                  verify_host_key_dns: (newValue as "ask" | "yes" | "no") || "",
+                });
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  fullWidth
+                  label="VerifyHostKeyDNS (Optional)"
+                  size="small"
+                  placeholder="ask / yes / no"
+                  helperText="Verify host key fingerprint via DNSSEC SSHFP records (RFC 4255)"
                 />
               )}
             />

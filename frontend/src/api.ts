@@ -72,6 +72,7 @@ export interface HostData {
     user_known_hosts_file?: string;
     strict_host_key_checking?: "yes" | "no" | "ask" | "";
     host_key_algorithms?: string;
+    verify_host_key_dns?: "yes" | "no" | "ask" | "";
     local_forward?: string;
     remote_forward?: string;
     dynamic_forward?: string;

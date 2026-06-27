@@ -188,6 +188,9 @@ func SaveHost(oldAlias string, h models.HostData) error {
 	if h.HostKeyAlgorithms != "" {
 		block = append(block, fmt.Sprintf("    HostKeyAlgorithms %s", h.HostKeyAlgorithms))
 	}
+	if h.VerifyHostKeyDNS != "" {
+		block = append(block, fmt.Sprintf("    VerifyHostKeyDNS %s", h.VerifyHostKeyDNS))
+	}
 	if h.LocalForward != "" {
 		for line := range strings.SplitSeq(h.LocalForward, "\n") {
 			line = strings.TrimSpace(line)
@@ -420,6 +423,7 @@ func ListHosts() ([]*models.HostData, error) {
 				userKnownHostsFile, _ := cfg.Get(name, "UserKnownHostsFile")
 				strictHostKeyChecking, _ := cfg.Get(name, "StrictHostKeyChecking")
 				hostKeyAlgorithmsOption, _ := cfg.Get(name, "HostKeyAlgorithms")
+				verifyHostKeyDNS, _ := cfg.Get(name, "VerifyHostKeyDNS")
 
 				var tags []string
 				var commentParts []string
@@ -493,6 +497,7 @@ func ListHosts() ([]*models.HostData, error) {
 					UserKnownHostsFile:    userKnownHostsFile,
 					StrictHostKeyChecking: strictHostKeyChecking,
 					HostKeyAlgorithms:     hostKeyAlgorithmsOption,
+					VerifyHostKeyDNS:      verifyHostKeyDNS,
 					LocalForward:          strings.Join(localForwards, "\n"),
 					RemoteForward:         strings.Join(remoteForwards, "\n"),
 					DynamicForward:        strings.Join(dynamicForwards, "\n"),
@@ -926,12 +931,16 @@ func getSSHClient(name string, term TerminalUI, identity string,
 
 	strictHostKeyChecking := "ask"
 	hostKeyAlgorithmsOption := ""
+	verifyHostKeyDNS := "" // "yes" | "no" | "ask" | ""
 	if cfg != nil {
 		if shkc, _ := cfg.Get(name, "StrictHostKeyChecking"); shkc != "" {
 			strictHostKeyChecking = strings.ToLower(shkc)
 		}
 		if hka, _ := cfg.Get(name, "HostKeyAlgorithms"); hka != "" {
 			hostKeyAlgorithmsOption = hka
+		}
+		if vhkd, _ := cfg.Get(name, "VerifyHostKeyDNS"); vhkd != "" {
+			verifyHostKeyDNS = strings.ToLower(vhkd)
 		}
 	}
 
@@ -973,14 +982,52 @@ func getSSHClient(name string, term TerminalUI, identity string,
 		if strictHostKeyChecking == "no" && isKnownHostsNull {
 			return nil
 		}
+
+		// ---- SSHFP / VerifyHostKeyDNS logic (consistent with OpenSSH) --------
+		// Strip the port part from hostname for the DNS lookup (knownhosts
+		// callback receives "host:port" as the hostname argument).
+		sshfpHost := hostname
+		if h, _, e := net.SplitHostPort(hostname); e == nil {
+			sshfpHost = h
+		}
+		var sshfpResult SSHFPVerifyResult
+		var sshfpErr error
+		if verifyHostKeyDNS == "yes" || verifyHostKeyDNS == "ask" {
+			sshfpResult, sshfpErr = VerifySSHFP(sshfpHost, key)
+		}
+		if sshfpResult == SSHFPMismatch {
+			// DNSSEC-authenticated records exist but none match — hard failure
+			// regardless of verifyHostKeyDNS value, matching OpenSSH behaviour.
+			msg := fmt.Sprintf(
+				"\r\n@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\r\n"+
+					"@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @\r\n"+
+					"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\r\n"+
+					"DNS-based host key verification (SSHFP) failed for '%s'.\r\n"+
+					"The %s key fingerprint is %s.\r\n"+
+					"No matching SSHFP record found in DNS (DNSSEC authenticated).\r\n"+
+					"Host key verification failed.\r\n",
+				hostname, key.Type(), ssh.FingerprintSHA256(key))
+			if term != nil {
+				term.Print(msg)
+			} else {
+				fmt.Print(msg)
+			}
+			return fmt.Errorf("SSHFP DNS key mismatch for %s", hostname)
+		}
+		// -----------------------------------------------------------------------
+
 		var keyErr2 *knownhosts.KeyError
 		err = khCallback(hostname, remote, key)
 		if err == nil {
+			// Known host matched — if we also have an SSHFP match, bonus.
+			if sshfpResult == SSHFPMatch && term != nil {
+				term.Print(fmt.Sprintf("\r\nHost key fingerprint verified via DNSSEC SSHFP for %s.\r\n", hostname))
+			}
 			return nil
 		}
 
 		if errors.As(err, &keyErr2) && len(keyErr2.Want) > 0 {
-			// Mismatch
+			// Mismatch in known_hosts
 			msg := fmt.Sprintf("\r\n@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\r\n@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @\r\n@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\r\nIT IS POSSIBLE THAT SOMEONE IS DOING SOMETHING NASTY!\r\nSomeone could be eavesdropping on you right now (man-in-the-middle attack)!\r\nIt is also possible that a host key has just been changed.\r\nThe fingerprint for the %s key sent by the remote host is\r\n%s.\r\nHost key verification failed.\r\n", key.Type(), ssh.FingerprintSHA256(key))
 			if term != nil {
 				term.Print(msg)
@@ -990,6 +1037,35 @@ func getSSHClient(name string, term TerminalUI, identity string,
 			return err
 		} else if errors.As(err, &keyErr) && len(keyErr.Want) == 0 {
 			// Unknown host
+
+			// When VerifyHostKeyDNS=yes and we have an SSHFP match, accept
+			// without prompting — identical to OpenSSH behaviour.
+			if verifyHostKeyDNS == "yes" && sshfpResult == SSHFPMatch {
+				if term != nil {
+					term.Print(fmt.Sprintf("\r\nAccepted host key for '%s' via DNSSEC SSHFP (VerifyHostKeyDNS=yes).\r\n", hostname))
+				}
+				if !isKnownHostsNull {
+					f, e := os.OpenFile(knownHostsFile, os.O_APPEND|os.O_WRONLY, 0600)
+					if e == nil {
+						line := knownhosts.Line([]string{hostname, remote.String()}, key)
+						f.WriteString(line + "\n")
+						f.Close()
+					}
+				}
+				return nil
+			}
+
+			fingerprint := ssh.FingerprintSHA256(key)
+
+			// When VerifyHostKeyDNS=ask and we have an SSHFP match, tell the
+			// user and prompt — same as OpenSSH.
+			var sshfpNote string
+			if verifyHostKeyDNS == "ask" && sshfpResult == SSHFPMatch {
+				sshfpNote = "\r\nMatching host key fingerprint found in DNS (DNSSEC authenticated).\r\n"
+			} else if sshfpErr != nil {
+				sshfpNote = fmt.Sprintf("\r\n(SSHFP DNS lookup failed: %v)\r\n", sshfpErr)
+			}
+
 			switch strictHostKeyChecking {
 			case "no":
 				if !isKnownHostsNull {
@@ -1009,8 +1085,9 @@ func getSSHClient(name string, term TerminalUI, identity string,
 				return fmt.Errorf("Host key verification failed (StrictHostKeyChecking=yes)")
 			default:
 				// ask
-				fingerprint := ssh.FingerprintSHA256(key)
-				prompt := fmt.Sprintf("\r\nThe authenticity of host '%s (%s)' can't be established.\r\n%s key fingerprint is %s.\r\nAre you sure you want to continue connecting (yes/no)? ", hostname, remote.String(), key.Type(), fingerprint)
+				prompt := fmt.Sprintf(
+					"\r\nThe authenticity of host '%s (%s)' can't be established.\r\n%s key fingerprint is %s.%s\r\nAre you sure you want to continue connecting (yes/no)? ",
+					hostname, remote.String(), key.Type(), fingerprint, sshfpNote)
 
 				if term == nil {
 					return fmt.Errorf("host key unknown, interactive prompt required but not available")
