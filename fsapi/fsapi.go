@@ -20,7 +20,6 @@ import (
 	"cozyssh/constants"
 	"cozyssh/models"
 	"cozyssh/session"
-	"cozyssh/sshmanager"
 )
 
 func HandleDownloadDirect(w http.ResponseWriter, r *http.Request) {
@@ -47,13 +46,12 @@ func HandleDownloadDirect(w http.ResponseWriter, r *http.Request) {
 	isLocal := (s.Host == constants.LOCAL_NAME)
 	var sftpClient *sftp.Client
 	if !isLocal {
-		pClient, ok := s.SSHClient.(*sshmanager.PooledClient)
-		if !ok || pClient == nil {
+		if s.SSHClient == nil {
 			http.Error(w, "Not connected to SSH", http.StatusServiceUnavailable)
 			return
 		}
 		var err error
-		sftpClient, err = sftp.NewClient(pClient.Client)
+		sftpClient, err = sftp.NewClient(s.SSHClient.Client)
 		if err != nil {
 			http.Error(w, "Failed to create SFTP client", http.StatusInternalServerError)
 			return
@@ -98,13 +96,12 @@ func HandleFS(w http.ResponseWriter, r *http.Request) {
 
 	var sftpClient *sftp.Client
 	if !isLocal {
-		pClient, ok := s.SSHClient.(*sshmanager.PooledClient)
-		if !ok || pClient == nil {
+		if s.SSHClient == nil {
 			http.Error(w, "Not connected to SSH", http.StatusServiceUnavailable)
 			return
 		}
 		var err error
-		sftpClient, err = sftp.NewClient(pClient.Client)
+		sftpClient, err = sftp.NewClient(s.SSHClient.Client)
 		if err != nil {
 			http.Error(w, "Failed to create SFTP client", http.StatusInternalServerError)
 			return

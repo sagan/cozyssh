@@ -190,6 +190,8 @@ export default function Sidebar({
   const appVersion = useStore((state) => state.sysinfo.version);
   const savePassword = useStore((state) => state.sysinfo.savePassword);
   const sysHostname = useStore((state) => state.sysinfo.hostname);
+  const sysConfigDir = useStore((state) => state.sysinfo.config_dir);
+  const sysSshDir = useStore((state) => state.sysinfo.ssh_dir);
   const activeSessionIds = useStore(
     useShallow((state) =>
       state.tabs.flatMap((t) => t.panes.filter((p) => p.state !== "stolen").map((p) => p.sessionId || p.id)),
@@ -2102,20 +2104,20 @@ export default function Sidebar({
     (e: React.KeyboardEvent) => {
       const key = e.key.toLowerCase();
       if (key === "arrowdown" || (e.altKey && key === "j")) {
-        const step = (key === "j" ? e.shiftKey : e.altKey)
-          ? e.ctrlKey
-            ? flatList.length
-            : getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS)
-          : 1;
+        const step = e.ctrlKey
+          ? flatList.length
+          : (key === "j" ? e.shiftKey : e.altKey)
+            ? getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS)
+            : 1;
         e.preventDefault();
         e.stopPropagation();
         setSelectedIndex((prev) => Math.min(prev + step, flatList.length - 1));
       } else if (key === "arrowup" || (e.altKey && key === "k")) {
-        const step = (key === "k" ? e.shiftKey : e.altKey)
-          ? e.ctrlKey
-            ? flatList.length
-            : getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS)
-          : 1;
+        const step = e.ctrlKey
+          ? flatList.length
+          : (key === "k" ? e.shiftKey : e.altKey)
+            ? getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS)
+            : 1;
         e.preventDefault();
         e.stopPropagation();
         setSelectedIndex((prev) => Math.max(prev - step, 0));
@@ -2190,7 +2192,7 @@ export default function Sidebar({
             setGroupContextMenu={setGroupContextMenu}
             setGroupContextMenuOpen={setGroupContextMenuOpen}
           />
-          <Collapse in={expandedGroups.has(node.path)} timeout="auto" unmountOnExit>
+          <Collapse in={expandedGroups.has(node.path)} timeout={0} unmountOnExit>
             <List disablePadding>{node.children.map((child) => renderTreeNode(child, level + 1))}</List>
           </Collapse>
         </React.Fragment>
@@ -3027,6 +3029,13 @@ export default function Sidebar({
                 <Button variant="outlined" color="error" size="small" onClick={handleClearCache} sx={{ mt: 1 }}>
                   Force Clear Cache & Unregister SW
                 </Button>
+                <Divider sx={{ my: 1 }} />
+                <Typography variant="subtitle2" gutterBottom>
+                  Config Dir: {sysConfigDir}
+                </Typography>
+                <Typography variant="subtitle2" gutterBottom>
+                  SSH Dir: {sysSshDir}
+                </Typography>
                 <Divider sx={{ my: 1 }} />
                 <Typography variant="subtitle2" gutterBottom>
                   Save Password Setting

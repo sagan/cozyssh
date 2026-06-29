@@ -2,6 +2,7 @@ package session
 
 import (
 	"cozyssh/models"
+	"cozyssh/sshmanager"
 	"errors"
 	"io"
 	"strings"
@@ -55,7 +56,7 @@ type Session struct {
 	ResizeFunc func(rows, cols uint16) error
 	RetryFunc  func() (io.Reader, io.Writer, error)
 	Buffer     *CircularBuffer
-	SSHClient  any // Will hold *sshmanager.PooledClient
+	SSHClient  *sshmanager.PooledClient
 
 	mu        sync.Mutex
 	listeners []chan []byte

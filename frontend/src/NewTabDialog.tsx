@@ -795,20 +795,20 @@ export default function NewTabDialog({
     (e: React.KeyboardEvent) => {
       const key = e.key.toLowerCase();
       if (key === "arrowdown" || (e.altKey && key === "j")) {
-        const step = (key === "j" ? e.shiftKey : e.altKey)
-          ? e.ctrlKey
-            ? items.length
-            : getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS)
-          : 1;
+        const step = e.ctrlKey
+          ? items.length
+          : (key === "j" ? e.shiftKey : e.altKey)
+            ? getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS)
+            : 1;
         e.preventDefault();
         e.stopPropagation();
         setSelectedIndex((prev) => Math.min(prev + step, items.length - 1));
       } else if (key === "arrowup" || (e.altKey && key === "k")) {
-        const step = (key === "k" ? e.shiftKey : e.altKey)
-          ? e.ctrlKey
-            ? items.length
-            : getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS)
-          : 1;
+        const step = e.ctrlKey
+          ? items.length
+          : (key === "k" ? e.shiftKey : e.altKey)
+            ? getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS)
+            : 1;
         e.preventDefault();
         e.stopPropagation();
         setSelectedIndex((prev) => Math.max(prev - step, 0));

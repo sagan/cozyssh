@@ -509,7 +509,7 @@ export default function DialogManager({
                           cloneSession(memoTabId, true);
                         }}
                       >
-                        Clone Session (Split)
+                        Clone Session (Split Screen)
                       </MenuItem>
                     )}
                     {tab.panes.length === 1 && (

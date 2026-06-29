@@ -51,6 +51,8 @@ type Sysinfo struct {
 	InsecureAllowed bool   `json:"insecureAllowed"`
 	IsSecure        bool   `json:"isSecure"`
 	SavePassword    string `json:"savePassword" ts_type:"\"ask\" | \"always\" | \"never\""`
+	ConfigDir       string `json:"config_dir"`
+	SSHDir          string `json:"ssh_dir"`
 }
 
 type SaveWebdavSettingsRequest struct {
@@ -359,7 +361,7 @@ type ActiveTunnel struct {
 	BindPort   string     `json:"bindPort"`
 	RemoteHost string     `json:"remoteHost,omitempty"` // empty for dynamic tunnels
 	RemotePort string     `json:"remotePort,omitempty"` // empty for dynamic tunnels
-	HostName   string     `json:"hostName"` // the SSH host alias this tunnel belongs to
+	HostName   string     `json:"hostName"`             // the SSH host alias this tunnel belongs to
 }
 
 // current it's not converted to TS automatically

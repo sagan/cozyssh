@@ -64,7 +64,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
 ## Features
 
 - **Use Host SSH Config**: It uses the host OpenSSH client config files (`~/.ssh/id_ed25519`, `~/.ssh/known_hosts`, `~/.ssh/config`) directly for ssh auth & server management.
-  - It automatically displays plain text (non hashed name) servers of `~/.ssh/known_hosts`. It's recommended to disable known_hosts name hashing feature by adding the below two lines to `~/.ssh/config`:
+  - It automatically displays plain text (non hashed name) servers of `~/.ssh/known_hosts`. It's recommended to disable known_hosts name hashing feature globally by modifying `/etc/ssh/ssh_config`:
     ```
     Host *
       HashKnownHosts no

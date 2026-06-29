@@ -194,11 +194,9 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			var err error
 
 			if cloneFrom != "" {
-				if parent := session.GlobalManager.Get(cloneFrom); parent != nil {
-					if pc, ok := parent.SSHClient.(*sshmanager.PooledClient); ok {
-						pClient = pc
-						sshSession, remoteCommand, err = sshmanager.CloneSSH(pClient, rows, cols)
-					}
+				if parent := session.GlobalManager.Get(cloneFrom); parent != nil && parent.SSHClient != nil {
+					pClient = parent.SSHClient
+					sshSession, remoteCommand, err = sshmanager.CloneSSH(pClient, rows, cols)
 				}
 			}
 
@@ -227,8 +225,8 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 				// The pClient doesn't directly expose them but we have the 'host' name and we can guess or use what was used.
 				// Actually, it's better if getSSHClient returns them or we store them.
 				// For now, let's just use the host name for expansion.
-				expanded := sshmanager.ExpandTokens(remoteCommand, host, "22", user, host, sessionID)
-				if err := sshSession.Start(expanded); err != nil {
+				expandedRemoteCommand := sshmanager.ExpandTokens(remoteCommand, host, "22", user, host, sessionID)
+				if err := sshSession.Start(expandedRemoteCommand); err != nil {
 					pClient.Release()
 					return
 				}
@@ -256,6 +254,12 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 				localFwd, remoteFwd, dynamicFwd = sshmanager.GetHostForwardRules(host)
 			}
 			if localFwd != "" || remoteFwd != "" || dynamicFwd != "" {
+				if localFwd != "" {
+					localFwd = sshmanager.ExpandTokens(localFwd, host, "22", user, host, sessionID)
+				}
+				if remoteFwd != "" {
+					remoteFwd = sshmanager.ExpandTokens(remoteFwd, host, "22", user, host, sessionID)
+				}
 				hostKey := sshmanager.GetHostCanonicalKey(host)
 				cleanupTunnels := sshmanager.SetupPortForwarding(pClient.Client, host, hostKey, localFwd, remoteFwd, dynamicFwd)
 				originalClose := s.CloseFunc
@@ -268,7 +272,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			s.RetryFunc = func() (io.Reader, io.Writer, error) {
 				s.Broadcast(append([]byte(models.WS_MSG_PREFIX_STATE), models.WsMsgStateDisconnected...))
 
-				newPClient, newSess, newRC, err := sshmanager.DialSSH(host, nil, rows, cols, identity,
+				newPClient, newSess, newRemoteCommand, err := sshmanager.DialSSH(host, nil, rows, cols, identity,
 					sessionProxyJump, noPublicKey)
 				if err != nil {
 					errStr := strings.ToLower(err.Error())
@@ -281,9 +285,9 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 				nr, _ := newSess.StdoutPipe()
 				nw, _ := newSess.StdinPipe()
 
-				if newRC != "" {
-					expanded := sshmanager.ExpandTokens(newRC, host, "22", user, host, sessionID)
-					if err := newSess.Start(expanded); err != nil {
+				if newRemoteCommand != "" {
+					expandedRemoteCommand := sshmanager.ExpandTokens(newRemoteCommand, host, "22", user, host, sessionID)
+					if err := newSess.Start(expandedRemoteCommand); err != nil {
 						newSess.Close()
 						newPClient.Release()
 						return nil, nil, err

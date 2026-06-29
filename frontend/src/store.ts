@@ -248,6 +248,8 @@ export const useStore = create<Store>(() => ({
     savePassword: "ask",
     isSecure: false,
     insecureAllowed: false,
+    config_dir: "",
+    ssh_dir: "",
   },
   tagsExpanded: loadFromStorage(BROWSER_STORAGE_KEY_TAGS_EXPANDED, 0),
   vars: loadFromStorage(BROWSER_STORAGE_KEY_VARS, {}),

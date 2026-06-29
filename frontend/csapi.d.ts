@@ -1686,6 +1686,8 @@ export interface Sysinfo {
 	insecureAllowed: boolean;
 	isSecure: boolean;
 	savePassword: "ask" | "always" | "never";
+	config_dir: string;
+	ssh_dir: string;
 }
 export interface HostData {
 	name: string;

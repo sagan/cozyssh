@@ -194,6 +194,8 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				InsecureAllowed: flags.AllowInsecure,
 				IsSecure:        isSecureRequest(r),
 				SavePassword:    cfg.SavePassword,
+				ConfigDir:       cfg.ConfigDir,
+				SSHDir:          cfg.SSHDir,
 			},
 			Hosts:   hosts,
 			Groups:  groups,
@@ -1037,9 +1039,9 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 			// Look up the session – paneId doubles as the backend session ID.
 			s := session.GlobalManager.Get(req.PaneId)
 			if s != nil {
-				if pClient, ok := s.SSHClient.(*sshmanager.PooledClient); ok {
+				if s.SSHClient != nil {
 					// SSH session: run command over a fresh background channel.
-					stdout, stderr, execErr = sshmanager.ExecSSHCommand(pClient, req.Cmdline)
+					stdout, stderr, execErr = sshmanager.ExecSSHCommand(s.SSHClient, req.Cmdline)
 				} else {
 					// Local-shell session: fall through to local exec below.
 					s = nil

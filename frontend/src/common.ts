@@ -366,6 +366,26 @@ export const DefaultXtermOptions: ITerminalOptions = {
   fontFamily: 'Consolas, "Courier New", monospace',
 };
 
+const codeKeys: Record<string, [string, string]> = {
+  Backquote: ["`", "~"],
+  Quote: ["'", '"'],
+  Comma: [",", "<"],
+  Minus: ["-", "_"],
+  Period: [".", ">"],
+  Slash: ["/", "?"],
+  Backslash: ["\\", "|"],
+  Digit1: ["1", "!"],
+  Digit2: ["2", "@"],
+  Digit3: ["3", "#"],
+  Digit4: ["4", "$"],
+  Digit5: ["5", "%"],
+  Digit6: ["6", "^"],
+  Digit7: ["7", "&"],
+  Digit8: ["8", "*"],
+  Digit9: ["9", "("],
+  Digit0: ["0", ")"],
+};
+
 /**
  * Get a key combination string from a KeyboardEvent
  * @param ev KeyboardEvent
@@ -391,7 +411,13 @@ export function getKeyCombination(ev: KeyboardEvent): string {
     suppressKeys.add("meta");
     mods += "+meta";
   }
-  const key = ev.key.toLowerCase();
+  let key = ev.key;
+  // In some keyboard layout (like Windows English International layout) some keystrokes will produce "Dead" key
+  // e.g. ' since 'e is used to input é. We need to get the actual key.
+  if (key === "Dead" && codeKeys[ev.code]) {
+    key = codeKeys[ev.code][ev.shiftKey ? 1 : 0];
+  }
+  key = key.toLowerCase();
   if (!suppressKeys.has(key)) {
     mods += "+" + key;
   }
