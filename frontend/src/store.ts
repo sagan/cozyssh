@@ -1695,18 +1695,14 @@ export async function moveServer(serverName: string, destGroupPath: string | nul
     }
   }
 
-  for (const h of updatedHosts) {
-    const url = h.source === "config" ? `/api/hosts/${h.name}` : `/api/hosts`;
-    const method = h.source === "config" ? METHOD_PUT : METHOD_POST;
-    await fetch(url, {
-      method,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        [HEADER_CONTENT_TYPE]: MIME_JSON,
-      },
-      body: JSON.stringify(h),
-    });
-  }
+  await fetch("/api/hosts", {
+    method: METHOD_PUT,
+    headers: {
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      [HEADER_CONTENT_TYPE]: MIME_JSON,
+    },
+    body: JSON.stringify(updatedHosts),
+  });
 
   fetchHosts();
 }

@@ -541,34 +541,16 @@ window.csDeleteButton = async (id: string): Promise<void> => {
   }
 };
 
-window.csUpdateHost = async (host: HostData): Promise<void> => {
-  const { hosts } = getStore();
-  const exists = hosts.some((h) => h.name === host.name && h.source === "config");
-
+window.csUpdateHost = async (host: HostData | HostData[]): Promise<void> => {
   const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-  const method = exists ? METHOD_PUT : METHOD_POST;
-  const url = exists ? `/api/hosts/${encodeURIComponent(host.name)}` : "/api/hosts";
 
-  const body: HostData = {
-    name: host.name,
-    hostname: host.hostname,
-    user: host.user || "root",
-    port: host.port ? String(host.port) : "22",
-    identity_file: host.identity_file || "",
-    proxy_jump: host.proxy_jump || "",
-    remote_command: host.remote_command || "",
-    tags: host.tags || [],
-    comment: host.comment || "",
-    source: host.source || "",
-  };
-
-  const res = await fetch(url, {
-    method,
+  const res = await fetch("/api/hosts", {
+    method: METHOD_PUT,
     headers: {
       [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
       [HEADER_CONTENT_TYPE]: MIME_JSON,
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(Array.isArray(host) ? host : [host]),
   });
 
   if (!res.ok) {

@@ -27,9 +27,14 @@ import (
 	"cozyssh/passstore"
 )
 
-var globalConfig *config.Config
+var (
+	globalConfig *config.Config
+	mu           sync.Mutex
+)
 
 func SetConfig(cfg *config.Config) {
+	mu.Lock()
+	defer mu.Unlock()
 	globalConfig = cfg
 }
 
@@ -127,7 +132,7 @@ func findHostBlock(lines []string, targetAlias string) (int, int) {
 	return start, end
 }
 
-func getCanonicalAddr(h models.HostData) string {
+func getCanonicalAddr(h *models.HostData) string {
 	user := h.User
 	if user == "" {
 		user = common.User
@@ -139,17 +144,68 @@ func getCanonicalAddr(h models.HostData) string {
 	return fmt.Sprintf("%s@%s:%s", user, h.HostName, port)
 }
 
-// SaveHost replaces an old host block or adds a new one gracefully without destroying file comments
-func SaveHost(oldAlias string, h models.HostData) error {
+func SaveHosts(hosts []*models.HostData) error {
+	mu.Lock()
+	defer mu.Unlock()
+
 	lines, err := readConfigLines()
 	if err != nil {
 		return err
 	}
 
+	for _, h := range hosts {
+		if h.Port == "" {
+			h.Port = "22"
+		}
+		if strings.HasPrefix(h.Name, constants.ID_DELETE_PREFIX) {
+			lines, _ = deleteHostLines(lines, h.Name[len(constants.ID_DELETE_PREFIX):])
+		} else {
+			lines, err = updateLines(lines, h.Name, h)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	if err := writeConfigLines(lines); err != nil {
+		return err
+	}
+	return nil
+}
+
+// SaveHost replaces an old host block or adds a new one gracefully without destroying file comments
+func SaveHost(oldAlias string, h *models.HostData) error {
+	mu.Lock()
+	defer mu.Unlock()
+
+	lines, err := readConfigLines()
+	if err != nil {
+		return err
+	}
+
+	if h.Port == "" {
+		h.Port = "22"
+	}
+
+	lines, err = updateLines(lines, oldAlias, h)
+	if err != nil {
+		return err
+	}
+
+	if err := writeConfigLines(lines); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func updateLines(lines []string, oldAlias string, h *models.HostData) ([]string, error) {
 	var block []string
 	if h.Comment != "" {
-		for line := range strings.SplitSeq(h.Comment, "\n") {
-			block = append(block, fmt.Sprintf("### %s", strings.TrimSpace(line)))
+		if comment := strings.TrimSpace(h.Comment); comment != "" {
+			for line := range strings.SplitSeq(comment, "\n") {
+				block = append(block, fmt.Sprintf("### %s", strings.TrimSpace(line)))
+			}
 		}
 	}
 	if len(h.Tags) > 0 {
@@ -241,7 +297,7 @@ func SaveHost(oldAlias string, h models.HostData) error {
 		allHosts, _ := ListHosts()
 		for _, oh := range allHosts {
 			if oh.Name == oldAlias {
-				oldCanonicalAddr = getCanonicalAddr(*oh)
+				oldCanonicalAddr = getCanonicalAddr(oh)
 				break
 			}
 		}
@@ -258,7 +314,7 @@ func SaveHost(oldAlias string, h models.HostData) error {
 			passstore.Delete(oldCanonicalAddr)
 		}
 		if err := passstore.Set(newCanonicalAddr, h.Password); err != nil {
-			return fmt.Errorf("failed to save password: %w", err)
+			return nil, fmt.Errorf("failed to save password: %w", err)
 		}
 	} else if oldCanonicalAddr != "" && oldCanonicalAddr != newCanonicalAddr {
 		// Host was renamed/modified, and no new password or clear password was specified.
@@ -274,20 +330,27 @@ func SaveHost(oldAlias string, h models.HostData) error {
 			}
 		}
 	}
+	return lines, nil
+}
 
-	if err := writeConfigLines(lines); err != nil {
-		return err
+func deleteHostLines(lines []string, name string) (newLines []string, deleted bool) {
+	start, end := findHostBlock(lines, name)
+	if start != -1 {
+		lines = append(lines[:start], lines[end:]...)
+		return lines, true
 	}
-
-	return nil
+	return lines, false
 }
 
 func DeleteHost(name string) error {
+	mu.Lock()
+	defer mu.Unlock()
+
 	var canonical string
 	allHosts, _ := ListHosts()
 	for _, oh := range allHosts {
 		if oh.Name == name {
-			canonical = getCanonicalAddr(*oh)
+			canonical = getCanonicalAddr(oh)
 			break
 		}
 	}
@@ -296,16 +359,18 @@ func DeleteHost(name string) error {
 	if err != nil {
 		return err
 	}
-	start, end := findHostBlock(lines, name)
-	if start != -1 {
-		lines = append(lines[:start], lines[end:]...)
-		if err := writeConfigLines(lines); err != nil {
-			return err
-		}
-		if canonical != "" {
-			passstore.Delete(canonical)
-		}
+
+	lines, deleted := deleteHostLines(lines, name)
+	if !deleted {
 		return nil
+	}
+
+	if err := writeConfigLines(lines); err != nil {
+		return err
+	}
+
+	if canonical != "" {
+		passstore.Delete(canonical)
 	}
 	return nil
 }
@@ -340,6 +405,9 @@ func ListGroups() ([]string, error) {
 }
 
 func SaveGroups(groups []string) error {
+	mu.Lock()
+	defer mu.Unlock()
+
 	lines, err := readConfigLines()
 	if err != nil {
 		return err
@@ -477,7 +545,7 @@ func ListHosts() ([]*models.HostData, error) {
 						}
 					}
 				}
-				comment := strings.Join(commentParts, " ")
+				comment := strings.Join(commentParts, "\n")
 
 				isFav := slices.Contains(tags, constants.TAG_FAV)
 

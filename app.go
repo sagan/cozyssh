@@ -18,6 +18,7 @@ import (
 	"net/http/pprof"
 	"os"
 	os_exec "os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -81,6 +82,20 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 	if flags.Err != nil {
 		return flags.Err
 	}
+
+	(func() {
+		executable, _ := os.Executable()
+		executableDir := filepath.Dir(executable)
+		os.Setenv("COZYSSH_BINDIR", executableDir)
+		if flags.ConfigDir != "" {
+			flags.ConfigDir = common.ExpandPath(flags.ConfigDir)
+		} else {
+			path := filepath.Join(executableDir, "cozyssh-data")
+			if stats, err := os.Stat(path); err == nil && stats.IsDir() {
+				flags.ConfigDir = path
+			}
+		}
+	})()
 
 	if flags.DoResetPassword {
 		cfg, err := config.LoadConfig(flags.ConfigDir)
@@ -151,7 +166,6 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 	os.Setenv("COZYSSH_HOME", cfg.ConfigDir)
 	os.Setenv("COZYSSH_SSHDIR", cfg.SSHDir)
 	sshmanager.UpdateDns(cfg.Dns)
-
 	if home, err := os.UserHomeDir(); err == nil {
 		os.Chdir(home)
 	}
@@ -324,13 +338,28 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				}
 				w.Header().Set(headers.ContentType, constants.MIME_JSON)
 				json.NewEncoder(w).Encode(hosts)
-			case http.MethodPost:
+			case http.MethodPut: // PUT : upsert hosts (same name host will override existing)
+				var hosts []*models.HostData
+				if err := json.NewDecoder(r.Body).Decode(&hosts); err != nil {
+					http.Error(w, "Bad Request", http.StatusBadRequest)
+					return
+				}
+				if err := sshmanager.SaveHosts(hosts); err != nil {
+					if errors.Is(err, passstore.ErrNoKey) {
+						http.Error(w, "encryption key not set", http.StatusForbidden)
+						return
+					}
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				w.WriteHeader(http.StatusNoContent)
+			case http.MethodPost: // POST: insert a new host
 				var h models.HostData
 				if err := json.NewDecoder(r.Body).Decode(&h); err != nil {
 					http.Error(w, "Bad Request", http.StatusBadRequest)
 					return
 				}
-				if err := sshmanager.SaveHost("", h); err != nil {
+				if err := sshmanager.SaveHost("", &h); err != nil {
 					if errors.Is(err, passstore.ErrNoKey) {
 						http.Error(w, "encryption key not set", http.StatusForbidden)
 						return
@@ -368,13 +397,13 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 		func(w http.ResponseWriter, r *http.Request) {
 			name := strings.TrimPrefix(r.URL.Path, "/api/hosts/")
 			switch r.Method {
-			case http.MethodPut:
+			case http.MethodPut, http.MethodPost:
 				var h models.HostData
 				if err := json.NewDecoder(r.Body).Decode(&h); err != nil {
 					http.Error(w, "Bad Request", http.StatusBadRequest)
 					return
 				}
-				if err := sshmanager.SaveHost(name, h); err != nil {
+				if err := sshmanager.SaveHost(name, &h); err != nil {
 					if errors.Is(err, passstore.ErrNoKey) {
 						http.Error(w, "encryption key not set", http.StatusForbidden)
 						return
@@ -858,7 +887,11 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				w.Header().Set(headers.ContentType, constants.MIME_JSON)
 				json.NewEncoder(w).Encode(cfg.GetButtons())
 			case http.MethodPost, http.MethodPut:
-				data, _ := io.ReadAll(r.Body)
+				data, err := io.ReadAll(r.Body)
+				if err != nil {
+					http.Error(w, "failed to read body", http.StatusBadRequest)
+					return
+				}
 				var btns []*models.ButtonData
 				if err := json.Unmarshal(data, &btns); err == nil {
 					force := r.URL.Query().Get("force") == "1"

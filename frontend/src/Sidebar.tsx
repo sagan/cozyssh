@@ -107,6 +107,7 @@ import {
   isValidHostname,
   localShellHost,
   openHostInNewWindow,
+  parseSSHConfigBlock,
   remoteCommandOptions,
   searchStringAny,
 } from "./common";
@@ -137,6 +138,8 @@ import { useShallow } from "zustand/react/shallow";
 
 const drawerWidth = 260;
 
+type Section = "fav" | "tree" | "auto";
+
 interface GroupNode {
   id: string;
   type: "group";
@@ -164,7 +167,7 @@ interface SelectableGroupItem {
 interface SelectableServerItem {
   id: string;
   type: "server";
-  section: "fav" | "tree" | "auto";
+  section: Section;
   host: HostData;
 }
 
@@ -558,7 +561,7 @@ export default function Sidebar({
     }
   };
 
-  const handleSyncNow = async () => {
+  const handleSyncNow = useCallback(async () => {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     setSyncStatus("syncing");
 
@@ -579,7 +582,7 @@ export default function Sidebar({
     } catch (e: unknown) {
       notify(`Failed to trigger sync: ${e}`, "error");
     }
-  };
+  }, [fetchWebdavStatus]);
 
   const [startupParams] = useSearchParams();
   const [filterStr, setFilterStr] = useState(startupParams.get("filter") || "");
@@ -597,7 +600,7 @@ export default function Sidebar({
   const [contextMenu, setContextMenu] = useState<{
     element: Element;
     target: HostData;
-    section: "fav" | "tree" | "auto";
+    section: Section;
   } | null>(null);
   const [tagContextMenuOpen, setTagContextMenuOpen] = useState(false);
   const [tagContextMenu, setTagContextMenu] = useState<{ element: Element; tag: string } | null>(null);
@@ -615,7 +618,7 @@ export default function Sidebar({
     return new Set<string>();
   });
 
-  const toggleGroupExpanded = (path: string) => {
+  const toggleGroupExpanded = useCallback((path: string) => {
     setExpandedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(path)) {
@@ -626,7 +629,7 @@ export default function Sidebar({
       localStorage.setItem(BROWSER_STORAGE_KEY_EXPANDED_GROUPS, JSON.stringify(Array.from(next)));
       return next;
     });
-  };
+  }, []);
 
   const [favExpanded, setFavExpanded] = useState<boolean>(() => {
     try {
@@ -686,23 +689,48 @@ export default function Sidebar({
   const [groupContextMenuOpen, setGroupContextMenuOpen] = useState(false);
   const [groupContextMenu, setGroupContextMenu] = useState<{ element: Element; path: string } | null>(null);
 
+  const [hostTitleMenuAnchor, setHostTitleMenuAnchor] = useState<null | HTMLElement>(null);
+
+  const handleHostTitleMenuClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    setHostTitleMenuAnchor(event.currentTarget);
+  }, []);
+
+  const handleHostTitleMenuClose = useCallback(() => {
+    setHostTitleMenuAnchor(null);
+  }, []);
+
+  const handlePasteSshConfigBlock = useCallback(async () => {
+    setHostTitleMenuAnchor(null);
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text) {
+        notify("Clipboard is empty", "warning");
+        return;
+      }
+      const host = parseSSHConfigBlock(text);
+      setHostFormData({ ...host, tags: host.tags?.join(" ") || "" });
+      notify("Successfully imported Host settings from SSH config block", "success");
+    } catch (err) {
+      notify(`Failed to read clipboard or parse config block: ${err}`, "error");
+    }
+  }, []);
+
   // Drag and Drop States
   const [draggedItem, setDraggedItem] = useState<
     { type: "group"; path: string } | { type: "server"; name: string } | null
   >(null);
   const [dragOverTarget, setDragOverTarget] = useState<{ id: string; effect: "before" | "inside" } | null>(null);
 
-  const getGroupOrder = useCallback(
-    (path: string): number => {
-      const idx = groups.indexOf(path);
-      return idx === -1 ? Infinity : idx;
-    },
-    [groups],
-  );
+  const getGroupOrder = useCallback((path: string): number => {
+    const idx = getStore().groups.indexOf(path);
+    return idx === -1 ? Infinity : idx;
+  }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (loading && hosts.length > 0) setLoading(false);
+    if (loading && hosts.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLoading(false);
+    }
   }, [hosts, loading]);
 
   useEffect(() => {
@@ -1098,7 +1126,7 @@ export default function Sidebar({
   }, []);
 
   const handleContextMenu = useCallback(
-    (e: React.MouseEvent | React.KeyboardEvent, host: HostData, section: "fav" | "tree" | "auto") => {
+    (e: React.MouseEvent | React.KeyboardEvent, host: HostData, section: Section) => {
       e.preventDefault();
       setContextMenu({ element: e.currentTarget, target: host, section });
       setContextMenuOpen(true);
@@ -1128,10 +1156,11 @@ export default function Sidebar({
     const tag = tagContextMenu.tag;
     setTagContextMenuOpen(false);
     setFilterStr(`#${tag} `);
+    const { hosts } = getStore();
     const targets = hosts.filter((h) => h.tags && h.tags.includes(tag));
     targets.forEach((h) => openHost(h.name));
     setMobileOpen(false);
-  }, [hosts, tagContextMenu]);
+  }, [tagContextMenu]);
 
   const handleOpenSplitServers = useCallback(() => {
     if (!tagContextMenu) {
@@ -1139,6 +1168,7 @@ export default function Sidebar({
     }
     const tag = tagContextMenu.tag;
     setTagContextMenuOpen(false);
+    const { hosts } = getStore();
     const filtered = hosts.filter((h) => h.tags && h.tags.includes(tag));
 
     const nameSorter = (a: HostData, b: HostData) => a.name.localeCompare(b.name);
@@ -1161,7 +1191,7 @@ export default function Sidebar({
       );
       setMobileOpen(false);
     }
-  }, [hosts, tagContextMenu]);
+  }, [tagContextMenu]);
 
   const handleCopyTagUrl = useCallback(() => {
     if (!tagContextMenu) {
@@ -1289,16 +1319,13 @@ export default function Sidebar({
       tags: newTags,
     };
 
-    const url = target.source === "config" ? `/api/hosts/${target.name}` : `/api/hosts`;
-    const method = target.source === "config" ? METHOD_PUT : METHOD_POST;
-
-    await fetch(url, {
-      method,
+    await fetch("/api/hosts", {
+      method: METHOD_PUT,
       headers: {
         [HEADER_CONTENT_TYPE]: MIME_JSON,
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify([payload]),
     });
     fetchHosts();
   }, [contextMenu]);
@@ -1410,10 +1437,11 @@ export default function Sidebar({
     if (!groupContextMenu) {
       return;
     }
+    const { hosts } = getStore();
     const targets = hosts.filter((h) => h.tags && h.tags.includes(TAG_GROUP_PREFIX + groupContextMenu.path));
     targets.forEach((h) => openHost(h.name));
     setMobileOpen(false);
-  }, [groupContextMenu, hosts]);
+  }, [groupContextMenu]);
 
   const handleOpenGroupAllInNewWindow = useCallback(() => {
     setGroupContextMenuOpen(false);
@@ -1428,6 +1456,7 @@ export default function Sidebar({
     if (!groupContextMenu) {
       return;
     }
+    const { hosts } = getStore();
     const filtered = hosts.filter((h) => h.tags && h.tags.includes(TAG_GROUP_PREFIX + groupContextMenu.path));
     const targets = filtered.slice(0, 4);
     if (targets.length > 0) {
@@ -1437,7 +1466,7 @@ export default function Sidebar({
       );
       setMobileOpen(false);
     }
-  }, [groupContextMenu, hosts]);
+  }, [groupContextMenu]);
 
   const handleAddSubGroupClick = useCallback(async () => {
     setGroupContextMenuOpen(false);
@@ -1464,6 +1493,7 @@ export default function Sidebar({
       dialogs.alert("Group name cannot contain spaces or slashes (/).");
       return;
     }
+    const { groups } = getStore();
     const newPath = `${parentPath}/${trimmed}`;
     if (groups.includes(newPath)) {
       dialogs.alert("Sub-group already exists.");
@@ -1490,7 +1520,7 @@ export default function Sidebar({
     } else {
       dialogs.alert("Failed to save group");
     }
-  }, [groupContextMenu, groups]);
+  }, [groupContextMenu]);
 
   const handleAddTopLevelGroupClick = useCallback(async () => {
     setGroupContextMenuOpen(false);
@@ -1507,6 +1537,7 @@ export default function Sidebar({
       dialogs.alert("Group name cannot contain spaces or slashes (/).");
       return;
     }
+    const { groups } = getStore();
     if (groups.includes(trimmed)) {
       dialogs.alert("Group already exists.");
       return;
@@ -1526,7 +1557,7 @@ export default function Sidebar({
     } else {
       dialogs.alert("Failed to save group");
     }
-  }, [groups]);
+  }, []);
 
   const handleDeleteGroupClick = useCallback(async () => {
     setGroupContextMenuOpen(false);
@@ -1540,6 +1571,7 @@ export default function Sidebar({
       return;
     }
 
+    const { hosts, groups } = getStore();
     const parts = G.split("/");
     const parentPath = parts.length > 1 ? parts.slice(0, -1).join("/") : null;
 
@@ -1590,21 +1622,17 @@ export default function Sidebar({
       setGroups(nextGroups);
     }
 
-    for (const h of updatedHosts) {
-      const url = h.source === "config" ? `/api/hosts/${h.name}` : `/api/hosts`;
-      const method = h.source === "config" ? METHOD_PUT : METHOD_POST;
-      await fetch(url, {
-        method,
-        headers: {
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-          [HEADER_CONTENT_TYPE]: MIME_JSON,
-        },
-        body: JSON.stringify(h),
-      });
-    }
+    await fetch("/api/hosts", {
+      method: METHOD_PUT,
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        [HEADER_CONTENT_TYPE]: MIME_JSON,
+      },
+      body: JSON.stringify(updatedHosts),
+    });
 
     fetchHosts();
-  }, [groupContextMenu, groups, hosts]);
+  }, [groupContextMenu]);
 
   const handleRenameGroupClick = useCallback(async () => {
     setGroupContextMenuOpen(false);
@@ -1637,6 +1665,7 @@ export default function Sidebar({
 
     const newG = parentPath ? `${parentPath}/${trimmed}` : trimmed;
 
+    const { hosts, groups } = getStore();
     // Check if new group already exists in the same level
     if (groups.includes(newG)) {
       dialogs.alert("A group with that name already exists.");
@@ -1713,22 +1742,17 @@ export default function Sidebar({
       return;
     }
 
-    // Save each updated host in backend
-    for (const h of updatedHosts) {
-      const url = h.source === "config" ? `/api/hosts/${h.name}` : `/api/hosts`;
-      const method = h.source === "config" ? METHOD_PUT : METHOD_POST;
-      await fetch(url, {
-        method,
-        headers: {
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-          [HEADER_CONTENT_TYPE]: MIME_JSON,
-        },
-        body: JSON.stringify(h),
-      });
-    }
+    await fetch("/api/hosts", {
+      method: METHOD_PUT,
+      headers: {
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        [HEADER_CONTENT_TYPE]: MIME_JSON,
+      },
+      body: JSON.stringify(updatedHosts),
+    });
 
     fetchHosts();
-  }, [groupContextMenu, groups, hosts, getHostGroupPath, fetchHosts]);
+  }, [groupContextMenu]);
 
   const handleSaveHost = useCallback(async () => {
     const { hostFormData } = getStore();
@@ -1737,9 +1761,6 @@ export default function Sidebar({
     }
     const finalName = hostFormData.name.trim() || hostFormData.hostname.trim();
     let token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    const { editHostName: editingHostName } = getStore();
-    const url = editingHostName ? `/api/hosts/${editingHostName}` : `/api/hosts`;
-    const method = editingHostName ? METHOD_PUT : METHOD_POST;
 
     const parsedTags = hostFormData.tags
       .replace(/,/g, " ")
@@ -1771,13 +1792,13 @@ export default function Sidebar({
       return;
     }
 
-    const res = await fetch(url, {
-      method,
+    const res = await fetch("/api/hosts", {
+      method: METHOD_PUT,
       headers: {
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
         [HEADER_CONTENT_TYPE]: MIME_JSON,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify([payload]),
     });
 
     if (res.status === 403) {
@@ -1803,13 +1824,13 @@ export default function Sidebar({
           token = loginData.token;
           localStorage.setItem(BROWSER_STORAGE_KEY_TOKEN, token);
 
-          const retryRes = await fetch(url, {
-            method,
+          const retryRes = await fetch("/api/hosts", {
+            method: METHOD_PUT,
             headers: {
               [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
               [HEADER_CONTENT_TYPE]: MIME_JSON,
             },
-            body: JSON.stringify(payload),
+            body: JSON.stringify([payload]),
           });
 
           if (retryRes.ok) {
@@ -1998,7 +2019,7 @@ export default function Sidebar({
       auto: sortedAutos,
       treeNodes: prunedTree,
     };
-  }, [hosts, groups, filterStr, getHostGroupPath, getGroupOrder, getHostOrder]);
+  }, [hosts, groups, filterStr, getGroupOrder]);
 
   const [flatList, flatListIds] = useMemo(() => {
     const list: SelectableItem[] = [];
@@ -2146,7 +2167,7 @@ export default function Sidebar({
         }
       }
     },
-    [flatListIds, flatList, selectedIndex],
+    [flatList, flatListIds, selectedIndex, toggleGroupExpanded],
   );
 
   const uniqueTags = useMemo(() => {
@@ -2166,7 +2187,8 @@ export default function Sidebar({
   useEffect(() => {
     setTimeout(() => {
       if (tagsContainerRef.current) {
-        setShowTagsToggle(tagsContainerRef.current.scrollHeight > 60);
+        // 60px + padding top (4) + padding bottom(4)
+        setShowTagsToggle(tagsContainerRef.current.scrollHeight > 68);
       }
     }, 0);
   }, [uniqueTags, filterStr]);
@@ -3399,6 +3421,8 @@ export default function Sidebar({
                   <br />
                   <b>Mouse Right Click</b> in terminal to paste
                   <br />
+                  <b>Mouse Middle Click</b> on a tab to close it
+                  <br />
                   <b>Alt + Mouse Wheel</b> in terminal to fast scroll up / down
                 </Typography>
                 {__CS_ENV__ === 1 && (
@@ -3416,6 +3440,8 @@ export default function Sidebar({
                       <b>F11</b> : Toggle full screen
                       <br />
                       <b>F12</b> : Open Web DevTools
+                      <br />
+                      <b>Ctrl + Tab / Ctrl + Shift + Tab</b> : Next / prev tab (only works in desktop app)
                     </Typography>
                   </>
                 )}
@@ -3461,7 +3487,30 @@ export default function Sidebar({
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>{editHostName ? `Edit Host ${editHostName}` : "Add Host"}</DialogTitle>
+        <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pr: 1.5 }}>
+          <span>{editHostName ? `Edit Host ${editHostName}` : "Add Host"}</span>
+          <IconButton
+            aria-label="more"
+            id="host-title-menu-button"
+            aria-controls={hostTitleMenuAnchor ? "host-title-menu" : undefined}
+            aria-expanded={hostTitleMenuAnchor ? "true" : undefined}
+            aria-haspopup="true"
+            onClick={handleHostTitleMenuClick}
+            size="small"
+          >
+            <MoreVertIcon fontSize="small" />
+          </IconButton>
+        </DialogTitle>
+        <Menu
+          id="host-title-menu"
+          anchorEl={hostTitleMenuAnchor}
+          open={!!hostTitleMenuAnchor}
+          onClose={handleHostTitleMenuClose}
+        >
+          <MenuItem onClick={handlePasteSshConfigBlock} disabled={!!editHostName}>
+            Paste SSH Config block
+          </MenuItem>
+        </Menu>
         <DialogContent>
           <Box sx={{ mt: 1, display: "flex", flexDirection: "column", gap: 2 }}>
             <TextField
@@ -3728,10 +3777,10 @@ function HostListItem({
   isSelected,
 }: {
   id: string;
-  section: "fav" | "tree" | "auto";
+  section: Section;
   filter: string;
   host: HostData;
-  onContextMenu: (e: React.MouseEvent, host: HostData, section: "fav" | "tree" | "auto") => void;
+  onContextMenu: (e: React.MouseEvent, host: HostData, section: Section) => void;
   isSelected?: boolean;
 }) {
   const itemRef = useRef<HTMLLIElement>(null);
@@ -3819,11 +3868,11 @@ function HostListItem({
                     .map((tag) => (
                       <Typography
                         key={tag}
-                        variant="caption"
+                        variant="body2"
                         sx={{
                           color: "primary.main",
-                          fontSize: "typography.caption.fontSize",
                           fontWeight: 600,
+                          lineHeight: 1.2,
                           opacity: 0.8,
                         }}
                       >
@@ -3997,11 +4046,7 @@ function TreeServerItem({
   dragOverTarget: { id: string; effect: "before" | "inside" } | null;
   setDraggedItem: (item: { type: "group"; path: string } | { type: "server"; name: string } | null) => void;
   setDragOverTarget: (item: { id: string; effect: "before" | "inside" } | null) => void;
-  handleContextMenu: (
-    e: React.MouseEvent | React.KeyboardEvent,
-    host: HostData,
-    section: "fav" | "tree" | "auto",
-  ) => void;
+  handleContextMenu: (e: React.MouseEvent | React.KeyboardEvent, host: HostData, section: Section) => void;
 }) {
   const itemRef = useRef<HTMLLIElement>(null);
   useEffect(() => {
@@ -4119,11 +4164,11 @@ function TreeServerItem({
                     .map((tag) => (
                       <Typography
                         key={tag}
-                        variant="caption"
+                        variant="body2"
                         sx={{
                           color: "primary.main",
-                          fontSize: "typography.caption.fontSize",
                           fontWeight: 600,
+                          lineHeight: 1.2,
                           opacity: 0.8,
                         }}
                       >

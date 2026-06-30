@@ -222,6 +222,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           }
           return;
 
+        case "ctrl+shift+tab":
         case "alt+h":
         case "alt+shift+h": {
           e.preventDefault();
@@ -231,7 +232,8 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
             return;
           }
           const activeTab = tabs[idx];
-          if (activeTab.panes.length <= 1 || keycomb === "alt+shift+h") {
+          const tabMode = keycomb === "alt+shift+h" || keycomb === "ctrl+shift+tab";
+          if (activeTab.panes.length <= 1 || tabMode) {
             // single pane tab or shift pressed, switch to prev tab
             const prevIdx = (idx - 1 + tabs.length) % tabs.length;
             activatePane(tabs[prevIdx].activePaneId, tabs[prevIdx].id);
@@ -248,6 +250,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           return;
         }
 
+        case "ctrl+tab": // only works in Desktop app
         case "alt+l":
         case "alt+shift+l": {
           e.preventDefault();
@@ -257,7 +260,8 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
             return;
           }
           const activeTab = tabs[idx];
-          if (activeTab.panes.length <= 1 || keycomb === "alt+shift+l") {
+          const tabMode = keycomb === "alt+shift+l" || keycomb === "ctrl+tab";
+          if (activeTab.panes.length <= 1 || tabMode) {
             // single pane tab or shift pressed, switch to next tab
             const nextIdx = (idx + 1) % tabs.length;
             activatePane(tabs[nextIdx].activePaneId, tabs[nextIdx].id);

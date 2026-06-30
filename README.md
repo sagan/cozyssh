@@ -144,6 +144,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - `Ctrl + Alt + Shift + R` : Force clear service worker, cache and reload
   - `Mouse Select` in terminal to copy
   - `Mouse Right Click` in terminal to paste
+  - `Mouse Middle Click` on a tab to close it
   - `Alt + Mouse Wheel` in terminal to fast scroll up / down
 - **Advanced SSH Management**: 🔑
   - **ProxyJump Support**: Full support for OpenSSH standard `ProxyJump` configuration, allowing you to connect to hosts via intermediate jump servers.

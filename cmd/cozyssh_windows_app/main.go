@@ -505,7 +505,7 @@ func setupSystemTrayAndHook(w webview2.WebView, hwnd uintptr, cfg *config.Config
 	menu.Add("Check update", func() {
 		go checkAppUpdate(hwnd)
 	})
-	menu.Add("Quit", func() {
+	menu.Add("Quit ("+cozyssh.Version+")", func() {
 		w.Terminate()
 	})
 	trayInstance.SetMenu(menu)

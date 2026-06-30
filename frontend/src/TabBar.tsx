@@ -136,6 +136,13 @@ export default function TabBar({
                   key={tab.id}
                   value={tab.id}
                   onContextMenu={(e) => handleContextMenu(e, tab.id)}
+                  onAuxClick={(e) => {
+                    // mouse middle key
+                    if (e.button === 1) {
+                      e.preventDefault();
+                      closeTab(tab.id);
+                    }
+                  }}
                   sx={{ minHeight: 40, py: 0, textTransform: "none", minWidth: "auto" }}
                   label={
                     <Box sx={{ display: "flex", alignItems: "center" }}>

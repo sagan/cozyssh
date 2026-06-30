@@ -1166,3 +1166,151 @@ export function getSSHConfigBlock(host: HostData): string {
   }
   return block;
 }
+
+/**
+ * Parse a OpenSSH Config Host block to HostData.
+ * It throws an exception if text doesn't seem to be a valid Host block.
+ */
+export function parseSSHConfigBlock(text: string): HostData {
+  const lines = text.split(/\r?\n/);
+  let name = "";
+  let hostname = "";
+  let user = "";
+  let port = "";
+  let identity_file = "";
+  let proxy_jump = "";
+  let remote_command = "";
+  let address_family = "";
+  let user_known_hosts_file = "";
+  let strict_host_key_checking = "";
+  let host_key_algorithms = "";
+  let verify_host_key_dns = "";
+  const local_forwards: string[] = [];
+  const remote_forwards: string[] = [];
+  const dynamic_forwards: string[] = [];
+
+  let commentText = "";
+  const tagsList: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    if (trimmed.startsWith("#")) {
+      const content = trimmed.replace(/^#+\s*/, "").trim();
+      if (!content) continue;
+      const words = content.split(/\s+/);
+      const commentWords: string[] = [];
+      for (const w of words) {
+        if (w.startsWith("#") && w.length > 1) {
+          tagsList.push(w.slice(1));
+        } else {
+          commentWords.push(w);
+        }
+      }
+      if (commentWords.length > 0) {
+        if (commentText) commentText += "\n";
+        commentText += commentWords.join(" ");
+      }
+      continue;
+    }
+
+    const match = trimmed.match(/^([a-zA-Z0-9_]+)\s*=?\s*(.*)$/);
+    if (!match) continue;
+
+    const key = match[1].toLowerCase();
+    let val = match[2].trim();
+    if (val.startsWith('"') && val.endsWith('"')) {
+      val = val.slice(1, -1);
+    }
+
+    switch (key) {
+      case "host":
+        name = val.split(/\s+/)[0];
+        break;
+      case "hostname":
+        hostname = val;
+        break;
+      case "user":
+        user = val;
+        break;
+      case "port":
+        port = val;
+        break;
+      case "identityfile":
+        identity_file = val;
+        break;
+      case "proxyjump":
+        proxy_jump = val;
+        break;
+      case "remotecommand":
+        remote_command = val;
+        break;
+      case "addressfamily":
+        {
+          const v = val.toLowerCase();
+          if (v === "any" || v === "inet" || v === "inet6") {
+            address_family = v;
+          }
+        }
+        break;
+      case "userknownhostsfile":
+        user_known_hosts_file = val;
+        break;
+      case "stricthostkeychecking":
+        {
+          const v = val.toLowerCase();
+          if (v === "yes" || v === "no" || v === "ask") {
+            strict_host_key_checking = v;
+          }
+        }
+        break;
+      case "hostkeyalgorithms":
+        host_key_algorithms = val;
+        break;
+      case "verifyhostkeydns":
+        {
+          const v = val.toLowerCase();
+          if (v === "yes" || v === "no" || v === "ask") {
+            verify_host_key_dns = v;
+          }
+        }
+        break;
+      case "localforward":
+        local_forwards.push(val);
+        break;
+      case "remoteforward":
+        remote_forwards.push(val);
+        break;
+      case "dynamicforward":
+        dynamic_forwards.push(val);
+        break;
+    }
+  }
+
+  if (!hostname) {
+    throw new Error("invalid");
+  }
+
+  const parsedData: HostData = {
+    name: name || hostname,
+    hostname,
+    user: user || "root",
+    port: port || "22",
+    source: "",
+    identity_file: identity_file || "",
+    proxy_jump: proxy_jump || "",
+    remote_command: remote_command || "",
+    address_family: (address_family || "") as HostForm["address_family"],
+    user_known_hosts_file: user_known_hosts_file || "",
+    strict_host_key_checking: (strict_host_key_checking || "") as HostForm["strict_host_key_checking"],
+    host_key_algorithms: host_key_algorithms || "",
+    verify_host_key_dns: (verify_host_key_dns || "") as HostForm["verify_host_key_dns"],
+    local_forward: local_forwards.join("\n"),
+    remote_forward: remote_forwards.join("\n"),
+    dynamic_forward: dynamic_forwards.join("\n"),
+    tags: tagsList,
+    comment: commentText || "",
+  };
+  return parsedData;
+}

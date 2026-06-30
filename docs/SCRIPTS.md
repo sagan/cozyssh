@@ -31,7 +31,7 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
   - [`csSetTheme(options: unknown, ...args: unknown[]): void`](#cssetthemeoptions-unknown-args-unknown-void)
   - [`csUpdateButton(btn: ButtonData | ButtonData[]): Promise<void>`](#csupdatebuttonbtn-buttondata--buttondata-promisevoid)
   - [`csDeleteButton(id: string): Promise<void>`](#csdeletebuttonid-string-promisevoid)
-  - [`csUpdateHost(host: Host): Promise<void>`](#csupdatehosthost-host-promisevoid)
+  - [`csUpdateHost(host: HostData | HostData[]): Promise<void>`](#csupdatehosthost-hostdata--hostdata-promisevoid)
   - [`csDeleteHost(name: string): Promise<void>`](#csdeletehostname-string-promisevoid)
   - [csAlert, csConfirm, csPrompt and more](#csalert-csconfirm-csprompt-and-more)
 - [Client-side Events](#client-side-events)
@@ -359,9 +359,9 @@ await csDeleteButton("btn-12345");
 csNotify("Button deleted");
 ```
 
-### `csUpdateHost(host: Host): Promise<void>`
+### `csUpdateHost(host: HostData | HostData[]): Promise<void>`
 
-Adds or updates a host configuration. If the host's `name` already exists in the configured hosts, it will be updated; otherwise, a new host block will be appended to your SSH config.
+Adds or updates a host or multiple hosts. If the host's `name` already exists in SSH config file, it will be updated; otherwise, a new host block will be appended to SSH config file.
 
 Sample usage:
 

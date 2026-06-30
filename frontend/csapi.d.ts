@@ -2299,7 +2299,7 @@ declare global {
 	/**
 	 * Update a host.
 	 */
-	function csUpdateHost(btn: HostData): Promise<void>;
+	function csUpdateHost(host: HostData | HostData[]): Promise<void>;
 	/**
 	 * Delete a host.
 	 */
