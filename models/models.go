@@ -46,13 +46,14 @@ type WebdavStatus struct {
 }
 
 type Sysinfo struct {
-	Hostname        string `json:"hostname"`
-	Version         string `json:"version"`
-	InsecureAllowed bool   `json:"insecureAllowed"`
-	IsSecure        bool   `json:"isSecure"`
-	SavePassword    string `json:"savePassword" ts_type:"\"ask\" | \"always\" | \"never\""`
-	ConfigDir       string `json:"config_dir"`
-	SSHDir          string `json:"ssh_dir"`
+	Username        string `json:"username,omitempty"`
+	Hostname        string `json:"hostname,omitempty"`
+	Version         string `json:"version,omitempty"`
+	InsecureAllowed bool   `json:"insecureAllowed,omitempty"`
+	IsSecure        bool   `json:"isSecure,omitempty"`
+	SavePassword    string `json:"savePassword,omitempty" ts_type:"\"ask\" | \"always\" | \"never\""`
+	ConfigDir       string `json:"config_dir,omitempty"`
+	SSHDir          string `json:"ssh_dir,omitempty"`
 }
 
 type SaveWebdavSettingsRequest struct {
@@ -127,10 +128,11 @@ type ButtonsMoveRequest struct {
 	Direction int    `json:"direction"` // -1 for left, 1 for right
 }
 
-type SessionPinned struct {
+type Session struct {
 	Id            string `json:"id"`
 	Host          string `json:"host"`
 	Title         string `json:"title"`
+	IsPinned      bool   `json:"isPinned"`
 	IsLocked      bool   `json:"isLocked"`
 	ListenerCount int    `json:"listenerCount"`
 }
@@ -151,23 +153,23 @@ type PasswordUpdateRequest struct {
 	Force       bool   `json:"force"`
 }
 
-// POST /api/tabs/pin payload
-type TabsPinRequest struct {
+// POST /api/sessions/pin payload
+type SessionsPinRequest struct {
 	Id    string `json:"id"`
 	Host  string `json:"host"`
 	Title string `json:"title"`
 }
 
-type TabsUnpinRequest struct {
+type SessionsUnpinRequest struct {
 	Id string `json:"id"`
 }
 
-type TabsRenameRequest struct {
+type SessionsRenameRequest struct {
 	Id    string `json:"id"`
 	Title string `json:"title"`
 }
 
-type TabsLockRequest struct {
+type SessionsLockRequest struct {
 	Id    string `json:"id"`
 	Host  string `json:"host"`
 	Title string `json:"title"`
@@ -189,7 +191,7 @@ type FullData struct {
 	Groups  []string               `json:"groups"`
 	Buttons []*ButtonData          `json:"buttons"`
 	Vars    map[string]string      `json:"vars"`
-	Pinned  []*SessionPinned       `json:"pinned"`
+	Pinned  []*Session             `json:"pinned"`
 	Recents []*Recent              `json:"recents"`
 	Shells  []*localpty.LocalShell `json:"shells"`
 }

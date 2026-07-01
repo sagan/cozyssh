@@ -1314,3 +1314,49 @@ export function parseSSHConfigBlock(text: string): HostData {
   };
   return parsedData;
 }
+
+/**
+ * Creates a Set proxy that calls a callback whenever the set is mutated.
+ * @param cb The callback. It MUST NOT mutate the set.
+ */
+export function createSetProxy<T>(initialValue: Iterable<T> | null | undefined, cb: (set: Set<T>) => void): Set<T> {
+  const mySet = new Set(initialValue);
+
+  // Track whether a microtask has already been scheduled
+  let isPending = false;
+
+  const setProxy = new Proxy(mySet, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
+
+      if (typeof value === "function") {
+        const mutatingMethods = ["add", "delete", "clear"];
+
+        if (mutatingMethods.includes(prop as string)) {
+          // Changed to any[] because clear() takes no args, delete() takes one, etc.
+          return function (...args: unknown[]) {
+            const result = value.apply(target, args);
+
+            // If a microtask isn't already queued, queue one now
+            if (!isPending) {
+              isPending = true;
+
+              queueMicrotask(() => {
+                isPending = false; // Reset the flag before running the callback
+                cb(target);
+              });
+            }
+
+            return result;
+          };
+        }
+
+        return value.bind(target);
+      }
+
+      return value;
+    },
+  });
+
+  return setProxy;
+}

@@ -39,6 +39,7 @@ import {
   ID_TERMINAL_SEARCH_INPUT,
   TAG_GROUP_PREFIX,
   TAG_FAV,
+  TOAST_KEY_BACKEND_API,
 } from "./constants";
 import {
   type ContextMenu,
@@ -690,6 +691,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
             case "OPEN_SCRATCHPAD":
               openScratchpad();
               break;
+            case "REFRESH":
+              refreshData({ sync: 2 });
+              break;
             default:
               break;
           }
@@ -738,7 +742,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             return;
           }
           if (!r.ok) {
-            notify(`Fail to load data: status=${r.status}`);
+            notify(`Fail to load data: status=${r.status}`, "error", TOAST_KEY_BACKEND_API);
             return;
           }
           data = (await r.json()) as FullData;
@@ -1052,7 +1056,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               });
               if (res.ok) {
                 setSysinfo({ savePassword: val });
-                notify("Settings saved successfully!");
+                notify("Settings saved successfully!", "success", TOAST_KEY_BACKEND_API);
               } else {
                 const errText = await res.text();
                 dialogs.alert("Failed to save setting: " + (errText || res.statusText));

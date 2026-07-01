@@ -31,13 +31,14 @@ export interface WebdavStatus {
     masterKey?: string;
 }
 export interface Sysinfo {
-    hostname: string;
-    version: string;
-    insecureAllowed: boolean;
-    isSecure: boolean;
-    savePassword: "ask" | "always" | "never";
-    config_dir: string;
-    ssh_dir: string;
+    username?: string;
+    hostname?: string;
+    version?: string;
+    insecureAllowed?: boolean;
+    isSecure?: boolean;
+    savePassword?: "ask" | "always" | "never";
+    config_dir?: string;
+    ssh_dir?: string;
 }
 export interface SaveWebdavSettingsRequest {
     url: string;
@@ -98,10 +99,11 @@ export interface ButtonsMoveRequest {
     id: string;
     direction: number;
 }
-export interface SessionPinned {
+export interface Session {
     id: string;
     host: string;
     title: string;
+    isPinned: boolean;
     isLocked: boolean;
     listenerCount: number;
 }
@@ -115,19 +117,19 @@ export interface PasswordUpdateRequest {
     new_password: string;
     force: boolean;
 }
-export interface TabsPinRequest {
+export interface SessionsPinRequest {
     id: string;
     host: string;
     title: string;
 }
-export interface TabsUnpinRequest {
+export interface SessionsUnpinRequest {
     id: string;
 }
-export interface TabsRenameRequest {
+export interface SessionsRenameRequest {
     id: string;
     title: string;
 }
-export interface TabsLockRequest {
+export interface SessionsLockRequest {
     id: string;
     host: string;
     title: string;
@@ -151,7 +153,7 @@ export interface FullData {
     groups: string[];
     buttons: ButtonData[];
     vars: {[key: string]: string};
-    pinned: SessionPinned[];
+    pinned: Session[];
     recents: Recent[];
     shells: LocalShell[];
 }

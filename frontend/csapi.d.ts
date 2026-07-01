@@ -1681,13 +1681,14 @@ export interface IModes {
 	readonly wraparoundMode: boolean;
 }
 export interface Sysinfo {
-	hostname: string;
-	version: string;
-	insecureAllowed: boolean;
-	isSecure: boolean;
-	savePassword: "ask" | "always" | "never";
-	config_dir: string;
-	ssh_dir: string;
+	username?: string;
+	hostname?: string;
+	version?: string;
+	insecureAllowed?: boolean;
+	isSecure?: boolean;
+	savePassword?: "ask" | "always" | "never";
+	config_dir?: string;
+	ssh_dir?: string;
 }
 export interface HostData {
 	name: string;
@@ -1725,6 +1726,14 @@ export interface ButtonData {
 	shortcut: string;
 	liquidjs?: number;
 	mtime?: number;
+}
+export interface Session {
+	id: string;
+	host: string;
+	title: string;
+	isPinned: boolean;
+	isLocked: boolean;
+	listenerCount: number;
 }
 export interface Recent {
 	host: string;
@@ -2169,6 +2178,11 @@ declare global {
 	 */
 	var __CS_SHORTCUT_BUTTONS__: Record<string, ButtonData>;
 	/**
+	 * Toast keys that are muted. Keys can be prefixes ending with '-'.
+	 * For example, 'A-' matches 'A-1', 'A-2', etc.
+	 */
+	var __CS_TOAST_KEY_MUTE_SET__: Set<string>;
+	/**
 	 * Focus the terminal with the given pane id.
 	 * @param tabOrPaneId defaults to active terminal pane id.
 	 */
@@ -2259,6 +2273,11 @@ declare global {
 		vars: Record<string, string | undefined>;
 		localVars: Record<string, string | undefined>;
 	};
+	/**
+	 * Get all sessions.
+	 * @param pinnedOnly Whether to only get sessions whose `isPinned` or `isLocked` property is true.
+	 */
+	function csGetSessions(pinnedOnly?: boolean): Promise<Session[]>;
 	/**
 	 * Performs an HTTP request via the CozySSH backend proxy to bypass browser CORS restrictions.
 	 * @param init the fetch `RequestInit` object, with an additional optional `key` property.

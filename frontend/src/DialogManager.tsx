@@ -1350,30 +1350,31 @@ export default function DialogManager({
           // Check if it's a direct connection and not in known hosts
           const parsedHost = parseHostName(hostname);
           const parsedHostString = getCanonicalHostString(parsedHost);
-          const known = hosts.find(
-            (h) => h.name === parsedHost.hostname || getCanonicalHostString(h) === parsedHostString,
-          );
-          if (!known) {
-            // Automatically add to ~/.ssh/config
-            const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-            try {
-              await fetch("/api/hosts", {
-                method: METHOD_POST,
-                headers: {
-                  [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-                  [HEADER_CONTENT_TYPE]: MIME_JSON,
-                },
-                body: JSON.stringify({
-                  user: "",
-                  port: "22",
-                  name: parsedHost.hostname,
-                  ...parsedHost,
-                  password: undefined, // don't save password from direct connect string
-                } satisfies HostData),
-              });
-              refreshData();
-            } catch (e) {
-              console.error("Failed to auto-add host:", e);
+          let known: HostData | undefined;
+          if (parsedHost.hostname !== LOCAL_NAME) {
+            known = hosts.find((h) => h.name === parsedHost.hostname || getCanonicalHostString(h) === parsedHostString);
+            if (!known) {
+              // Automatically add to ~/.ssh/config
+              const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+              try {
+                await fetch("/api/hosts", {
+                  method: METHOD_POST,
+                  headers: {
+                    [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+                    [HEADER_CONTENT_TYPE]: MIME_JSON,
+                  },
+                  body: JSON.stringify({
+                    user: "",
+                    port: "22",
+                    name: parsedHost.hostname,
+                    ...parsedHost,
+                    password: undefined, // don't save password from direct connect string
+                  } satisfies HostData),
+                });
+                refreshData();
+              } catch (e) {
+                console.error("Failed to auto-add host:", e);
+              }
             }
           }
           const hostStr = (known?.name || cutSuffix(parsedHostString, ":22")[0]) + (query ? "?" + query : "");
@@ -1403,6 +1404,7 @@ export default function DialogManager({
             severity={t.severity}
             data-severity={t.severity}
             data-msg={t.msg}
+            data-key={t.key || ""}
             className="toast"
             variant="filled"
             onClose={() => setToasts((prev) => prev.filter((x) => x.id !== t.id))}

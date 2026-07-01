@@ -88,7 +88,7 @@ func TestPinTab(t *testing.T) {
 	t.Logf("session id: %s", sessionId)
 
 	// 2. Pin it via the API (simulates right-click → "Pin tab").
-	resp := apiPost(t, url, token, "/api/tabs/pin", &models.TabsPinRequest{
+	resp := apiPost(t, url, token, "/api/sessions/pin", &models.SessionsPinRequest{
 		Id:    sessionId,
 		Host:  constants.LOCAL_NAME,
 		Title: "PIN_TEST",
@@ -139,7 +139,7 @@ func TestPinTab(t *testing.T) {
 	t.Logf("pinned tab title after reload: %s", tabTitle)
 
 	// 4. Unpin via the API.
-	resp = apiPost(t, url, token, "/api/tabs/unpin", &models.TabsUnpinRequest{Id: sessionId})
+	resp = apiPost(t, url, token, "/api/sessions/unpin", &models.SessionsUnpinRequest{Id: sessionId})
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("unpin: expected 204, got %d", resp.StatusCode)
@@ -166,8 +166,8 @@ func TestPinTab(t *testing.T) {
 
 // TestLockTab verifies that a locked tab:
 //   - Cannot be closed via /api/sessions/close (session stays alive).
-//   - Is reported as both pinned and locked by /api/sessions/pinned.
-//   - Can be downgraded to pinned (not locked) via /api/tabs/pin, after which it
+//   - Is reported as both pinned and locked by /api/sessions?pinned=1.
+//   - Can be downgraded to pinned (not locked) via /api/sessions/pin, after which it
 //     can be closed.
 func TestLockTab(t *testing.T) {
 	configDir := setupTestConfig(t)
@@ -181,7 +181,7 @@ func TestLockTab(t *testing.T) {
 	t.Logf("session id: %s", sessionId)
 
 	// Lock the session.
-	resp := apiPost(t, url, token, "/api/tabs/lock", &models.TabsLockRequest{
+	resp := apiPost(t, url, token, "/api/sessions/lock", &models.SessionsLockRequest{
 		Id:    sessionId,
 		Host:  constants.LOCAL_NAME,
 		Title: "LOCK_TEST",
@@ -193,7 +193,7 @@ func TestLockTab(t *testing.T) {
 
 	// Verify backend sees it as locked.
 	pinned := pinnedSessions(t, url, token)
-	var lockedEntry *models.SessionPinned
+	var lockedEntry *models.Session
 	for _, p := range pinned {
 		if p.Id == sessionId {
 			lockedEntry = p
@@ -227,7 +227,7 @@ func TestLockTab(t *testing.T) {
 	}
 
 	// Downgrade: unlock → pin only (so it can be closed).
-	resp = apiPost(t, url, token, "/api/tabs/pin", &models.TabsPinRequest{
+	resp = apiPost(t, url, token, "/api/sessions/pin", &models.SessionsPinRequest{
 		Id:    sessionId,
 		Host:  constants.LOCAL_NAME,
 		Title: "LOCK_TEST",
@@ -274,7 +274,7 @@ func TestAttachStealsSession(t *testing.T) {
 	waitForTerminalText(t, pageA, "stolen_marker", 10*time.Second)
 
 	// Pin the session so it persists when the WS is stolen.
-	resp := apiPost(t, url, tokenA, "/api/tabs/pin", &models.TabsPinRequest{
+	resp := apiPost(t, url, tokenA, "/api/sessions/pin", &models.SessionsPinRequest{
 		Id:    sessionId,
 		Host:  constants.LOCAL_NAME,
 		Title: "STEAL_TEST",
@@ -318,7 +318,7 @@ func TestAttachStealsSession(t *testing.T) {
 // TestPinnedSessionSurvivesClientDisconnect verifies that a pinned session
 // remains registered in the backend even after the WebSocket client disconnects
 // (i.e., the browser tab closes / the context is cleaned up).  The session
-// should still appear in /api/sessions/pinned with listenerCount == 0 and
+// should still appear in /api/sessions?pinned=1 with listenerCount == 0 and
 // be re-attachable by a new client.
 func TestPinnedSessionSurvivesClientDisconnect(t *testing.T) {
 	configDir := setupTestConfig(t)
@@ -351,7 +351,7 @@ func TestPinnedSessionSurvivesClientDisconnect(t *testing.T) {
 	waitForTerminalText(t, pageA, "survive_marker", 10*time.Second)
 
 	// Pin.
-	resp := apiPost(t, url, token, "/api/tabs/pin", &models.TabsPinRequest{
+	resp := apiPost(t, url, token, "/api/sessions/pin", &models.SessionsPinRequest{
 		Id:    sessionId,
 		Host:  constants.LOCAL_NAME,
 		Title: "SURVIVE_TEST",
@@ -366,7 +366,7 @@ func TestPinnedSessionSurvivesClientDisconnect(t *testing.T) {
 
 	// The session must still be listed as pinned with listenerCount == 0.
 	pinned := pinnedSessions(t, url, token)
-	var entry *models.SessionPinned
+	var entry *models.Session
 	for _, p := range pinned {
 		if p.Id == sessionId {
 			entry = p
@@ -454,7 +454,7 @@ Host fav2
 	// Clean up leaked pinned sessions from previous tests because session.GlobalManager is global
 	token := getToken(t, page)
 	for _, p := range pinnedSessions(t, url, token) {
-		apiPost(t, url, token, "/api/tabs/unpin", &models.TabsUnpinRequest{Id: p.Id})
+		apiPost(t, url, token, "/api/sessions/unpin", &models.SessionsUnpinRequest{Id: p.Id})
 	}
 
 	// Now open the target URL directly (since token is in localStorage for this origin, it will skip login)
@@ -526,7 +526,7 @@ Host fav2
 	// Clean up leaked pinned sessions from previous tests
 	token := getToken(t, page)
 	for _, p := range pinnedSessions(t, url, token) {
-		apiPost(t, url, token, "/api/tabs/unpin", &models.TabsUnpinRequest{Id: p.Id})
+		apiPost(t, url, token, "/api/sessions/unpin", &models.SessionsUnpinRequest{Id: p.Id})
 	}
 
 	// Now open the tag URL directly

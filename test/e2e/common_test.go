@@ -311,17 +311,17 @@ func getToken(t *testing.T, page playwright.Page) string {
 	return tok.(string)
 }
 
-// pinnedSessions fetches /api/sessions/pinned and returns the parsed slice.
-func pinnedSessions(t *testing.T, baseURL, token string) []*models.SessionPinned {
+// pinnedSessions fetches /api/sessions?pinned=1 and returns the pinned sessions slice.
+func pinnedSessions(t *testing.T, baseURL, token string) []*models.Session {
 	t.Helper()
-	v := apiGet(t, baseURL, token, "/api/sessions/pinned")
+	v := apiGet(t, baseURL, token, "/api/sessions?pinned=1")
 	if v == nil {
 		return nil
 	}
 	raw, _ := json.Marshal(v)
-	var result []*models.SessionPinned
-	json.Unmarshal(raw, &result)
-	return result
+	var sessions []*models.Session
+	json.Unmarshal(raw, &sessions)
+	return sessions
 }
 
 // Return selector of xterm screen with specified paneId. If paneId is empty, return selector of any xterm screen

@@ -200,9 +200,10 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 		if err != nil {
 			groups = []string{}
 		}
-		pinned := session.GlobalManager.GetPinned()
+		pinned := session.GlobalManager.GetAll(true)
 		return &models.FullData{
 			Sysinfo: models.Sysinfo{
+				Username:        common.User,
 				Hostname:        displayHostname,
 				Version:         Version,
 				InsecureAllowed: flags.AllowInsecure,
@@ -729,19 +730,13 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 			w.WriteHeader(http.StatusNoContent)
 		}))))
 
-	mux.Handle("/api/tabs/pinned", securityMiddleware(auth.Middleware(http.HandlerFunc(
-		func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set(headers.ContentType, constants.MIME_JSON)
-			json.NewEncoder(w).Encode(session.GlobalManager.GetPinned())
-		}))))
-
-	mux.Handle("/api/tabs/pin", securityMiddleware(auth.Middleware(http.HandlerFunc(
+	mux.Handle("/api/sessions/pin", securityMiddleware(auth.Middleware(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
 				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 				return
 			}
-			var req models.TabsPinRequest
+			var req models.SessionsPinRequest
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 				http.Error(w, "Bad Request", http.StatusBadRequest)
 				return
@@ -755,12 +750,12 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 			w.WriteHeader(http.StatusNoContent)
 		}))))
 
-	mux.Handle("/api/tabs/lock", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/api/sessions/lock", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		var req models.TabsLockRequest
+		var req models.SessionsLockRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
 			return
@@ -774,12 +769,12 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 		w.WriteHeader(http.StatusNoContent)
 	}))))
 
-	mux.Handle("/api/tabs/unpin", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/api/sessions/unpin", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		var req models.TabsUnpinRequest
+		var req models.SessionsUnpinRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
 			return
@@ -804,10 +799,11 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 			w.WriteHeader(http.StatusNoContent)
 		}))))
 
-	mux.Handle("/api/sessions/pinned", securityMiddleware(auth.Middleware(http.HandlerFunc(
+	mux.Handle("/api/sessions", securityMiddleware(auth.Middleware(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
+			pinnedOnly := r.URL.Query().Get("pinned") == "1"
 			w.Header().Set(headers.ContentType, constants.MIME_JSON)
-			json.NewEncoder(w).Encode(session.GlobalManager.GetPinned())
+			json.NewEncoder(w).Encode(session.GlobalManager.GetAll(pinnedOnly))
 		}))))
 
 	mux.Handle("/api/tunnels", securityMiddleware(auth.Middleware(http.HandlerFunc(
@@ -863,13 +859,13 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 			w.WriteHeader(http.StatusNoContent)
 		}))))
 
-	mux.Handle("/api/tabs/rename", securityMiddleware(auth.Middleware(http.HandlerFunc(
+	mux.Handle("/api/sessions/rename", securityMiddleware(auth.Middleware(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
 				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 				return
 			}
-			var req models.TabsRenameRequest
+			var req models.SessionsRenameRequest
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Id == "" || req.Title == "" {
 				http.Error(w, "Bad Request", http.StatusBadRequest)
 				return

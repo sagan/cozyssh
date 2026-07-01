@@ -11,6 +11,7 @@ import "@xterm/xterm/css/xterm.css";
 import type { WsResizeMsg, WsTerminalMessage } from "./api";
 import {
   BROWSER_STORAGE_KEY_TOKEN,
+  TOAST_KEY_TERMINAL,
   VAR_CS_NOIMAGE,
   VAR_CS_NOMODTEXTAREA,
   VAR_CS_NOWEBGL,
@@ -810,7 +811,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
         try {
           await Promise.all(promises);
         } catch (error) {
-          notify(`Error in terminal setup: ${error}`, "error");
+          notify(`Error in terminal setup: ${error}`, "error", TOAST_KEY_TERMINAL);
           return;
         }
 

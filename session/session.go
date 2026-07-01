@@ -345,24 +345,25 @@ func (m *SessionManager) CancelDisconnectTimer(id string) {
 	}
 }
 
-func (m *SessionManager) GetPinned() []*models.SessionPinned {
+func (m *SessionManager) GetAll(pinnedOnly bool) []*models.Session {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	var pinned []*models.SessionPinned
+	sessions := []*models.Session{}
 	for _, s := range m.sessions {
 		s.mu.Lock()
-		if s.IsPinned || s.IsLocked {
-			pinned = append(pinned, &models.SessionPinned{
+		if !pinnedOnly || s.IsPinned || s.IsLocked {
+			sessions = append(sessions, &models.Session{
 				Id:            s.ID,
 				Host:          s.Host,
 				Title:         s.Title,
+				IsPinned:      s.IsPinned,
 				IsLocked:      s.IsLocked,
 				ListenerCount: len(s.listeners),
 			})
 		}
 		s.mu.Unlock()
 	}
-	return pinned
+	return sessions
 }
 
 func (m *SessionManager) DisconnectAllWebsockets() {

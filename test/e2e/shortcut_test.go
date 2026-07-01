@@ -23,7 +23,7 @@ func TestKeyboardShortcuts(t *testing.T) {
 
 	// Clean up leaked pinned sessions from previous tests
 	for _, p := range pinnedSessions(t, url, token) {
-		apiPost(t, url, token, "/api/tabs/unpin", &models.TabsUnpinRequest{Id: p.Id})
+		apiPost(t, url, token, "/api/sessions/unpin", &models.SessionsUnpinRequest{Id: p.Id})
 	}
 
 	// Wait for default local shell

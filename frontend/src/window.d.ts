@@ -1,6 +1,6 @@
 import type { ITerminalOptions, Terminal } from "@xterm/xterm";
 
-import type { ButtonData, HostData } from "./api";
+import type { ButtonData, HostData, Session } from "./api";
 import type {
   CS_EVENT_SHELL_INTEGRATION,
   CS_EVENT_TERMINAL_CHANGE,
@@ -140,6 +140,11 @@ declare global {
    */
   var __CS_SHORTCUT_BUTTONS__: Record<string, ButtonData>;
   /**
+   * Toast keys that are muted. Keys can be prefixes ending with '-'.
+   * For example, 'A-' matches 'A-1', 'A-2', etc.
+   */
+  var __CS_TOAST_KEY_MUTE_SET__: Set<string>;
+  /**
    * Focus the terminal with the given pane id.
    * @param tabOrPaneId defaults to active terminal pane id.
    */
@@ -230,6 +235,11 @@ declare global {
     vars: Record<string, string | undefined>;
     localVars: Record<string, string | undefined>;
   };
+  /**
+   * Get all sessions.
+   * @param pinnedOnly Whether to only get sessions whose `isPinned` or `isLocked` property is true.
+   */
+  function csGetSessions(pinnedOnly?: boolean): Promise<Session[]>;
   /**
    * Performs an HTTP request via the CozySSH backend proxy to bypass browser CORS restrictions.
    * @param init the fetch `RequestInit` object, with an additional optional `key` property.

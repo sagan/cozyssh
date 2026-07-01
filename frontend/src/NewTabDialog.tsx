@@ -26,18 +26,16 @@ import PushPinIcon from "@mui/icons-material/PushPin";
 import TagIcon from "@mui/icons-material/Tag";
 import SmartButtonIcon from "@mui/icons-material/SmartButton";
 
-import type { SessionPinned, ButtonData, HostData } from "./api";
+import type { Session, ButtonData, HostData } from "./api";
 import {
-  BROWSER_STORAGE_KEY_TOKEN,
   BUILTIN_BUTTONS,
   DEFAULT_BUTTON_GROUP,
-  HEADER_AUTHORIZATION,
-  HEADER_AUTHORIZATION_BEARER_PREFIX,
   DEFAULT_SCROLL_ITEMS,
   LOCAL_NAME,
   VAR_CS_SCROLL_ITEMS,
   ID_NEW_TAB_DIALOG_INPUT,
   TAG_ORDER_PREFIX,
+  TOAST_KEY_COPY_TUNNEL_ENTRYPOINT,
 } from "./constants";
 import {
   cutString,
@@ -58,6 +56,7 @@ import {
   updateRecentButtonId,
   useStore,
   getIntVar,
+  fetchSessions,
 } from "./store";
 
 interface DialogItem {
@@ -193,7 +192,7 @@ export default function NewTabDialog({
   const selectedItemRef = useRef<HTMLDivElement>(null);
   const swipeStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
-  const [localPinned, setLocalPinned] = useState<SessionPinned[]>([]);
+  const [localPinned, setLocalPinned] = useState<Session[]>([]);
 
   const uniqueTags: { tag: string; count: number }[] = useMemo(() => {
     const set = new Map<string, number>();
@@ -237,14 +236,8 @@ export default function NewTabDialog({
 
   useEffect(() => {
     if (open) {
-      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-      fetch("/api/sessions/pinned", {
-        headers: {
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        },
-      })
-        .then((r) => r.json() as Promise<SessionPinned[]>)
-        .then((data) => setLocalPinned(data || []))
+      fetchSessions(true)
+        .then((data) => setLocalPinned(data))
         .catch((e) => console.error(e));
     }
   }, [open]);
@@ -779,7 +772,7 @@ export default function NewTabDialog({
         navigator.clipboard
           .writeText(item.value)
           .then(() =>
-            notify(`Tunnel entrypoint "${item.value}" copied to clipboard`, "info", "cs-copy-tunnel-entrypoint"),
+            notify(`Tunnel entrypoint "${item.value}" copied to clipboard`, "info", TOAST_KEY_COPY_TUNNEL_ENTRYPOINT),
           )
           .catch(() => {});
         onClose();

@@ -22,6 +22,7 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
   - [`csFocus(tabOrPaneId?: string): void`](#csfocustaborpaneid-string-void)
   - [`csNotify(msg: string, severity: 'success' | 'info' | 'warning' | 'error' = 'info'): void`](#csnotifymsg-string-severity-success--info--warning--error--info-void)
   - [`csGetAll(): AllObject`](#csgetall-allobject)
+  - [`csGetSessions(pinnedOnly?: boolean): Promise<Session[]>`](#csgetsessionspinnedonly-boolean-promisesession)
   - [`csOpen(host: HostData | string | (HostData | string)[], options?: { title?: string, target?: string }): void`](#csopenhost-hostdata--string--hostdata--string-options--title-string-target-string--void)
   - [`csClose(tabOrPaneId?: string): void`](#csclosetaborpaneid-string-void)
   - [`csFetch(url: string, options?: RequestInit): Promise<Response>`](#csfetchurl-string-options-requestinit-promiseresponse)
@@ -261,6 +262,25 @@ Returns an object containing all the data from the CozySSH application. Sample o
   ],
   "vars": {},
   "localVars": {}
+}
+```
+
+### `csGetSessions(pinnedOnly?: boolean): Promise<Session[]>`
+
+Get all sessions. It returns all sessions, including sessions of other browser instances (if any).
+
+- `pinnedOnly`: Whether to only get sessions whose `isPinned` or `isLocked` property is true.
+
+Sample session object:
+
+```json
+{
+  "id": "local-123456",
+  "host": "local",
+  "title": "local",
+  "isPinned": false,
+  "isLocked": false,
+  "listenerCount": 1
 }
 ```
 

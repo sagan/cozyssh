@@ -60,7 +60,7 @@ import { version as PACKAGE_JSON_VERSION } from "../package.json";
 import type {
   HostData,
   PasswordUpdateRequest,
-  SessionPinned,
+  Session,
   CopyIDRequest,
   CopyIDResponse,
   PasswordsResponse,
@@ -92,6 +92,8 @@ import {
   TAG_GROUP_PREFIX,
   TAG_ORDER_PREFIX,
   TAG_FAV,
+  TOAST_KEY_PASTE_SSH_CONFIG_BLOCK,
+  TOAST_KEY_SYNC,
 } from "./constants";
 import {
   type HostForm,
@@ -133,6 +135,7 @@ import {
   getIntVar,
   moveServer,
   moveGroup,
+  fetchSessions,
 } from "./store";
 import { useShallow } from "zustand/react/shallow";
 
@@ -192,6 +195,7 @@ export default function Sidebar({
 }) {
   const appVersion = useStore((state) => state.sysinfo.version);
   const savePassword = useStore((state) => state.sysinfo.savePassword);
+  const sysUsername = useStore((state) => state.sysinfo.username);
   const sysHostname = useStore((state) => state.sysinfo.hostname);
   const sysConfigDir = useStore((state) => state.sysinfo.config_dir);
   const sysSshDir = useStore((state) => state.sysinfo.ssh_dir);
@@ -214,7 +218,7 @@ export default function Sidebar({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newPwd, setNewPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
-  const [pinnedSessions, setPinnedSessions] = useState<SessionPinned[]>([]);
+  const [pinnedSessions, setPinnedSessions] = useState<Session[]>([]);
   const [dialogTab, setDialogTab] = useState(0);
   const [dialogAppPassword, setDialogAppPassword] = useState<string | null>(null);
   const [passwordsState, setPasswordsState] = useState<PasswordsResponse>({ locked: true, keys: [] });
@@ -257,14 +261,8 @@ export default function Sidebar({
 
   useEffect(() => {
     if (settingsOpen) {
-      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-      fetch("/api/sessions/pinned", {
-        headers: {
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        },
-      })
-        .then((r) => r.json() as Promise<SessionPinned[]>)
-        .then((data) => setPinnedSessions(data || []))
+      fetchSessions(true)
+        .then((data) => setPinnedSessions(data))
         .catch((e) => console.error(e));
     }
   }, [settingsOpen]);
@@ -356,15 +354,15 @@ export default function Sidebar({
       });
 
       if (res.ok) {
-        notify(nextEnabled ? "Sync enabled" : "Sync disabled", "success");
+        notify(nextEnabled ? "Sync enabled" : "Sync disabled", "success", TOAST_KEY_SYNC);
         setWebdavEnabled(nextEnabled);
         fetchWebdavStatus(false);
       } else {
         const t = await res.text();
-        notify("Failed to toggle sync: " + t, "error");
+        notify("Failed to toggle sync: " + t, "error", TOAST_KEY_SYNC);
       }
     } catch (e: unknown) {
-      notify(`Failed to toggle sync: ${e}`, "error");
+      notify(`Failed to toggle sync: ${e}`, "error", TOAST_KEY_SYNC);
     }
   };
 
@@ -409,7 +407,7 @@ export default function Sidebar({
         });
 
         if (res.ok) {
-          notify("WebDAV settings cleared successfully", "success");
+          notify("WebDAV settings cleared successfully", "success", TOAST_KEY_SYNC);
           setWebdavUrl("");
           setCurrentWebdavUrl("");
           setWebdavUser("");
@@ -423,7 +421,7 @@ export default function Sidebar({
           fetchWebdavStatus(false);
         } else {
           const text = await res.text();
-          notify("Failed to clear WebDAV settings: " + text, "error");
+          notify("Failed to clear WebDAV settings: " + text, "error", TOAST_KEY_SYNC);
         }
         return;
       }
@@ -545,17 +543,17 @@ export default function Sidebar({
       });
 
       if (saveRes.ok) {
-        notify("WebDAV settings saved successfully", "success");
+        notify("WebDAV settings saved successfully", "success", TOAST_KEY_SYNC);
         setCurrentWebdavUrl(webdavUrl.trim());
         setCurrentWebdavUser(webdavUser);
         setCurrentWebdavPassword(webdavPassword);
         fetchWebdavStatus(false);
       } else {
         const text = await saveRes.text();
-        notify("Failed to save WebDAV settings: " + text, "error");
+        notify("Failed to save WebDAV settings: " + text, "error", TOAST_KEY_SYNC);
       }
     } catch (e: unknown) {
-      notify(`WebDAV verification failed: ${e}`, "error");
+      notify(`WebDAV verification failed: ${e}`, "error", TOAST_KEY_SYNC);
     } finally {
       setIsTestingWebdav(false);
     }
@@ -574,10 +572,10 @@ export default function Sidebar({
       });
 
       if (res.ok) {
-        notify("Sync triggered", "success");
-        setTimeout(() => fetchWebdavStatus(true), 500);
+        notify("Sync triggered", "success", TOAST_KEY_SYNC);
+        setTimeout(() => fetchWebdavStatus(true), 500, TOAST_KEY_SYNC);
       } else {
-        notify("Failed to trigger sync", "error");
+        notify("Failed to trigger sync", "error", TOAST_KEY_SYNC);
       }
     } catch (e: unknown) {
       notify(`Failed to trigger sync: ${e}`, "error");
@@ -704,14 +702,14 @@ export default function Sidebar({
     try {
       const text = await navigator.clipboard.readText();
       if (!text) {
-        notify("Clipboard is empty", "warning");
+        notify("Clipboard is empty", "warning", TOAST_KEY_PASTE_SSH_CONFIG_BLOCK);
         return;
       }
       const host = parseSSHConfigBlock(text);
       setHostFormData({ ...host, tags: host.tags?.join(" ") || "" });
-      notify("Successfully imported Host settings from SSH config block", "success");
+      notify("Successfully imported Host settings from SSH config block", "success", TOAST_KEY_PASTE_SSH_CONFIG_BLOCK);
     } catch (err) {
-      notify(`Failed to read clipboard or parse config block: ${err}`, "error");
+      notify(`Failed to read clipboard or parse config block: ${err}`, "error", TOAST_KEY_PASTE_SSH_CONFIG_BLOCK);
     }
   }, []);
 
@@ -3057,6 +3055,9 @@ export default function Sidebar({
                 </Typography>
                 <Typography variant="subtitle2" gutterBottom>
                   SSH Dir: {sysSshDir}
+                </Typography>
+                <Typography variant="subtitle2" gutterBottom>
+                  OS Username: {sysUsername}
                 </Typography>
                 <Divider sx={{ my: 1 }} />
                 <Typography variant="subtitle2" gutterBottom>

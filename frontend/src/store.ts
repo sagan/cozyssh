@@ -19,14 +19,15 @@ import type {
   ActiveTunnel,
   RecentUpdateRequest,
   SessionsAttachRequest,
-  TabsUnpinRequest,
-  TabsPinRequest,
-  TabsLockRequest,
+  SessionsUnpinRequest,
+  SessionsPinRequest,
+  SessionsLockRequest,
   SessionsCloseRequest,
-  TabsRenameRequest,
+  SessionsRenameRequest,
   ButtonsMoveRequest,
   Sysinfo,
   FullData,
+  Session,
 } from "./api";
 import {
   type HostForm,
@@ -34,6 +35,7 @@ import {
   type ShellIntegration,
   type Toast,
   type ViewMode,
+  createSetProxy,
   genPaneId,
   genTabId,
   getHostGroupPath,
@@ -49,6 +51,7 @@ import {
 import type { TerminalHandle } from "./Terminal";
 import type { ScratchpadHandle } from "./Scratchpad";
 import {
+  APP_NAME,
   BROWSER_STORAGE_KEY_ACTIVE_GROUP,
   BROWSER_STORAGE_KEY_LOCAL_VARS,
   BROWSER_STORAGE_KEY_RECENT_BUTTONS,
@@ -182,6 +185,27 @@ function loadFromStorage<T>(key: string, defaultValue: T): T {
   return defaultValue;
 }
 
+export type MsgLogout = {
+  type: "logout";
+  preserveLocalVars?: boolean;
+};
+
+export type Msg = MsgLogout;
+
+export const channel = new BroadcastChannel(APP_NAME);
+
+channel.onmessage = (event) => {
+  const msg = event.data as Msg;
+  switch (msg.type) {
+    case "logout":
+      clearData(msg.preserveLocalVars);
+      location.reload();
+      break;
+    default:
+      break;
+  }
+};
+
 export const useStore = create<Store>(() => ({
   asyncDialogOpen: false,
   sendScope: 0,
@@ -271,7 +295,33 @@ export const triggerFocusSearchInput = () =>
 
 let toastId = 0;
 
+let toastKeyMuteRegExp: RegExp | undefined;
+export const toastKeyMuteSet = createSetProxy<string>([], (set) => {
+  if (set.size > 0) {
+    toastKeyMuteRegExp = new RegExp(
+      "^(" +
+        Array.from(set)
+          .sort((a, b) => b.length - a.length)
+          .map((a) => {
+            if (a.endsWith("-")) {
+              // treat as prefix
+              return RegExp.escape(a);
+            }
+            // exact match
+            return RegExp.escape(a) + "$";
+          })
+          .join("|") +
+        ")",
+    );
+  } else {
+    toastKeyMuteRegExp = undefined;
+  }
+});
+
 export const notify = (msg: string, severity: Severity = "info", key?: string) => {
+  if (key && toastKeyMuteRegExp?.test(key)) {
+    return;
+  }
   const id = key ? `${key}-${toastId++}` : toastId++;
   setToasts((prev) => {
     const newToast = { id, key, msg, severity };
@@ -583,9 +633,9 @@ export const setLocalVars = (localVars: Record<string, string>) => {
 };
 
 /**
- * Clear all in-memory store data - call it when log out
+ * Clear all in-memory store data
  */
-export const clearData = () =>
+export const clearData = (preserveLocalVars = false) =>
   useStore.setState({
     activeGroup: "",
     hosts: [],
@@ -595,10 +645,33 @@ export const clearData = () =>
     recents: [],
     toasts: [],
     vars: {},
-    localVars: {},
     shellIntegrations: {},
     recentButtonIds: [],
+    ...(preserveLocalVars ? {} : { localVars: {} }),
   });
+
+/**
+ * Clear local storage, clear all in-memory store data, and redirect to login page.
+ */
+export async function safeLogout(preserveLocalVars = false) {
+  if (preserveLocalVars) {
+    for (const key of Object.keys(localStorage)) {
+      if (key !== BROWSER_STORAGE_KEY_LOCAL_VARS) {
+        localStorage.removeItem(key);
+      }
+    }
+  } else {
+    localStorage.clear();
+  }
+  sessionStorage.clear();
+  clearData(preserveLocalVars);
+  if (window.caches) {
+    await caches.delete(CACHE_API_DATA);
+    await caches.delete(CACHE_MANIFEST);
+  }
+  channel.postMessage({ type: "logout", preserveLocalVars } satisfies MsgLogout);
+  window.location.href = "/login";
+}
 
 /**
  * Clean Cross-Tab Synchronization
@@ -783,6 +856,19 @@ export async function fetchActiveTunnels() {
   } catch (e) {
     console.error("Failed to fetch active tunnels:", e);
   }
+}
+
+export async function fetchSessions(pinnedOnly = false): Promise<Session[]> {
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+  const res = await fetch(`/api/sessions?pinned=${pinnedOnly ? "1" : "0"}`, {
+    headers: {
+      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+    },
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch sessions: status=${res.status}`);
+  }
+  return (await res.json()) as Session[];
 }
 
 export function openHostsAsSplit(title: string, hosts: string[], hostOptions?: (Record<string, string> | undefined)[]) {
@@ -992,14 +1078,7 @@ export async function logout() {
       },
     });
   }
-  localStorage.clear();
-  sessionStorage.clear();
-  clearData();
-  if (window.caches) {
-    await caches.delete(CACHE_API_DATA);
-    await caches.delete(CACHE_MANIFEST);
-  }
-  window.location.href = "/login";
+  safeLogout();
 }
 
 export async function logoutAll() {
@@ -1028,14 +1107,7 @@ export async function logoutAll() {
       },
     }).catch((e) => console.error(e));
   }
-  localStorage.clear();
-  sessionStorage.clear();
-  clearData();
-  if (window.caches) {
-    await caches.delete(CACHE_API_DATA);
-    await caches.delete(CACHE_MANIFEST);
-  }
-  window.location.href = "/login";
+  safeLogout();
 }
 
 export async function cloneSession(id: string, cloneInSameTab?: boolean) {
@@ -1136,13 +1208,13 @@ export async function unpinTab(id?: string) {
   }
   const backendSessionId = tab.panes[0]?.sessionId || tab.panes[0]?.id || id;
   const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-  await fetch("/api/tabs/unpin", {
+  await fetch("/api/sessions/unpin", {
     method: METHOD_POST,
     headers: {
       [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
       [HEADER_CONTENT_TYPE]: MIME_JSON,
     },
-    body: JSON.stringify({ id: backendSessionId } satisfies TabsUnpinRequest),
+    body: JSON.stringify({ id: backendSessionId } satisfies SessionsUnpinRequest),
   });
 }
 
@@ -1164,13 +1236,13 @@ export async function pinTab(id?: string) {
   const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
   // Pinning only supports single-pane tabs for now (backend requirement)
   const host = pane.host || LOCAL_NAME;
-  await fetch("/api/tabs/pin", {
+  await fetch("/api/sessions/pin", {
     method: METHOD_POST,
     headers: {
       [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
       [HEADER_CONTENT_TYPE]: MIME_JSON,
     },
-    body: JSON.stringify({ id: backendSessionId, host, title: tab.title } satisfies TabsPinRequest),
+    body: JSON.stringify({ id: backendSessionId, host, title: tab.title } satisfies SessionsPinRequest),
   });
   setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, isPinned: true } : t)));
 }
@@ -1192,13 +1264,13 @@ export async function unlockTab(id?: string) {
   const paneId = pane.sessionId || pane.id;
   const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
   const host = pane.host || LOCAL_NAME;
-  await fetch("/api/tabs/pin", {
+  await fetch("/api/sessions/pin", {
     method: METHOD_POST,
     headers: {
       [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
       [HEADER_CONTENT_TYPE]: MIME_JSON,
     },
-    body: JSON.stringify({ id: paneId, host, title: tab.title } satisfies TabsPinRequest),
+    body: JSON.stringify({ id: paneId, host, title: tab.title } satisfies SessionsPinRequest),
   });
   setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, isLocked: false } : t)));
 }
@@ -1220,13 +1292,13 @@ export async function lockTab(id?: string) {
   const backendSessionId = pane.sessionId || pane.id;
   const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
   const host = pane.host || LOCAL_NAME;
-  await fetch("/api/tabs/lock", {
+  await fetch("/api/sessions/lock", {
     method: METHOD_POST,
     headers: {
       [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
       [HEADER_CONTENT_TYPE]: MIME_JSON,
     },
-    body: JSON.stringify({ id: backendSessionId, host, title: tab.title } satisfies TabsLockRequest),
+    body: JSON.stringify({ id: backendSessionId, host, title: tab.title } satisfies SessionsLockRequest),
   });
   setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, isLocked: true } : t)));
 }
@@ -1347,13 +1419,13 @@ export async function renameTab(targetId?: string) {
     if (targetTab.isPinned) {
       const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
       const backendSessionId = targetTab.panes[0]?.sessionId || targetTab.panes[0]?.id || targetId;
-      await fetch("/api/tabs/rename", {
+      await fetch("/api/sessions/rename", {
         method: METHOD_POST,
         headers: {
           [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
           [HEADER_CONTENT_TYPE]: MIME_JSON,
         },
-        body: JSON.stringify({ id: backendSessionId, title: newTitle } satisfies TabsRenameRequest),
+        body: JSON.stringify({ id: backendSessionId, title: newTitle } satisfies SessionsRenameRequest),
       });
     }
     setTabs((prev) => prev.map((t) => (t.id === targetId ? { ...t, title: newTitle } : t)));
@@ -1369,8 +1441,7 @@ export async function fetchHosts() {
       },
     });
     if (r.status === 401) {
-      localStorage.removeItem(BROWSER_STORAGE_KEY_TOKEN);
-      window.location.href = "/login"; // @todo : move side effect out of it
+      safeLogout(true);
       return;
     }
     const data: HostData[] = await r.json();
@@ -1621,8 +1692,7 @@ export async function refreshData({ sync = 0, refresh = 0 } = {}) {
       },
     });
     if (r.status === 401) {
-      localStorage.removeItem(BROWSER_STORAGE_KEY_TOKEN);
-      window.location.href = "/login";
+      safeLogout(true);
       return;
     }
     const data: FullData = await r.json();

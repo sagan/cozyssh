@@ -37,6 +37,7 @@ import {
   LOCAL_VAR_PREFIX,
   DEFAULT_FONT_SIZE,
   VAR_CS_FONT_SIZE,
+  TOAST_KEY_SCRIPT,
 } from "./constants";
 import {
   defaultThemeOptions,
@@ -64,6 +65,8 @@ import {
   useStore,
   getIntVar,
   refreshData,
+  toastKeyMuteSet,
+  fetchSessions,
 } from "./store";
 import { dialogs } from "./Dialogs";
 import type { AppletData } from "./AppletWrapper";
@@ -83,6 +86,7 @@ window.__CS_BLACKHOLE_SHORTCUTS__ = blackholeShortcuts;
 window.__CS_LIQUID_ENGINE__ = liquidEngine;
 window.__CS_RUNNING_SCRIPT__ = undefined;
 window.__CS_SHORTCUT_BUTTONS__ = {};
+window.__CS_TOAST_KEY_MUTE_SET__ = toastKeyMuteSet;
 window.__CS_ENV__ = window.appToggleFullscreen ? 1 : 0;
 document.documentElement.dataset.csEnv = `${window.__CS_ENV__}`;
 document.documentElement.dataset.csVersion = PACKAGE_JSON_VERSION;
@@ -185,6 +189,7 @@ window.csOpenMenu = openMenu;
 window.csAttach = attachSession;
 window.csRefresh = refreshData;
 window.csClose = closeTabOrPane;
+window.csGetSessions = fetchSessions;
 
 window.csFocus = (tabOrPaneId?: string) => {
   if (isMuiModalOpen()) {
@@ -347,7 +352,7 @@ export async function runScript({ button, background }: CsRunScriptPayload) {
       scriptCode = transform(scriptCode, { transforms: ["typescript", "jsx"] }).code;
     } catch (e) {
       console.error(`Script ${button.name} Transform Error:`, e);
-      notify(`Script ${button.name} Transform Error: ${e}`, "error");
+      notify(`Script ${button.name} Transform Error: ${e}`, "error", TOAST_KEY_SCRIPT);
       __CS_RUNNING_SCRIPT__ = undefined;
       return;
     }
@@ -358,7 +363,7 @@ export async function runScript({ button, background }: CsRunScriptPayload) {
       moduleObj = await import(url);
     } catch (e) {
       console.error(`Script ${button.name} Import Error:`, e);
-      notify(`Script ${button.name} Import Error: ${e}`, "error");
+      notify(`Script ${button.name} Import Error: ${e}`, "error", TOAST_KEY_SCRIPT);
       __CS_RUNNING_SCRIPT__ = undefined;
       return;
     } finally {
@@ -378,12 +383,13 @@ export async function runScript({ button, background }: CsRunScriptPayload) {
       await moduleObj.default.run({ button, background });
     } catch (e) {
       console.error(`Script ${button.name} run() Error:`, e);
-      notify(`Script ${button.name} run() Error: ${e}`, "error");
+      notify(`Script ${button.name} run() Error: ${e}`, "error", TOAST_KEY_SCRIPT);
     }
   } else if (cached) {
     notify(
       `Script ${button.name} is already imported & cached, and has no run function. Reload the page to clear the cache`,
       "info",
+      TOAST_KEY_SCRIPT,
     );
     __CS_RUNNING_SCRIPT__ = undefined;
     return;

@@ -116,6 +116,7 @@ export const MISC_FUNCTIONS: BuiltinButton[] = [
   { value: "NEXT_BUTTON_GROUP", label: "Next Button Group", shortcut: "alt+v" },
   { value: "PREV_BUTTON_GROUP", label: "Prev Button Group", shortcut: "alt+shift+v" },
   { value: "OPEN_SCRATCHPAD", label: "Open Scratchpad", shortcut: "alt+s" },
+  { value: "REFRESH", label: "Refresh Data" },
 ] as const;
 
 export const BUILTIN_BUTTONS = [
@@ -141,7 +142,20 @@ export const DEFAULT_SCROLL_LINES = 3;
  * xterm.js default fontSize
  */
 export const DEFAULT_TERMINAL_FONT_SIZE = 15;
+
 export const TOAST_KEY_FONT_SIZE = "cs-font-size";
+export const TOAST_KEY_PASTE_SSH_CONFIG_BLOCK = "cs-paste-ssh-config-block";
+/**
+ * WebDAV Sync related toasts
+ */
+export const TOAST_KEY_SYNC = "cs-sync";
+export const TOAST_KEY_TERMINAL = "cs-terminal";
+/**
+ * Custom Script (run_script button) related toasts
+ */
+export const TOAST_KEY_SCRIPT = "cs-script";
+export const TOAST_KEY_BACKEND_API = "cs-backend-api";
+export const TOAST_KEY_COPY_TUNNEL_ENTRYPOINT = "cs-copy-tunnel-entrypoint";
 
 /**
  * Used as a special flag in url hash to indicate the mobile input panel is currently open.
