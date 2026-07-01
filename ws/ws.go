@@ -154,6 +154,10 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	localForwards := strings.Join(query["localForward"], "\n")
 	remoteForwards := strings.Join(query["remoteForward"], "\n")
 	dynamicForwards := strings.Join(query["dynamicForward"], "\n")
+	var env []string
+	if query.Has("env") {
+		env = strings.Split(strings.Join(query["env"], "\n"), "\n")
+	}
 
 	user := common.User
 	// sessionID fallbacks to hostname if no unique ID provided
@@ -202,7 +206,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 
 			if pClient == nil {
 				pClient, sshSession, remoteCommand, err = sshmanager.DialSSH(host, term, rows, cols, identity,
-					sessionProxyJump, noPublicKey)
+					sessionProxyJump, noPublicKey, env)
 			}
 
 			if err != nil {
@@ -273,7 +277,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 				s.Broadcast(append([]byte(models.WS_MSG_PREFIX_STATE), models.WsMsgStateDisconnected...))
 
 				newPClient, newSess, newRemoteCommand, err := sshmanager.DialSSH(host, nil, rows, cols, identity,
-					sessionProxyJump, noPublicKey)
+					sessionProxyJump, noPublicKey, env)
 				if err != nil {
 					errStr := strings.ToLower(err.Error())
 					if strings.Contains(errStr, "mismatch") || strings.Contains(errStr, "auth") ||

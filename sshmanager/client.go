@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -50,6 +51,7 @@ type PooledClient struct {
 	Client        *ssh.Client
 	Closers       []io.Closer
 	RemoteCommand string
+	SendEnv       string
 	Mu            sync.Mutex
 	Refs          int
 }
@@ -246,6 +248,9 @@ func updateLines(lines []string, oldAlias string, h *models.HostData) ([]string,
 	}
 	if h.VerifyHostKeyDNS != "" {
 		block = append(block, fmt.Sprintf("    VerifyHostKeyDNS %s", h.VerifyHostKeyDNS))
+	}
+	if h.SendEnv != "" {
+		block = append(block, fmt.Sprintf("    SendEnv %s", h.SendEnv))
 	}
 	if h.LocalForward != "" {
 		for line := range strings.SplitSeq(h.LocalForward, "\n") {
@@ -493,6 +498,7 @@ func ListHosts() ([]*models.HostData, error) {
 				strictHostKeyChecking, _ := cfg.Get(name, "StrictHostKeyChecking")
 				hostKeyAlgorithmsOption, _ := cfg.Get(name, "HostKeyAlgorithms")
 				verifyHostKeyDNS, _ := cfg.Get(name, "VerifyHostKeyDNS")
+				sendEnv, _ := cfg.Get(name, "SendEnv")
 
 				var tags []string
 				var commentParts []string
@@ -567,6 +573,7 @@ func ListHosts() ([]*models.HostData, error) {
 					StrictHostKeyChecking: strictHostKeyChecking,
 					HostKeyAlgorithms:     hostKeyAlgorithmsOption,
 					VerifyHostKeyDNS:      verifyHostKeyDNS,
+					SendEnv:               sendEnv,
 					LocalForward:          strings.Join(localForwards, "\n"),
 					RemoteForward:         strings.Join(remoteForwards, "\n"),
 					DynamicForward:        strings.Join(dynamicForwards, "\n"),
@@ -675,14 +682,14 @@ type TerminalUI interface {
 
 // DialSSH resolves standard configs and connects via id_ed25519
 // It always returns a new independent connection.
-func DialSSH(name string, term TerminalUI, rows, cols int, identity string, proxyJump string, noPublicKey bool) (
-	*PooledClient, *ssh.Session, string, error) {
-	client, closers, remoteCommand, err := getSSHClient(name, term, identity, proxyJump, noPublicKey)
+func DialSSH(name string, term TerminalUI, rows, cols int, identity string, proxyJump string, noPublicKey bool,
+	env []string) (*PooledClient, *ssh.Session, string, error) {
+	client, closers, remoteCommand, sendEnv, err := getSSHClient(name, term, identity, proxyJump, noPublicKey)
 	if err != nil {
 		return nil, nil, "", err
 	}
 
-	pClient := &PooledClient{Client: client, Refs: 1, Closers: closers, RemoteCommand: remoteCommand}
+	pClient := &PooledClient{Client: client, Refs: 1, Closers: closers, RemoteCommand: remoteCommand, SendEnv: sendEnv}
 
 	session, err := client.NewSession()
 	if err != nil {
@@ -696,6 +703,15 @@ func DialSSH(name string, term TerminalUI, rows, cols int, identity string, prox
 		return nil, nil, "", err
 	}
 
+	applySendEnv(session, pClient.SendEnv)
+
+	for _, v := range env {
+		if v != "" {
+			name, value, _ := strings.Cut(v, "=")
+			session.Setenv(name, value)
+		}
+	}
+
 	go startKeepAlive(client)
 
 	return pClient, session, remoteCommand, nil
@@ -705,7 +721,7 @@ func DialSSH(name string, term TerminalUI, rows, cols int, identity string, prox
 // $identity: directly set the content of the identity file.
 // noPublicKey: skip default public key authentication.
 func getSSHClient(name string, term TerminalUI, identity string,
-	proxyJump string, noPublicKey bool) (*ssh.Client, []io.Closer, string, error) {
+	proxyJump string, noPublicKey bool) (*ssh.Client, []io.Closer, string, string, error) {
 	configPath := filepath.Join(getSSHDir(), "config")
 	f, err := os.Open(configPath)
 	var cfg *ssh_config.Config
@@ -766,6 +782,7 @@ func getSSHClient(name string, term TerminalUI, identity string,
 	identityFile := ""
 	remoteCommand := ""
 	addressFamily := ""
+	sendEnv := ""
 	if cfg != nil {
 		identityFile, _ = cfg.Get(name, "IdentityFile")
 		if proxyJump == "" {
@@ -773,6 +790,7 @@ func getSSHClient(name string, term TerminalUI, identity string,
 		}
 		remoteCommand, _ = cfg.Get(name, "RemoteCommand")
 		addressFamily, _ = cfg.Get(name, "AddressFamily")
+		sendEnv, _ = cfg.Get(name, "SendEnv")
 	}
 	if proxyJump != "" {
 		proxyJump = ExpandTokens(proxyJump, host, port, user, host, "")
@@ -1001,7 +1019,7 @@ func getSSHClient(name string, term TerminalUI, identity string,
 			if term != nil {
 				term.Print(fmt.Sprintf("\r\nknown_hosts error: %v\r\n", khErr))
 			}
-			return nil, nil, "", khErr
+			return nil, nil, "", "", khErr
 		}
 	}
 
@@ -1206,7 +1224,7 @@ func getSSHClient(name string, term TerminalUI, identity string,
 
 	dialFunc := func(config *ssh.ClientConfig) (*ssh.Client, error) {
 		if proxyJump != "" {
-			proxyClient, proxyClosers, _, err := getSSHClient(proxyJump, term, "", "", false)
+			proxyClient, proxyClosers, _, _, err := getSSHClient(proxyJump, term, "", "", false)
 			if err != nil {
 				return nil, fmt.Errorf("failed to connect to ProxyJump %s: %w", proxyJump, err)
 			}
@@ -1288,10 +1306,10 @@ func getSSHClient(name string, term TerminalUI, identity string,
 		for _, c := range closers {
 			c.Close()
 		}
-		return nil, nil, "", err
+		return nil, nil, "", "", err
 	}
 
-	return client, closers, remoteCommand, nil
+	return client, closers, remoteCommand, sendEnv, nil
 }
 
 // GetHostForwardRules reads LocalForward, RemoteForward, and DynamicForward directives
@@ -1390,7 +1408,33 @@ func CloneSSH(pClient *PooledClient, rows, cols int) (*ssh.Session, string, erro
 		pClient.Release()
 		return nil, "", err
 	}
+	applySendEnv(session, pClient.SendEnv)
 	return session, pClient.RemoteCommand, nil
+}
+
+func applySendEnv(session *ssh.Session, sendEnv string) {
+	if sendEnv == "" {
+		return
+	}
+	for _, env := range os.Environ() {
+		parts := strings.SplitN(env, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		name, val := parts[0], parts[1]
+		if matchEnvPatterns(name, sendEnv) {
+			session.Setenv(name, val)
+		}
+	}
+}
+
+func matchEnvPatterns(name string, patterns string) bool {
+	for _, pattern := range strings.Fields(patterns) {
+		if matched, _ := path.Match(pattern, name); matched {
+			return true
+		}
+	}
+	return false
 }
 
 func setupSession(session *ssh.Session, rows, cols int) error {
@@ -1651,7 +1695,7 @@ func tryPubKeyAuth(name string, host *models.HostData, expectedFingerprint strin
 
 	var client *ssh.Client
 	if host.ProxyJump != "" {
-		proxyClient, proxyClosers, _, err := getSSHClient(host.ProxyJump, nil, "", "", false)
+		proxyClient, proxyClosers, _, _, err := getSSHClient(host.ProxyJump, nil, "", "", false)
 		if err != nil {
 			return false, nil, fmt.Errorf("failed to connect to ProxyJump %s: %w", host.ProxyJump, err)
 		}
@@ -1741,7 +1785,7 @@ func executeCopyIDWithPassword(name string, host *models.HostData, password stri
 	var closers []io.Closer
 
 	if host.ProxyJump != "" {
-		proxyClient, proxyClosers, _, err := getSSHClient(host.ProxyJump, nil, "", "", false)
+		proxyClient, proxyClosers, _, _, err := getSSHClient(host.ProxyJump, nil, "", "", false)
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to ProxyJump %s: %w", host.ProxyJump, err)
 		}

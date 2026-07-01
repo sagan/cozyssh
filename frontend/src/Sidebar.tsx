@@ -1216,6 +1216,7 @@ export default function Sidebar({
       strict_host_key_checking: "",
       host_key_algorithms: "",
       verify_host_key_dns: "",
+      send_env: "",
       local_forward: "",
       remote_forward: "",
       tags: "",
@@ -1251,6 +1252,7 @@ export default function Sidebar({
       strict_host_key_checking: target.strict_host_key_checking || "",
       host_key_algorithms: target.host_key_algorithms || "",
       verify_host_key_dns: target.verify_host_key_dns || "",
+      send_env: target.send_env || "",
       local_forward: target.local_forward || "",
       remote_forward: target.remote_forward || "",
       tags: target.tags ? target.tags.join(" ") : "",
@@ -3696,6 +3698,25 @@ export default function Sidebar({
                   size="small"
                   placeholder="ask / yes / no"
                   helperText="Verify host key fingerprint via DNSSEC SSHFP records (RFC 4255)"
+                />
+              )}
+            />
+            <Autocomplete
+              freeSolo
+              fullWidth
+              options={["LANG LC_* COLORTERM NO_COLOR"]}
+              value={hostFormData.send_env || ""}
+              onInputChange={(_event, newValue) =>
+                setHostFormData({ ...hostFormData, send_env: newValue || "" })
+              }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  fullWidth
+                  label="SendEnv (Optional)"
+                  size="small"
+                  placeholder="LANG LC_* COLORTERM NO_COLOR"
+                  helperText="Send environment variables to remote host"
                 />
               )}
             />

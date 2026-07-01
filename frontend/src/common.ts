@@ -1055,6 +1055,9 @@ export function getSSHCommand(host: HostData, hosts?: HostData[]): string {
   if (host.host_key_algorithms) {
     command += ` -o "HostKeyAlgorithms=${host.host_key_algorithms}"`;
   }
+  if (host.send_env) {
+    command += ` -o "SendEnv=${host.send_env}"`;
+  }
   if (host.local_forward) {
     const forwards = host.local_forward
       .split(/[\r\n]+/)
@@ -1133,6 +1136,9 @@ export function getSSHConfigBlock(host: HostData): string {
   if (host.host_key_algorithms) {
     block += `    HostKeyAlgorithms ${host.host_key_algorithms}\n`;
   }
+  if (host.send_env) {
+    block += `    SendEnv ${host.send_env}\n`;
+  }
   if (host.local_forward) {
     const forwards = host.local_forward
       .split("\n")
@@ -1185,6 +1191,7 @@ export function parseSSHConfigBlock(text: string): HostData {
   let strict_host_key_checking = "";
   let host_key_algorithms = "";
   let verify_host_key_dns = "";
+  let send_env = "";
   const local_forwards: string[] = [];
   const remote_forwards: string[] = [];
   const dynamic_forwards: string[] = [];
@@ -1276,6 +1283,9 @@ export function parseSSHConfigBlock(text: string): HostData {
           }
         }
         break;
+      case "sendenv":
+        send_env = val;
+        break;
       case "localforward":
         local_forwards.push(val);
         break;
@@ -1306,6 +1316,7 @@ export function parseSSHConfigBlock(text: string): HostData {
     strict_host_key_checking: (strict_host_key_checking || "") as HostForm["strict_host_key_checking"],
     host_key_algorithms: host_key_algorithms || "",
     verify_host_key_dns: (verify_host_key_dns || "") as HostForm["verify_host_key_dns"],
+    send_env: send_env || "",
     local_forward: local_forwards.join("\n"),
     remote_forward: remote_forwards.join("\n"),
     dynamic_forward: dynamic_forwards.join("\n"),

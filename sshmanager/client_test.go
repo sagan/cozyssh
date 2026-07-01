@@ -207,3 +207,27 @@ func TestCopySSHID_HostKeyMismatchReplacement(t *testing.T) {
 		t.Errorf("expected known_hosts line to be:\n%s\ngot:\n%s", expectedLine, lines[0])
 	}
 }
+
+func TestSendEnvOption(t *testing.T) {
+	// Test matching function
+	tests := []struct {
+		name     string
+		patterns string
+		want     bool
+	}{
+		{"LANG", "LANG LC_* COLORTERM NO_COLOR", true},
+		{"LC_ALL", "LANG LC_* COLORTERM NO_COLOR", true},
+		{"LC_CTYPE", "LANG LC_* COLORTERM NO_COLOR", true},
+		{"COLORTERM", "LANG LC_* COLORTERM NO_COLOR", true},
+		{"NO_COLOR", "LANG LC_* COLORTERM NO_COLOR", true},
+		{"PATH", "LANG LC_* COLORTERM NO_COLOR", false},
+		{"USER", "LANG LC_* COLORTERM NO_COLOR", false},
+	}
+
+	for _, tt := range tests {
+		got := matchEnvPatterns(tt.name, tt.patterns)
+		if got != tt.want {
+			t.Errorf("matchEnvPatterns(%q, %q) = %v, want %v", tt.name, tt.patterns, got, tt.want)
+		}
+	}
+}

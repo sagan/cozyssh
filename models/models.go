@@ -98,6 +98,8 @@ type HostData struct {
 	HostKeyAlgorithms     string `json:"host_key_algorithms,omitempty"`
 	// VerifyHostKeyDNS controls SSHFP DNS verification (yes / no / ask), consistent with OpenSSH.
 	VerifyHostKeyDNS string `json:"verify_host_key_dns,omitempty" ts_type:"\"yes\" | \"no\" | \"ask\" | \"\""`
+	// SendEnv specifies environment variables to send to the remote host.
+	SendEnv string `json:"send_env,omitempty"`
 
 	// Port forwarding (OpenSSH syntax, one rule per line)
 	LocalForward   string `json:"local_forward,omitempty"`
