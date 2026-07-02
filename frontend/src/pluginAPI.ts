@@ -91,6 +91,36 @@ window.__CS_ENV__ = window.appToggleFullscreen ? 1 : 0;
 document.documentElement.dataset.csEnv = `${window.__CS_ENV__}`;
 document.documentElement.dataset.csVersion = PACKAGE_JSON_VERSION;
 
+if (__CS_ENV__ === 1) {
+  const urlClickHandle = function (e: MouseEvent) {
+    if (e.button >= 2) {
+      return;
+    }
+    let aEl: HTMLAnchorElement | null = null;
+    let el = e.target as HTMLElement | null;
+    let i = 0;
+    main: while (el && i < 5) {
+      i++;
+      switch (el.tagName) {
+        case "A":
+          aEl = el as HTMLAnchorElement;
+          break main;
+        case "div":
+        case "p":
+          break main;
+        default:
+          el = el.parentElement;
+      }
+    }
+    if (aEl && aEl.target === "_blank" && aEl.href) {
+      e.preventDefault();
+      appOpenUrl!(aEl.href);
+    }
+  };
+  window.addEventListener("click", urlClickHandle);
+  window.addEventListener("auxclick", urlClickHandle);
+}
+
 // Use Proxy to intercept __CS_TERMINAL_OPTIONS__
 (function () {
   let isCallbackScheduled = false;

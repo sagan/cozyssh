@@ -859,28 +859,30 @@ export async function forceReload(): Promise<void> {
  * If closeAll is true, close all modals. Otherwise, close only the top-most modal.
  * It works by sending Escape key events to the modals.
  * Note: some dialog modals will ignore this event when there are dirty form fields, it's by design.
+ * @returns true if at least 1 modal was closed, false otherwise.
  */
-export async function closeModal(closeAll?: boolean) {
+export async function closeModal(closeAll?: boolean): Promise<boolean> {
   const modals = document.querySelectorAll(".MuiModal-root");
-  if (modals.length > 0) {
-    const targetModals = closeAll ? Array.from(modals).reverse() : [modals[modals.length - 1]];
+  if (modals.length === 0) {
+    return false;
+  }
+  const targetModals = closeAll ? Array.from(modals).reverse() : [modals[modals.length - 1]];
+  for (const modal of targetModals) {
+    modal.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Escape",
+        code: "Escape",
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
 
-    for (const modal of targetModals) {
-      modal.dispatchEvent(
-        new KeyboardEvent("keydown", {
-          key: "Escape",
-          code: "Escape",
-          bubbles: true,
-          cancelable: true,
-        }),
-      );
-
-      if (closeAll) {
-        // Yield control to the event loop so MUI can update its stack
-        await new Promise((resolve) => setTimeout(resolve, 0));
-      }
+    if (closeAll) {
+      // Yield control to the event loop so MUI can update its stack
+      await new Promise((resolve) => setTimeout(resolve, 0));
     }
   }
+  return true;
 }
 
 /**
@@ -1093,7 +1095,7 @@ export function getSSHCopyIdCommand(host: HostData): string {
   return command;
 }
 
-export function getSSHConfigBlock(host: HostData): string {
+export function getSSHConfigBlock(host: HostData | HostForm): string {
   let block = "";
   if (host.comment) {
     block += host.comment
@@ -1103,16 +1105,19 @@ export function getSSHConfigBlock(host: HostData): string {
       .join("\n");
     block += "\n";
   }
-  if (host.tags?.length) {
-    block += `### ${host.tags.map((t) => "#" + t).join(" ")}`;
-    block += "\n";
+  if (host.tags) {
+    const tags = typeof host.tags === "string" ? host.tags.trim().split(/\s+/).filter(Boolean) : host.tags;
+    if (tags.length > 0) {
+      block += `### ${tags.map((t) => "#" + t).join(" ")}`;
+      block += "\n";
+    }
   }
-  block += `Host ${host.name}\n`;
+  block += `Host ${host.name || host.hostname}\n`;
   block += `    HostName ${host.hostname}\n`;
   if (host.user) {
     block += `    User ${host.user}\n`;
   }
-  if (host.port) {
+  if (host.port && host.port !== "22") {
     block += `    Port ${host.port}\n`;
   }
   if (host.identity_file) {
@@ -1305,7 +1310,7 @@ export function parseSSHConfigBlock(text: string): HostData {
   const parsedData: HostData = {
     name: name || hostname,
     hostname,
-    user: user || "root",
+    user,
     port: port || "22",
     source: "",
     identity_file: identity_file || "",

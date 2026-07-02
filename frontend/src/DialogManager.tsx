@@ -610,7 +610,7 @@ export default function DialogManager({
             setEditButtonDialogOpen(true);
           }}
         >
-          Edit Button
+          Edit {lastMenuBtn ? `"${lastMenuBtn.name}"` : "Button"}
         </MenuItem>
         <MenuItem
           onClick={() => {
@@ -749,8 +749,8 @@ export default function DialogManager({
           <span>{editButton ? "Edit Button " + editButton.id : "Add Button"}</span>
           <IconButton
             aria-label="more"
-            id="title-menu-button"
-            aria-controls={titleMenuAnchor ? "title-menu" : undefined}
+            id="edit-button-dialog-title-menu-button"
+            aria-controls={titleMenuAnchor ? "edit-button-dialog-title-menu" : undefined}
             aria-expanded={titleMenuAnchor ? "true" : undefined}
             aria-haspopup="true"
             onClick={handleTitleMenuClick}
@@ -759,7 +759,12 @@ export default function DialogManager({
             <MoreVertIcon fontSize="small" />
           </IconButton>
         </DialogTitle>
-        <Menu id="title-menu" anchorEl={titleMenuAnchor} open={!!titleMenuAnchor} onClose={handleTitleMenuClose}>
+        <Menu
+          id="edit-button-dialog-title-menu"
+          anchorEl={titleMenuAnchor}
+          open={!!titleMenuAnchor}
+          onClose={handleTitleMenuClose}
+        >
           <MenuItem
             onClick={() => {
               handleTitleMenuClose();
@@ -1026,6 +1031,9 @@ export default function DialogManager({
                 <br />- <b>localForward</b> & <b>remoteForward</b> & <b>dynamicForward</b> : OpenSSH syntax SSH tunnel
                 rules. Use&nbsp;
                 <code>%0A</code> (\n) to seperate multiple rules.
+                <br />- <b>env</b>: Environment variables to send to SSH server. Format: <code>name=value</code>.&nbsp;
+                Use&nbsp;
+                <code>%0A</code> (\n) to seperate multiple variables.
                 <br /> E.g. <b>local?id=local-abc&title=Local&remoteCommand=tmux attach || tmux new</b>
                 <br /> It's possible to set multiple (up to 4) comma-separated servers to open them in split screen.
               </Typography>
@@ -1100,7 +1108,10 @@ export default function DialogManager({
               rows={6}
               variant="outlined"
               id={ID_INPUT_DIALOG_INPUT}
-              placeholder="Type input to send to terminal. <ctrl-x> style syntax supported. Ctrl + Enter to send; Ctrl + Shift + Enter to send to all tabs"
+              placeholder={
+                "Type input to send to terminal. <ctrl-x> style syntax supported. Ctrl + Enter to send; Ctrl + Shift + Enter to send to all tabs" +
+                (activeTab && activeTab.panes.length > 1 ? " or Ctrl + Alt + Enter to send to all panes" : "")
+              }
               value={inputValue}
               onChange={(e) => {
                 setInputValue(e.target.value);
@@ -1108,9 +1119,11 @@ export default function DialogManager({
               }}
               onKeyDown={(e) => {
                 const key = getKeyCombination(e as unknown as KeyboardEvent);
-                if (key === "ctrl+enter" || key === "ctrl+shift+enter") {
+                if (key === "ctrl+enter" || key === "ctrl+shift+enter" || key === "ctrl+alt+enter") {
                   if (key === "ctrl+shift+enter") {
                     setSendScope(2);
+                  } else if (key === "ctrl+alt+enter") {
+                    setSendScope(1);
                   }
                   e.preventDefault();
                   e.stopPropagation();
@@ -1145,7 +1158,10 @@ export default function DialogManager({
                   rows={6}
                   variant="outlined"
                   id={ID_INPUT_DIALOG_INPUT}
-                  placeholder="Type template/input to send to terminal. Ctrl + Enter to send; Ctrl + Shift + Enter to send to all tabs"
+                  placeholder={
+                    "Type template/input to send to terminal. Ctrl + Enter to send; Ctrl + Shift + Enter to send to all tabs" +
+                    (activeTab && activeTab.panes.length > 1 ? " or Ctrl + Alt + Enter to send to all panes" : "")
+                  }
                   value={inputValue}
                   onChange={(e) => {
                     setInputValue(e.target.value);
@@ -1153,9 +1169,11 @@ export default function DialogManager({
                   }}
                   onKeyDown={(e) => {
                     const key = getKeyCombination(e as unknown as KeyboardEvent);
-                    if (key === "ctrl+enter" || key === "ctrl+shift+enter") {
+                    if (key === "ctrl+enter" || key === "ctrl+shift+enter" || key === "ctrl+alt+enter") {
                       if (key === "ctrl+shift+enter") {
                         setSendScope(2);
+                      } else if (key === "ctrl+alt+enter") {
+                        setSendScope(1);
                       }
                       e.preventDefault();
                       e.stopPropagation();
@@ -1212,12 +1230,18 @@ export default function DialogManager({
                         setUserVars((prev) => ({ ...prev, [vname]: e.target.value }));
                         setInputDialogDirty(true);
                       }}
-                      placeholder="Ctrl + Enter to send, + Shift to send to all tabs"
+                      placeholder={
+                        activeTab && activeTab.panes.length > 1
+                          ? "Ctrl + Enter to send; +Alt/Shift for all panes/tabs"
+                          : "Ctrl + Enter to send; +Shift for all tabs"
+                      }
                       onKeyDown={(e) => {
                         const key = getKeyCombination(e as unknown as KeyboardEvent);
-                        if (key === "ctrl+enter" || key === "ctrl+shift+enter") {
+                        if (key === "ctrl+enter" || key === "ctrl+shift+enter" || key === "ctrl+alt+enter") {
                           if (key === "ctrl+shift+enter") {
                             setSendScope(2);
+                          } else if (key === "ctrl+alt+enter") {
+                            setSendScope(1);
                           }
                           e.preventDefault();
                           e.stopPropagation();

@@ -697,6 +697,11 @@ export default function Sidebar({
     setHostTitleMenuAnchor(null);
   }, []);
 
+  const handleCopySshConfigBlock = useCallback(() => {
+    setHostTitleMenuAnchor(null);
+    navigator.clipboard.writeText(getSSHConfigBlock(getStore().hostFormData));
+  }, []);
+
   const handlePasteSshConfigBlock = useCallback(async () => {
     setHostTitleMenuAnchor(null);
     try {
@@ -1474,7 +1479,7 @@ export default function Sidebar({
       return;
     }
     const parentPath = groupContextMenu.path;
-    const name = await dialogs.prompt("Enter sub-group name:", "", {
+    const name = await dialogs.prompt(`Create new sub-group in "${parentPath}", enter sub-group name:`, "", {
       validate: function (str: string): string | undefined {
         if (str.includes(" ") || str.includes("/")) {
           return "Group name cannot contain spaces or slashes (/)";
@@ -1643,7 +1648,7 @@ export default function Sidebar({
     const lastPart = parts[parts.length - 1];
     const parentPath = parts.length > 1 ? parts.slice(0, -1).join("/") : null;
 
-    const name = await dialogs.prompt(`Rename group "${lastPart}" to:`, lastPart, {
+    const name = await dialogs.prompt(`Rename group "${lastPart}"${parentPath ? ` (${G})` : ""} to:`, lastPart, {
       validate: function (str: string): string | undefined {
         if (!str.trim()) {
           return "Group name cannot be empty";
@@ -2749,9 +2754,13 @@ export default function Sidebar({
               setContextMenuOpen(false);
               const groups = getStore().groups;
               const currentGroup = getHostGroupPath(target);
-              const dstGroup = await dialogs.prompt(`Move server "${target.name}" to group:`, currentGroup || "", {
-                options: [{ value: "", label: "(no group)" }, ...groups],
-              });
+              const dstGroup = await dialogs.prompt(
+                `Move server "${target.name}" (current group: ${currentGroup || "<none>"}) to group:`,
+                currentGroup || "",
+                {
+                  options: [{ value: "", label: "(no group)" }, ...groups],
+                },
+              );
               if (dstGroup === null) {
                 return;
               }
@@ -3395,7 +3404,7 @@ export default function Sidebar({
                   <br />
                   <b>Alt + Shift + J / Alt + Shift + K</b> : Scroll terminal down / up by a page
                   <br />
-                  <b>Ctrl + Alt + Shift + J / Ctrl + Alt + Shift + K</b> : Scroll terminal to bottom / top
+                  <b>Ctrl + Alt + J / Ctrl + Alt + K</b> : Scroll terminal to bottom / top
                   <br />
                   <b>Alt + Enter</b> : Toggle fullscreen of main terminal area
                   <br />
@@ -3494,8 +3503,8 @@ export default function Sidebar({
           <span>{editHostName ? `Edit Host ${editHostName}` : "Add Host"}</span>
           <IconButton
             aria-label="more"
-            id="host-title-menu-button"
-            aria-controls={hostTitleMenuAnchor ? "host-title-menu" : undefined}
+            id="edit-button-dialog-title-menu-button"
+            aria-controls={hostTitleMenuAnchor ? "edit-host-dialog-title-menu" : undefined}
             aria-expanded={hostTitleMenuAnchor ? "true" : undefined}
             aria-haspopup="true"
             onClick={handleHostTitleMenuClick}
@@ -3505,14 +3514,13 @@ export default function Sidebar({
           </IconButton>
         </DialogTitle>
         <Menu
-          id="host-title-menu"
+          id="edit-host-dialog-title-menu"
           anchorEl={hostTitleMenuAnchor}
           open={!!hostTitleMenuAnchor}
           onClose={handleHostTitleMenuClose}
         >
-          <MenuItem onClick={handlePasteSshConfigBlock} disabled={!!editHostName}>
-            Paste SSH Config block
-          </MenuItem>
+          <MenuItem onClick={handleCopySshConfigBlock}>Copy SSH Config Block</MenuItem>
+          <MenuItem onClick={handlePasteSshConfigBlock}>Paste SSH Config Block</MenuItem>
         </Menu>
         <DialogContent>
           <Box sx={{ mt: 1, display: "flex", flexDirection: "column", gap: 2 }}>
@@ -3706,9 +3714,7 @@ export default function Sidebar({
               fullWidth
               options={["LANG LC_* COLORTERM NO_COLOR"]}
               value={hostFormData.send_env || ""}
-              onInputChange={(_event, newValue) =>
-                setHostFormData({ ...hostFormData, send_env: newValue || "" })
-              }
+              onInputChange={(_event, newValue) => setHostFormData({ ...hostFormData, send_env: newValue || "" })}
               renderInput={(params) => (
                 <TextField
                   {...params}

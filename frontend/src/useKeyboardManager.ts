@@ -96,7 +96,11 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         case "alt+`": {
           // Alt + Backquote
           e.preventDefault();
-          closeModal();
+          closeModal().then((closed) => {
+            if (!closed) {
+              setSearchOpen(false);
+            }
+          });
           return;
         }
         case "alt+shift+~": {
@@ -105,6 +109,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           closeInputDialog();
           setEditButtonDialogOpen(false);
           setEditHostDialogOpen(false);
+          setSearchOpen(false);
           closeModal(true);
           setToasts([]);
           return;
@@ -391,7 +396,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           return;
         }
 
-        case "ctrl+alt+shift+k": {
+        case "ctrl+alt+k": {
           const { activePaneId } = getStore();
           const terminalRefs = getTerminalRefs();
           const term = terminalRefs[activePaneId];
@@ -401,7 +406,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           }
           return;
         }
-        case "ctrl+alt+shift+j": {
+        case "ctrl+alt+j": {
           const { activePaneId } = getStore();
           const terminalRefs = getTerminalRefs();
           const term = terminalRefs[activePaneId];

@@ -130,7 +130,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - `Alt + Shift + 1-9,0` : Click the button in button bar
   - `Alt + J / Alt + K` : Scroll terminal down / up by a few lines
   - `Alt + Shift + J / Alt + Shift + K` : Scroll terminal down / up by a page
-  - `Ctrl + Alt + Shift + J / Ctrl + Alt + Shift + K` : Scroll terminal to bottom / top
+  - `Ctrl + Alt + J / Ctrl + Alt + K` : Scroll terminal to bottom / top
   - `Alt + Enter` : Toggle fullscreen of main terminal area
   - `Alt + Backquote` : Close any modal (Dialog / Menu / Popover). Similar to `Escape` but works even if terminal is in fullscreen mode
   - `Alt + Shift + Backquote` : Force close all modals. Also close all toasts.

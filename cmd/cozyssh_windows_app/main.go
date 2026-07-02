@@ -309,7 +309,7 @@ func main() {
 		AutoFocus: true,
 		DataPath:  filepath.Join(cfg.ConfigDir, constants.WEBVIEW2_DATA_DIR),
 		WindowOptions: webview2.WindowOptions{
-			Title:     constants.APP_NAME,
+			Title:     constants.APP_NAME + " (main)",
 			Width:     initWidth,
 			Height:    initHeight,
 			IconId:    2,
@@ -334,6 +334,9 @@ func main() {
 	var savedWindowRect winRect
 	var savedWindowStyle uint32
 
+	w.Bind("appOpenUrl", func(u string) {
+		windows.ShellExecute(0, nil, windows.StringToUTF16Ptr(u), nil, nil, windows.SW_SHOWNORMAL)
+	})
 	w.Bind("appAuth", func() (string, error) {
 		token := auth.GenerateToken()
 		return token, nil

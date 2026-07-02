@@ -135,6 +135,7 @@ export default function TabBar({
                   data-id={tab.id}
                   key={tab.id}
                   value={tab.id}
+                  title={tab.type === "terminal" ? `Hosts: ${tab.panes.map((p) => p.host).join(", ")}` : "Scratchpad"}
                   onContextMenu={(e) => handleContextMenu(e, tab.id)}
                   onAuxClick={(e) => {
                     // mouse middle key
