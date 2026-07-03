@@ -503,7 +503,7 @@ func setupSystemTrayAndHook(w webview2.WebView, hwnd uintptr, cfg *config.Config
 		exec.Command("explorer", cfg.ConfigDir).Run()
 	})
 	menu.Add("Open SSH Dir", func() {
-		exec.Command("explorer", cfg.SSHDir).Run()
+		exec.Command("explorer", cfg.AbsSSHDir).Run()
 	})
 	menu.Add("Check update", func() {
 		go checkAppUpdate(hwnd)

@@ -62,6 +62,7 @@ type Config struct {
 	WebdavEnabled           bool   `json:"webdav_enabled,omitempty"`
 	WebdavEncryptionEnabled bool   `json:"webdav_encryption_enabled,omitempty"`
 	WebdavMasterKey         string `json:"webdav_master_key,omitempty"`
+	AbsSSHDir               string `json:"-,omitempty"`
 	mu                      sync.Mutex
 }
 
@@ -73,6 +74,10 @@ func LoadConfig(customDir string) (*Config, error) {
 			return nil, fmt.Errorf("could not find user home dir: %w", err)
 		}
 		configDir = filepath.Join(home, ".config", "cozyssh")
+	}
+	configDir, err := filepath.Abs(configDir)
+	if err != nil {
+		return nil, fmt.Errorf("could not get absolute path: %w", err)
 	}
 
 	if err := os.MkdirAll(configDir, 0700); err != nil {
@@ -127,11 +132,11 @@ func LoadConfig(customDir string) (*Config, error) {
 	}
 	if cfg.SSHDir == "" {
 		home, _ := os.UserHomeDir()
-		cfg.SSHDir = filepath.Join(home, ".ssh")
+		cfg.AbsSSHDir = filepath.Join(home, ".ssh")
 	} else if filepath.IsAbs(cfg.SSHDir) {
-		cfg.SSHDir = filepath.Clean(cfg.SSHDir)
+		cfg.AbsSSHDir = filepath.Clean(cfg.SSHDir)
 	} else {
-		cfg.SSHDir = filepath.Join(cfg.ConfigDir, cfg.SSHDir)
+		cfg.AbsSSHDir = filepath.Join(cfg.ConfigDir, cfg.SSHDir)
 	}
 	if cfg.Vars == nil {
 		cfg.Vars = make(map[string]string)

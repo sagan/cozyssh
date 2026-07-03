@@ -39,14 +39,6 @@ func SetConfig(cfg *config.Config) {
 	globalConfig = cfg
 }
 
-func getSSHDir() string {
-	if globalConfig != nil && globalConfig.SSHDir != "" {
-		return globalConfig.SSHDir
-	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".ssh")
-}
-
 type PooledClient struct {
 	Client        *ssh.Client
 	Closers       []io.Closer
@@ -75,7 +67,7 @@ func (p *PooledClient) Release() {
 }
 
 func getSSHConfigPath() string {
-	return filepath.Join(getSSHDir(), "config")
+	return filepath.Join(globalConfig.AbsSSHDir, "config")
 }
 
 func readConfigLines() ([]string, error) {
@@ -461,7 +453,7 @@ func SaveGroups(groups []string) error {
 // ListHosts reads the standard ~/.ssh/config and ~/.ssh/known_hosts
 // and returns a list of configured and auto-discovered servers
 func ListHosts() ([]*models.HostData, error) {
-	configPath := filepath.Join(getSSHDir(), "config")
+	configPath := filepath.Join(globalConfig.AbsSSHDir, "config")
 	f, err := os.Open(configPath)
 	var cfg *ssh_config.Config
 	if err == nil {
@@ -607,7 +599,7 @@ func ListHosts() ([]*models.HostData, error) {
 
 // ListKnownHosts reads ~/.ssh/known_hosts and returns plain-name entries
 func ListKnownHosts() ([]*models.HostData, error) {
-	knownHostsPath := filepath.Join(getSSHDir(), "known_hosts")
+	knownHostsPath := filepath.Join(globalConfig.AbsSSHDir, "known_hosts")
 	data, err := os.ReadFile(knownHostsPath)
 	if err != nil {
 		return nil, err
@@ -722,7 +714,7 @@ func DialSSH(name string, term TerminalUI, rows, cols int, identity string, prox
 // noPublicKey: skip default public key authentication.
 func getSSHClient(name string, term TerminalUI, identity string,
 	proxyJump string, noPublicKey bool) (*ssh.Client, []io.Closer, string, string, error) {
-	configPath := filepath.Join(getSSHDir(), "config")
+	configPath := filepath.Join(globalConfig.AbsSSHDir, "config")
 	f, err := os.Open(configPath)
 	var cfg *ssh_config.Config
 	if err == nil {
@@ -806,9 +798,9 @@ func getSSHClient(name string, term TerminalUI, identity string,
 	if noPublicKey {
 		identityFile = ""
 	} else if identityFile == "" {
-		identityFile = filepath.Join(getSSHDir(), "id_ed25519")
+		identityFile = filepath.Join(globalConfig.AbsSSHDir, "id_ed25519")
 		if _, err := os.Stat(identityFile); os.IsNotExist(err) {
-			identityFile = filepath.Join(getSSHDir(), "id_rsa")
+			identityFile = filepath.Join(globalConfig.AbsSSHDir, "id_rsa")
 		}
 	} else {
 		identityFile = common.ExpandPath(identityFile)
@@ -996,7 +988,7 @@ func getSSHClient(name string, term TerminalUI, identity string,
 	var khErr error
 	isKnownHostsNull := false
 
-	knownHostsFile := filepath.Join(getSSHDir(), "known_hosts")
+	knownHostsFile := filepath.Join(globalConfig.AbsSSHDir, "known_hosts")
 	if cfg != nil {
 		if ukh, _ := cfg.Get(name, "UserKnownHostsFile"); ukh != "" {
 			knownHostsFile = common.ExpandPath(ukh)
@@ -1350,7 +1342,7 @@ func GetHostForwardRules(name string) (localForward, remoteForward, dynamicForwa
 // GetHostCanonicalKey returns the canonical key (user@host:port) for a named SSH host.
 // This is used to uniquely identify hosts for port forwarding deduplication.
 func GetHostCanonicalKey(name string) string {
-	configPath := filepath.Join(getSSHDir(), "config")
+	configPath := filepath.Join(globalConfig.AbsSSHDir, "config")
 	f, err := os.Open(configPath)
 	var cfg *ssh_config.Config
 	if err == nil {
@@ -1595,10 +1587,9 @@ func getIdentityFileID(keyData []byte) string {
 func GetIdentityPathForHost(h *models.HostData) string {
 	identityFile := h.IdentityFile
 	if identityFile == "" {
-		sshDir := getSSHDir()
-		identityFile = filepath.Join(sshDir, "id_ed25519")
+		identityFile = filepath.Join(globalConfig.AbsSSHDir, "id_ed25519")
 		if _, err := os.Stat(identityFile); os.IsNotExist(err) {
-			identityFile = filepath.Join(sshDir, "id_rsa")
+			identityFile = filepath.Join(globalConfig.AbsSSHDir, "id_rsa")
 		}
 	} else {
 		identityFile = common.ExpandPath(identityFile)
@@ -2069,7 +2060,7 @@ type HostKeyResult struct {
 }
 
 func createCopyIDHostKeyCallback(name string, hostStr string, portStr string, expectedFingerprint string, result *HostKeyResult) (ssh.HostKeyCallback, []string, error) {
-	configPath := filepath.Join(getSSHDir(), "config")
+	configPath := filepath.Join(globalConfig.AbsSSHDir, "config")
 	f, err := os.Open(configPath)
 	var cfg *ssh_config.Config
 	if err == nil {
@@ -2077,7 +2068,7 @@ func createCopyIDHostKeyCallback(name string, hostStr string, portStr string, ex
 		f.Close()
 	}
 
-	knownHostsFile := filepath.Join(getSSHDir(), "known_hosts")
+	knownHostsFile := filepath.Join(globalConfig.AbsSSHDir, "known_hosts")
 	if cfg != nil {
 		if ukh, _ := cfg.Get(name, "UserKnownHostsFile"); ukh != "" {
 			knownHostsFile = common.ExpandPath(ukh)

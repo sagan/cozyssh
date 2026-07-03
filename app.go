@@ -164,7 +164,7 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 
 	// apply config
 	os.Setenv("COZYSSH_HOME", cfg.ConfigDir)
-	os.Setenv("COZYSSH_SSHDIR", cfg.SSHDir)
+	os.Setenv("COZYSSH_SSHDIR", cfg.AbsSSHDir)
 	sshmanager.UpdateDns(cfg.Dns)
 	if home, err := os.UserHomeDir(); err == nil {
 		os.Chdir(home)
@@ -210,7 +210,7 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				IsSecure:        isSecureRequest(r),
 				SavePassword:    cfg.SavePassword,
 				ConfigDir:       cfg.ConfigDir,
-				SSHDir:          cfg.SSHDir,
+				SSHDir:          cfg.AbsSSHDir,
 			},
 			Hosts:   hosts,
 			Groups:  groups,

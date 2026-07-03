@@ -10,7 +10,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
 - [Getting Started](#getting-started)
   - [Installation](#installation)
   - [Usage](#usage)
-  - [Configuration](#configuration)
+  - [Config \& Data](#config--data)
   - [Run as systemd service](#run-as-systemd-service)
 - [Development](#development)
   - [Prerequisites](#prerequisites)
@@ -22,15 +22,6 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
 ## Screenshots
 
 <details>
-
-<summary>Mobile View</summary>
-
-![CozySSH Mobile View](./docs/screenshot-mobile-view.png)
-
-</details>
-
-<details>
-
 <summary>Split Screen</summary>
 
 ![CozySSH Split Screen](./docs/screenshot-split-screen.png)
@@ -38,7 +29,13 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
 </details>
 
 <details>
+<summary>Add Host Form</summary>
 
+![CozySSH Add Host](./docs/screenshot-edit-host-dialog.png)
+
+</details>
+
+<details>
 <summary>File Browser</summary>
 
 ![CozySSH File Browser](./docs/screenshot-file-browser.png)
@@ -46,7 +43,6 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
 </details>
 
 <details>
-
 <summary>Text Editor</summary>
 
 ![CozySSH Text Editor](./docs/screenshot-text-editor.png)
@@ -54,10 +50,30 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
 </details>
 
 <details>
-
-<summary>New Tab Dialog</summary>
+<summary>New Tab Dialog <code>Alt+O</code></summary>
 
 ![CozySSH Text Editor](./docs/screenshot-new-tab-dialog.png)
+
+</details>
+
+<details>
+<summary>Command Palette <code>Alt+E / Ctrl+Shift+P</code></summary>
+
+![CozySSH Text Editor](./docs/screenshot-new-tab-dialog-buttons.png)
+
+</details>
+
+<details>
+<summary>Mobile View</summary>
+
+![CozySSH Mobile View](./docs/screenshot-mobile-view.png)
+
+</details>
+
+<details>
+<summary>Mobile Assistant Keyboard</summary>
+
+![CozySSH Mobile View](./docs/screenshot-mobile-assistant-keyboard.png)
 
 </details>
 
@@ -155,7 +171,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - **Heartbeat & Keep-Alive**: Background heartbeat (`keepalive@openssh.com`) every 30 seconds ensures stable connections and prevents idle timeouts.
   - **Interactive Verification**: Full support for interactive Host Key verification and Keyboard-Interactive (Password) authentication.
   - **Smart Resize logic**: Optimized terminal resizing that preserves shell prompt integrity when switching between multiple active tabs.
-- **Local Shell**: Open local shell tab. It uses `$SHELL`. If not set, on Linux it fallbacks to `bash`; on Windows it fallbacks to `pwsh.exe` (if present) or `powershell.exe`.
+- **Local Shell**: Open local shell tab. It automatically discovers and displays list of local system installed / available shells.
 - **Terminal UX Enhancements**:
   - **Manual Reconnection**: If a terminal session is lost or "stolen" by another browser instance, simply press **Enter** to instantly reconnect.
   - **Auto-copy**: Selected text is automatically copied to your clipboard.
@@ -165,7 +181,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - **Persistent Sessions**: Right-click any tab and select **"Pin Tab"** to keep the terminal session (PTY or SSH) running in the background even if you close your browser or navigate away.
   - **Output Buffering**: Pinned sessions maintain a circular output buffer (approx. 50KB), ensuring you see the most recent activity immediately upon reconnection.
   - **Usage-Aware Auto-Restore**: Pinned tabs automatically resume when you re-open CozySSH, but only in the primary window to prevent duplicate UI clutter.
-  - **Lock Tab**: Pinned tabs can be further locked to prevent accidental closing.
+  - **Lock Tab**: Tabs can be locked, which works similar to pinning but also prevent accidental closing.
 - **Scratchpad feature**: Open a "Scratchpad" text editor tab to write your notes or paste some configuration commands or other text. All data is auto-saving and cached in browser localStorage and automatically synced with and persisted in backend.
 - **Secure by Default**:
   - **Stateless Authentication**: HMAC-SHA256 token-based authentication with a simple App Password.
@@ -188,9 +204,9 @@ Run the CozySSH binary:
 ./cozyssh
 ```
 
-On first run, CozySSH will generate a default configuration file at `~/.config/cozyssh/config.yaml` with an initial random **App Password**. Check the terminal output to find the initial password. The app password can be changed in UI. If you forget your app password, you can reset it to a new random value by running `cozyssh -do-reset-password`.
+On first run, CozySSH will generate a default configuration file at `~/.config/cozyssh/config.json` with an initial random **App Password**. Check the terminal output to find the initial password. The app password can be changed in UI. If you forget your app password, you can reset it to a new random value by running `cozyssh -do-reset-password`.
 
-CozySSH listens on `127.0.0.1:8022` by default. By default, CozySSH can only be accessed from `localhost` hostname (e.g. http://localhost:8022 ) or from a `https` origin via running CozySSH behind a TLS enabled a reverse proxy (like [Traefik](https://github.com/traefik/traefik) or Nginx) and / or CDN provider (like Cloudflare). Start cozyssh with `--allow-insecure-http` flag to lift the restriction.
+CozySSH listens on `127.0.0.1:8022` by default. By default, CozySSH can only be accessed from `localhost` hostname (e.g. http://localhost:8022 ) or from a `https` origin by running CozySSH behind a TLS enabled reverse proxy (like [Traefik](https://github.com/traefik/traefik) or Nginx) and / or CDN provider (like Cloudflare). Start cozyssh with `-allow-insecure-http` flag to lift the restriction.
 
 <details>
 
@@ -221,22 +237,22 @@ service = "cozyssh"
 
 </details>
 
-### Configuration
+### Config & Data
 
-CozySSH stores its settings in `~/.config/cozyssh/config.yaml`. You can customize:
-
-- `app_password_hash`: The BCrypt hashed app password. Run `cozyssh -do-reset-password` to reset it.
-- `addr`: (optional) The address and port the server binds to. Defaults to `127.0.0.1:8022`.
-- `sitename`: (optional) The sitename. Defaults to the backend `hostname`. Note it will be visible to everyone who can access the frontend, even unauthenticated.
-- `sshdir`: (optional) The OpenSSH client config dir. Defaults to `~/.ssh`.
-
-The default `~/.config/cozyssh` config dir path can be changed by `-config` command line flag.
+CozySSH stores its settings in `~/.config/cozyssh/config.json`. The default `~/.config/cozyssh` path can be changed by running CozySSH with `-config <dir>` command line flag. CozySSH stores all app data (excluding OpenSSH data) here. See [docs/DATA.md](./docs/DATA.md) for more details.
 
 ### Run as systemd service
 
-Example `cozyssh.service` file:
+You can run CozySSH as a systemd service.
+
+<details>
+<summary>Example <code>cozyssh.service</code> systemd service file:</summary>
 
 ```
+# Put this file to `/etc/systemd/system/cozyssh.service`
+# Put `cozyssh` binary to `/usr/bin/cozyssh`
+# Run `systemctl enable --now cozyssh` to enable & start the service
+
 [Unit]
 Description=cozyssh
 
@@ -251,8 +267,7 @@ Restart=always
 WantedBy=multi-user.target
 ```
 
-Put it to `/etc/systemd/system/cozyssh.service` and put `cozyssh` binary to `/usr/bin/cozyssh`,
-then run `systemctl enable --now cozyssh` to start the service.
+</details>
 
 ## Development
 
@@ -261,7 +276,7 @@ then run `systemctl enable --now cozyssh` to start the service.
 - [Go](https://golang.org/doc/install) 1.25+ (for building the backend)
 - [Node.js v24 & npm](https://nodejs.org/en/download/) (for building the frontend)
 
-Older versions of Go or Node.js may also build but I didn't test them.
+Older versions of Go or Node.js may also work but I didn't test them.
 
 ### Build
 

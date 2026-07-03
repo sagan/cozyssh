@@ -37,10 +37,13 @@ import {
   CS_EVENT_TERMINAL_RESIZE,
   getKeyCombination,
   base64urlEncode,
-  terminalKeyShortcuts,
-  nonCharKeys,
+  passthroughKeyShortcuts,
   DefaultXtermOptions,
   applyFilters,
+  appShortcuts,
+  systemShortcuts,
+  disableShortcuts,
+  blackholeShortcuts,
 } from "./common";
 import { type PaneData, notify, getIntVar } from "./store";
 
@@ -726,11 +729,6 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
 
         const kcomb = getKeyCombination(e);
 
-        // Allow all standard typing (including Shift) to pass through to xterm
-        if (!e.ctrlKey && !e.altKey && !e.metaKey && !nonCharKeys.has(e.key.toLowerCase())) {
-          return true;
-        }
-
         if (__CS_REMAP_CTRL_L__) {
           if (kcomb === "ctrl+l") {
             if (__CS_ENV__ === 1) {
@@ -745,10 +743,20 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
           }
         }
 
-        if (terminalKeyShortcuts.has(kcomb)) {
+        if (passthroughKeyShortcuts.has(kcomb)) {
           return true;
         }
-        return false;
+
+        if (
+          __CS_SHORTCUT_BUTTONS__[kcomb] ||
+          ((appShortcuts.has(kcomb) || systemShortcuts.has(kcomb)) &&
+            !disableShortcuts.has(kcomb) &&
+            !blackholeShortcuts.has(kcomb))
+        ) {
+          return false;
+        }
+
+        return true;
       });
 
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";

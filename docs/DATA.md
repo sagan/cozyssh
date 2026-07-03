@@ -43,6 +43,13 @@ All files in directory are plain text format. There are following files:
 
 When CozySSH starts, if `config.json` file doesn't exist, it will be automatically initialized with default values including a random generated initial `App Password` and output the initial password to stderr. You must save it and use it to login to the Web UI.
 
+The `config.json` contains these key-value fields:
+
+- `app_password_hash`: The BCrypt hashed app password. Run `cozyssh -do-reset-password` to reset it.
+- `addr`: (optional) The address and port the server binds to. Defaults to `127.0.0.1:8022`.
+- `sitename`: (optional) The sitename. Defaults to the backend `hostname`. Note it will be visible to everyone who can access the frontend, even unauthenticated.
+- `sshdir`: (optional) The OpenSSH client config dir. Defaults to `~/.ssh`.
+
 ### `passwords.json` file
 
 `passwords.json` store the SSH server passwords & identity file passphrases that you choose to save in CozySSH Passstore. All stored passwords are encrypted with CozySSH `App Password` using `XAES-256-GCM`.

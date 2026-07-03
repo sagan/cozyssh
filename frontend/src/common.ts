@@ -241,116 +241,117 @@ export const loginTheme = createTheme({
 });
 
 /**
- * These shortcuts should be handled by the terminal / shell itself.
+ * Basic system shortcuts that should be passed to browsers even if terminal has focus
  */
-export const terminalKeyShortcuts = new Set([
-  // basic keys
-  "tab",
-  "ctrl+i", // same as tab
-  "shift+tab",
-  "backspace",
-  "delete",
-  "insert",
-  "enter",
-  "ctrl+j",
-  "escape",
-  "ctrl+[", // same as escape
-  "ctrl+]", // telnet quit
-  "home",
-  "end",
-  "pageup",
-  "pagedown",
-  "arrowup",
-  "arrowdown",
-  "arrowleft",
-  "arrowright",
-  "alt+arrowup",
-  "alt+arrowdown",
-  "alt+arrowleft",
-  "alt+arrowright",
-  "ctrl+arrowup",
-  "ctrl+arrowdown",
-  "ctrl+arrowleft",
-  "ctrl+arrowright",
-  "shift+arrowup",
-  "shift+arrowdown",
-  "shift+arrowleft",
-  "shift+arrowright",
-  "shift+home",
-  "shift+end",
-  "shift+pageup",
-  "shift+pagedown",
-  // "shift+insert", // paste. handled by xterm.js
+export const systemShortcuts = new Set<string>([
+  "ctrl+tab", // switch to next tab
+  "ctrl+shift+tab", // switch to previous tab
+  // "ctrl+shift+t", // restore last opened tab
 
-  // TTY / Kernel Signals
-  "ctrl+c", // SIGINT (Kill process)
-  "ctrl+d", // EOF (End of input / Exit)
-  "ctrl+q", // XON (Resume screen output)
-  "ctrl+s", // XOFF (Freeze screen output)
-  "ctrl+z", // SIGTSTP (Suspend process)
-  "ctrl+\\", // SIGQUIT (Quit and core dump)
+  // Conflicted with shell emacs mode
+  // "ctrl+w", // close tab
+  // "ctrl+t", // new tab
 
-  // Shell / Readline Shortcuts (Emacs Mode) - Navigation
-  "ctrl+a", // Move cursor to beginning of line
-  "ctrl+e", // Move cursor to end of line
-  "ctrl+b", // Move backward one character
-  "ctrl+f", // Move forward one character
-  "alt+b", // Move backward one word
-  "alt+f", // Move forward one word
-  "ctrl+x", // Prefix for chorded commands (e.g., ctrl+x, ctrl+x)
-
-  // Shell / Readline Shortcuts (Emacs Mode) - Editing
-  "ctrl+u", // Cut from cursor to beginning of line
-  "ctrl+k", // Cut from cursor to end of line
-  "ctrl+w", // Cut word before cursor
-  "alt+d", // Cut word after cursor
-  "ctrl+y", // Paste (yank) previously cut text
-  "ctrl+t", // Swap last two characters
-  "alt+t", // Swap current word with previous word
-  "ctrl+h", // Backspace
-  "ctrl+l", // Clear screen and redraw current line
-  "ctrl+v", // Quoted Insert
-  "ctrl+o", // Execute and display next line
-  "ctrl+_", // Undo last change
-  "alt+u", // Upper case from cursor to end of word. Note we don't add alt+ l / c since CozySSH itself uses them
-  "alt+r", // Readline revert-line
-
-  // Shell / Readline Shortcuts (Emacs Mode) - History & Search
-  "ctrl+r", // Reverse history search
-  "ctrl+g", // Cancel reverse search / current action
-  "ctrl+p", // Fetch previous command (Up)
-  "ctrl+n", // Fetch next command (Down)
-  "alt+.", // Insert last argument of previous command
+  "f5", // refresh
+  "ctrl+f5", // force refresh
+  "f11", // fullscreen
+  "f12", // DevTools
+  "alt+f4", // close window
+  "ctrl+0", // reset zoom level
+  "ctrl+-", // zoom out
+  "ctrl+=", // zoom in
 ]);
 
 /**
- * Keys that doesn't produce any character.
+ * CozySSH internal global shortcuts
  */
-export const nonCharKeys = new Set([
-  "f1",
-  "f2",
-  "f3",
-  "f4",
-  "f5",
-  "f6",
-  "f7",
-  "f8",
-  "f9",
-  "f10",
-  "f11",
-  "f12",
-  "home",
-  "end",
-  "backspace",
-  "insert",
-  "delete",
-  "pageup",
-  "pagedown",
-  "arrowup",
-  "arrowdown",
-  "arrowleft",
-  "arrowright",
+export const appShortcuts = new Set([
+  "alt+`",
+  "alt+shift+~",
+  "alt+enter",
+  "ctrl+alt+shift+r",
+  "ctrl+alt+0",
+  "alt-",
+  "alt+shift+_",
+  "alt+=",
+  "alt+shift++",
+  "alt+c",
+  "alt+shift+c",
+  "alt+o",
+  "alt+p",
+  "alt+;",
+  "alt+/",
+  "alt+a",
+  "alt+e",
+  "ctrl+shift+p",
+  "alt+n",
+  "ctrl+alt+n",
+  "alt+shift+n",
+  "ctrl+alt+shift+n",
+  "alt+s",
+  "alt+i",
+  "alt+shift+i",
+  "alt+h",
+  "alt+shift+h",
+  "alt+l",
+  "alt+shift+l",
+  "alt+q",
+  "alt+w",
+  "ctrl+alt+shift+w",
+  "ctrl+alt+shift+l",
+  "alt+shift+w",
+  "alt+g",
+  "alt+shift+g",
+  "alt+v",
+  "ctrl+alt+v",
+  "alt+shift+v",
+  "ctrl+alt+shift+v",
+  "alt+j",
+  "alt+shift+j",
+  "alt+k",
+  "alt+shift+k",
+  "ctrl+alt+k",
+  "ctrl+alt+j",
+  "ctrl+shift+f",
+  "ctrl+shift+r",
+  "ctrl+shift+c",
+
+  // Dynamic Tab Navigation (Alt + 0-9)
+  "alt+0",
+  "alt+1",
+  "alt+2",
+  "alt+3",
+  "alt+4",
+  "alt+5",
+  "alt+6",
+  "alt+7",
+  "alt+8",
+  "alt+9",
+
+  // Dynamic Button Group Triggers (Alt + Shift + 0-9)
+  "alt+shift+)",
+  "alt+shift+!",
+  "alt+shift+@",
+  "alt+shift+#",
+  "alt+shift+$",
+  "alt+shift+%",
+  "alt+shift+^",
+  "alt+shift+&",
+  "alt+shift+*",
+  "alt+shift+(",
 ]);
+
+/**
+ * These keystrokes are silently "consumed" by CozySSH.
+ */
+export const blackholeShortcuts = new Set<string>(["ctrl+alt", "ctrl+alt+shift", "ctrl+shift", "alt", "alt+shift"]);
+
+export const disableShortcuts = new Set<string>();
+
+/**
+ * Additional shortcuts that should be handled by the terminal if it has focus
+ */
+export const passthroughKeyShortcuts = new Set<string>();
 
 export const DefaultXtermOptions: ITerminalOptions = {
   scrollback: 10000,
@@ -391,6 +392,9 @@ const codeKeys: Record<string, [string, string]> = {
  * @param ev KeyboardEvent
  * @returns key combination string, e.g. "ctrl+alt+shift+meta+a",
  * modifiers are in order, all lowercase.
+ * Note for special keys, if shift is hold, the different character will be returned.
+ * So if user press "Alt + Shift + 1" it will return "alt+shift+!" since the shift version of "1" is "!".
+ * It's a known limitation and may be changed in the future.
  */
 export function getKeyCombination(ev: KeyboardEvent): string {
   let mods = "";
@@ -412,7 +416,7 @@ export function getKeyCombination(ev: KeyboardEvent): string {
     mods += "+meta";
   }
   let key = ev.key;
-  // In some keyboard layout (like Windows English International layout) some keystrokes will produce "Dead" key
+  // In some keyboard layout (like Windows English International layout) some keystrokes perse will produce "Dead" key,
   // e.g. ' since 'e is used to input é. We need to get the actual key.
   if (key === "Dead" && codeKeys[ev.code]) {
     key = codeKeys[ev.code][ev.shiftKey ? 1 : 0];

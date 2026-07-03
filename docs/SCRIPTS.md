@@ -92,7 +92,7 @@ CozySSH sets some global variables in the browser's window object.
 
 - `window.__CS_AUTORUN_DONE__` : `undefined | 0 | 1` - `1` - If all autorun scripts have been executed, unset (undefined) or 0 otherwise. It can be used to determine if the script is executed via auto-run or via clicking the button.
 - `window.__CS_MODULECACHE__` : `Record<string, CsScriptModule>` - The module cache of imported scripts. The key is the button internal id.
-- `window.__CS_PASSTHROUGH_SHORTCUTS__` : `Set<string>` - The list of key combinations that should be passed through to the terminal if terminal has focus. Each element is a key combination string such as `ctrl+shift+m` (all lowercase, modifiers in `ctrl,alt,shift,meta` order). Some key combinations (like `ctrl+c`, `ctrl+d`, etc.) are pre-added to this set by default.
+- `window.__CS_PASSTHROUGH_SHORTCUTS__` : `Set<string>` - The additional list of key combinations that should be passed through to the terminal if terminal has focus. Each element is a key combination string such as `ctrl+shift+m` (all lowercase, modifiers in `ctrl,alt,shift,meta` order).
 - `window.__CS_DISABLE_SHORTCUTS__` : `Set<string>` - The list of keyboard shortcuts that should be disabled. The element is in the same format as `__CS_PASSTHROUGH_SHORTCUTS__` element.
 - `window.__CS_BLACKHOLE_SHORTCUTS__` : `Set<string>` - The list of keyboard shortcuts that should be silently consumed / ignored. The difference between it and `__CS_DISABLE_SHORTCUTS__` is that for shortcut in this list it will execute `e.preventDefault()` before returning in keyboard event handle.
 - `window.__CS_USE_STORE__` : `typeof useStore` - The [zustand][] store hook function that CozySSH uses to manage state.

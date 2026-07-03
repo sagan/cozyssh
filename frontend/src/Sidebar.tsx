@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useSearchParams } from "react-router";
 import {
-  Autocomplete,
   List,
   ListItem,
   ListItemButton,
@@ -138,6 +137,7 @@ import {
   fetchSessions,
 } from "./store";
 import { useShallow } from "zustand/react/shallow";
+import FreeTextField from "./components/FreeTextField";
 
 const drawerWidth = 260;
 
@@ -3543,31 +3543,27 @@ export default function Sidebar({
               required
               autoFocus={!hostFormData.hostname}
             />
-            <Autocomplete
-              freeSolo
+            <FreeTextField
+              fullWidth
+              label="User"
+              size="small"
+              placeholder="leave empty to use backend current user"
               options={["root", "ubuntu", "user", "administrator"]}
               value={hostFormData.user}
-              onChange={(_event, newValue) => {
-                setHostFormData({ ...hostFormData, user: newValue || "" });
+              onChange={(newValue) => {
+                setHostFormData({ ...hostFormData, user: newValue });
               }}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  fullWidth
-                  label="User"
-                  size="small"
-                  placeholder="leave empty to use backend current user"
-                />
-              )}
             />
-            <Autocomplete
-              freeSolo
+            <FreeTextField
+              fullWidth
+              label="Port"
+              size="small"
+              placeholder="22"
               options={["22", "222", "2222"]}
               value={hostFormData.port || ""}
-              onChange={(_event, newValue) => {
+              onChange={(newValue) => {
                 setHostFormData({ ...hostFormData, port: newValue || "" });
               }}
-              renderInput={(params) => <TextField {...params} fullWidth label="Port" size="small" placeholder="22" />}
             />
             <TextField
               fullWidth
@@ -3618,130 +3614,84 @@ export default function Sidebar({
               onChange={(e) => setHostFormData({ ...hostFormData, proxy_jump: e.target.value })}
               placeholder="e.g. server-foo,server-bar"
             />
-            <Autocomplete
+            <FreeTextField
+              fullWidth
+              label="AddressFamily (Optional)"
+              size="small"
+              placeholder="any / inet / inet6"
               options={["any", "inet", "inet6"]}
               value={hostFormData.address_family || ""}
-              onChange={(_event, newValue) => {
+              onChange={(newValue) => {
                 setHostFormData({ ...hostFormData, address_family: (newValue as "any" | "inet" | "inet6") || "" });
               }}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  fullWidth
-                  label="AddressFamily (Optional)"
-                  size="small"
-                  placeholder="any / inet / inet6"
-                />
-              )}
             />
-            <Autocomplete
-              freeSolo
+            <FreeTextField
               fullWidth
+              label="UserKnownHostsFile (Optional)"
+              size="small"
+              placeholder="e.g. ~/.ssh/known_hosts_custom"
               options={["/dev/null", "NUL"]}
               value={hostFormData.user_known_hosts_file || ""}
-              onInputChange={(_event, newValue) =>
-                setHostFormData({ ...hostFormData, user_known_hosts_file: newValue || "" })
-              }
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  fullWidth
-                  label="UserKnownHostsFile (Optional)"
-                  size="small"
-                  placeholder="e.g. ~/.ssh/known_hosts_custom"
-                />
-              )}
+              onChange={(newValue) => setHostFormData({ ...hostFormData, user_known_hosts_file: newValue || "" })}
             />
-            <Autocomplete
+            <FreeTextField
+              fullWidth
+              label="StrictHostKeyChecking (Optional)"
+              size="small"
+              placeholder="ask / yes / no"
               options={["ask", "yes", "no"]}
               value={hostFormData.strict_host_key_checking || ""}
-              onChange={(_event, newValue) => {
+              onChange={(newValue) => {
                 setHostFormData({
                   ...hostFormData,
                   strict_host_key_checking: (newValue as "ask" | "yes" | "no") || "",
                 });
               }}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  fullWidth
-                  label="StrictHostKeyChecking (Optional)"
-                  size="small"
-                  placeholder="ask / yes / no"
-                />
-              )}
             />
-            <Autocomplete
-              freeSolo
+            <FreeTextField
               fullWidth
+              label="HostKeyAlgorithms (Optional)"
+              size="small"
+              placeholder="e.g. +ssh-rsa"
               options={["+ssh-rsa"]}
               value={hostFormData.host_key_algorithms || ""}
-              onInputChange={(_event, newValue) =>
-                setHostFormData({ ...hostFormData, host_key_algorithms: newValue || "" })
-              }
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  fullWidth
-                  label="HostKeyAlgorithms (Optional)"
-                  size="small"
-                  placeholder="e.g. +ssh-rsa"
-                />
-              )}
+              onChange={(newValue) => setHostFormData({ ...hostFormData, host_key_algorithms: newValue || "" })}
             />
-            <Autocomplete
+            <FreeTextField
+              fullWidth
+              label="VerifyHostKeyDNS (Optional)"
+              size="small"
+              placeholder="ask / yes / no"
+              helperText="Verify host key fingerprint via DNSSEC SSHFP records (RFC 4255)"
               options={["ask", "yes", "no"]}
               value={hostFormData.verify_host_key_dns || ""}
-              onChange={(_event, newValue) => {
+              onChange={(newValue) => {
                 setHostFormData({
                   ...hostFormData,
                   verify_host_key_dns: (newValue as "ask" | "yes" | "no") || "",
                 });
               }}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  fullWidth
-                  label="VerifyHostKeyDNS (Optional)"
-                  size="small"
-                  placeholder="ask / yes / no"
-                  helperText="Verify host key fingerprint via DNSSEC SSHFP records (RFC 4255)"
-                />
-              )}
             />
-            <Autocomplete
-              freeSolo
+            <FreeTextField
               fullWidth
+              label="SendEnv (Optional)"
+              size="small"
+              placeholder="LANG LC_* COLORTERM NO_COLOR"
+              helperText="Send environment variables to remote host"
               options={["LANG LC_* COLORTERM NO_COLOR"]}
               value={hostFormData.send_env || ""}
-              onInputChange={(_event, newValue) => setHostFormData({ ...hostFormData, send_env: newValue || "" })}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  fullWidth
-                  label="SendEnv (Optional)"
-                  size="small"
-                  placeholder="LANG LC_* COLORTERM NO_COLOR"
-                  helperText="Send environment variables to remote host"
-                />
-              )}
+              onChange={(newValue) => setHostFormData({ ...hostFormData, send_env: newValue || "" })}
             />
-            <Autocomplete
-              freeSolo
-              options={remoteCommandOptions}
-              value={hostFormData.remote_command}
-              onInputChange={(_event, newValue) => {
+            <FreeTextField
+              fullWidth
+              label="RemoteCommand (Optional)"
+              size="small"
+              placeholder="Use %i for session id"
+              options={remoteCommandOptions as unknown as string[]}
+              value={hostFormData.remote_command || ""}
+              onChange={(newValue) => {
                 setHostFormData({ ...hostFormData, remote_command: newValue });
               }}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  fullWidth
-                  label="RemoteCommand (Optional)"
-                  size="small"
-                  placeholder="Use %i for session id"
-                />
-              )}
             />
             <TextField
               fullWidth

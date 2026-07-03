@@ -45,7 +45,9 @@ import {
   generatePassword,
   isMuiModalOpen,
   liquidEngine,
-  terminalKeyShortcuts,
+  passthroughKeyShortcuts,
+  blackholeShortcuts,
+  disableShortcuts,
 } from "./common";
 import {
   type CsScriptModule,
@@ -70,7 +72,6 @@ import {
 } from "./store";
 import { dialogs } from "./Dialogs";
 import type { AppletData } from "./AppletWrapper";
-import { blackholeShortcuts, disableShortcuts } from "./useKeyboardManager";
 import type { ITerminalOptions } from "@xterm/xterm";
 import { openMenu } from "./DynamicMenu";
 import { moduleCache } from "./store";
@@ -80,7 +81,7 @@ window.__CS_AUTORUN_DONE__ = undefined;
 window.__CS_MODULECACHE__ = moduleCache;
 window.__CS_VERSION__ = PACKAGE_JSON_VERSION;
 window.__CS_USE_STORE__ = useStore;
-window.__CS_PASSTHROUGH_SHORTCUTS__ = terminalKeyShortcuts;
+window.__CS_PASSTHROUGH_SHORTCUTS__ = passthroughKeyShortcuts;
 window.__CS_DISABLE_SHORTCUTS__ = disableShortcuts;
 window.__CS_BLACKHOLE_SHORTCUTS__ = blackholeShortcuts;
 window.__CS_LIQUID_ENGINE__ = liquidEngine;

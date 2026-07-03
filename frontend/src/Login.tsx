@@ -4,9 +4,8 @@ import { Box, Button, TextField, Typography, Paper, ThemeProvider, CssBaseline }
 import { version as PACKAGE_JSON_VERSION } from "../package.json";
 import type { FullData, LoginRequest, LoginResponse, Manifest } from "./api";
 import { APP_NAME, BROWSER_STORAGE_KEY_TOKEN, HEADER_CONTENT_TYPE, METHOD_POST, MIME_JSON } from "./constants";
-import { forceReload, getKeyCombination, loginTheme } from "./common";
+import { forceReload, getKeyCombination, loginTheme, blackholeShortcuts } from "./common";
 import { dialogs } from "./Dialogs";
-import { blackholeShortcuts } from "./useKeyboardManager";
 
 export default function Login({ onLoginSuccess }: { onLoginSuccess: (data?: FullData) => void }) {
   const [password, setPassword] = useState("");

@@ -10,7 +10,6 @@ import {
   Button,
   FormControlLabel,
   Checkbox,
-  Autocomplete,
   Menu,
   MenuItem,
   Alert,
@@ -94,6 +93,7 @@ import {
 } from "./store";
 import NewTabDialog from "./NewTabDialog";
 import { dialogs } from "./Dialogs";
+import FreeTextField from "./components/FreeTextField";
 
 export interface DialogManagerProps {
   isMobile: boolean;
@@ -792,23 +792,20 @@ export default function DialogManager({
           )}
           <Box sx={{ display: "flex", gap: 2, mt: 1 }}>
             <TextField
-              fullWidth
+              sx={{ flex: 2 }}
               label="Button Name"
               size="small"
               value={buttonFormData.name}
               onChange={(e) => setButtonFormData({ ...buttonFormData, name: e.target.value })}
             />
-            <Autocomplete
+            <FreeTextField
+              sx={{ flex: 1 }}
               size="small"
-              freeSolo
-              fullWidth
+              label="Button Group"
+              placeholder={DEFAULT_BUTTON_GROUP}
               options={groups}
               value={buttonFormData.group}
-              onChange={(_e, newValue) => setButtonFormData({ ...buttonFormData, group: newValue || "" })}
-              onInputChange={(_e, newValue) => setButtonFormData({ ...buttonFormData, group: newValue || "" })}
-              renderInput={(params) => (
-                <TextField {...params} label="Button Group" placeholder={DEFAULT_BUTTON_GROUP} />
-              )}
+              onChange={(newValue) => setButtonFormData({ ...buttonFormData, group: newValue || "" })}
             />
           </Box>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -992,25 +989,16 @@ export default function DialogManager({
                 borderColor: "divider",
               }}
             >
-              <Autocomplete
-                freeSolo
+              <FreeTextField
+                fullWidth
+                label="Server / Address"
+                size="small"
+                placeholder="e.g. local, production-db, root@192.168.1.1"
                 options={[LOCAL_NAME, ...hosts.map((h) => h.name)]}
                 value={buttonFormData.payload}
-                onChange={(_event, newValue) => {
+                onChange={(newValue) => {
                   setButtonFormData({ ...buttonFormData, payload: newValue || "" });
                 }}
-                onInputChange={(_event, newInputValue) => {
-                  setButtonFormData({ ...buttonFormData, payload: newInputValue || "" });
-                }}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    fullWidth
-                    label="Server / Address"
-                    size="small"
-                    placeholder="e.g. local, production-db, root@192.168.1.1"
-                  />
-                )}
               />
               <Typography variant="body2" color="text.secondary">
                 Server name or <b>[username[:password]@]hostname[:port]</b>. Use <b>{LOCAL_NAME}</b> for local shell.

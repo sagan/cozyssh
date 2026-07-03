@@ -19,7 +19,15 @@ import {
   LOCAL_NAME,
   VAR_CS_SCROLL_LINES,
 } from "./constants";
-import { closeModal, forceReload, getKeyCombination, isMuiModalOpen, localShellHost } from "./common";
+import {
+  blackholeShortcuts,
+  closeModal,
+  disableShortcuts,
+  forceReload,
+  getKeyCombination,
+  isMuiModalOpen,
+  localShellHost,
+} from "./common";
 import {
   type TerminalRefMap,
   activatePane,
@@ -57,13 +65,6 @@ export interface KeyboardManagerOptions {
   /** Getter for the live terminal ref map */
   getTerminalRefs: () => TerminalRefMap;
 }
-
-/**
- * These keystrokes are silently "consumed" by CozySSH.
- */
-export const blackholeShortcuts = new Set<string>(["ctrl+alt", "ctrl+alt+shift", "ctrl+shift", "alt", "alt+shift"]);
-
-export const disableShortcuts = new Set<string>();
 
 export function useKeyboardManager(options: KeyboardManagerOptions): void {
   const { handleButtonClick, getTerminalRefs } = options;

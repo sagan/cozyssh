@@ -2124,10 +2124,9 @@ declare global {
 	 */
 	var __CS_USE_STORE__: UseStore;
 	/**
-	 * The list of key combinations that should be passed through to the terminal if terminal has focus.
+	 * The additional list of key combinations that should be passed through to the terminal if terminal has focus.
 	 * Each element is a key combination string such as `ctrl+shift+m`
 	 * (all lowercase, modifiers in `ctrl,alt,shift,meta` order).
-	 * Some key combinations (like `ctrl+c`, `ctrl+d`, etc.) are pre-added to this set by default.
 	 */
 	var __CS_PASSTHROUGH_SHORTCUTS__: Set<string>;
 	/**
