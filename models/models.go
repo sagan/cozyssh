@@ -48,13 +48,13 @@ type WebdavStatus struct {
 
 type Sysinfo struct {
 	Username        string `json:"username,omitempty"`
-	Hostname        string `json:"hostname,omitempty"`
+	Sitename        string `json:"sitename,omitempty"`
 	Version         string `json:"version,omitempty"`
 	InsecureAllowed bool   `json:"insecureAllowed,omitempty"`
 	IsSecure        bool   `json:"isSecure,omitempty"`
 	SavePassword    string `json:"savePassword,omitempty" ts_type:"\"ask\" | \"always\" | \"never\""`
-	ConfigDir       string `json:"config_dir,omitempty"`
-	SSHDir          string `json:"ssh_dir,omitempty"`
+	ConfigDir       string `json:"configDir,omitempty"`
+	SSHDir          string `json:"sshDir,omitempty"`
 }
 
 type SaveWebdavSettingsRequest struct {
@@ -145,8 +145,8 @@ type ImportSSHConfigRequest struct {
 // POST /api/settings/webdav/import/knownhosts
 type ImportKnownHostsRequest struct {
 	DeviceName string   `json:"deviceName"`
-	Lines      []string `json:"lines"`  // Raw known_hosts lines to import
-	Force      bool     `json:"force"`  // Required to import conflicting entries
+	Lines      []string `json:"lines"` // Raw known_hosts lines to import
+	Force      bool     `json:"force"` // Required to import conflicting entries
 }
 
 type HostData struct {
@@ -154,35 +154,35 @@ type HostData struct {
 	HostName      string   `json:"hostname"`
 	Port          string   `json:"port"`
 	User          string   `json:"user"`
-	ProxyJump     string   `json:"proxy_jump,omitempty"`
-	RemoteCommand string   `json:"remote_command,omitempty"`
+	ProxyJump     string   `json:"proxyJump,omitempty"`
+	RemoteCommand string   `json:"remoteCommand,omitempty"`
 	Tags          []string `json:"tags,omitempty"`
 	Comment       string   `json:"comment,omitempty"`
 	// "config", "known_hosts", ""
 	Source       string `json:"source,omitempty" ts_type:"\"config\" | \"known_hosts\" | \"\""`
-	IdentityFile string `json:"identity_file,omitempty"`
+	IdentityFile string `json:"identityFile,omitempty"`
 	// true if from known_hosts and not config
-	IsAuto      bool `json:"is_auto,omitempty"`
-	IsFavourite bool `json:"is_favourite,omitempty"`
+	IsAuto      bool `json:"isAuto,omitempty"`
+	IsFavourite bool `json:"isFavourite,omitempty"`
 
-	AddressFamily         string `json:"address_family,omitempty" ts_type:"\"any\" | \"inet\" | \"inet6\" | \"\""`
-	UserKnownHostsFile    string `json:"user_known_hosts_file,omitempty"`
-	StrictHostKeyChecking string `json:"strict_host_key_checking,omitempty" ts_type:"\"yes\" | \"no\" | \"ask\" | \"\""`
-	HostKeyAlgorithms     string `json:"host_key_algorithms,omitempty"`
+	AddressFamily         string `json:"addressFamily,omitempty" ts_type:"\"any\" | \"inet\" | \"inet6\" | \"\""`
+	UserKnownHostsFile    string `json:"userKnownHostsFile,omitempty"`
+	StrictHostKeyChecking string `json:"strictHostKeyChecking,omitempty" ts_type:"\"yes\" | \"no\" | \"ask\" | \"\""`
+	HostKeyAlgorithms     string `json:"hostKeyAlgorithms,omitempty"`
 	// VerifyHostKeyDNS controls SSHFP DNS verification (yes / no / ask), consistent with OpenSSH.
-	VerifyHostKeyDNS string `json:"verify_host_key_dns,omitempty" ts_type:"\"yes\" | \"no\" | \"ask\" | \"\""`
+	VerifyHostKeyDNS string `json:"verifyHostKeyDns,omitempty" ts_type:"\"yes\" | \"no\" | \"ask\" | \"\""`
 	// SendEnv specifies environment variables to send to the remote host.
-	SendEnv string `json:"send_env,omitempty"`
+	SendEnv string `json:"sendEnv,omitempty"`
 
 	// Port forwarding (OpenSSH syntax, one rule per line)
-	LocalForward   string `json:"local_forward,omitempty"`
-	RemoteForward  string `json:"remote_forward,omitempty"`
-	DynamicForward string `json:"dynamic_forward,omitempty"` // SOCKS5 proxy: [bind_address:]port
+	LocalForward   string `json:"localForward,omitempty"`
+	RemoteForward  string `json:"remoteForward,omitempty"`
+	DynamicForward string `json:"dynamicForward,omitempty"` // SOCKS5 proxy: [bind_address:]port
 
 	// Password storage support
 	Password       string `json:"password,omitempty"`
-	PasswordExists bool   `json:"password_exists,omitempty"`
-	ClearPassword  bool   `json:"clear_password,omitempty"`
+	PasswordExists bool   `json:"passwordExists,omitempty"`
+	ClearPassword  bool   `json:"clearPassword,omitempty"`
 }
 
 type ButtonData struct {
@@ -300,7 +300,7 @@ type ExecInTerminalRequest struct {
 type CopyIDRequest struct {
 	Name                string `json:"name"`
 	Password            string `json:"password,omitempty"`
-	ExpectedFingerprint string `json:"expected_fingerprint,omitempty"`
+	ExpectedFingerprint string `json:"expectedFingerprint,omitempty"`
 }
 
 type CopyIDResponse struct {
@@ -419,7 +419,8 @@ type PasswordsDeleteRequest struct {
 
 // POST /api/config
 type ConfigRequest struct {
-	SavePassword string `json:"save_password" ts_type:"\"ask\" | \"always\" | \"never\""`
+	Sitename     string `json:"sitename,omitempty"`
+	SavePassword string `json:"savePassword,omitempty" ts_type:"\"ask\" | \"always\" | \"never\""`
 }
 
 // TunnelType indicates the direction of the tunnel.

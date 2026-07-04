@@ -174,7 +174,9 @@ export default function DialogManager({
   }, [buttonFormData.payload, buttonFormData.type, buttonFormData.liquidjs]);
 
   useEffect(() => {
-    if (!inputLiquid) return;
+    if (!inputLiquid) {
+      return;
+    }
     Promise.resolve().then(() => {
       setUserVars((prev) => {
         const next = { ...prev };
@@ -1173,7 +1175,7 @@ export default function DialogManager({
                     }
                   }}
                   autoFocus={varsList.length === 0}
-                  slotProps={{ input: { sx: { fontFamily: "monospace", fontSize: "0.85rem" } } }}
+                  slotProps={{ input: { sx: { fontFamily: "monospace", fontSize: "typography.body2.fontSize" } } }}
                 />
                 <Typography variant="subtitle2" color="text.secondary">
                   System Variables
@@ -1274,7 +1276,7 @@ export default function DialogManager({
                     slotProps={{
                       input: {
                         readOnly: true,
-                        sx: { fontFamily: "monospace", fontSize: "0.85rem" },
+                        sx: { fontFamily: "monospace", fontSize: "typography.body2.fontSize" },
                       },
                     }}
                     value={renderedPreview}

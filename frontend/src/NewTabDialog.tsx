@@ -276,9 +276,9 @@ export default function NewTabDialog({
     }
     const filtered = filterHosts(hosts, f);
 
-    const favs = filtered.filter((h) => h.is_favourite);
-    const normals = filtered.filter((h) => !h.is_favourite && !h.is_auto);
-    const autos = filtered.filter((h) => !h.is_favourite && h.is_auto);
+    const favs = filtered.filter((h) => h.isFavourite);
+    const normals = filtered.filter((h) => !h.isFavourite && !h.isAuto);
+    const autos = filtered.filter((h) => !h.isFavourite && h.isAuto);
 
     const nameSorter = (a: HostData, b: HostData) => a.name.localeCompare(b.name);
     const hostNameSorter = (a: HostData, b: HostData) => {
@@ -408,7 +408,9 @@ export default function NewTabDialog({
     let flatIndex = 0;
 
     const addSection = (title: string, rawItems: Omit<DialogItem, "flatIndex">[]) => {
-      if (rawItems.length === 0) return;
+      if (rawItems.length === 0) {
+        return;
+      }
       const sectionItems = rawItems.map((item) => {
         const dialogItem = { ...item, flatIndex: flatIndex++ };
         items.push(dialogItem);
@@ -484,7 +486,7 @@ export default function NewTabDialog({
           label: h.name,
           subtitle,
           tooltip: h.comment,
-          isFav: h.is_favourite,
+          isFav: h.isFavourite,
           tag: h.tags
             ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX))
             .map((t) => "#" + t)
@@ -509,7 +511,7 @@ export default function NewTabDialog({
           label: h.name,
           subtitle,
           tooltip: h.comment,
-          isFav: h.is_favourite,
+          isFav: h.isFavourite,
           tag: h.tags
             ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX))
             .map((t) => "#" + t)
@@ -534,7 +536,7 @@ export default function NewTabDialog({
           label: h.name,
           subtitle,
           tooltip: h.comment,
-          isFav: h.is_favourite,
+          isFav: h.isFavourite,
           tag: h.tags
             ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX))
             .map((t) => "#" + t)
@@ -989,7 +991,7 @@ export default function NewTabDialog({
               <Typography
                 variant="caption"
                 sx={{
-                  fontSize: "0.6rem",
+                  fontSize: "typography.caption.fontSize",
                   lineHeight: 1,
                   fontWeight: 400,
                   userSelect: "none",

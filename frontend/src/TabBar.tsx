@@ -52,7 +52,7 @@ export default function TabBar({
   const activeTabId = useStore((state) => state.activeTabId);
   const activePaneId = useStore((state) => state.activePaneId);
   const unreadTabIds = useStore((state) => state.unreadTabIds);
-  const sysHostname = useStore((state) => state.sysinfo.hostname);
+  const sysSitename = useStore((state) => state.sysinfo.sitename);
   const searchOpen = useStore((state) => state.searchOpen);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -66,11 +66,11 @@ export default function TabBar({
   useEffect(() => {
     const active = tabs.find((t) => t.id === activeTabId);
     if (!active || active.title === LOCAL_NAME) {
-      document.title = APP_NAME + " " + sysHostname;
+      document.title = APP_NAME + " " + sysSitename;
     } else {
-      document.title = `${active.title} - ${APP_NAME} ${sysHostname}`;
+      document.title = `${active.title} - ${APP_NAME} ${sysSitename}`;
     }
-  }, [tabs, activeTabId, sysHostname]);
+  }, [tabs, activeTabId, sysSitename]);
 
   useEffect(() => {
     window.dispatchEvent(
@@ -293,7 +293,7 @@ export default function TabBar({
                 }}
                 sx={{
                   width: 200,
-                  "& .MuiInputBase-root": { height: 32, fontSize: "typography.body2.fontSize" },
+                  "& .MuiInputBase-root": { fontSize: "typography.body2.fontSize" },
                 }}
               />
               <IconButton

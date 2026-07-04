@@ -1682,39 +1682,39 @@ export interface IModes {
 }
 export interface Sysinfo {
 	username?: string;
-	hostname?: string;
+	sitename?: string;
 	version?: string;
 	insecureAllowed?: boolean;
 	isSecure?: boolean;
 	savePassword?: "ask" | "always" | "never";
-	config_dir?: string;
-	ssh_dir?: string;
+	configDir?: string;
+	sshDir?: string;
 }
 export interface HostData {
 	name: string;
 	hostname: string;
 	port: string;
 	user: string;
-	proxy_jump?: string;
-	remote_command?: string;
+	proxyJump?: string;
+	remoteCommand?: string;
 	tags?: string[];
 	comment?: string;
 	source?: "config" | "known_hosts" | "";
-	identity_file?: string;
-	is_auto?: boolean;
-	is_favourite?: boolean;
-	address_family?: "any" | "inet" | "inet6" | "";
-	user_known_hosts_file?: string;
-	strict_host_key_checking?: "yes" | "no" | "ask" | "";
-	host_key_algorithms?: string;
-	verify_host_key_dns?: "yes" | "no" | "ask" | "";
-	send_env?: string;
-	local_forward?: string;
-	remote_forward?: string;
-	dynamic_forward?: string;
+	identityFile?: string;
+	isAuto?: boolean;
+	isFavourite?: boolean;
+	addressFamily?: "any" | "inet" | "inet6" | "";
+	userKnownHostsFile?: string;
+	strictHostKeyChecking?: "yes" | "no" | "ask" | "";
+	hostKeyAlgorithms?: string;
+	verifyHostKeyDns?: "yes" | "no" | "ask" | "";
+	sendEnv?: string;
+	localForward?: string;
+	remoteForward?: string;
+	dynamicForward?: string;
 	password?: string;
-	password_exists?: boolean;
-	clear_password?: boolean;
+	passwordExists?: boolean;
+	clearPassword?: boolean;
 }
 export interface ButtonData {
 	id: string;

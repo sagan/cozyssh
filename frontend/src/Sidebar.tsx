@@ -74,7 +74,6 @@ import type {
   SaveWebdavSettingsRequest,
   SyncDetectionResult,
   WebdavStatus,
-  ConfigRequest,
 } from "./api";
 import {
   METHOD_PUT,
@@ -138,6 +137,7 @@ import {
   moveServer,
   moveGroup,
   fetchSessions,
+  updateConfig,
 } from "./store";
 import { useShallow } from "zustand/react/shallow";
 import FreeTextField from "./components/FreeTextField";
@@ -184,14 +184,12 @@ const PASSWORD_PLACEHOLDER = "***";
 export default function Sidebar({
   isMobile,
   isTouch,
-  onSavePasswordChange,
   onOpenScratchpad,
   onAttach,
   onRefresh,
 }: {
   isMobile: boolean;
   isTouch: boolean;
-  onSavePasswordChange: (val: ConfigRequest["save_password"]) => void;
   onOpenScratchpad: () => void;
   onAttach: (id: string, host: string, title: string, isLocked: boolean) => void;
   onRefresh: () => void;
@@ -199,9 +197,9 @@ export default function Sidebar({
   const appVersion = useStore((state) => state.sysinfo.version);
   const savePassword = useStore((state) => state.sysinfo.savePassword);
   const sysUsername = useStore((state) => state.sysinfo.username);
-  const sysHostname = useStore((state) => state.sysinfo.hostname);
-  const sysConfigDir = useStore((state) => state.sysinfo.config_dir);
-  const sysSshDir = useStore((state) => state.sysinfo.ssh_dir);
+  const sysSitename = useStore((state) => state.sysinfo.sitename);
+  const sysConfigDir = useStore((state) => state.sysinfo.configDir);
+  const sysSshDir = useStore((state) => state.sysinfo.sshDir);
   const activeSessionIds = useStore(
     useShallow((state) =>
       state.tabs.flatMap((t) => t.panes.filter((p) => p.state !== "stolen").map((p) => p.sessionId || p.id)),
@@ -377,23 +375,8 @@ export default function Sidebar({
   const urlChanged = webdavUrl.trim() !== currentWebdavUrl;
   const isCleared = !webdavUrl.trim() && !webdavUser.trim() && !webdavPassword.trim();
 
-  const handleSaveWebdav = async () => {
+  const handleSaveWebdav = useCallback(async () => {
     setIsTestingWebdav(true);
-    if (
-      isCleared &&
-      !(await dialogs.confirm(
-        "Are you sure you want to clear WebDAV settings?",
-        `It will not remove any existing files from WebDAV server.` +
-          (webdavEncrypted
-            ? ` The WebDAV remote directory is encrypted with master key ${masterKey}.` +
-              ` If you proceed, the master key will be deleted from CozySSH server. Make sure you have a backup of it.`
-            : ""),
-        webdavEncrypted,
-      ))
-    ) {
-      setIsTestingWebdav(false);
-      return;
-    }
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
 
     try {
@@ -573,7 +556,81 @@ export default function Sidebar({
     } finally {
       setIsTestingWebdav(false);
     }
-  };
+  }, [
+    currentMasterKey,
+    currentUploadSSHData,
+    fetchWebdavStatus,
+    isCleared,
+    masterKey,
+    uploadSSHData,
+    urlChanged,
+    useEncryption,
+    webdavEnabled,
+    webdavEncrypted,
+    webdavPassword,
+    webdavUrl,
+    webdavUser,
+  ]);
+
+  const handleClearWebdav = useCallback(async () => {
+    setIsTestingWebdav(true);
+    if (
+      !(await dialogs.confirm(
+        "Are you sure you want to clear WebDAV settings?",
+        `It will not remove any existing files from WebDAV server.` +
+          (webdavEncrypted
+            ? ` The WebDAV remote directory is encrypted with master key ${masterKey}.` +
+              ` If you proceed, the master key will be deleted from CozySSH server. Make sure you have a backup of it.`
+            : ""),
+        webdavEncrypted,
+      ))
+    ) {
+      setIsTestingWebdav(false);
+      return;
+    }
+    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+
+    try {
+      const res = await fetch("/api/settings/webdav", {
+        method: METHOD_POST,
+        headers: {
+          [HEADER_CONTENT_TYPE]: MIME_JSON,
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        },
+        body: JSON.stringify({
+          url: "",
+          user: "",
+          password: "",
+          enabled: false,
+          useEncryption: false,
+          masterKey: "",
+        } satisfies SaveWebdavSettingsRequest),
+      });
+
+      if (res.ok) {
+        notify("WebDAV settings cleared successfully", "success", TOAST_KEY_SYNC);
+        setWebdavUrl("");
+        setCurrentWebdavUrl("");
+        setWebdavUser("");
+        setCurrentWebdavUser("");
+        setWebdavPassword("");
+        setCurrentWebdavPassword("");
+        setWebdavEnabled(false);
+        setUseEncryption(false);
+        setMasterKey("");
+        setCurrentMasterKey("");
+        fetchWebdavStatus(false);
+      } else {
+        const text = await res.text();
+        notify("Failed to clear WebDAV settings: " + text, "error", TOAST_KEY_SYNC);
+      }
+      return;
+    } catch (e: unknown) {
+      notify(`WebDAV settings saving failed: ${e}`, "error", TOAST_KEY_SYNC);
+    } finally {
+      setIsTestingWebdav(false);
+    }
+  }, [fetchWebdavStatus, masterKey, webdavEncrypted]);
 
   const handleSyncNow = useCallback(async () => {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
@@ -1036,6 +1093,14 @@ export default function Sidebar({
     [fetchPasswords],
   );
 
+  const handleChangeSitename = useCallback(async () => {
+    const sitename = await dialogs.prompt("New sitename:", getStore().sysinfo.sitename);
+    if (!sitename || sitename === getStore().sysinfo.sitename) {
+      return;
+    }
+    updateConfig({ sitename });
+  }, []);
+
   const handleSavePassword = useCallback(async () => {
     if (newPwd !== confirmPwd) {
       dialogs.alert("Passwords don't match");
@@ -1198,9 +1263,9 @@ export default function Sidebar({
       return a.hostname.localeCompare(b.hostname);
     };
 
-    const favs = filtered.filter((h) => h.is_favourite).sort(nameSorter);
-    const normals = filtered.filter((h) => !h.is_favourite && !h.is_auto).sort(nameSorter);
-    const autos = filtered.filter((h) => !h.is_favourite && h.is_auto).sort(hostNameSorter);
+    const favs = filtered.filter((h) => h.isFavourite).sort(nameSorter);
+    const normals = filtered.filter((h) => !h.isFavourite && !h.isAuto).sort(nameSorter);
+    const autos = filtered.filter((h) => !h.isFavourite && h.isAuto).sort(hostNameSorter);
 
     const targets = [...favs, ...normals, ...autos].slice(0, 4);
     if (targets.length > 0) {
@@ -1229,22 +1294,22 @@ export default function Sidebar({
       user: "root",
       port: "22",
       source: "",
-      identity_file: "",
-      proxy_jump: "",
-      remote_command: "",
-      address_family: "",
-      user_known_hosts_file: "",
-      strict_host_key_checking: "",
-      host_key_algorithms: "",
-      verify_host_key_dns: "",
-      send_env: "",
-      local_forward: "",
-      remote_forward: "",
+      identityFile: "",
+      proxyJump: "",
+      remoteCommand: "",
+      addressFamily: "",
+      userKnownHostsFile: "",
+      strictHostKeyChecking: "",
+      hostKeyAlgorithms: "",
+      verifyHostKeyDns: "",
+      sendEnv: "",
+      localForward: "",
+      remoteForward: "",
       tags: "",
       comment: "",
       password: "",
-      password_exists: false,
-      clear_password: false,
+      passwordExists: false,
+      clearPassword: false,
     };
     setEditHostName("");
     setHostFormData(data);
@@ -1265,22 +1330,22 @@ export default function Sidebar({
       user: target.user || "root",
       port: target.port || "22",
       source: "",
-      identity_file: target.identity_file || "",
-      proxy_jump: target.proxy_jump || "",
-      remote_command: target.remote_command || "",
-      address_family: target.address_family || "",
-      user_known_hosts_file: target.user_known_hosts_file || "",
-      strict_host_key_checking: target.strict_host_key_checking || "",
-      host_key_algorithms: target.host_key_algorithms || "",
-      verify_host_key_dns: target.verify_host_key_dns || "",
-      send_env: target.send_env || "",
-      local_forward: target.local_forward || "",
-      remote_forward: target.remote_forward || "",
+      identityFile: target.identityFile || "",
+      proxyJump: target.proxyJump || "",
+      remoteCommand: target.remoteCommand || "",
+      addressFamily: target.addressFamily || "",
+      userKnownHostsFile: target.userKnownHostsFile || "",
+      strictHostKeyChecking: target.strictHostKeyChecking || "",
+      hostKeyAlgorithms: target.hostKeyAlgorithms || "",
+      verifyHostKeyDns: target.verifyHostKeyDns || "",
+      sendEnv: target.sendEnv || "",
+      localForward: target.localForward || "",
+      remoteForward: target.remoteForward || "",
       tags: target.tags ? target.tags.join(" ") : "",
       comment: target.comment || "",
-      password: target.password_exists ? PASSWORD_PLACEHOLDER : "",
-      password_exists: target.password_exists,
-      clear_password: false,
+      password: target.passwordExists ? PASSWORD_PLACEHOLDER : "",
+      passwordExists: target.passwordExists,
+      clearPassword: false,
     };
     setEditHostName(isAuto ? "" : target.name);
     setHostFormData(data);
@@ -1319,7 +1384,7 @@ export default function Sidebar({
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
 
     let newTags = target.tags ? [...target.tags] : [];
-    if (target.is_favourite) {
+    if (target.isFavourite) {
       newTags = newTags.filter((t) => t !== TAG_FAV);
     } else {
       if (!newTags.includes(TAG_FAV)) {
@@ -1332,9 +1397,9 @@ export default function Sidebar({
       hostname: target.hostname,
       user: target.user || "root",
       port: target.port || "22",
-      identity_file: target.identity_file || "",
-      proxy_jump: target.proxy_jump || "",
-      remote_command: target.remote_command || "",
+      identityFile: target.identityFile || "",
+      proxyJump: target.proxyJump || "",
+      remoteCommand: target.remoteCommand || "",
       source: target.source || "",
       comment: target.comment || "",
       tags: newTags,
@@ -1365,14 +1430,14 @@ export default function Sidebar({
     };
 
     let passwordInput: string | undefined = undefined;
-    let expected_fingerprint: string | undefined = undefined;
+    let expectedFingerprint: string | undefined = undefined;
 
     while (true) {
       try {
         const payload: CopyIDRequest = {
           name: target.name,
           password: passwordInput,
-          expected_fingerprint,
+          expectedFingerprint,
         };
 
         const res = await fetch("/api/hosts/copy-id", {
@@ -1441,7 +1506,7 @@ export default function Sidebar({
           if (!data.fingerprint) {
             break;
           }
-          expected_fingerprint = data.fingerprint;
+          expectedFingerprint = data.fingerprint;
         } else {
           dialogs.alert(`ssh-copy-id "${payload.name}": Error: ${data.message}`);
           break;
@@ -1582,7 +1647,9 @@ export default function Sidebar({
 
   const handleDeleteGroupClick = useCallback(async () => {
     setGroupContextMenuOpen(false);
-    if (!groupContextMenu) return;
+    if (!groupContextMenu) {
+      return;
+    }
     const G = groupContextMenu.path;
     if (
       !(await dialogs.confirm(
@@ -1657,7 +1724,9 @@ export default function Sidebar({
 
   const handleRenameGroupClick = useCallback(async () => {
     setGroupContextMenuOpen(false);
-    if (!groupContextMenu) return;
+    if (!groupContextMenu) {
+      return;
+    }
     const G = groupContextMenu.path;
 
     const parts = G.split("/");
@@ -1788,10 +1857,10 @@ export default function Sidebar({
       .split(/\s+/)
       .filter((t) => t.trim() !== "");
 
-    let clearPassword = hostFormData.clear_password;
+    let clearPassword = hostFormData.clearPassword;
     let passwordVal = hostFormData.password;
 
-    if (hostFormData.password_exists) {
+    if (hostFormData.passwordExists) {
       if (hostFormData.password === "") {
         clearPassword = true;
         passwordVal = "";
@@ -1805,7 +1874,7 @@ export default function Sidebar({
       name: finalName,
       tags: parsedTags,
       password: passwordVal,
-      clear_password: clearPassword,
+      clearPassword,
     };
 
     if (!isValidHostname(payload.name) || !isValidHostname(payload.hostname)) {
@@ -1893,11 +1962,11 @@ export default function Sidebar({
   const filteredHosts = useMemo(() => {
     const filteredAll = filterHosts(hosts, filterStr);
 
-    const favs = filteredAll.filter((h) => h.is_favourite);
+    const favs = filteredAll.filter((h) => h.isFavourite);
     const nameSorter = (a: HostData, b: HostData) => a.name.localeCompare(b.name);
     const sortedFavs = favs.sort(nameSorter);
 
-    const autos = filteredAll.filter((h) => !h.is_favourite && h.is_auto);
+    const autos = filteredAll.filter((h) => !h.isFavourite && h.isAuto);
     const hostNameSorter = (a: HostData, b: HostData) => {
       if (a.hostname === b.hostname) {
         return a.name.localeCompare(b.name);
@@ -1906,7 +1975,7 @@ export default function Sidebar({
     };
     const sortedAutos = autos.sort(hostNameSorter);
 
-    const treeHosts = filteredAll.filter((h) => !h.is_auto);
+    const treeHosts = filteredAll.filter((h) => !h.isAuto);
 
     const allGroupPaths = new Set<string>();
     for (const g of groups) {
@@ -1984,14 +2053,18 @@ export default function Sidebar({
       subGroups.sort((a, b) => {
         const orderA = getGroupOrder(a.path);
         const orderB = getGroupOrder(b.path);
-        if (orderA !== orderB) return orderA - orderB;
+        if (orderA !== orderB) {
+          return orderA - orderB;
+        }
         return a.name.localeCompare(b.name);
       });
 
       subServers.sort((a, b) => {
         const orderA = getHostOrder(a.host);
         const orderB = getHostOrder(b.host);
-        if (orderA !== orderB) return orderA - orderB;
+        if (orderA !== orderB) {
+          return orderA - orderB;
+        }
         return a.name.localeCompare(b.name);
       });
 
@@ -2001,14 +2074,18 @@ export default function Sidebar({
     topLevelGroups.sort((a, b) => {
       const orderA = getGroupOrder(a.path);
       const orderB = getGroupOrder(b.path);
-      if (orderA !== orderB) return orderA - orderB;
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
       return a.name.localeCompare(b.name);
     });
 
     topLevelServers.sort((a, b) => {
       const orderA = getHostOrder(a.host);
       const orderB = getHostOrder(b.host);
-      if (orderA !== orderB) return orderA - orderB;
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
       return a.name.localeCompare(b.name);
     });
 
@@ -2027,7 +2104,9 @@ export default function Sidebar({
         })
         .filter((node) => {
           if (node.type === "group") {
-            if (!filterStr.trim()) return true;
+            if (!filterStr.trim()) {
+              return true;
+            }
             return node.children.length > 0 || node.name.toLowerCase().includes(filterStr.toLowerCase());
           }
           return true;
@@ -2265,7 +2344,9 @@ export default function Sidebar({
   };
 
   const handleRootDragOver = (e: React.DragEvent) => {
-    if (!draggedItem) return;
+    if (!draggedItem) {
+      return;
+    }
     e.preventDefault();
     setDragOverTarget({ id: "root", effect: "inside" });
   };
@@ -2273,8 +2354,9 @@ export default function Sidebar({
   const handleRootDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setDragOverTarget(null);
-    if (!draggedItem) return;
-
+    if (!draggedItem) {
+      return;
+    }
     if (draggedItem.type === "server") {
       await moveServer(draggedItem.name, null, null);
     }
@@ -2297,7 +2379,7 @@ export default function Sidebar({
       <Toolbar sx={{ justifyContent: "space-between", pr: 1 }}>
         <Typography variant="h6" noWrap sx={{ fontWeight: "bold" }}>
           <span>{APP_NAME}</span>&nbsp;
-          <span title={sysHostname}>{sysHostname}</span>
+          <span title={sysSitename}>{sysSitename}</span>
         </Typography>
         <IconButton onClick={(e) => setAnchorEl(e.currentTarget)} size="small">
           <MoreVertIcon />
@@ -2758,7 +2840,7 @@ export default function Sidebar({
         </MenuItem>
         <MenuItem onClick={handleRunCopyID}>Run ssh-copy-id</MenuItem>
         <MenuItem onClick={handleToggleFavourite}>
-          {contextMenu?.target.is_favourite ? "Remove From Favourite" : "Add To Favourite"}
+          {contextMenu?.target.isFavourite ? "Remove From Favourite" : "Add To Favourite"}
         </MenuItem>
         {contextMenu?.section === "tree" && (
           <MenuItem
@@ -2883,7 +2965,11 @@ export default function Sidebar({
 
             {dialogTab === 1 && (
               <>
-                <Typography variant="subtitle2" sx={{ fontSize: "1rem", fontWeight: "bold", mb: 2 }}>
+                <Typography
+                  variant="subtitle2"
+                  gutterBottom
+                  sx={{ fontSize: "typography.body1.fontSize", fontWeight: "bold" }}
+                >
                   Active Port Forwarding Tunnels
                 </Typography>
                 {activeTunnels.length > 0 ? (
@@ -2943,7 +3029,7 @@ export default function Sidebar({
             {dialogTab === 2 && (
               <>
                 <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
-                  <Typography variant="subtitle2" sx={{ fontSize: "1rem", fontWeight: "bold" }}>
+                  <Typography variant="subtitle2" sx={{ fontSize: "typography.body1.fontSize", fontWeight: "bold" }}>
                     Saved Passwords
                   </Typography>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -3060,33 +3146,32 @@ export default function Sidebar({
 
             {dialogTab === 3 && (
               <>
-                <Typography variant="subtitle2" gutterBottom>
-                  Service Worker & Cache
+                <Typography variant="subtitle2" sx={{ display: "flex", gap: 1 }} gutterBottom>
+                  <code>Service Worker:</code>
+                  <Chip label={swStatus} color={swStatus === "active" ? "success" : "default"} variant="outlined" />
+                  <Button variant="outlined" color="error" size="small" onClick={handleClearCache}>
+                    Force Update
+                  </Button>
                 </Typography>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Status:
-                  </Typography>
-                  <Chip
-                    label={swStatus}
-                    size="small"
-                    color={swStatus === "active" ? "success" : "default"}
-                    variant="outlined"
-                    sx={{ fontWeight: "bold" }}
-                  />
-                </Box>
-                <Button variant="outlined" color="error" size="small" onClick={handleClearCache} sx={{ mt: 1 }}>
-                  Force Clear Cache & Unregister SW
-                </Button>
                 <Divider sx={{ my: 1 }} />
-                <Typography variant="subtitle2" gutterBottom>
-                  Config Dir: {sysConfigDir}
+                <Typography variant="subtitle2" sx={{ display: "flex", gap: 1 }} gutterBottom>
+                  <code>Config Dir:</code>
+                  <Chip color="default" label={sysConfigDir} />
                 </Typography>
-                <Typography variant="subtitle2" gutterBottom>
-                  SSH Dir: {sysSshDir}
+                <Typography variant="subtitle2" sx={{ display: "flex", gap: 1 }} gutterBottom>
+                  <code>SSH Dir:</code>
+                  <Chip color="default" label={sysSshDir} />
                 </Typography>
-                <Typography variant="subtitle2" gutterBottom>
-                  OS Username: {sysUsername}
+                <Typography variant="subtitle2" sx={{ display: "flex", gap: 1 }} gutterBottom>
+                  <code>OS Username:</code>
+                  <Chip color="default" label={sysUsername} />
+                </Typography>
+                <Typography variant="subtitle2" sx={{ display: "flex", gap: 1 }} gutterBottom>
+                  <code>Sitename:</code>
+                  <Chip color="default" label={sysSitename} />
+                  <Button variant="text" size="small" onClick={handleChangeSitename}>
+                    Change
+                  </Button>
                 </Typography>
                 <Divider sx={{ my: 1 }} />
                 <Typography variant="subtitle2" gutterBottom>
@@ -3095,19 +3180,19 @@ export default function Sidebar({
                 <ButtonGroup fullWidth size="small" sx={{ mt: 1, mb: 1 }}>
                   <Button
                     variant={savePassword === "ask" ? "contained" : "outlined"}
-                    onClick={() => onSavePasswordChange("ask")}
+                    onClick={() => updateConfig({ savePassword: "ask" })}
                   >
                     ask (default)
                   </Button>
                   <Button
                     variant={savePassword === "always" ? "contained" : "outlined"}
-                    onClick={() => onSavePasswordChange("always")}
+                    onClick={() => updateConfig({ savePassword: "always" })}
                   >
                     always
                   </Button>
                   <Button
                     variant={savePassword === "never" ? "contained" : "outlined"}
-                    onClick={() => onSavePasswordChange("never")}
+                    onClick={() => updateConfig({ savePassword: "never" })}
                   >
                     never
                   </Button>
@@ -3153,7 +3238,7 @@ export default function Sidebar({
                   directory.
                   <br />
                   <b>Note</b>: OpenSSH hosts data sync is opt-in and semi-automatic; You must manually import other
-                  device's hosts from "Import/Export" page. OpenSSH private keys and saved passwords will&nbsp;
+                  device's hosts from "Import" page. OpenSSH private keys and saved passwords will&nbsp;
                   <b>NOT</b> be uploaded. See&nbsp;
                   <a
                     target="_blank"
@@ -3162,7 +3247,7 @@ export default function Sidebar({
                   >
                     CozySSH Data doccument
                   </a>
-                  &nbsp; for more details.
+                  &nbsp;for more details.
                 </Typography>
                 <Box
                   sx={{
@@ -3347,29 +3432,36 @@ export default function Sidebar({
                     }}
                   />
                 )}
-                <Typography>
+                <Typography sx={{ display: "flex", gap: 1 }}>
                   <Button
                     variant="contained"
                     onClick={handleSaveWebdav}
                     disabled={
                       isTestingWebdav ||
+                      !webdavUrl ||
                       (webdavUrl === currentWebdavUrl &&
                         webdavUser === currentWebdavUser &&
                         webdavPassword === currentWebdavPassword &&
                         masterKey === currentMasterKey &&
-                        uploadSSHData === currentUploadSSHData) ||
-                      (!!currentWebdavUrl && !webdavUrl && (!!webdavUser || !!webdavPassword))
+                        uploadSSHData === currentUploadSSHData)
                     }
                     sx={{ mt: 1, textTransform: "none" }}
                     disableElevation
                   >
                     {isTestingWebdav
                       ? "Verifying & Saving..."
-                      : isCleared && currentWebdavUrl
-                        ? "Clear Sync Settings"
-                        : urlChanged
-                          ? "Verify & Save Sync Settings"
-                          : "Save Sync Settings"}
+                      : urlChanged
+                        ? "Verify & Save Sync Settings"
+                        : "Save Sync Settings"}
+                  </Button>
+                  <Button
+                    variant="contained"
+                    onClick={handleClearWebdav}
+                    disabled={isTestingWebdav || !currentWebdavUrl}
+                    sx={{ mt: 1, textTransform: "none" }}
+                    disableElevation
+                  >
+                    Clear Sync Settings
                   </Button>
                 </Typography>
               </>
@@ -3620,8 +3712,8 @@ export default function Sidebar({
               label="IdentityFile (Optional)"
               size="small"
               type="search"
-              value={hostFormData.identity_file}
-              onChange={(e) => setHostFormData({ ...hostFormData, identity_file: e.target.value })}
+              value={hostFormData.identityFile}
+              onChange={(e) => setHostFormData({ ...hostFormData, identityFile: e.target.value })}
               placeholder="~/.ssh/id_ed25519"
             />
             <TextField
@@ -3651,8 +3743,8 @@ export default function Sidebar({
               label="ProxyJump (Optional)"
               size="small"
               type="search"
-              value={hostFormData.proxy_jump}
-              onChange={(e) => setHostFormData({ ...hostFormData, proxy_jump: e.target.value })}
+              value={hostFormData.proxyJump}
+              onChange={(e) => setHostFormData({ ...hostFormData, proxyJump: e.target.value })}
               placeholder="e.g. server-foo,server-bar"
             />
             <FreeTextField
@@ -3661,9 +3753,9 @@ export default function Sidebar({
               size="small"
               placeholder="any / inet / inet6"
               options={["any", "inet", "inet6"]}
-              value={hostFormData.address_family || ""}
+              value={hostFormData.addressFamily || ""}
               onChange={(newValue) => {
-                setHostFormData({ ...hostFormData, address_family: (newValue as "any" | "inet" | "inet6") || "" });
+                setHostFormData({ ...hostFormData, addressFamily: (newValue as "any" | "inet" | "inet6") || "" });
               }}
             />
             <FreeTextField
@@ -3672,8 +3764,8 @@ export default function Sidebar({
               size="small"
               placeholder="e.g. ~/.ssh/known_hosts_custom"
               options={["/dev/null", "NUL"]}
-              value={hostFormData.user_known_hosts_file || ""}
-              onChange={(newValue) => setHostFormData({ ...hostFormData, user_known_hosts_file: newValue || "" })}
+              value={hostFormData.userKnownHostsFile || ""}
+              onChange={(newValue) => setHostFormData({ ...hostFormData, userKnownHostsFile: newValue || "" })}
             />
             <FreeTextField
               fullWidth
@@ -3681,11 +3773,11 @@ export default function Sidebar({
               size="small"
               placeholder="ask / yes / no"
               options={["ask", "yes", "no"]}
-              value={hostFormData.strict_host_key_checking || ""}
+              value={hostFormData.strictHostKeyChecking || ""}
               onChange={(newValue) => {
                 setHostFormData({
                   ...hostFormData,
-                  strict_host_key_checking: (newValue as "ask" | "yes" | "no") || "",
+                  strictHostKeyChecking: (newValue as "ask" | "yes" | "no") || "",
                 });
               }}
             />
@@ -3695,8 +3787,8 @@ export default function Sidebar({
               size="small"
               placeholder="e.g. +ssh-rsa"
               options={["+ssh-rsa"]}
-              value={hostFormData.host_key_algorithms || ""}
-              onChange={(newValue) => setHostFormData({ ...hostFormData, host_key_algorithms: newValue || "" })}
+              value={hostFormData.hostKeyAlgorithms || ""}
+              onChange={(newValue) => setHostFormData({ ...hostFormData, hostKeyAlgorithms: newValue || "" })}
             />
             <FreeTextField
               fullWidth
@@ -3705,11 +3797,11 @@ export default function Sidebar({
               placeholder="ask / yes / no"
               helperText="Verify host key fingerprint via DNSSEC SSHFP records (RFC 4255)"
               options={["ask", "yes", "no"]}
-              value={hostFormData.verify_host_key_dns || ""}
+              value={hostFormData.verifyHostKeyDns || ""}
               onChange={(newValue) => {
                 setHostFormData({
                   ...hostFormData,
-                  verify_host_key_dns: (newValue as "ask" | "yes" | "no") || "",
+                  verifyHostKeyDns: (newValue as "ask" | "yes" | "no") || "",
                 });
               }}
             />
@@ -3720,8 +3812,8 @@ export default function Sidebar({
               placeholder="LANG LC_* COLORTERM NO_COLOR"
               helperText="Send environment variables to remote host"
               options={["LANG LC_* COLORTERM NO_COLOR"]}
-              value={hostFormData.send_env || ""}
-              onChange={(newValue) => setHostFormData({ ...hostFormData, send_env: newValue || "" })}
+              value={hostFormData.sendEnv || ""}
+              onChange={(newValue) => setHostFormData({ ...hostFormData, sendEnv: newValue || "" })}
             />
             <FreeTextField
               fullWidth
@@ -3729,9 +3821,9 @@ export default function Sidebar({
               size="small"
               placeholder="Use %i for session id"
               options={remoteCommandOptions as unknown as string[]}
-              value={hostFormData.remote_command || ""}
+              value={hostFormData.remoteCommand || ""}
               onChange={(newValue) => {
-                setHostFormData({ ...hostFormData, remote_command: newValue });
+                setHostFormData({ ...hostFormData, remoteCommand: newValue });
               }}
             />
             <TextField
@@ -3740,8 +3832,8 @@ export default function Sidebar({
               size="small"
               multiline
               rows={2}
-              value={hostFormData.local_forward || ""}
-              onChange={(e) => setHostFormData({ ...hostFormData, local_forward: e.target.value })}
+              value={hostFormData.localForward || ""}
+              onChange={(e) => setHostFormData({ ...hostFormData, localForward: e.target.value })}
               placeholder="e.g. 8080 localhost:80&#10;One rule per line"
             />
             <TextField
@@ -3750,8 +3842,8 @@ export default function Sidebar({
               size="small"
               multiline
               rows={2}
-              value={hostFormData.remote_forward || ""}
-              onChange={(e) => setHostFormData({ ...hostFormData, remote_forward: e.target.value })}
+              value={hostFormData.remoteForward || ""}
+              onChange={(e) => setHostFormData({ ...hostFormData, remoteForward: e.target.value })}
               placeholder="e.g. 8080 localhost:80&#10;One rule per line"
             />
             <TextField
@@ -3760,8 +3852,8 @@ export default function Sidebar({
               size="small"
               multiline
               rows={2}
-              value={hostFormData.dynamic_forward || ""}
-              onChange={(e) => setHostFormData({ ...hostFormData, dynamic_forward: e.target.value })}
+              value={hostFormData.dynamicForward || ""}
+              onChange={(e) => setHostFormData({ ...hostFormData, dynamicForward: e.target.value })}
               placeholder="e.g. 1080 or 127.0.0.1:1080&#10;One port per line"
             />
             <TextField
@@ -3813,7 +3905,7 @@ function HostListItem({
     }
   }, [isSelected]);
 
-  const isFavourite = host.is_favourite;
+  const isFavourite = host.isFavourite;
   let secondaryText = `${host.user && host.user !== "root" ? host.user + "@" : ""}${host.hostname}`;
   if (filter && host.comment) {
     const matchedComment = searchStringAny(host.comment, filter);
@@ -3902,7 +3994,7 @@ function HostListItem({
             </Box>
           }
           secondary={
-            (!host.is_auto || host.name !== `${host.user || "root"}@${host.hostname}`) && (
+            (!host.isAuto || host.name !== `${host.user || "root"}@${host.hostname}`) && (
               <Typography
                 variant="caption"
                 color="text.secondary"
@@ -3971,7 +4063,9 @@ function TreeGroupItem({
         e.dataTransfer.effectAllowed = "move";
       }}
       onDragOver={(e) => {
-        if (!draggedItem) return;
+        if (!draggedItem) {
+          return;
+        }
         if (draggedItem.type === "group") {
           if (node.path === draggedItem.path || node.path.startsWith(draggedItem.path + "/")) {
             return;
@@ -3989,7 +4083,9 @@ function TreeGroupItem({
         e.preventDefault();
         e.stopPropagation();
         setDragOverTarget(null);
-        if (!draggedItem) return;
+        if (!draggedItem) {
+          return;
+        }
         if (draggedItem.type === "server") {
           await moveServer(draggedItem.name, node.path, null);
         } else if (draggedItem.type === "group") {
@@ -4079,7 +4175,7 @@ function TreeServerItem({
 
   const host = node.host;
   const isDragOver = dragOverTarget?.id === node.id;
-  const isFavourite = host.is_favourite;
+  const isFavourite = host.isFavourite;
   let secondaryText = `${host.user && host.user !== "root" ? host.user + "@" : ""}${host.hostname}`;
   if (filterStr && host.comment) {
     const matchedComment = searchStringAny(host.comment, filterStr);
@@ -4099,7 +4195,9 @@ function TreeServerItem({
         e.dataTransfer.effectAllowed = "move";
       }}
       onDragOver={(e) => {
-        if (!draggedItem) return;
+        if (!draggedItem) {
+          return;
+        }
         e.preventDefault();
         e.stopPropagation();
         setDragOverTarget({ id: node.id, effect: "before" });
@@ -4112,7 +4210,9 @@ function TreeServerItem({
         e.preventDefault();
         e.stopPropagation();
         setDragOverTarget(null);
-        if (!draggedItem) return;
+        if (!draggedItem) {
+          return;
+        }
         if (draggedItem.type === "server") {
           const targetGroup = getHostGroupPath(host);
           await moveServer(draggedItem.name, targetGroup, host.name);
@@ -4198,7 +4298,7 @@ function TreeServerItem({
             </Box>
           }
           secondary={
-            (!host.is_auto || host.name !== `${host.user || "root"}@${host.hostname}`) && (
+            (!host.isAuto || host.name !== `${host.user || "root"}@${host.hostname}`) && (
               <Typography
                 variant="caption"
                 color="text.secondary"

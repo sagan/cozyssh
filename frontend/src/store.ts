@@ -28,6 +28,7 @@ import type {
   Sysinfo,
   FullData,
   Session,
+  ConfigRequest,
 } from "./api";
 import {
   type HostForm,
@@ -76,6 +77,7 @@ import {
   MIME_JSON,
   TAG_GROUP_PREFIX,
   TAG_ORDER_PREFIX,
+  TOAST_KEY_API_SETTINGS,
   TOAST_KEY_FONT_SIZE,
   VAR_CS_FONT_SIZE,
   VAR_CS_TERMINAL_FONT_SIZE,
@@ -1705,15 +1707,17 @@ export async function refreshData({ sync = 0, refresh = 0 } = {}) {
 export async function moveServer(serverName: string, destGroupPath: string | null, beforeServerName: string | null) {
   const hosts = getStore().hosts;
   const host = hosts.find((h) => h.name === serverName);
-  if (!host) return;
+  if (!host) {
+    return;
+  }
 
-  const siblingHosts = hosts.filter(
-    (h) => !h.is_auto && h.name !== serverName && getHostGroupPath(h) === destGroupPath,
-  );
+  const siblingHosts = hosts.filter((h) => !h.isAuto && h.name !== serverName && getHostGroupPath(h) === destGroupPath);
   siblingHosts.sort((a, b) => {
     const orderA = getHostOrder(a);
     const orderB = getHostOrder(b);
-    if (orderA !== orderB) return orderA - orderB;
+    if (orderA !== orderB) {
+      return orderA - orderB;
+    }
     return a.name.localeCompare(b.name);
   });
 
@@ -1803,5 +1807,27 @@ export async function moveGroup(srcPath: string, beforeSiblingPath: string) {
     setGroups(nextGroups);
   } else {
     dialogs.alert("Failed to save group order");
+  }
+}
+
+export async function updateConfig(config: ConfigRequest) {
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+  try {
+    const res = await fetch("/api/settings/config", {
+      method: METHOD_POST,
+      headers: {
+        [HEADER_CONTENT_TYPE]: MIME_JSON,
+        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+      },
+      body: JSON.stringify(config),
+    });
+    if (!res.ok) {
+      const msg = await res.text();
+      throw new Error(`status=${res.status}, msg=${msg}`);
+    }
+    setSysinfo(config satisfies Partial<Sysinfo>);
+    notify("Settings saved", "success", TOAST_KEY_API_SETTINGS);
+  } catch (e) {
+    notify(`Failed to save setting: ${e}`, "error", TOAST_KEY_API_SETTINGS);
   }
 }

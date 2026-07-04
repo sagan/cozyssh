@@ -154,7 +154,8 @@ export const TOAST_KEY_TERMINAL = "cs-terminal";
  * Custom Script (run_script button) related toasts
  */
 export const TOAST_KEY_SCRIPT = "cs-script";
-export const TOAST_KEY_BACKEND_API = "cs-backend-api";
+export const TOAST_KEY_API_SETTINGS = "cs-api-settings";
+export const TOAST_KEY_API_FULLDATA = "cs-api-fulldata";
 export const TOAST_KEY_COPY_TUNNEL_ENTRYPOINT = "cs-copy-tunnel-entrypoint";
 
 /**

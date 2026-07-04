@@ -300,7 +300,9 @@ function SSHConfigImportView({
     });
 
   const handleImport = async () => {
-    if (selected.size === 0) return;
+    if (selected.size === 0) {
+      return;
+    }
     setImporting(true);
     try {
       const r = await fetch("/api/settings/webdav/import/sshconfig", {
@@ -359,8 +361,7 @@ function SSHConfigImportView({
           sx={{
             width: 180,
             "& .MuiInputBase-root": {
-              height: 32,
-              fontSize: "0.875rem",
+              fontSize: "typography.body2.fontSize",
             },
           }}
           slotProps={{
@@ -380,7 +381,7 @@ function SSHConfigImportView({
           size="small"
           onClick={handleImport}
           disabled={selected.size === 0 || importing}
-          sx={{ height: 32, textTransform: "none" }}
+          sx={{ textTransform: "none" }}
         >
           {importing ? <CircularProgress size={14} sx={{ mr: 1 }} /> : null}
           Import {selected.size} hosts
@@ -597,9 +598,15 @@ function KnownHostsImportView({
     });
 
   const filtered = entries.filter((e) => {
-    if (e.isNew && !showNew) return false;
-    if (e.isConflict && !showConflict) return false;
-    if (!e.isNew && !e.isConflict && !showSame) return false;
+    if (e.isNew && !showNew) {
+      return false;
+    }
+    if (e.isConflict && !showConflict) {
+      return false;
+    }
+    if (!e.isNew && !e.isConflict && !showSame) {
+      return false;
+    }
     if (filterText.trim()) {
       const q = filterText.toLowerCase();
       const patternMatch = e.patterns.toLowerCase().includes(q);
@@ -632,7 +639,9 @@ function KnownHostsImportView({
   const allConflictsAcked = conflictedSelected.every((e) => conflictAcked.has(e.line));
 
   const handleImport = async () => {
-    if (selected.size === 0) return;
+    if (selected.size === 0) {
+      return;
+    }
     setImporting(true);
     try {
       const lines = Array.from(selected);
@@ -694,8 +703,7 @@ function KnownHostsImportView({
           sx={{
             width: 180,
             "& .MuiInputBase-root": {
-              height: 32,
-              fontSize: "0.875rem",
+              fontSize: "typography.body2.fontSize",
             },
           }}
           slotProps={{
@@ -722,7 +730,7 @@ function KnownHostsImportView({
           color={conflictedSelected.length > 0 ? "error" : "primary"}
           onClick={handleImport}
           disabled={selected.size === 0 || importing || (conflictedSelected.length > 0 && !allConflictsAcked)}
-          sx={{ height: 32, textTransform: "none" }}
+          sx={{ textTransform: "none" }}
         >
           {importing ? <CircularProgress size={14} sx={{ mr: 1 }} /> : null}
           Import {selected.size} entries
@@ -787,7 +795,7 @@ function KnownHostsImportView({
                     <TableCell
                       sx={{
                         fontFamily: "monospace",
-                        fontSize: "0.75rem",
+                        fontSize: "typography.caption.fontSize",
                         maxWidth: 240,
                         overflow: "hidden",
                         textOverflow: "ellipsis",
@@ -796,8 +804,10 @@ function KnownHostsImportView({
                     >
                       {entry.patterns}
                     </TableCell>
-                    <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{entry.keyType}</TableCell>
-                    <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>
+                    <TableCell sx={{ fontFamily: "monospace", fontSize: "typography.caption.fontSize" }}>
+                      {entry.keyType}
+                    </TableCell>
+                    <TableCell sx={{ fontFamily: "monospace", fontSize: "typography.caption.fontSize" }}>
                       {keyFingerprint(entry.keyData)}
                     </TableCell>
                     <TableCell>

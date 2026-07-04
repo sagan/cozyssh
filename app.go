@@ -208,7 +208,7 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 
 	getFullData := func(r *http.Request) *models.FullData {
 		scratchpad.Reload()
-		displayHostname := cfg.SiteName
+		displayHostname := cfg.Sitename
 		if displayHostname == "" {
 			if hostname, _ := os.Hostname(); hostname == "" {
 				displayHostname = "unknown"
@@ -228,7 +228,7 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 		return &models.FullData{
 			Sysinfo: models.Sysinfo{
 				Username:        common.User,
-				Hostname:        displayHostname,
+				Sitename:        displayHostname,
 				Version:         Version,
 				InsecureAllowed: flags.AllowInsecure,
 				IsSecure:        isSecureRequest(r),
@@ -618,11 +618,7 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				http.Error(w, "Bad Request", http.StatusBadRequest)
 				return
 			}
-			if req.SavePassword != "always" && req.SavePassword != "never" && req.SavePassword != "ask" {
-				http.Error(w, "Invalid option. Must be always, never, or ask", http.StatusBadRequest)
-				return
-			}
-			if err := cfg.UpdateSavePassword(req.SavePassword); err != nil {
+			if err := cfg.UpdateConfig(req); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -1232,8 +1228,8 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 	fileServer := http.FileServer(http.FS(distFS))
 
 	mux.HandleFunc("/manifest.json", func(w http.ResponseWriter, r *http.Request) {
-		shortname := cfg.SiteName
-		sitename := cfg.SiteName
+		shortname := cfg.Sitename
+		sitename := cfg.Sitename
 		if sitename == "" {
 			hostname, _ := os.Hostname()
 			if hostname != "" {

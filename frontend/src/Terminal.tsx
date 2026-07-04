@@ -623,7 +623,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       term.parser.registerOscHandler(52, (data) => {
         try {
           const firstSemi = data.indexOf(";");
-          if (firstSemi === -1) return true;
+          if (firstSemi === -1) {
+            return true;
+          }
 
           // Everything after the first ';' is the base64 payload.
           // We intentionally ignore the clipboard-target field - we always
@@ -631,7 +633,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
           const b64 = data.substring(firstSemi + 1);
 
           // '?' means the remote is requesting a clipboard read - deny silently
-          if (b64 === "?") return true;
+          if (b64 === "?") {
+            return true;
+          }
 
           // Decode the base64 payload and write to the OS clipboard
           const decoded = atob(b64);
@@ -1088,7 +1092,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       // -------------------------------------------------------------------------
       const readCurrentCmdLine = (): string => {
         const phase = shellIntegrationRef.current.promptPhase;
-        if (phase !== "prompt" && phase !== "input") return "";
+        if (phase !== "prompt" && phase !== "input") {
+          return "";
+        }
 
         const buffer = term.buffer.active;
         const promptEnd = promptEndRef.current;
@@ -1120,7 +1126,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
           //  - no anchor is available (promptEndRef is null), or
           //  - the anchor was captured at col 0 (OSC fired before prompt rendered)
           const cursorLine = buffer.getLine(buffer.cursorY + buffer.baseY);
-          if (!cursorLine) return "";
+          if (!cursorLine) {
+            return "";
+          }
           const text = cursorLine.translateToString(true);
           // Strip everything up to and including the last $, #, %, or > followed by a space
           const lastPrompt = Math.max(
@@ -1135,7 +1143,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
 
       term.onWriteParsed(() => {
         const phase = shellIntegrationRef.current.promptPhase;
-        if (phase !== "prompt" && phase !== "input") return;
+        if (phase !== "prompt" && phase !== "input") {
+          return;
+        }
         const live = readCurrentCmdLine();
         if (live !== shellIntegrationRef.current.currentCmdLine) {
           updateShellIntegration({ currentCmdLine: live });

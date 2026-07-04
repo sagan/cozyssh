@@ -39,7 +39,7 @@ var (
 
 type Config struct {
 	Addr                  string               `json:"addr,omitempty"`
-	SiteName              string               `json:"sitename,omitempty"`
+	Sitename              string               `json:"sitename,omitempty"`
 	AppPasswordHash       string               `json:"app_password_hash,omitempty"`
 	SSHDir                string               `json:"sshdir,omitempty"` // openssh config dir, defaults to ~/.ssh
 	Buttons               []*models.ButtonData `json:"-,omitempty"`      // Moved to buttons.json
@@ -752,6 +752,21 @@ func (c *Config) UpdateVars(updates map[string]*string) error {
 		OnVarsUpdate()
 	}
 	return nil
+}
+
+func (c *Config) UpdateConfig(req *models.ConfigRequest) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if req.SavePassword != "" {
+		if req.SavePassword != "always" && req.SavePassword != "never" && req.SavePassword != "ask" {
+			return fmt.Errorf("invalid save_password option: must be always, never, or ask")
+		}
+		c.SavePassword = req.SavePassword
+	}
+	if req.Sitename != "" {
+		c.Sitename = req.Sitename
+	}
+	return c.save()
 }
 
 func (c *Config) UpdateSavePassword(value string) error {

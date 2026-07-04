@@ -271,7 +271,7 @@ export const appShortcuts = new Set([
   "alt+enter",
   "ctrl+alt+shift+r",
   "ctrl+alt+0",
-  "alt-",
+  "alt+-",
   "alt+shift+_",
   "alt+=",
   "alt+shift++",
@@ -1026,11 +1026,11 @@ export const getHostGroupPath = (host: HostData): string | null => {
 
 export function getSSHCommand(host: HostData, hosts?: HostData[]): string {
   let command = `ssh`;
-  if (host.identity_file) {
-    command += ` -i "${host.identity_file}"`;
+  if (host.identityFile) {
+    command += ` -i "${host.identityFile}"`;
   }
-  if (host.proxy_jump) {
-    const jumpServers = host.proxy_jump.split(",").map((name) => {
+  if (host.proxyJump) {
+    const jumpServers = host.proxyJump.split(",").map((name) => {
       name = name.trim();
       const server = hosts ? hosts.find((h) => h.name === name) : undefined;
       if (!server) {
@@ -1043,41 +1043,49 @@ export function getSSHCommand(host: HostData, hosts?: HostData[]): string {
     });
     command += ` -J ${jumpServers.join(",")}`;
   }
-  if (host.remote_command) {
-    if (/\b(?:sudo|vim|vi|nano|top|htop|btop|tmux|screen)\b/.test(host.remote_command)) {
+  if (host.remoteCommand) {
+    if (/\b(?:sudo|vim|vi|nano|top|htop|btop|tmux|screen)\b/.test(host.remoteCommand)) {
       command += ` -t`;
     }
-    command += ` -o "RemoteCommand=${host.remote_command}"`;
+    command += ` -o "RemoteCommand=${host.remoteCommand}"`;
   }
-  if (host.address_family) {
-    command += ` -o "AddressFamily=${host.address_family}"`;
+  if (host.addressFamily) {
+    command += ` -o "AddressFamily=${host.addressFamily}"`;
   }
-  if (host.user_known_hosts_file) {
-    command += ` -o "UserKnownHostsFile=${host.user_known_hosts_file}"`;
+  if (host.userKnownHostsFile) {
+    command += ` -o "UserKnownHostsFile=${host.userKnownHostsFile}"`;
   }
-  if (host.strict_host_key_checking) {
-    command += ` -o "StrictHostKeyChecking=${host.strict_host_key_checking}"`;
+  if (host.strictHostKeyChecking) {
+    command += ` -o "StrictHostKeyChecking=${host.strictHostKeyChecking}"`;
   }
-  if (host.host_key_algorithms) {
-    command += ` -o "HostKeyAlgorithms=${host.host_key_algorithms}"`;
+  if (host.hostKeyAlgorithms) {
+    command += ` -o "HostKeyAlgorithms=${host.hostKeyAlgorithms}"`;
   }
-  if (host.send_env) {
-    command += ` -o "SendEnv=${host.send_env}"`;
+  if (host.sendEnv) {
+    command += ` -o "SendEnv=${host.sendEnv}"`;
   }
-  if (host.local_forward) {
-    const forwards = host.local_forward
+  if (host.localForward) {
+    const forwards = host.localForward
       .split(/[\r\n]+/)
       .map((forward) => forward.trim())
       .filter((forward) => forward && !forward.startsWith("#"))
       .map((forward) => ` -L "${forward.split(/\s+/).join(":")}"`);
     command += forwards.join("");
   }
-  if (host.remote_forward) {
-    const forwards = host.remote_forward
+  if (host.remoteForward) {
+    const forwards = host.remoteForward
       .split(/[\r\n]+/)
       .map((forward) => forward.trim())
       .filter((forward) => forward && !forward.startsWith("#"))
       .map((forward) => ` -R "${forward.split(/\s+/).join(":")}"`);
+    command += forwards.join("");
+  }
+  if (host.dynamicForward) {
+    const forwards = host.dynamicForward
+      .split(/[\r\n]+/)
+      .map((forward) => forward.trim())
+      .filter((forward) => forward && !forward.startsWith("#"))
+      .map((forward) => ` -D "${forward}"`);
     command += forwards.join("");
   }
   if (host.port && host.port !== "22") {
@@ -1089,8 +1097,8 @@ export function getSSHCommand(host: HostData, hosts?: HostData[]): string {
 
 export function getSSHCopyIdCommand(host: HostData): string {
   let command = `ssh-copy-id`;
-  if (host.identity_file) {
-    command += ` -i "${host.identity_file}"`;
+  if (host.identityFile) {
+    command += ` -i "${host.identityFile}"`;
   }
   if (host.port !== "22") {
     command += ` -p ${host.port}`;
@@ -1124,32 +1132,32 @@ export function getSSHConfigBlock(host: HostData | HostForm): string {
   if (host.port && host.port !== "22") {
     block += `    Port ${host.port}\n`;
   }
-  if (host.identity_file) {
-    block += `    IdentityFile ${host.identity_file}\n`;
+  if (host.identityFile) {
+    block += `    IdentityFile ${host.identityFile}\n`;
   }
-  if (host.proxy_jump) {
-    block += `    ProxyJump ${host.proxy_jump}\n`;
+  if (host.proxyJump) {
+    block += `    ProxyJump ${host.proxyJump}\n`;
   }
-  if (host.remote_command) {
-    block += `    RemoteCommand ${host.remote_command}\n`;
+  if (host.remoteCommand) {
+    block += `    RemoteCommand ${host.remoteCommand}\n`;
   }
-  if (host.address_family) {
-    block += `    AddressFamily ${host.address_family}\n`;
+  if (host.addressFamily) {
+    block += `    AddressFamily ${host.addressFamily}\n`;
   }
-  if (host.user_known_hosts_file) {
-    block += `    UserKnownHostsFile ${host.user_known_hosts_file}\n`;
+  if (host.userKnownHostsFile) {
+    block += `    UserKnownHostsFile ${host.userKnownHostsFile}\n`;
   }
-  if (host.strict_host_key_checking) {
-    block += `    StrictHostKeyChecking ${host.strict_host_key_checking}\n`;
+  if (host.strictHostKeyChecking) {
+    block += `    StrictHostKeyChecking ${host.strictHostKeyChecking}\n`;
   }
-  if (host.host_key_algorithms) {
-    block += `    HostKeyAlgorithms ${host.host_key_algorithms}\n`;
+  if (host.hostKeyAlgorithms) {
+    block += `    HostKeyAlgorithms ${host.hostKeyAlgorithms}\n`;
   }
-  if (host.send_env) {
-    block += `    SendEnv ${host.send_env}\n`;
+  if (host.sendEnv) {
+    block += `    SendEnv ${host.sendEnv}\n`;
   }
-  if (host.local_forward) {
-    const forwards = host.local_forward
+  if (host.localForward) {
+    const forwards = host.localForward
       .split("\n")
       .map((f) => f.trim())
       .filter((f) => f && !f.startsWith("#"));
@@ -1157,8 +1165,8 @@ export function getSSHConfigBlock(host: HostData | HostForm): string {
       block += `    LocalForward ${forward}\n`;
     }
   }
-  if (host.remote_forward) {
-    const forwards = host.remote_forward
+  if (host.remoteForward) {
+    const forwards = host.remoteForward
       .split("\n")
       .map((f) => f.trim())
       .filter((f) => f && !f.startsWith("#"));
@@ -1166,8 +1174,8 @@ export function getSSHConfigBlock(host: HostData | HostForm): string {
       block += `    RemoteForward ${forward}\n`;
     }
   }
-  if (host.dynamic_forward) {
-    const forwards = host.dynamic_forward
+  if (host.dynamicForward) {
+    const forwards = host.dynamicForward
       .split("\n")
       .map((f) => f.trim())
       .filter((f) => f && !f.startsWith("#"));
@@ -1192,21 +1200,21 @@ export function parseSSHConfigBlock(text: string): HostData {
   let hostname = "";
   let user = "";
   let port = "";
-  let identity_file = "";
-  let proxy_jump = "";
-  let remote_command = "";
-  let address_family = "";
-  let user_known_hosts_file = "";
-  let strict_host_key_checking = "";
-  let host_key_algorithms = "";
-  let verify_host_key_dns = "";
-  let send_env = "";
-  const local_forwards: string[] = [];
-  const remote_forwards: string[] = [];
-  const dynamic_forwards: string[] = [];
+  let identityFile = "";
+  let proxyJump = "";
+  let remoteCommand = "";
+  let addressFamily = "";
+  let userKnownHostsFile = "";
+  let strictHostKeyChecking = "";
+  let hostKeyAlgorithms = "";
+  let verifyHostKeydns = "";
+  let sendEnv = "";
+  const localForwards: string[] = [];
+  const remoteForwards: string[] = [];
+  const dynamicForwards: string[] = [];
 
-  let commentText = "";
-  const tagsList: string[] = [];
+  let comment = "";
+  const tags: string[] = [];
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -1219,14 +1227,14 @@ export function parseSSHConfigBlock(text: string): HostData {
       const commentWords: string[] = [];
       for (const w of words) {
         if (w.startsWith("#") && w.length > 1) {
-          tagsList.push(w.slice(1));
+          tags.push(w.slice(1));
         } else {
           commentWords.push(w);
         }
       }
       if (commentWords.length > 0) {
-        if (commentText) commentText += "\n";
-        commentText += commentWords.join(" ");
+        if (comment) comment += "\n";
+        comment += commentWords.join(" ");
       }
       continue;
     }
@@ -1254,55 +1262,55 @@ export function parseSSHConfigBlock(text: string): HostData {
         port = val;
         break;
       case "identityfile":
-        identity_file = val;
+        identityFile = val;
         break;
       case "proxyjump":
-        proxy_jump = val;
+        proxyJump = val;
         break;
       case "remotecommand":
-        remote_command = val;
+        remoteCommand = val;
         break;
       case "addressfamily":
         {
           const v = val.toLowerCase();
           if (v === "any" || v === "inet" || v === "inet6") {
-            address_family = v;
+            addressFamily = v;
           }
         }
         break;
       case "userknownhostsfile":
-        user_known_hosts_file = val;
+        userKnownHostsFile = val;
         break;
       case "stricthostkeychecking":
         {
           const v = val.toLowerCase();
           if (v === "yes" || v === "no" || v === "ask") {
-            strict_host_key_checking = v;
+            strictHostKeyChecking = v;
           }
         }
         break;
       case "hostkeyalgorithms":
-        host_key_algorithms = val;
+        hostKeyAlgorithms = val;
         break;
       case "verifyhostkeydns":
         {
           const v = val.toLowerCase();
           if (v === "yes" || v === "no" || v === "ask") {
-            verify_host_key_dns = v;
+            verifyHostKeydns = v;
           }
         }
         break;
       case "sendenv":
-        send_env = val;
+        sendEnv = val;
         break;
       case "localforward":
-        local_forwards.push(val);
+        localForwards.push(val);
         break;
       case "remoteforward":
-        remote_forwards.push(val);
+        remoteForwards.push(val);
         break;
       case "dynamicforward":
-        dynamic_forwards.push(val);
+        dynamicForwards.push(val);
         break;
     }
   }
@@ -1312,25 +1320,25 @@ export function parseSSHConfigBlock(text: string): HostData {
   }
 
   const parsedData: HostData = {
-    name: name || hostname,
     hostname,
     user,
+    identityFile,
+    proxyJump,
+    remoteCommand,
+    userKnownHostsFile,
+    hostKeyAlgorithms,
+    sendEnv,
+    tags,
+    comment,
+    name: name || hostname,
     port: port || "22",
     source: "",
-    identity_file: identity_file || "",
-    proxy_jump: proxy_jump || "",
-    remote_command: remote_command || "",
-    address_family: (address_family || "") as HostForm["address_family"],
-    user_known_hosts_file: user_known_hosts_file || "",
-    strict_host_key_checking: (strict_host_key_checking || "") as HostForm["strict_host_key_checking"],
-    host_key_algorithms: host_key_algorithms || "",
-    verify_host_key_dns: (verify_host_key_dns || "") as HostForm["verify_host_key_dns"],
-    send_env: send_env || "",
-    local_forward: local_forwards.join("\n"),
-    remote_forward: remote_forwards.join("\n"),
-    dynamic_forward: dynamic_forwards.join("\n"),
-    tags: tagsList,
-    comment: commentText || "",
+    localForward: localForwards.join("\n"),
+    remoteForward: remoteForwards.join("\n"),
+    dynamicForward: dynamicForwards.join("\n"),
+    addressFamily: addressFamily as HostForm["addressFamily"],
+    strictHostKeyChecking: strictHostKeyChecking as HostForm["strictHostKeyChecking"],
+    verifyHostKeyDns: verifyHostKeydns as HostForm["verifyHostKeyDns"],
   };
   return parsedData;
 }

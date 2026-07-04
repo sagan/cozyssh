@@ -107,7 +107,7 @@ export default function TextEditor({ fileName, initialContent, onSave, onClose, 
             sx={{
               flexGrow: 1,
               fontFamily: "monospace",
-              fontSize: "0.9rem",
+              fontSize: "typography.body2.fontSize",
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",

@@ -19,17 +19,14 @@ import CloseIcon from "@mui/icons-material/Close";
 import ViewSidebarIcon from "@mui/icons-material/ViewSidebar";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 
-import type { FullData, HostData, ButtonData, ConfigRequest } from "./api";
+import type { FullData, HostData, ButtonData } from "./api";
 import {
   DEFAULT_SCROLL_LINES,
   BROWSER_STORAGE_KEY_TOKEN,
   DEFAULT_BUTTON_GROUP,
   HEADER_AUTHORIZATION,
   HEADER_AUTHORIZATION_BEARER_PREFIX,
-  HEADER_CONTENT_TYPE,
   LOCAL_NAME,
-  METHOD_POST,
-  MIME_JSON,
   VAR_CS_NOAUTOLOAD,
   VAR_CS_NOAUTORUN,
   VAR_CS_SCROLL_LINES,
@@ -39,7 +36,7 @@ import {
   ID_TERMINAL_SEARCH_INPUT,
   TAG_GROUP_PREFIX,
   TAG_FAV,
-  TOAST_KEY_BACKEND_API,
+  TOAST_KEY_API_FULLDATA,
 } from "./constants";
 import {
   type ContextMenu,
@@ -78,7 +75,6 @@ import {
   openScratchpad,
   openHostsAsSplit2,
   getIntVar,
-  setSysinfo,
   refreshData,
   lockTab,
   unlockTab,
@@ -742,12 +738,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
             return;
           }
           if (!r.ok) {
-            notify(`Fail to load data: status=${r.status}`, "error", TOAST_KEY_BACKEND_API);
-            return;
+            throw new Error(`status=${r.status}`);
           }
           data = (await r.json()) as FullData;
         } catch (e) {
           console.error(e);
+          notify(`Fail to load data: ${e}`, "error", TOAST_KEY_API_FULLDATA);
           const tabId = genTabId(LOCAL_NAME);
           const paneId = genPaneId(LOCAL_NAME);
           setTabs((tabs) => [
@@ -812,8 +808,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
           };
 
           const favs = filtered.filter((h) => h.tags?.includes(TAG_FAV)).sort(nameSorter);
-          const normals = filtered.filter((h) => !h.tags?.includes(TAG_FAV) && !h.is_auto).sort(nameSorter);
-          const autos = filtered.filter((h) => !h.tags?.includes(TAG_FAV) && h.is_auto).sort(hostNameSorter);
+          const normals = filtered.filter((h) => !h.tags?.includes(TAG_FAV) && !h.isAuto).sort(nameSorter);
+          const autos = filtered.filter((h) => !h.tags?.includes(TAG_FAV) && h.isAuto).sort(hostNameSorter);
 
           const targets = [...favs, ...normals, ...autos].slice(0, 4);
           if (targets.length > 0) {
@@ -1043,28 +1039,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
         <Sidebar
           isMobile={isMobile}
           isTouch={isTouch}
-          onSavePasswordChange={async (val) => {
-            const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-            try {
-              const res = await fetch("/api/settings/config", {
-                method: METHOD_POST,
-                headers: {
-                  [HEADER_CONTENT_TYPE]: MIME_JSON,
-                  [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-                },
-                body: JSON.stringify({ save_password: val } satisfies ConfigRequest),
-              });
-              if (res.ok) {
-                setSysinfo({ savePassword: val });
-                notify("Settings saved successfully!", "success", TOAST_KEY_BACKEND_API);
-              } else {
-                const errText = await res.text();
-                dialogs.alert("Failed to save setting: " + (errText || res.statusText));
-              }
-            } catch (e) {
-              dialogs.alert("Failed to save setting: " + e);
-            }
-          }}
           onAttach={(id, host, title, isLocked) => {
             attachSession(id, host, title, isLocked);
             setMobileOpen(false);

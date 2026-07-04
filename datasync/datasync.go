@@ -984,8 +984,8 @@ func removeFromStringSlice(slice []string, val string) []string {
 
 // getDeviceName returns the device name used in WebDAV SSH filenames.
 func getDeviceName(cfg *config.Config) string {
-	if cfg.SiteName != "" {
-		return cfg.SiteName
+	if cfg.Sitename != "" {
+		return cfg.Sitename
 	}
 	hostname, err := os.Hostname()
 	if err != nil || hostname == "" {
@@ -1203,19 +1203,45 @@ func hostDataToDirectives(h *models.HostData) map[string]string {
 		"hostname": h.HostName,
 		"port":     h.Port,
 	}
-	if h.User != "" { d["user"] = h.User }
-	if h.IdentityFile != "" { d["identityfile"] = h.IdentityFile }
-	if h.ProxyJump != "" { d["proxyjump"] = h.ProxyJump }
-	if h.RemoteCommand != "" { d["remotecommand"] = h.RemoteCommand }
-	if h.AddressFamily != "" { d["addressfamily"] = h.AddressFamily }
-	if h.UserKnownHostsFile != "" { d["userknownhostsfile"] = h.UserKnownHostsFile }
-	if h.StrictHostKeyChecking != "" { d["stricthostkeychecking"] = h.StrictHostKeyChecking }
-	if h.HostKeyAlgorithms != "" { d["hostkeyalgorithms"] = h.HostKeyAlgorithms }
-	if h.VerifyHostKeyDNS != "" { d["verifyhostkeydns"] = h.VerifyHostKeyDNS }
-	if h.SendEnv != "" { d["sendenv"] = h.SendEnv }
-	if h.LocalForward != "" { d["localforward"] = h.LocalForward }
-	if h.RemoteForward != "" { d["remoteforward"] = h.RemoteForward }
-	if h.DynamicForward != "" { d["dynamicforward"] = h.DynamicForward }
+	if h.User != "" {
+		d["user"] = h.User
+	}
+	if h.IdentityFile != "" {
+		d["identityfile"] = h.IdentityFile
+	}
+	if h.ProxyJump != "" {
+		d["proxyjump"] = h.ProxyJump
+	}
+	if h.RemoteCommand != "" {
+		d["remotecommand"] = h.RemoteCommand
+	}
+	if h.AddressFamily != "" {
+		d["addressfamily"] = h.AddressFamily
+	}
+	if h.UserKnownHostsFile != "" {
+		d["userknownhostsfile"] = h.UserKnownHostsFile
+	}
+	if h.StrictHostKeyChecking != "" {
+		d["stricthostkeychecking"] = h.StrictHostKeyChecking
+	}
+	if h.HostKeyAlgorithms != "" {
+		d["hostkeyalgorithms"] = h.HostKeyAlgorithms
+	}
+	if h.VerifyHostKeyDNS != "" {
+		d["verifyhostkeydns"] = h.VerifyHostKeyDNS
+	}
+	if h.SendEnv != "" {
+		d["sendenv"] = h.SendEnv
+	}
+	if h.LocalForward != "" {
+		d["localforward"] = h.LocalForward
+	}
+	if h.RemoteForward != "" {
+		d["remoteforward"] = h.RemoteForward
+	}
+	if h.DynamicForward != "" {
+		d["dynamicforward"] = h.DynamicForward
+	}
 	return d
 }
 

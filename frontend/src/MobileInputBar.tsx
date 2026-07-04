@@ -182,7 +182,7 @@ const PANEL_BTN_SX = (wide?: boolean) =>
     minWidth: 0,
     height: 34,
     px: 0.25,
-    fontSize: "0.72rem",
+    fontSize: "typography.caption.fontSize",
     fontFamily: "monospace",
     textTransform: "none",
     bgcolor: "background.paper",
@@ -287,7 +287,9 @@ export default function MobileInputBar({
       let done = false;
 
       const finish = () => {
-        if (done) return;
+        if (done) {
+          return;
+        }
         done = true;
         vv.removeEventListener("resize", onVVResize);
         onExtraKeysOpenChange(false);
@@ -388,7 +390,7 @@ export default function MobileInputBar({
           px: 0,
           fontWeight: 700,
           flexShrink: 0,
-          fontSize: "0.72rem",
+          fontSize: "typography.caption.fontSize",
           boxSizing: "border-box",
         }}
       >
@@ -408,7 +410,7 @@ export default function MobileInputBar({
           px: 0,
           fontWeight: 700,
           flexShrink: 0,
-          fontSize: "0.72rem",
+          fontSize: "typography.caption.fontSize",
           boxSizing: "border-box",
         }}
       >
