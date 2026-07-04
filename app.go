@@ -59,6 +59,42 @@ type CozysshFlags struct {
 	Debug           bool
 	DoResetPassword bool
 	Err             error
+	initialized     bool
+}
+
+func (flags *CozysshFlags) InitConfigDir() {
+	if flags.initialized {
+		return
+	}
+	flags.initialized = true
+	executable, _ := os.Executable()
+	executableDir := filepath.Dir(executable)
+	os.Setenv("COZYSSH_BINDIR", executableDir)
+	if flags.ConfigDir != "" {
+		flags.ConfigDir = common.ExpandPath(flags.ConfigDir)
+	} else {
+		path := filepath.Join(executableDir, "cozyssh-data")
+		if stats, err := os.Stat(path); err == nil && stats.IsDir() {
+			flags.ConfigDir = path
+		} else {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "could not find user home dir: %v\n", err)
+				os.Exit(1)
+			}
+			flags.ConfigDir = filepath.Join(home, ".config", "cozyssh")
+		}
+	}
+	var err error
+	flags.ConfigDir, err = filepath.Abs(flags.ConfigDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "could not get absolute path: %v\n", err)
+		os.Exit(1)
+	}
+	if err := os.MkdirAll(flags.ConfigDir, 0700); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create config dir: %v", err)
+		os.Exit(1)
+	}
 }
 
 func ParseFlags(args []string) *CozysshFlags {
@@ -83,19 +119,7 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 		return flags.Err
 	}
 
-	(func() {
-		executable, _ := os.Executable()
-		executableDir := filepath.Dir(executable)
-		os.Setenv("COZYSSH_BINDIR", executableDir)
-		if flags.ConfigDir != "" {
-			flags.ConfigDir = common.ExpandPath(flags.ConfigDir)
-		} else {
-			path := filepath.Join(executableDir, "cozyssh-data")
-			if stats, err := os.Stat(path); err == nil && stats.IsDir() {
-				flags.ConfigDir = path
-			}
-		}
-	})()
+	flags.InitConfigDir()
 
 	if flags.DoResetPassword {
 		cfg, err := config.LoadConfig(flags.ConfigDir)
@@ -614,15 +638,16 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 			}
 			status, errMsg, lastTime := datasync.GetStatus()
 			res := &models.WebdavStatus{
-				WebdavUrl:       cfg.WebdavUrl,
-				WebdavUser:      cfg.WebdavUser,
-				WebdavPassword:  cfg.WebdavPassword,
-				WebdavEnabled:   cfg.WebdavEnabled,
-				SyncStatus:      status,
-				SyncError:       errMsg,
-				SyncTime:        lastTime,
-				WebdavEncrypted: cfg.WebdavEncryptionEnabled,
-				MasterKey:       cfg.WebdavMasterKey,
+				WebdavUrl:           cfg.WebdavUrl,
+				WebdavUser:          cfg.WebdavUser,
+				WebdavPassword:      cfg.WebdavPassword,
+				WebdavEnabled:       cfg.WebdavEnabled,
+				SyncStatus:          status,
+				SyncError:           errMsg,
+				SyncTime:            lastTime,
+				WebdavEncrypted:     cfg.WebdavEncryptionEnabled,
+				MasterKey:           cfg.WebdavMasterKey,
+				WebdavUploadSSHData: cfg.WebdavUploadSSHData,
 			}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(res)
@@ -690,7 +715,7 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				}
 			}
 
-			if err := cfg.UpdateWebdavSettings(req.Url, req.User, req.Password, req.Enabled, encEnabled, masterKeyStr); err != nil {
+			if err := cfg.UpdateWebdavSettings(req.Url, req.User, req.Password, req.Enabled, encEnabled, masterKeyStr, req.UploadSSHData); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -727,6 +752,101 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				return
 			}
 			go datasync.Sync(false)
+			w.WriteHeader(http.StatusNoContent)
+		}))))
+
+	mux.Handle("/api/settings/webdav/devices", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			devices, err := datasync.ListDeviceSSHData()
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(&models.DeviceSSHListResponse{Devices: devices})
+		}))))
+
+	mux.Handle("/api/settings/webdav/devices/sshconfig/", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			deviceName := strings.TrimPrefix(r.URL.Path, "/api/settings/webdav/devices/sshconfig/")
+			if deviceName == "" {
+				http.Error(w, "device name required", http.StatusBadRequest)
+				return
+			}
+			hosts, err := sshmanager.ListHosts()
+			if err != nil {
+				hosts = []*models.HostData{}
+			}
+			entries, err := datasync.ReadDeviceSSHConfig(deviceName, hosts)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(&models.DeviceSSHConfigResponse{DeviceName: deviceName, Hosts: entries})
+		}))))
+
+	mux.Handle("/api/settings/webdav/devices/knownhosts/", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			deviceName := strings.TrimPrefix(r.URL.Path, "/api/settings/webdav/devices/knownhosts/")
+			if deviceName == "" {
+				http.Error(w, "device name required", http.StatusBadRequest)
+				return
+			}
+			entries, err := datasync.ReadDeviceKnownHosts(deviceName)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(&models.DeviceKnownHostsResponse{DeviceName: deviceName, Entries: entries})
+		}))))
+
+	mux.Handle("/api/settings/webdav/import/sshconfig", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var req models.ImportSSHConfigRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.DeviceName == "" {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+			if err := datasync.ImportSSHConfigHosts(req.DeviceName, req.HostNames); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		}))))
+
+	mux.Handle("/api/settings/webdav/import/knownhosts", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var req models.ImportKnownHostsRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.DeviceName == "" {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+			if err := datasync.ImportKnownHostsLines(req.DeviceName, req.Lines, req.Force); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 			w.WriteHeader(http.StatusNoContent)
 		}))))
 

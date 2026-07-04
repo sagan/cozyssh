@@ -224,7 +224,7 @@ func main() {
 	if flags.DoResetPassword || flags.Err == flag.ErrHelp {
 		// CLI mode
 		attachToParentConsole()
-		flags = cozyssh.ParseFlags(os.Args[1:])
+		flags = cozyssh.ParseFlags(os.Args[1:]) // fuck Windows, need to parse flags again after attach to parent console
 		err := cozyssh.RunWithFlags(context.Background(), flags, nil)
 
 		os.Stdout.Sync()
@@ -239,7 +239,8 @@ func main() {
 
 	config.SetWritePasswordToFile(true)
 
-	cfg, err := config.LoadConfig("")
+	flags.InitConfigDir()
+	cfg, err := config.LoadConfig(flags.ConfigDir)
 	if err != nil {
 		messageBox("CozySSH startup error", fmt.Sprintf("Failed to load config: %v", err))
 		os.Exit(1)

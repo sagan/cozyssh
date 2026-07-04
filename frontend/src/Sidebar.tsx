@@ -55,6 +55,9 @@ import FolderIcon from "@mui/icons-material/Folder";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
+import SSHImportTab from "./SSHImportTab";
+import SSHExportTab from "./SSHExportTab";
+
 import { version as PACKAGE_JSON_VERSION } from "../package.json";
 import type {
   HostData,
@@ -283,6 +286,8 @@ export default function Sidebar({
   const [useEncryption, setUseEncryption] = useState(false);
   const [masterKey, setMasterKey] = useState("");
   const [currentMasterKey, setCurrentMasterKey] = useState("");
+  const [uploadSSHData, setUploadSSHData] = useState(false);
+  const [currentUploadSSHData, setCurrentUploadSSHData] = useState(false);
 
   const fetchWebdavStatus = useCallback(async (onlyStatus = false) => {
     const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
@@ -307,6 +312,8 @@ export default function Sidebar({
           setUseEncryption(!!data.webdavEncrypted);
           setMasterKey(data.masterKey || "");
           setCurrentMasterKey(data.masterKey || "");
+          setUploadSSHData(!!data.webdavUploadSSHData);
+          setCurrentUploadSSHData(!!data.webdavUploadSSHData);
         }
         setSyncStatus(data.syncStatus);
         setSyncError(data.syncError);
@@ -350,6 +357,7 @@ export default function Sidebar({
           enabled: nextEnabled,
           useEncryption: useEncryption,
           masterKey: masterKey,
+          uploadSSHData: uploadSSHData,
         }),
       });
 
@@ -377,7 +385,7 @@ export default function Sidebar({
         "Are you sure you want to clear WebDAV settings?",
         `It will not remove any existing files from WebDAV server.` +
           (webdavEncrypted
-            ? ` The WebDAV remote directory is encrypted with key ${masterKey}.` +
+            ? ` The WebDAV remote directory is encrypted with master key ${masterKey}.` +
               ` If you proceed, the master key will be deleted from CozySSH server. Make sure you have a backup of it.`
             : ""),
         webdavEncrypted,
@@ -429,7 +437,12 @@ export default function Sidebar({
       let localMasterKey = masterKey;
       let finalUseEncryption = useEncryption;
 
-      if (urlChanged || useEncryption !== webdavEncrypted || masterKey !== currentMasterKey) {
+      if (
+        urlChanged ||
+        useEncryption !== webdavEncrypted ||
+        masterKey !== currentMasterKey ||
+        uploadSSHData !== currentUploadSSHData
+      ) {
         const detectRes = await fetch("/api/settings/webdav/detect", {
           method: METHOD_POST,
           headers: {
@@ -443,6 +456,7 @@ export default function Sidebar({
             enabled: webdavEnabled,
             useEncryption: useEncryption,
             masterKey: localMasterKey,
+            uploadSSHData: uploadSSHData,
           } satisfies SaveWebdavSettingsRequest),
         });
 
@@ -478,6 +492,7 @@ export default function Sidebar({
               enabled: webdavEnabled,
               useEncryption: true,
               masterKey: localMasterKey,
+              uploadSSHData: uploadSSHData,
             } satisfies SaveWebdavSettingsRequest),
           });
 
@@ -539,6 +554,7 @@ export default function Sidebar({
           enabled: urlChanged || finalUseEncryption !== webdavEncrypted ? true : webdavEnabled,
           useEncryption: finalUseEncryption,
           masterKey: localMasterKey,
+          uploadSSHData: uploadSSHData,
         } satisfies SaveWebdavSettingsRequest),
       });
 
@@ -2830,6 +2846,8 @@ export default function Sidebar({
             <Tab label="Passwords" />
             <Tab label="Settings" />
             <Tab label="Sync" />
+            <Tab label="Import" />
+            <Tab label="Export" />
             <Tab label="Shortcuts" />
             <Tab label="About" />
           </Tabs>
@@ -3134,7 +3152,9 @@ export default function Sidebar({
                   <b>WebDAV Synchronization</b>: Sync CozySSH data (buttons, vars, scratchpad) with a custom WebDAV
                   directory.
                   <br />
-                  <b>Note</b>: OpenSSH hosts data and saved passwords will <b>NOT</b> be synced, see&nbsp;
+                  <b>Note</b>: OpenSSH hosts data sync is opt-in and semi-automatic; You must manually import other
+                  device's hosts from "Import/Export" page. OpenSSH private keys and saved passwords will&nbsp;
+                  <b>NOT</b> be uploaded. See&nbsp;
                   <a
                     target="_blank"
                     rel="noopener noreferrer"
@@ -3286,17 +3306,34 @@ export default function Sidebar({
                   }
                   sx={{ mt: 1, mb: 1, alignItems: "flex-start" }}
                 />
-                {useEncryption && (
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={uploadSSHData}
+                      onChange={(e) => setUploadSSHData(e.target.checked)}
+                      disabled={isTestingWebdav}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2">Upload local SSH data</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Allow uploading this device's local SSH config and known_hosts.
+                      </Typography>
+                    </Box>
+                  }
+                  sx={{ mt: 1, mb: 1, alignItems: "flex-start" }}
+                />
+                {useEncryption && !!masterKey && (
                   <TextField
                     fullWidth
                     label="WebDAV Master Key (Base64)"
                     size="small"
                     margin="dense"
-                    placeholder="Auto-generated if left blank for new servers"
                     value={masterKey}
                     onChange={(e) => setMasterKey(e.target.value)}
-                    disabled={isTestingWebdav || !!currentWebdavUrl}
-                    helperText="Keep this key safe! You will need it to unlock your encrypted sync session on other devices."
+                    disabled={true}
+                    helperText="Save this key. You will need it to setup encrypted sync session on other devices."
                     slotProps={{
                       input: {
                         endAdornment: (
@@ -3319,8 +3356,8 @@ export default function Sidebar({
                       (webdavUrl === currentWebdavUrl &&
                         webdavUser === currentWebdavUser &&
                         webdavPassword === currentWebdavPassword &&
-                        useEncryption === webdavEncrypted &&
-                        masterKey === currentMasterKey) ||
+                        masterKey === currentMasterKey &&
+                        uploadSSHData === currentUploadSSHData) ||
                       (!!currentWebdavUrl && !webdavUrl && (!!webdavUser || !!webdavPassword))
                     }
                     sx={{ mt: 1, textTransform: "none" }}
@@ -3338,7 +3375,11 @@ export default function Sidebar({
               </>
             )}
 
-            {dialogTab === 5 && (
+            {dialogTab === 5 && <SSHImportTab />}
+
+            {dialogTab === 6 && <SSHExportTab />}
+
+            {dialogTab === 7 && (
               <>
                 <Typography variant="subtitle2" gutterBottom>
                   Keyboard Shortcuts
@@ -3460,7 +3501,7 @@ export default function Sidebar({
               </>
             )}
 
-            {dialogTab === 6 && (
+            {dialogTab === 8 && (
               <Box sx={{ textAlign: "center", mt: 4 }}>
                 <Typography variant="h5" gutterBottom sx={{ fontWeight: "bold" }}>
                   CozySSH
@@ -3721,7 +3762,7 @@ export default function Sidebar({
               rows={2}
               value={hostFormData.dynamic_forward || ""}
               onChange={(e) => setHostFormData({ ...hostFormData, dynamic_forward: e.target.value })}
-              placeholder="e.g. 1080&#10;or 127.0.0.1:1080&#10;One port per line"
+              placeholder="e.g. 1080 or 127.0.0.1:1080&#10;One port per line"
             />
             <TextField
               fullWidth

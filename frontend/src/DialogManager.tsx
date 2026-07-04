@@ -1383,7 +1383,7 @@ export default function DialogManager({
                     password: undefined, // don't save password from direct connect string
                   } satisfies HostData),
                 });
-                refreshData();
+                refreshData({ sync: 2 });
               } catch (e) {
                 console.error("Failed to auto-add host:", e);
               }

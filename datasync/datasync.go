@@ -300,13 +300,25 @@ func listRemoteFiles(cfg *config.Config) ([]remoteFileInfo, bool, error) {
 			continue
 		}
 
+		// SSH files use .txt (plaintext) or .bin (encrypted), others use .json/.bin
+		isSshFile := strings.HasPrefix(filename, "sshconfig_") || strings.HasPrefix(filename, "knownhosts_")
 		var suffix string
-		if isEncrypted && strings.HasSuffix(filename, ".bin") {
-			suffix = ".bin"
-		} else if !isEncrypted && strings.HasSuffix(filename, ".json") {
-			suffix = ".json"
+		if isSshFile {
+			if isEncrypted && strings.HasSuffix(filename, ".bin") {
+				suffix = ".bin"
+			} else if !isEncrypted && strings.HasSuffix(filename, ".txt") {
+				suffix = ".txt"
+			} else {
+				continue
+			}
 		} else {
-			continue
+			if isEncrypted && strings.HasSuffix(filename, ".bin") {
+				suffix = ".bin"
+			} else if !isEncrypted && strings.HasSuffix(filename, ".json") {
+				suffix = ".json"
+			} else {
+				continue
+			}
 		}
 
 		var itemType string
@@ -323,6 +335,12 @@ func listRemoteFiles(cfg *config.Config) ([]remoteFileInfo, bool, error) {
 		} else if strings.HasPrefix(filename, "config_") {
 			itemType = "vars"
 			rawName = filename[len("config_"):]
+		} else if strings.HasPrefix(filename, "sshconfig_") {
+			itemType = "sshconfig"
+			rawName = filename[len("sshconfig_"):]
+		} else if strings.HasPrefix(filename, "knownhosts_") {
+			itemType = "knownhosts"
+			rawName = filename[len("knownhosts_"):]
 		} else {
 			continue
 		}
@@ -339,6 +357,20 @@ func listRemoteFiles(cfg *config.Config) ([]remoteFileInfo, bool, error) {
 		if itemType == "vars" {
 			id = "global"
 			ts, err := strconv.ParseInt(nameWithoutExt, 10, 64)
+			if err != nil {
+				continue
+			}
+			timestamp = ts
+		} else if itemType == "sshconfig" || itemType == "knownhosts" {
+			// Format: <device-name>_<timestamp>
+			// device-name itself may contain underscores, so we split on last underscore
+			lastUnderscore := strings.LastIndex(nameWithoutExt, "_")
+			if lastUnderscore == -1 {
+				continue
+			}
+			id = nameWithoutExt[:lastUnderscore] // device name
+			tsStr := nameWithoutExt[lastUnderscore+1:]
+			ts, err := strconv.ParseInt(tsStr, 10, 64)
 			if err != nil {
 				continue
 			}
@@ -932,6 +964,11 @@ func performSync() error {
 		}
 	}
 
+	// Sync SSH data
+	if err := syncSSHData(remoteFiles, davBaseUrl, dek); err != nil {
+		log.Printf("ssh data sync err: %v", err)
+	}
+
 	return nil
 }
 
@@ -943,6 +980,497 @@ func removeFromStringSlice(slice []string, val string) []string {
 		}
 	}
 	return result
+}
+
+// getDeviceName returns the device name used in WebDAV SSH filenames.
+func getDeviceName(cfg *config.Config) string {
+	if cfg.SiteName != "" {
+		return cfg.SiteName
+	}
+	hostname, err := os.Hostname()
+	if err != nil || hostname == "" {
+		return "unknown"
+	}
+	return hostname
+}
+
+// syncSSHData uploads own SSH files and downloads other devices' SSH files.
+func syncSSHData(remoteFiles []remoteFileInfo, davBaseUrl string, dek []byte) error {
+	deviceName := getDeviceName(gCfg)
+	ext := ".txt"
+	if gCfg.WebdavEncryptionEnabled {
+		ext = ".bin"
+	}
+
+	// --- Upload own SSH files if mtime changed ---
+	sshFiles := map[string]string{
+		"sshconfig":  filepath.Join(gCfg.AbsSSHDir, "config"),
+		"knownhosts": filepath.Join(gCfg.AbsSSHDir, "known_hosts"),
+	}
+
+	// Find our own remote files grouped by type
+	ownRemote := map[string][]remoteFileInfo{}
+	otherRemote := map[string]map[string]remoteFileInfo{} // type -> deviceName -> best file
+	for _, rf := range remoteFiles {
+		if rf.itemType != "sshconfig" && rf.itemType != "knownhosts" {
+			continue
+		}
+		if rf.id == deviceName {
+			ownRemote[rf.itemType] = append(ownRemote[rf.itemType], rf)
+		} else {
+			if otherRemote[rf.itemType] == nil {
+				otherRemote[rf.itemType] = map[string]remoteFileInfo{}
+			}
+			if existing, ok := otherRemote[rf.itemType][rf.id]; !ok || rf.timestamp > existing.timestamp {
+				otherRemote[rf.itemType][rf.id] = rf
+			}
+		}
+	}
+
+	if gCfg.WebdavUploadSSHData {
+		for itemType, localPath := range sshFiles {
+			info, err := os.Stat(localPath)
+			if err != nil {
+				continue // file doesn't exist, skip
+			}
+			localMtime := info.ModTime().UnixMilli()
+
+			// Find the highest own timestamp on remote
+			var remoteMtime int64 = -1
+			var ownFiles []remoteFileInfo
+			for _, rf := range ownRemote[itemType] {
+				ownFiles = append(ownFiles, rf)
+				if rf.timestamp > remoteMtime {
+					remoteMtime = rf.timestamp
+				}
+			}
+
+			if localMtime != remoteMtime {
+				// Need to upload
+				data, err := os.ReadFile(localPath)
+				if err != nil {
+					log.Printf("syncSSHData: read %s: %v", localPath, err)
+					continue
+				}
+				uploadData := data
+				if gCfg.WebdavEncryptionEnabled {
+					uploadData, err = encryptData(data, dek)
+					if err != nil {
+						log.Printf("syncSSHData: encrypt %s: %v", localPath, err)
+						continue
+					}
+				}
+				filename := fmt.Sprintf("%s_%s_%d%s", itemType, deviceName, localMtime, ext)
+				resp, err := makeRequest("PUT", davBaseUrl+filename, bytes.NewReader(uploadData), gCfg)
+				if err != nil {
+					log.Printf("syncSSHData: upload %s: %v", filename, err)
+					continue
+				}
+				resp.Body.Close()
+
+				// Delete old own-device files for this type
+				for _, rf := range ownFiles {
+					if rf.filename != filename {
+						r, err := makeRequest("DELETE", davBaseUrl+rf.filename, nil, gCfg)
+						if err == nil {
+							r.Body.Close()
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// --- Download other devices' latest SSH files to local cache ---
+	cacheBase := filepath.Join(gCfg.ConfigDir, "devices_sshdata")
+	allOtherDevices := map[string]bool{}
+	for _, byDevice := range otherRemote {
+		for dev := range byDevice {
+			allOtherDevices[dev] = true
+		}
+	}
+
+	for dev := range allOtherDevices {
+		devDir := filepath.Join(cacheBase, dev)
+		if err := os.MkdirAll(devDir, 0700); err != nil {
+			continue
+		}
+		for itemType, localFilename := range map[string]string{"sshconfig": "config", "knownhosts": "known_hosts"} {
+			rf, ok := otherRemote[itemType][dev]
+			if !ok {
+				continue
+			}
+			localPath := filepath.Join(devDir, localFilename)
+			// Check if cached file already matches this timestamp
+			cached, err := os.Stat(localPath)
+			if err == nil && cached.ModTime().UnixMilli() == rf.timestamp {
+				continue // already up-to-date
+			}
+			// Download
+			resp, err := makeRequest("GET", davBaseUrl+rf.filename, nil, gCfg)
+			if err != nil {
+				log.Printf("syncSSHData: download %s: %v", rf.filename, err)
+				continue
+			}
+			body, err := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if err != nil || resp.StatusCode != http.StatusOK {
+				continue
+			}
+			if rf.isEncrypted {
+				body, err = decryptData(body, dek)
+				if err != nil {
+					log.Printf("syncSSHData: decrypt %s: %v", rf.filename, err)
+					continue
+				}
+			}
+			if err := common.AtomicWriteFileContents(localPath, body); err != nil {
+				log.Printf("syncSSHData: write cache %s: %v", localPath, err)
+				continue
+			}
+			// Set mtime on cached file to match the remote timestamp
+			ts := time.UnixMilli(rf.timestamp)
+			os.Chtimes(localPath, ts, ts)
+		}
+	}
+	return nil
+}
+
+// ListDeviceSSHData returns metadata about other devices' SSH data cached locally.
+func ListDeviceSSHData() ([]*models.DeviceSSHData, error) {
+	if gCfg == nil {
+		return nil, fmt.Errorf("config not initialized")
+	}
+	cacheBase := filepath.Join(gCfg.ConfigDir, "devices_sshdata")
+	entries, err := os.ReadDir(cacheBase)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []*models.DeviceSSHData{}, nil
+		}
+		return nil, err
+	}
+	var result []*models.DeviceSSHData
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		dev := &models.DeviceSSHData{DeviceName: e.Name()}
+		cfgInfo, err := os.Stat(filepath.Join(cacheBase, e.Name(), "config"))
+		if err == nil {
+			dev.HasSSHConfig = true
+			dev.SSHConfigMtime = cfgInfo.ModTime().UnixMilli()
+		}
+		khInfo, err := os.Stat(filepath.Join(cacheBase, e.Name(), "known_hosts"))
+		if err == nil {
+			dev.HasKnownHosts = true
+			dev.KnownHostsMtime = khInfo.ModTime().UnixMilli()
+		}
+		if dev.HasSSHConfig || dev.HasKnownHosts {
+			result = append(result, dev)
+		}
+	}
+	return result, nil
+}
+
+// ReadDeviceSSHConfig reads and parses another device's cached SSH config,
+// comparing against local hosts to classify each entry as new/modified/same.
+func ReadDeviceSSHConfig(deviceName string, localHosts []*models.HostData) ([]*models.RemoteHostEntry, error) {
+	if gCfg == nil {
+		return nil, fmt.Errorf("config not initialized")
+	}
+	cfgPath := filepath.Join(gCfg.ConfigDir, "devices_sshdata", deviceName, "config")
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build local host map (alias -> directives)
+	localMap := map[string]map[string]string{}
+	for _, h := range localHosts {
+		if h.Source != "config" {
+			continue
+		}
+		d := hostDataToDirectives(h)
+		localMap[h.Name] = d
+	}
+
+	// Parse remote config into blocks
+	return parseSSHConfigToEntries(string(data), localMap), nil
+}
+
+func hostDataToDirectives(h *models.HostData) map[string]string {
+	d := map[string]string{
+		"hostname": h.HostName,
+		"port":     h.Port,
+	}
+	if h.User != "" { d["user"] = h.User }
+	if h.IdentityFile != "" { d["identityfile"] = h.IdentityFile }
+	if h.ProxyJump != "" { d["proxyjump"] = h.ProxyJump }
+	if h.RemoteCommand != "" { d["remotecommand"] = h.RemoteCommand }
+	if h.AddressFamily != "" { d["addressfamily"] = h.AddressFamily }
+	if h.UserKnownHostsFile != "" { d["userknownhostsfile"] = h.UserKnownHostsFile }
+	if h.StrictHostKeyChecking != "" { d["stricthostkeychecking"] = h.StrictHostKeyChecking }
+	if h.HostKeyAlgorithms != "" { d["hostkeyalgorithms"] = h.HostKeyAlgorithms }
+	if h.VerifyHostKeyDNS != "" { d["verifyhostkeydns"] = h.VerifyHostKeyDNS }
+	if h.SendEnv != "" { d["sendenv"] = h.SendEnv }
+	if h.LocalForward != "" { d["localforward"] = h.LocalForward }
+	if h.RemoteForward != "" { d["remoteforward"] = h.RemoteForward }
+	if h.DynamicForward != "" { d["dynamicforward"] = h.DynamicForward }
+	return d
+}
+
+func parseSSHConfigToEntries(content string, localMap map[string]map[string]string) []*models.RemoteHostEntry {
+	var entries []*models.RemoteHostEntry
+	var currentHost string
+	currentDirectives := map[string]string{}
+
+	flush := func() {
+		if currentHost == "" || currentHost == "*" {
+			return
+		}
+		entry := &models.RemoteHostEntry{
+			Host:       currentHost,
+			Directives: currentDirectives,
+		}
+		if local, ok := localMap[currentHost]; ok {
+			if !directivesEqual(currentDirectives, local) {
+				entry.IsModified = true
+				entry.LocalDirectives = local
+			}
+		} else {
+			entry.IsNew = true
+		}
+		entries = append(entries, entry)
+	}
+
+	for line := range strings.SplitSeq(content, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		lower := strings.ToLower(line)
+		if strings.HasPrefix(lower, "host ") {
+			flush()
+			currentHost = strings.TrimSpace(line[5:])
+			currentDirectives = map[string]string{}
+		} else if currentHost != "" {
+			parts := strings.SplitN(line, " ", 2)
+			if len(parts) == 2 {
+				currentDirectives[strings.ToLower(parts[0])] = strings.TrimSpace(parts[1])
+			}
+		}
+	}
+	flush()
+	return entries
+}
+
+func directivesEqual(a, b map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if bv, ok := b[k]; !ok || bv != v {
+			return false
+		}
+	}
+	return true
+}
+
+// ReadDeviceKnownHosts reads and parses another device's cached known_hosts,
+// comparing against local known_hosts to classify conflicts.
+func ReadDeviceKnownHosts(deviceName string) ([]*models.RemoteKnownHostEntry, error) {
+	if gCfg == nil {
+		return nil, fmt.Errorf("config not initialized")
+	}
+	remotePath := filepath.Join(gCfg.ConfigDir, "devices_sshdata", deviceName, "known_hosts")
+	remoteData, err := os.ReadFile(remotePath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse local known_hosts into map: patterns -> (keyType, keyData)
+	localKH := map[string][2]string{} // pattern -> [keyType, keyData]
+	localPath := filepath.Join(gCfg.AbsSSHDir, "known_hosts")
+	if localData, err := os.ReadFile(localPath); err == nil {
+		for _, line := range strings.Split(string(localData), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "|") {
+				continue
+			}
+			fields := strings.Fields(line)
+			if len(fields) < 3 {
+				continue
+			}
+			for _, pat := range strings.Split(fields[0], ",") {
+				localKH[strings.TrimSpace(pat)] = [2]string{fields[1], fields[2]}
+			}
+		}
+	}
+
+	var entries []*models.RemoteKnownHostEntry
+	for _, line := range strings.Split(string(remoteData), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "|") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			continue
+		}
+		patterns := fields[0]
+		keyType := fields[1]
+		keyData := fields[2]
+		comment := ""
+		if len(fields) > 3 {
+			comment = strings.Join(fields[3:], " ")
+		}
+
+		entry := &models.RemoteKnownHostEntry{
+			Line:     line,
+			Patterns: patterns,
+			KeyType:  keyType,
+			KeyData:  keyData,
+			Comment:  comment,
+		}
+
+		// Check against local
+		isNew := true
+		for _, pat := range strings.Split(patterns, ",") {
+			pat = strings.TrimSpace(pat)
+			if local, ok := localKH[pat]; ok {
+				isNew = false
+				if local[1] != keyData {
+					entry.IsConflict = true
+					entry.LocalKeyType = local[0]
+					entry.LocalKeyData = local[1]
+				}
+				break
+			}
+		}
+		entry.IsNew = isNew
+		entries = append(entries, entry)
+	}
+	return entries, nil
+}
+
+// ImportSSHConfigHosts appends selected host blocks from a device's cached config into local ~/.ssh/config.
+func ImportSSHConfigHosts(deviceName string, hostNames []string) error {
+	if gCfg == nil {
+		return fmt.Errorf("config not initialized")
+	}
+	cfgPath := filepath.Join(gCfg.ConfigDir, "devices_sshdata", deviceName, "config")
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		return err
+	}
+	wanted := map[string]bool{}
+	for _, n := range hostNames {
+		wanted[n] = true
+	}
+
+	// Extract raw blocks for wanted hosts
+	blocks := extractSSHConfigBlocks(string(data), wanted)
+	if len(blocks) == 0 {
+		return nil
+	}
+
+	localCfgPath := filepath.Join(gCfg.AbsSSHDir, "config")
+	existing, _ := os.ReadFile(localCfgPath)
+	combined := strings.TrimRight(string(existing), "\n") + "\n\n" + strings.Join(blocks, "\n\n") + "\n"
+
+	return common.AtomicWriteFileContents(localCfgPath, []byte(combined))
+}
+
+func extractSSHConfigBlocks(content string, wanted map[string]bool) []string {
+	var blocks []string
+	var currentLines []string
+	var currentHost string
+
+	flush := func() {
+		if currentHost != "" && wanted[currentHost] && len(currentLines) > 0 {
+			blocks = append(blocks, strings.TrimRight(strings.Join(currentLines, "\n"), "\n"))
+		}
+		currentLines = nil
+		currentHost = ""
+	}
+
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		lower := strings.ToLower(trimmed)
+		if strings.HasPrefix(lower, "host ") && !strings.HasPrefix(lower, "hostname") {
+			flush()
+			currentHost = strings.TrimSpace(trimmed[5:])
+			currentLines = []string{line}
+		} else if currentHost != "" {
+			currentLines = append(currentLines, line)
+		}
+	}
+	flush()
+	return blocks
+}
+
+// ImportKnownHostsLines appends selected lines to local ~/.ssh/known_hosts.
+// Conflicting entries are only imported if force=true, in which case the old line is replaced.
+func ImportKnownHostsLines(deviceName string, lines []string, force bool) error {
+	if gCfg == nil {
+		return fmt.Errorf("config not initialized")
+	}
+	localPath := filepath.Join(gCfg.AbsSSHDir, "known_hosts")
+	localData, _ := os.ReadFile(localPath)
+
+	// Build existing local map
+	localKH := map[string]string{} // pattern -> full line
+	localLines := strings.Split(string(localData), "\n")
+	for i, line := range localLines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "|") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			continue
+		}
+		for _, pat := range strings.Split(fields[0], ",") {
+			localKH[strings.TrimSpace(pat)] = fmt.Sprintf("%d", i)
+		}
+	}
+
+	// Process each line to import
+	for _, importLine := range lines {
+		importLine = strings.TrimSpace(importLine)
+		if importLine == "" {
+			continue
+		}
+		fields := strings.Fields(importLine)
+		if len(fields) < 3 {
+			continue
+		}
+		importKeyData := fields[2]
+		isConflict := false
+		for _, pat := range strings.Split(fields[0], ",") {
+			pat = strings.TrimSpace(pat)
+			if idxStr, ok := localKH[pat]; ok {
+				idx, _ := strconv.Atoi(idxStr)
+				existingFields := strings.Fields(localLines[idx])
+				if len(existingFields) >= 3 && existingFields[2] != importKeyData {
+					isConflict = true
+					if force {
+						localLines[idx] = importLine
+					}
+				}
+				break
+			}
+		}
+		if !isConflict {
+			localLines = append(localLines, importLine)
+		}
+	}
+
+	result := strings.Join(localLines, "\n")
+	if !strings.HasSuffix(result, "\n") {
+		result += "\n"
+	}
+	return common.AtomicWriteFileContents(localPath, []byte(result))
 }
 
 func DetectChanges(urlVal, userVal, passwordVal, masterKeyVal string) (*models.SyncDetectionResult, error) {

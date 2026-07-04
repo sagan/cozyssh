@@ -34,15 +34,16 @@ type Manifest struct {
 }
 
 type WebdavStatus struct {
-	WebdavUrl       string `json:"webdavUrl"`
-	WebdavUser      string `json:"webdavUser"`
-	WebdavPassword  string `json:"webdavPassword"`
-	WebdavEnabled   bool   `json:"webdavEnabled"`
-	SyncStatus      string `json:"syncStatus" ts_type:"\"idle\" | \"syncing\" | \"error\" | \"success\" | \"disabled\""`
-	SyncError       string `json:"syncError"`
-	SyncTime        int64  `json:"syncTime"`
-	WebdavEncrypted bool   `json:"webdavEncrypted"`
-	MasterKey       string `json:"masterKey,omitempty"`
+	WebdavUrl           string `json:"webdavUrl"`
+	WebdavUser          string `json:"webdavUser"`
+	WebdavPassword      string `json:"webdavPassword"`
+	WebdavEnabled       bool   `json:"webdavEnabled"`
+	SyncStatus          string `json:"syncStatus" ts_type:"\"idle\" | \"syncing\" | \"error\" | \"success\" | \"disabled\""`
+	SyncError           string `json:"syncError"`
+	SyncTime            int64  `json:"syncTime"`
+	WebdavEncrypted     bool   `json:"webdavEncrypted"`
+	MasterKey           string `json:"masterKey,omitempty"`
+	WebdavUploadSSHData bool   `json:"webdavUploadSSHData"`
 }
 
 type Sysinfo struct {
@@ -63,6 +64,7 @@ type SaveWebdavSettingsRequest struct {
 	Enabled       bool   `json:"enabled"`
 	UseEncryption bool   `json:"useEncryption,omitempty"`
 	MasterKey     string `json:"masterKey,omitempty"`
+	UploadSSHData bool   `json:"uploadSSHData,omitempty"`
 }
 
 type SyncDetectionResult struct {
@@ -74,6 +76,77 @@ type SyncDetectionResult struct {
 	Encrypted         bool `json:"encrypted"`
 	KeyRequired       bool `json:"keyRequired"`
 	KeyInvalid        bool `json:"keyInvalid"`
+}
+
+// DeviceSSHData represents another device's SSH data cached locally from WebDAV.
+type DeviceSSHData struct {
+	DeviceName      string `json:"deviceName"`
+	HasSSHConfig    bool   `json:"hasSSHConfig"`
+	HasKnownHosts   bool   `json:"hasKnownHosts"`
+	SSHConfigMtime  int64  `json:"sshConfigMtime"`  // file mtime encoded in the WebDAV filename
+	KnownHostsMtime int64  `json:"knownHostsMtime"` // file mtime encoded in the WebDAV filename
+}
+
+// RemoteHostEntry is a parsed host block from another device's ~/.ssh/config,
+// compared against the local config to determine its import status.
+type RemoteHostEntry struct {
+	// All raw directives from the remote config block, keyed by lowercase directive name.
+	// The "host" key holds the alias name.
+	Host       string            `json:"host"`
+	Directives map[string]string `json:"directives"`
+	// IsNew is true when no local host with this alias exists.
+	IsNew bool `json:"isNew"`
+	// IsModified is true when a local host with this alias exists but differs.
+	IsModified bool `json:"isModified"`
+	// LocalDirectives is populated (non-nil) when IsModified is true.
+	LocalDirectives map[string]string `json:"localDirectives,omitempty"`
+}
+
+// RemoteKnownHostEntry is a parsed line from another device's ~/.ssh/known_hosts,
+// compared against the local known_hosts to determine its import status.
+type RemoteKnownHostEntry struct {
+	// Raw line from known_hosts (excluding comment lines and blank lines).
+	Line     string `json:"line"`
+	Patterns string `json:"patterns"` // first field, comma-separated hostnames/IPs
+	KeyType  string `json:"keyType"`  // e.g. "ssh-ed25519", "ecdsa-sha2-nistp256"
+	KeyData  string `json:"keyData"`  // base64-encoded key blob
+	Comment  string `json:"comment,omitempty"`
+	// IsNew is true if none of the patterns exist in local known_hosts.
+	IsNew bool `json:"isNew"`
+	// IsConflict is true if at least one of the patterns exists locally but with a DIFFERENT key.
+	IsConflict   bool   `json:"isConflict"`
+	LocalKeyType string `json:"localKeyType,omitempty"` // populated when IsConflict is true
+	LocalKeyData string `json:"localKeyData,omitempty"` // populated when IsConflict is true
+}
+
+// GET /api/settings/webdav/devices response
+type DeviceSSHListResponse struct {
+	Devices []*DeviceSSHData `json:"devices"`
+}
+
+// GET /api/settings/webdav/devices/{name}/sshconfig response
+type DeviceSSHConfigResponse struct {
+	DeviceName string             `json:"deviceName"`
+	Hosts      []*RemoteHostEntry `json:"hosts"`
+}
+
+// GET /api/settings/webdav/devices/{name}/knownhosts response
+type DeviceKnownHostsResponse struct {
+	DeviceName string                  `json:"deviceName"`
+	Entries    []*RemoteKnownHostEntry `json:"entries"`
+}
+
+// POST /api/settings/webdav/import/sshconfig
+type ImportSSHConfigRequest struct {
+	DeviceName string   `json:"deviceName"`
+	HostNames  []string `json:"hostNames"` // Host aliases to import
+}
+
+// POST /api/settings/webdav/import/knownhosts
+type ImportKnownHostsRequest struct {
+	DeviceName string   `json:"deviceName"`
+	Lines      []string `json:"lines"`  // Raw known_hosts lines to import
+	Force      bool     `json:"force"`  // Required to import conflicting entries
 }
 
 type HostData struct {

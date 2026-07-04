@@ -20,6 +20,7 @@ export default function SideEffect() {
   const localVars = useStore((state) => state.localVars);
   const buttons = useStore((state) => state.buttons);
   const activeGroup = useStore((state) => state.activeGroup);
+  const sysHostname = useStore((state) => state.sysinfo.hostname);
 
   const anyDialogOpen = useStore(
     (state) =>
@@ -35,6 +36,10 @@ export default function SideEffect() {
       setTimeout(triggerFocus, 0);
     }
   }, [anyDialogOpen]);
+
+  useEffect(() => {
+    document.documentElement.dataset.csHostname = sysHostname;
+  }, [sysHostname]);
 
   useEffect(() => {
     const shortcutButtons: Record<string, ButtonData> = {};

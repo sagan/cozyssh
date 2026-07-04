@@ -8,6 +8,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -375,5 +378,125 @@ func TestWebdavE2EESync(t *testing.T) {
 	}
 	if markerPayload.Id != "btn1" || markerPayload.Mtime != fmt.Sprintf("%d", delTS) || !markerPayload.Deleted {
 		t.Fatalf("unexpected deletion marker payload: %+v", markerPayload)
+	}
+}
+
+func TestWebdavUploadSSHDataToggle(t *testing.T) {
+	var remoteFilesMap = make(map[string][]byte)
+	var mu sync.Mutex
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "MKCOL" {
+			w.WriteHeader(http.StatusCreated)
+			return
+		}
+		if r.Method == "PUT" {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			mu.Lock()
+			remoteFilesMap[r.URL.Path] = body
+			mu.Unlock()
+			w.WriteHeader(http.StatusCreated)
+			return
+		}
+		if r.Method == "PROPFIND" {
+			mu.Lock()
+			w.Header().Set("Content-Type", "application/xml")
+			w.WriteHeader(207)
+			w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?>`))
+			w.Write([]byte(`<D:multistatus xmlns:D="DAV:">`))
+			for k := range remoteFilesMap {
+				w.Write([]byte(fmt.Sprintf(`<D:response><D:href>%s</D:href></D:response>`, k)))
+			}
+			w.Write([]byte(`</D:multistatus>`))
+			mu.Unlock()
+			return
+		}
+		if r.Method == "GET" {
+			mu.Lock()
+			data, ok := remoteFilesMap[r.URL.Path]
+			mu.Unlock()
+			if !ok {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			w.Write(data)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	sshDir := filepath.Join(tmpDir, "ssh")
+	if err := os.MkdirAll(sshDir, 0755); err != nil {
+		t.Fatalf("failed to create ssh dir: %v", err)
+	}
+
+	// Create dummy SSH config and known_hosts files
+	sshConfigPath := filepath.Join(sshDir, "config")
+	knownHostsPath := filepath.Join(sshDir, "known_hosts")
+	if err := os.WriteFile(sshConfigPath, []byte("Host test\n  HostName 127.0.0.1"), 0600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+	if err := os.WriteFile(knownHostsPath, []byte("127.0.0.1 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA..."), 0600); err != nil {
+		t.Fatalf("failed to write known_hosts: %v", err)
+	}
+
+	gCfg = &config.Config{
+		WebdavEnabled:       true,
+		WebdavUrl:           server.URL,
+		WebdavUploadSSHData: false, // Default is OFF
+		AbsSSHDir:           sshDir,
+		ConfigDir:           tmpDir,
+	}
+	loadMetadata()
+
+	// 1. Sync with WebdavUploadSSHData = false
+	err := performSync()
+	if err != nil {
+		t.Fatalf("performSync failed: %v", err)
+	}
+
+	// Verify nothing was uploaded to WebDAV
+	mu.Lock()
+	uploadedCount := len(remoteFilesMap)
+	mu.Unlock()
+	if uploadedCount > 0 {
+		t.Errorf("expected 0 files to be uploaded when WebdavUploadSSHData is false, got %d files", uploadedCount)
+	}
+
+	// 2. Sync with WebdavUploadSSHData = true
+	gCfg.WebdavUploadSSHData = true
+	err = performSync()
+	if err != nil {
+		t.Fatalf("performSync failed: %v", err)
+	}
+
+	// Verify files were uploaded to WebDAV
+	mu.Lock()
+	hasConfig := false
+	hasKnownHosts := false
+	for path := range remoteFilesMap {
+		if strings.Contains(path, "sshconfig_") {
+			hasConfig = true
+		}
+		if strings.Contains(path, "knownhosts_") {
+			hasKnownHosts = true
+		}
+	}
+	mu.Unlock()
+
+	if !hasConfig {
+		t.Errorf("expected sshconfig to be uploaded when WebdavUploadSSHData is true")
+	}
+	if !hasKnownHosts {
+		t.Errorf("expected knownhosts to be uploaded when WebdavUploadSSHData is true")
 	}
 }

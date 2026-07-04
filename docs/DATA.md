@@ -70,13 +70,18 @@ In short, CozySSH aims to work like the standard CLI OpenSSH client but through 
 
 CozySSH provides an optional WebDAV Sync Feature. It synces some `App Data` dir files with a user-provided WebDAV server, optionally with E2EE (end to end encryption) using `XAES-256-GCM`.
 
-The following files in `App Data` dir will be synced:
+The following files in `App Data` dir will be synced (full-automatic sync with other devices through WebDAV server):
 
 - `buttons.json` : The buttons data.
 - `scratchpad.json` : The Scratchpad data.
 - `vars.json` : The variables data.
 
+OpenSSH data can be configured to upload to WebDAV server (opt-in) but must be imported manually by user on the other side (via Import/Export page in Settings) (They don't support full automatic sync). These data includes:
+
+- `~/.ssh/config` .
+- `~/.ssh/known_hosts` .
+
 The following files will NOT be synced:
 
 - `config.json` and `passwords.json` in `App Data` dir.
-- All files in `SSH Data` dir.
+- OpenSSH private keys ( `~/.ssh/id_*` ).

@@ -29,6 +29,7 @@ export interface WebdavStatus {
     syncTime: number;
     webdavEncrypted: boolean;
     masterKey?: string;
+    webdavUploadSSHData: boolean;
 }
 export interface Sysinfo {
     username?: string;
@@ -47,6 +48,7 @@ export interface SaveWebdavSettingsRequest {
     enabled: boolean;
     useEncryption?: boolean;
     masterKey?: string;
+    uploadSSHData?: boolean;
 }
 export interface SyncDetectionResult {
     brandNew: boolean;
@@ -57,6 +59,51 @@ export interface SyncDetectionResult {
     encrypted: boolean;
     keyRequired: boolean;
     keyInvalid: boolean;
+}
+export interface DeviceSSHData {
+    deviceName: string;
+    hasSSHConfig: boolean;
+    hasKnownHosts: boolean;
+    sshConfigMtime: number;
+    knownHostsMtime: number;
+}
+export interface RemoteHostEntry {
+    host: string;
+    directives: {[key: string]: string};
+    isNew: boolean;
+    isModified: boolean;
+    localDirectives?: {[key: string]: string};
+}
+export interface RemoteKnownHostEntry {
+    line: string;
+    patterns: string;
+    keyType: string;
+    keyData: string;
+    comment?: string;
+    isNew: boolean;
+    isConflict: boolean;
+    localKeyType?: string;
+    localKeyData?: string;
+}
+export interface DeviceSSHListResponse {
+    devices: DeviceSSHData[];
+}
+export interface DeviceSSHConfigResponse {
+    deviceName: string;
+    hosts: RemoteHostEntry[];
+}
+export interface DeviceKnownHostsResponse {
+    deviceName: string;
+    entries: RemoteKnownHostEntry[];
+}
+export interface ImportSSHConfigRequest {
+    deviceName: string;
+    hostNames: string[];
+}
+export interface ImportKnownHostsRequest {
+    deviceName: string;
+    lines: string[];
+    force: boolean;
 }
 export interface HostData {
     name: string;

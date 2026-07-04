@@ -62,28 +62,12 @@ type Config struct {
 	WebdavEnabled           bool   `json:"webdav_enabled,omitempty"`
 	WebdavEncryptionEnabled bool   `json:"webdav_encryption_enabled,omitempty"`
 	WebdavMasterKey         string `json:"webdav_master_key,omitempty"`
+	WebdavUploadSSHData     bool   `json:"webdav_upload_ssh_data,omitempty"`
 	AbsSSHDir               string `json:"-,omitempty"`
 	mu                      sync.Mutex
 }
 
-func LoadConfig(customDir string) (*Config, error) {
-	configDir := customDir
-	if configDir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, fmt.Errorf("could not find user home dir: %w", err)
-		}
-		configDir = filepath.Join(home, ".config", "cozyssh")
-	}
-	configDir, err := filepath.Abs(configDir)
-	if err != nil {
-		return nil, fmt.Errorf("could not get absolute path: %w", err)
-	}
-
-	if err := os.MkdirAll(configDir, 0700); err != nil {
-		return nil, fmt.Errorf("failed to create config dir: %w", err)
-	}
-
+func LoadConfig(configDir string) (*Config, error) {
 	configPath := filepath.Join(configDir, constants.CONFIG_FILE)
 
 	var cfg Config
@@ -777,7 +761,7 @@ func (c *Config) UpdateSavePassword(value string) error {
 	return c.save()
 }
 
-func (c *Config) UpdateWebdavSettings(urlVal, userVal, passwordVal string, enabledVal bool, encEnabledVal bool, masterKeyVal string) error {
+func (c *Config) UpdateWebdavSettings(urlVal, userVal, passwordVal string, enabledVal bool, encEnabledVal bool, masterKeyVal string, uploadSSHDataVal bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -787,12 +771,14 @@ func (c *Config) UpdateWebdavSettings(urlVal, userVal, passwordVal string, enabl
 		c.WebdavPassword = ""
 		c.WebdavEncryptionEnabled = false
 		c.WebdavMasterKey = ""
+		c.WebdavUploadSSHData = false
 	} else {
 		if passwordVal != "" {
 			c.WebdavPassword = passwordVal
 		}
 		c.WebdavEncryptionEnabled = encEnabledVal
 		c.WebdavMasterKey = masterKeyVal
+		c.WebdavUploadSSHData = uploadSSHDataVal
 	}
 	c.WebdavEnabled = enabledVal
 
