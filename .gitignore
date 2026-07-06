@@ -10,3 +10,5 @@ node_modules
 
 # AI experiment area
 /scratch
+
+/config/buttons.json

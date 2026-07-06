@@ -1375,6 +1375,35 @@ export default function Sidebar({
     }
   }, [contextMenu]);
 
+  const handleDeleteKnownHost = useCallback(async () => {
+    if (!contextMenu) {
+      return;
+    }
+    const target = contextMenu.target;
+    setContextMenuOpen(false);
+    if (
+      await dialogs.confirm(
+        `Are you extremely certain you want to permanently delete "${target.hostname}" from known_hosts?`,
+      )
+    ) {
+      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+      const port = target.port || "22";
+      const res = await fetch(`/api/known_hosts/${target.hostname}?port=${port}`, {
+        method: METHOD_DELETE,
+        headers: {
+          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+        },
+      });
+      if (res.ok) {
+        notify("Successfully removed entry from known_hosts", "success");
+        fetchHosts();
+      } else {
+        const text = await res.text();
+        notify("Failed to delete known_host entry: " + text, "error");
+      }
+    }
+  }, [contextMenu]);
+
   const handleToggleFavourite = useCallback(async () => {
     if (!contextMenu) {
       return;
@@ -1845,7 +1874,7 @@ export default function Sidebar({
   }, [groupContextMenu]);
 
   const handleSaveHost = useCallback(async () => {
-    const { hostFormData } = getStore();
+    const { editHostName, hostFormData } = getStore();
     if (!hostFormData.hostname) {
       return;
     }
@@ -1882,13 +1911,13 @@ export default function Sidebar({
       return;
     }
 
-    const res = await fetch("/api/hosts", {
-      method: METHOD_PUT,
+    const res = await fetch("/api/hosts" + (editHostName ? "/" + editHostName : ""), {
+      method: METHOD_POST,
       headers: {
         [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
         [HEADER_CONTENT_TYPE]: MIME_JSON,
       },
-      body: JSON.stringify([payload]),
+      body: JSON.stringify(payload),
     });
 
     if (res.status === 403) {
@@ -2874,6 +2903,11 @@ export default function Sidebar({
         {contextMenu?.target.source === "config" && (
           <MenuItem onClick={handleDelete} sx={{ color: "error.main" }}>
             Delete Host
+          </MenuItem>
+        )}
+        {contextMenu?.target.source === "known_hosts" && (
+          <MenuItem onClick={handleDeleteKnownHost} sx={{ color: "error.main" }}>
+            Delete known_host
           </MenuItem>
         )}
       </Menu>

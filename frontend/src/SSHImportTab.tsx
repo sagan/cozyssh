@@ -32,39 +32,11 @@ import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutlined";
 import EditIcon from "@mui/icons-material/Edit";
 import CloudDownloadIcon from "@mui/icons-material/CloudDownload";
 import SearchIcon from "@mui/icons-material/Search";
+import FileUploadIcon from "@mui/icons-material/FileUpload";
 
 import { HEADER_AUTHORIZATION, HEADER_AUTHORIZATION_BEARER_PREFIX, BROWSER_STORAGE_KEY_TOKEN } from "./constants";
 import { notify, refreshData } from "./store";
-
-// ─── Types (mirrors models/models.go) ────────────────────────────────────────
-
-interface DeviceSSHData {
-  deviceName: string;
-  hasSSHConfig: boolean;
-  hasKnownHosts: boolean;
-  sshConfigMtime: number;
-  knownHostsMtime: number;
-}
-
-interface RemoteHostEntry {
-  host: string;
-  directives: Record<string, string>;
-  isNew: boolean;
-  isModified: boolean;
-  localDirectives?: Record<string, string>;
-}
-
-interface RemoteKnownHostEntry {
-  line: string;
-  patterns: string;
-  keyType: string;
-  keyData: string;
-  comment?: string;
-  isNew: boolean;
-  isConflict: boolean;
-  localKeyType?: string;
-  localKeyData?: string;
-}
+import type { DeviceSSHData, RemoteHostEntry, RemoteKnownHostEntry } from "./api";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -90,6 +62,7 @@ function keyFingerprint(keyData: string): string {
 function DeviceListView({ onSelectDevice }: { onSelectDevice: (device: DeviceSSHData) => void }) {
   const [devices, setDevices] = useState<DeviceSSHData[]>([]);
   const [loading, setLoading] = useState(true);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -109,7 +82,72 @@ function DeviceListView({ onSelectDevice }: { onSelectDevice: (device: DeviceSSH
     load();
   }, []);
 
-  if (loading) {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const filename = file.name;
+    if (
+      filename !== "config" &&
+      filename !== "known_hosts" &&
+      filename !== "config.txt" &&
+      filename !== "known_hosts.txt"
+    ) {
+      notify("Acceptable files are OpenSSH format 'config' & 'known_hosts' file.", "error");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    setLoading(true);
+    try {
+      const r = await fetch("/api/settings/webdav/devices/upload", {
+        method: "POST",
+        headers: authHeaders(),
+        body: formData,
+      });
+      if (r.ok) {
+        notify("File uploaded successfully.", "success");
+        load();
+      } else {
+        const txt = await r.text();
+        notify("Upload failed: " + txt, "error");
+      }
+    } catch (err: unknown) {
+      notify(`Upload failed: ${err}`, "error");
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm("Are you sure you want to delete the uploaded files?")) {
+      return;
+    }
+    setLoading(true);
+    try {
+      const r = await fetch("/api/settings/webdav/devices/upload", {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      if (r.ok) {
+        notify("Uploaded files deleted successfully.", "success");
+        load();
+      } else {
+        const txt = await r.text();
+        notify("Delete failed: " + txt, "error");
+      }
+    } catch (err: unknown) {
+      notify(`Delete failed: ${err}`, "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading && devices.length === 0) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
         <CircularProgress size={32} />
@@ -117,23 +155,24 @@ function DeviceListView({ onSelectDevice }: { onSelectDevice: (device: DeviceSSH
     );
   }
 
-  if (devices.length === 0) {
-    return (
-      <Box sx={{ textAlign: "center", py: 6, color: "text.secondary" }}>
-        <CloudDownloadIcon sx={{ fontSize: 48, mb: 1, opacity: 0.4 }} />
-        <Typography variant="body1" gutterBottom>
-          No SSH data from other devices yet.
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Other devices with WebDAV sync enabled will upload their SSH data automatically. Once fetched, they'll appear
-          here.
-        </Typography>
-        <Button variant="outlined" sx={{ mt: 2 }} size="small" onClick={load}>
-          Refresh
-        </Button>
-      </Box>
-    );
-  }
+  const actionButtons = (
+    <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+      <input type="file" ref={fileInputRef} style={{ display: "none" }} onChange={handleFileChange} />
+      <Button
+        size="small"
+        variant="outlined"
+        title="Upload files to import. Supported formats: OpenSSH config & known_hosts"
+        startIcon={<FileUploadIcon />}
+        onClick={() => fileInputRef.current?.click()}
+        disabled={loading}
+      >
+        Upload
+      </Button>
+      <Button size="small" onClick={load} disabled={loading}>
+        Refresh
+      </Button>
+    </Stack>
+  );
 
   return (
     <Box>
@@ -141,65 +180,90 @@ function DeviceListView({ onSelectDevice }: { onSelectDevice: (device: DeviceSSH
         <Typography variant="subtitle2" sx={{ fontWeight: "bold" }}>
           Available Devices
         </Typography>
-        <Button size="small" onClick={load} disabled={loading}>
-          Refresh
-        </Button>
+        {actionButtons}
       </Box>
-      <TableContainer
-        component={Paper}
-        sx={{ border: "1px solid", borderColor: "divider", boxShadow: "none", borderRadius: 1 }}
-      >
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell sx={{ fontWeight: "bold" }}>Device Name</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>SSH Config</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Known Hosts</TableCell>
-              <TableCell />
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {devices.map((d) => (
-              <TableRow key={d.deviceName} hover>
-                <TableCell sx={{ fontFamily: "monospace", fontWeight: 600 }}>{d.deviceName}</TableCell>
-                <TableCell>
-                  {d.hasSSHConfig ? (
-                    <Chip
-                      label={new Date(d.sshConfigMtime).toLocaleString()}
-                      size="small"
-                      color="success"
-                      variant="outlined"
-                    />
-                  ) : (
-                    <Typography variant="caption" color="text.disabled">
-                      —
-                    </Typography>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {d.hasKnownHosts ? (
-                    <Chip
-                      label={new Date(d.knownHostsMtime).toLocaleString()}
-                      size="small"
-                      color="success"
-                      variant="outlined"
-                    />
-                  ) : (
-                    <Typography variant="caption" color="text.disabled">
-                      —
-                    </Typography>
-                  )}
-                </TableCell>
-                <TableCell align="right">
-                  <Button size="small" variant="contained" disableElevation onClick={() => onSelectDevice(d)}>
-                    Import
-                  </Button>
-                </TableCell>
+
+      {devices.length === 0 ? (
+        <Box sx={{ textAlign: "center", py: 6, color: "text.secondary" }}>
+          <CloudDownloadIcon sx={{ fontSize: 48, mb: 1, opacity: 0.4 }} />
+          <Typography variant="body1" gutterBottom>
+            No SSH data from other devices yet.
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Other devices with WebDAV sync enabled will upload their SSH data automatically. Once fetched, they'll
+            appear here. Or upload an OpenSSH 'config' or 'known_hosts' file directly.
+          </Typography>
+        </Box>
+      ) : (
+        <TableContainer
+          component={Paper}
+          sx={{ border: "1px solid", borderColor: "divider", boxShadow: "none", borderRadius: 1 }}
+        >
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ fontWeight: "bold" }}>Device Name</TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>SSH Config</TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>Known Hosts</TableCell>
+                <TableCell />
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+            </TableHead>
+            <TableBody>
+              {devices.map((d) => (
+                <TableRow key={d.deviceName} hover>
+                  <TableCell sx={{ fontFamily: "monospace", fontWeight: 600 }}>{d.deviceName}</TableCell>
+                  <TableCell>
+                    {d.hasSSHConfig ? (
+                      <Chip
+                        label={new Date(d.sshConfigMtime).toLocaleString()}
+                        size="small"
+                        color="success"
+                        variant="outlined"
+                      />
+                    ) : (
+                      <Typography variant="caption" color="text.disabled">
+                        —
+                      </Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {d.hasKnownHosts ? (
+                      <Chip
+                        label={new Date(d.knownHostsMtime).toLocaleString()}
+                        size="small"
+                        color="success"
+                        variant="outlined"
+                      />
+                    ) : (
+                      <Typography variant="caption" color="text.disabled">
+                        —
+                      </Typography>
+                    )}
+                  </TableCell>
+                  <TableCell align="right">
+                    <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end", alignItems: "center" }}>
+                      {d.deviceName.startsWith("$") && (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="error"
+                          onClick={() => handleDelete()}
+                          disabled={loading}
+                        >
+                          Delete
+                        </Button>
+                      )}
+                      <Button size="small" variant="contained" disableElevation onClick={() => onSelectDevice(d)}>
+                        Import
+                      </Button>
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
     </Box>
   );
 }
@@ -953,8 +1017,8 @@ export default function SSHImportTab() {
   return (
     <Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2, mt: -1 }}>
-        <b>SSH Data Import</b>: Import SSH hosts or known_hosts entries from other devices that use the same WebDAV sync
-        server. Data is fetched automatically during periodic sync.
+        <b>SSH Data Import</b>: Import SSH data from other devices of same WebDAV server, or upload OpenSSH config &
+        known_hosts files to import
       </Typography>
 
       {selectedDevice ? (

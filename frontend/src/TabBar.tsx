@@ -293,6 +293,7 @@ export default function TabBar({
                 }}
                 sx={{
                   width: 200,
+                  input: { py: 0 },
                   "& .MuiInputBase-root": { fontSize: "typography.body2.fontSize" },
                 }}
               />

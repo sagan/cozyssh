@@ -1,9 +1,9 @@
 package sshmanager
 
 import (
-	"cozyssh/common"
-	"cozyssh/config"
-	"cozyssh/models"
+	"crypto/hmac"
+	"crypto/sha1"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
@@ -11,6 +11,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"cozyssh/common"
+	"cozyssh/config"
+	"cozyssh/models"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
@@ -132,7 +136,8 @@ func TestCopySSHID_HostKeyMismatchReplacement(t *testing.T) {
 		globalConfig = origConfig
 	}()
 	globalConfig = &config.Config{
-		SSHDir: tempDir,
+		SSHDir:    tempDir,
+		AbsSSHDir: tempDir,
 	}
 
 	// Generate key1 and key2
@@ -229,5 +234,101 @@ func TestSendEnvOption(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("matchEnvPatterns(%q, %q) = %v, want %v", tt.name, tt.patterns, got, tt.want)
 		}
+	}
+}
+
+func hashHost(host string, salt []byte) string {
+	mac := hmac.New(sha1.New, salt)
+	mac.Write([]byte(host))
+	signature := mac.Sum(nil)
+	return fmt.Sprintf("|1|%s|%s",
+		base64.StdEncoding.EncodeToString(salt),
+		base64.StdEncoding.EncodeToString(signature))
+}
+
+func TestDeleteKnownHost(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "cozyssh-test-delete-kh-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	origConfig := globalConfig
+	defer func() {
+		globalConfig = origConfig
+	}()
+	globalConfig = &config.Config{
+		SSHDir:    tempDir,
+		AbsSSHDir: tempDir,
+	}
+
+	knownHostsPath := filepath.Join(tempDir, "known_hosts")
+
+	// Generate a hashed host string for "google.com"
+	salt := []byte("somesalt12345")
+	hashedGoogle := hashHost("google.com", salt)
+	hashedGoogleLine := fmt.Sprintf("%s ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJK38f61K+823j4u87l14G2sN2j3v4t5r6e7d8c9b0a3", hashedGoogle)
+
+	initialContent := strings.Join([]string{
+		"example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJK38f61K+823j4u87l14G2sN2j3v4t5r6e7d8c9b0a1",
+		"[example.com]:2222 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJK38f61K+823j4u87l14G2sN2j3v4t5r6e7d8c9b0a2",
+		hashedGoogleLine,
+		"other.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJK38f61K+823j4u87l14G2sN2j3v4t5r6e7d8c9b0a4",
+	}, "\n") + "\n"
+
+	err = os.WriteFile(knownHostsPath, []byte(initialContent), 0600)
+	if err != nil {
+		t.Fatalf("failed to write initial known_hosts: %v", err)
+	}
+
+	// 1. Delete "example.com" with port 22. It should remove the plain "example.com" entry.
+	err = DeleteKnownHost("example.com", "22")
+	if err != nil {
+		t.Fatalf("DeleteKnownHost failed: %v", err)
+	}
+
+	content, err := os.ReadFile(knownHostsPath)
+	if err != nil {
+		t.Fatalf("failed to read known_hosts: %v", err)
+	}
+
+	if strings.Contains(string(content), "example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJK38f61K+823j4u87l14G2sN2j3v4t5r6e7d8c9b0a1") {
+		t.Errorf("expected plain example.com entry to be deleted")
+	}
+	if !strings.Contains(string(content), "[example.com]:2222") {
+		t.Errorf("expected [example.com]:2222 entry to remain")
+	}
+
+	// 2. Delete "example.com" with port 2222. It should remove the "[example.com]:2222" entry.
+	err = DeleteKnownHost("example.com", "2222")
+	if err != nil {
+		t.Fatalf("DeleteKnownHost failed: %v", err)
+	}
+
+	content, err = os.ReadFile(knownHostsPath)
+	if err != nil {
+		t.Fatalf("failed to read known_hosts: %v", err)
+	}
+	if strings.Contains(string(content), "[example.com]:2222") {
+		t.Errorf("expected [example.com]:2222 entry to be deleted")
+	}
+
+	// 3. Delete "google.com" with port 22 (default). It should remove the hashed entry.
+	err = DeleteKnownHost("google.com", "")
+	if err != nil {
+		t.Fatalf("DeleteKnownHost failed: %v", err)
+	}
+
+	content, err = os.ReadFile(knownHostsPath)
+	if err != nil {
+		t.Fatalf("failed to read known_hosts: %v", err)
+	}
+	if strings.Contains(string(content), hashedGoogleLine) {
+		t.Errorf("expected hashed google.com entry to be deleted")
+	}
+
+	// 4. "other.com" should still remain.
+	if !strings.Contains(string(content), "other.com") {
+		t.Errorf("expected other.com entry to remain")
 	}
 }

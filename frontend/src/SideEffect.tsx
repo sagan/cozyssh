@@ -21,6 +21,7 @@ export default function SideEffect() {
   const buttons = useStore((state) => state.buttons);
   const activeGroup = useStore((state) => state.activeGroup);
   const sysSitename = useStore((state) => state.sysinfo.sitename);
+  const sysUsername = useStore((state) => state.sysinfo.username);
 
   const anyDialogOpen = useStore(
     (state) =>
@@ -38,8 +39,9 @@ export default function SideEffect() {
   }, [anyDialogOpen]);
 
   useEffect(() => {
-    document.documentElement.dataset.csHostname = sysSitename;
-  }, [sysSitename]);
+    document.documentElement.dataset.csSitename = sysSitename;
+    document.documentElement.dataset.csUsername = sysUsername;
+  }, [sysSitename, sysUsername]);
 
   useEffect(() => {
     const shortcutButtons: Record<string, ButtonData> = {};
@@ -73,11 +75,13 @@ export default function SideEffect() {
     const terminalFontSize = Math.max(1, getIntVar(VAR_CS_TERMINAL_FONT_SIZE, DEFAULT_TERMINAL_FONT_SIZE));
     if (terminalFontSize !== __CS_TERMINAL_OPTIONS__.fontSize) {
       __CS_TERMINAL_OPTIONS__.fontSize = terminalFontSize;
+      document.documentElement.dataset.csTerminalFontSize = `${terminalFontSize}`;
     }
 
     const fontSize = Math.max(1, getIntVar(VAR_CS_FONT_SIZE, DEFAULT_FONT_SIZE));
     if (fontSize !== __CS_FONT_SIZE__) {
       __CS_FONT_SIZE__ = fontSize;
+      document.documentElement.dataset.csFontSize = `${fontSize}`;
     }
 
     window.dispatchEvent(

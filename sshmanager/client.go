@@ -2,7 +2,10 @@ package sshmanager
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha1"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -664,6 +667,112 @@ func ListKnownHosts() ([]*models.HostData, error) {
 	}
 
 	return res, nil
+}
+
+func matchHashedHost(lineHost string, plainHosts []string) bool {
+	if !strings.HasPrefix(lineHost, "|1|") {
+		return false
+	}
+	parts := strings.Split(lineHost, "|")
+	if len(parts) < 4 {
+		return false
+	}
+	saltBytes, err := base64.StdEncoding.DecodeString(parts[2])
+	if err != nil {
+		return false
+	}
+	expectedHashBytes, err := base64.StdEncoding.DecodeString(parts[3])
+	if err != nil {
+		return false
+	}
+
+	for _, ph := range plainHosts {
+		mac := hmac.New(sha1.New, saltBytes)
+		mac.Write([]byte(ph))
+		calculatedHash := mac.Sum(nil)
+		if hmac.Equal(calculatedHash, expectedHashBytes) {
+			return true
+		}
+	}
+	return false
+}
+
+func DeleteKnownHost(hostname string, port string) error {
+	mu.Lock()
+	defer mu.Unlock()
+
+	knownHostsPath := filepath.Join(globalConfig.AbsSSHDir, "known_hosts")
+	data, err := os.ReadFile(knownHostsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	// Prepare the plain-text representations we want to match
+	plainHosts := []string{hostname}
+	if port != "" && port != "22" {
+		plainHosts = append(plainHosts, fmt.Sprintf("[%s]:%s", hostname, port))
+	} else {
+		plainHosts = append(plainHosts, fmt.Sprintf("[%s]:22", hostname))
+	}
+
+	lines := strings.Split(string(data), "\n")
+	var newLines []string
+	modified := false
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			newLines = append(newLines, line)
+			continue
+		}
+
+		fields := strings.Fields(trimmed)
+		if len(fields) < 2 {
+			newLines = append(newLines, line)
+			continue
+		}
+
+		hostPart := fields[0]
+		match := false
+
+		if strings.HasPrefix(hostPart, "|1|") {
+			// Hashed host
+			if matchHashedHost(hostPart, plainHosts) {
+				match = true
+			}
+		} else {
+			// Plain text hosts (comma separated)
+			parts := strings.Split(hostPart, ",")
+			for _, p := range parts {
+				p = strings.TrimSpace(p)
+				for _, ph := range plainHosts {
+					if p == ph {
+						match = true
+						break
+					}
+				}
+				if match {
+					break
+				}
+			}
+		}
+
+		if match {
+			modified = true
+		} else {
+			newLines = append(newLines, line)
+		}
+	}
+
+	if modified {
+		output := strings.Join(newLines, "\n")
+		return common.AtomicWriteFileContents(knownHostsPath, []byte(output))
+	}
+
+	return nil
 }
 
 type TerminalUI interface {

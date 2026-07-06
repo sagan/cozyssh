@@ -448,6 +448,22 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 			}
 		}))))
 
+	mux.Handle("/api/known_hosts/", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			hostname := strings.TrimPrefix(r.URL.Path, "/api/known_hosts/")
+			switch r.Method {
+			case http.MethodDelete:
+				port := r.URL.Query().Get("port")
+				if err := sshmanager.DeleteKnownHost(hostname, port); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				w.WriteHeader(http.StatusNoContent)
+			default:
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			}
+		}))))
+
 	mux.Handle("/api/settings/password", securityMiddleware(auth.Middleware(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
@@ -766,6 +782,71 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 			json.NewEncoder(w).Encode(&models.DeviceSSHListResponse{Devices: devices})
 		}))))
 
+	mux.Handle("/api/settings/webdav/devices/upload", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodPost {
+				err := r.ParseMultipartForm(10 << 20) // max 10MB
+				if err != nil {
+					http.Error(w, "Failed to parse multipart form: "+err.Error(), http.StatusBadRequest)
+					return
+				}
+				file, header, err := r.FormFile("file")
+				if err != nil {
+					http.Error(w, "Failed to get file from form: "+err.Error(), http.StatusBadRequest)
+					return
+				}
+				defer file.Close()
+
+				filename := filepath.Base(header.Filename)
+				var destName string
+				typeParam := r.URL.Query().Get("type")
+				if typeParam == "config" || typeParam == "known_hosts" {
+					destName = typeParam
+				} else if filename == "config" || filename == "config.txt" {
+					destName = "config"
+				} else if filename == "known_hosts" || filename == "known_hosts.txt" {
+					destName = "known_hosts"
+				}
+
+				if destName == "" {
+					http.Error(w, "Invalid file. Only 'config' or 'known_hosts' files are accepted.", http.StatusBadRequest)
+					return
+				}
+
+				destDir := filepath.Join(cfg.ConfigDir, "devices_sshdata", "$upload_openssh")
+				if err := os.MkdirAll(destDir, 0755); err != nil {
+					http.Error(w, "Failed to create target directory: "+err.Error(), http.StatusInternalServerError)
+					return
+				}
+
+				destPath := filepath.Join(destDir, destName)
+				out, err := os.Create(destPath)
+				if err != nil {
+					http.Error(w, "Failed to create destination file: "+err.Error(), http.StatusInternalServerError)
+					return
+				}
+				defer out.Close()
+
+				if _, err := io.Copy(out, file); err != nil {
+					http.Error(w, "Failed to write file contents: "+err.Error(), http.StatusInternalServerError)
+					return
+				}
+
+				w.WriteHeader(http.StatusNoContent)
+				return
+			} else if r.Method == http.MethodDelete {
+				destDir := filepath.Join(cfg.ConfigDir, "devices_sshdata", "$upload_openssh")
+				if err := os.RemoveAll(destDir); err != nil {
+					http.Error(w, "Failed to delete uploaded files: "+err.Error(), http.StatusInternalServerError)
+					return
+				}
+				w.WriteHeader(http.StatusNoContent)
+				return
+			} else {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			}
+		}))))
+
 	mux.Handle("/api/settings/webdav/devices/sshconfig/", securityMiddleware(auth.Middleware(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodGet {
@@ -843,7 +924,42 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			w.WriteHeader(http.StatusNoContent)
+		}))))
+
+	mux.Handle("/api/settings/export/sshconfig", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			filePath := filepath.Join(cfg.AbsSSHDir, "config")
+			f, err := os.Open(filePath)
+			if err != nil {
+				http.Error(w, "SSH config file not found: "+err.Error(), http.StatusNotFound)
+				return
+			}
+			defer f.Close()
+			w.Header().Set("Content-Disposition", "attachment; filename=config")
+			w.Header().Set("Content-Type", "application/octet-stream")
+			io.Copy(w, f)
+		}))))
+
+	mux.Handle("/api/settings/export/knownhosts", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			filePath := filepath.Join(cfg.AbsSSHDir, "known_hosts")
+			f, err := os.Open(filePath)
+			if err != nil {
+				http.Error(w, "known_hosts file not found: "+err.Error(), http.StatusNotFound)
+				return
+			}
+			defer f.Close()
+			w.Header().Set("Content-Disposition", "attachment; filename=known_hosts")
+			w.Header().Set("Content-Type", "application/octet-stream")
+			io.Copy(w, f)
 		}))))
 
 	mux.Handle("/api/sessions/pin", securityMiddleware(auth.Middleware(http.HandlerFunc(

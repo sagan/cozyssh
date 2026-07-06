@@ -93,13 +93,13 @@ type RemoteHostEntry struct {
 	// All raw directives from the remote config block, keyed by lowercase directive name.
 	// The "host" key holds the alias name.
 	Host       string            `json:"host"`
-	Directives map[string]string `json:"directives"`
+	Directives map[string]string `json:"directives" ts_type:"Record<string, string>"`
 	// IsNew is true when no local host with this alias exists.
 	IsNew bool `json:"isNew"`
 	// IsModified is true when a local host with this alias exists but differs.
 	IsModified bool `json:"isModified"`
 	// LocalDirectives is populated (non-nil) when IsModified is true.
-	LocalDirectives map[string]string `json:"localDirectives,omitempty"`
+	LocalDirectives map[string]string `json:"localDirectives,omitempty" ts_type:"Record<string, string>"`
 }
 
 // RemoteKnownHostEntry is a parsed line from another device's ~/.ssh/known_hosts,

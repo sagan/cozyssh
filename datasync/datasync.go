@@ -1314,8 +1314,8 @@ func ReadDeviceKnownHosts(deviceName string) ([]*models.RemoteKnownHostEntry, er
 		return nil, err
 	}
 
-	// Parse local known_hosts into map: patterns -> (keyType, keyData)
-	localKH := map[string][2]string{} // pattern -> [keyType, keyData]
+	// Parse local known_hosts into map: pattern -> keyType -> keyData
+	localKH := map[string]map[string]string{}
 	localPath := filepath.Join(gCfg.AbsSSHDir, "known_hosts")
 	if localData, err := os.ReadFile(localPath); err == nil {
 		for _, line := range strings.Split(string(localData), "\n") {
@@ -1328,7 +1328,11 @@ func ReadDeviceKnownHosts(deviceName string) ([]*models.RemoteKnownHostEntry, er
 				continue
 			}
 			for _, pat := range strings.Split(fields[0], ",") {
-				localKH[strings.TrimSpace(pat)] = [2]string{fields[1], fields[2]}
+				pat = strings.TrimSpace(pat)
+				if localKH[pat] == nil {
+					localKH[pat] = map[string]string{}
+				}
+				localKH[pat][fields[1]] = fields[2]
 			}
 		}
 	}
@@ -1363,14 +1367,16 @@ func ReadDeviceKnownHosts(deviceName string) ([]*models.RemoteKnownHostEntry, er
 		isNew := true
 		for _, pat := range strings.Split(patterns, ",") {
 			pat = strings.TrimSpace(pat)
-			if local, ok := localKH[pat]; ok {
-				isNew = false
-				if local[1] != keyData {
-					entry.IsConflict = true
-					entry.LocalKeyType = local[0]
-					entry.LocalKeyData = local[1]
+			if typeMap, ok := localKH[pat]; ok {
+				if localKeyData, hasSameType := typeMap[keyType]; hasSameType {
+					isNew = false
+					if localKeyData != keyData {
+						entry.IsConflict = true
+						entry.LocalKeyType = keyType
+						entry.LocalKeyData = localKeyData
+					}
+					break
 				}
-				break
 			}
 		}
 		entry.IsNew = isNew
@@ -1444,8 +1450,8 @@ func ImportKnownHostsLines(deviceName string, lines []string, force bool) error 
 	localPath := filepath.Join(gCfg.AbsSSHDir, "known_hosts")
 	localData, _ := os.ReadFile(localPath)
 
-	// Build existing local map
-	localKH := map[string]string{} // pattern -> full line
+	// Build existing local map: pattern -> keyType -> index of line in localLines
+	localKH := map[string]map[string]int{}
 	localLines := strings.Split(string(localData), "\n")
 	for i, line := range localLines {
 		line = strings.TrimSpace(line)
@@ -1457,7 +1463,11 @@ func ImportKnownHostsLines(deviceName string, lines []string, force bool) error 
 			continue
 		}
 		for _, pat := range strings.Split(fields[0], ",") {
-			localKH[strings.TrimSpace(pat)] = fmt.Sprintf("%d", i)
+			pat = strings.TrimSpace(pat)
+			if localKH[pat] == nil {
+				localKH[pat] = map[string]int{}
+			}
+			localKH[pat][fields[1]] = i
 		}
 	}
 
@@ -1471,23 +1481,30 @@ func ImportKnownHostsLines(deviceName string, lines []string, force bool) error 
 		if len(fields) < 3 {
 			continue
 		}
+		importKeyType := fields[1]
 		importKeyData := fields[2]
 		isConflict := false
+		hasSame := false
 		for _, pat := range strings.Split(fields[0], ",") {
 			pat = strings.TrimSpace(pat)
-			if idxStr, ok := localKH[pat]; ok {
-				idx, _ := strconv.Atoi(idxStr)
-				existingFields := strings.Fields(localLines[idx])
-				if len(existingFields) >= 3 && existingFields[2] != importKeyData {
-					isConflict = true
-					if force {
-						localLines[idx] = importLine
+			if typeMap, ok := localKH[pat]; ok {
+				if idx, hasSameType := typeMap[importKeyType]; hasSameType {
+					existingFields := strings.Fields(localLines[idx])
+					if len(existingFields) >= 3 {
+						if existingFields[2] != importKeyData {
+							isConflict = true
+							if force {
+								localLines[idx] = importLine
+							}
+						} else {
+							hasSame = true
+						}
 					}
+					break
 				}
-				break
 			}
 		}
-		if !isConflict {
+		if !isConflict && !hasSame {
 			localLines = append(localLines, importLine)
 		}
 	}

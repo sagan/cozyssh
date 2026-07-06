@@ -69,10 +69,10 @@ export interface DeviceSSHData {
 }
 export interface RemoteHostEntry {
     host: string;
-    directives: {[key: string]: string};
+    directives: Record<string, string>;
     isNew: boolean;
     isModified: boolean;
-    localDirectives?: {[key: string]: string};
+    localDirectives?: Record<string, string>;
 }
 export interface RemoteKnownHostEntry {
     line: string;

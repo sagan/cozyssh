@@ -19,6 +19,8 @@
           return;
         }
         const keys = ["cozy_vars", "cozy_localvars"];
+        let fontSize = `14`;
+        let terminalFontSize = `15`;
         for (const key of keys) {
           const data = localStorage.getItem(key);
           if (!data) {
@@ -27,7 +29,21 @@
           const prefix = key === "cozy_localvars" ? "local_" : "";
           try {
             const vars = JSON.parse(data);
-            let variable = vars?.[prefix + "class"];
+            if (!vars) {
+              continue;
+            }
+            let variable;
+
+            variable = vars[prefix + "cs_font_size"];
+            if (variable) {
+              fontSize = variable;
+            }
+            variable = vars[prefix + "cs_terminal_font_size"];
+            if (variable) {
+              terminalFontSize = variable;
+            }
+
+            variable = vars[prefix + "class"];
             if (variable) {
               let className = document.documentElement.getAttribute("class") || "";
               if (className !== "") {
@@ -36,10 +52,10 @@
               className += variable;
               document.documentElement.setAttribute("class", className);
             }
-            variable = vars?.[prefix + "css"] || "";
+            variable = vars[prefix + "css"] || "";
             document.getElementById("cozy_" + prefix + "css").textContent = variable;
 
-            variable = vars?.[prefix + "acss"]; // additional CSS, Record<string, string> format json
+            variable = vars[prefix + "acss"]; // additional CSS, Record<string, string> format json
             if (variable) {
               try {
                 const acss = JSON.parse(variable);
@@ -53,6 +69,8 @@
             }
           } catch {}
         }
+        document.documentElement.dataset.csFontSize = fontSize;
+        document.documentElement.dataset.csTerminalFontSize = terminalFontSize;
       })();
     </script>
   </head>

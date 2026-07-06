@@ -500,3 +500,117 @@ func TestWebdavUploadSSHDataToggle(t *testing.T) {
 		t.Errorf("expected knownhosts to be uploaded when WebdavUploadSSHData is true")
 	}
 }
+
+func TestKnownHostsConflictDetection(t *testing.T) {
+	tmpDir := t.TempDir()
+	sshDir := filepath.Join(tmpDir, "ssh")
+	if err := os.MkdirAll(sshDir, 0755); err != nil {
+		t.Fatalf("failed to create ssh dir: %v", err)
+	}
+
+	// 1. Setup local known_hosts
+	localLines := []string{
+		"example.com ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYW1vY2tsb2NhbA==",
+		"example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAZWRsb2NhbA==",
+	}
+	localPath := filepath.Join(sshDir, "known_hosts")
+	if err := os.WriteFile(localPath, []byte(strings.Join(localLines, "\n")+"\n"), 0600); err != nil {
+		t.Fatalf("failed to write local known_hosts: %v", err)
+	}
+
+	// 2. Setup mock cached device known_hosts
+	deviceDir := filepath.Join(tmpDir, "devices_sshdata", "mock_device")
+	if err := os.MkdirAll(deviceDir, 0755); err != nil {
+		t.Fatalf("failed to create device dir: %v", err)
+	}
+	remoteLines := []string{
+		"example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAZWRsb2NhbA==",                      // Same
+		"example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAZWRyZW1vdGVkaWZmZXJlbnQ=",        // Conflict (same type, different data)
+		"example.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCsYW1wbGVyZW1vdGVyc2E=",        // New (different type)
+		"newhost.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAbmV3aG9zdGtleQ==",               // New (new host)
+	}
+	remotePath := filepath.Join(deviceDir, "known_hosts")
+	if err := os.WriteFile(remotePath, []byte(strings.Join(remoteLines, "\n")+"\n"), 0600); err != nil {
+		t.Fatalf("failed to write remote known_hosts: %v", err)
+	}
+
+	gCfg = &config.Config{
+		ConfigDir: tmpDir,
+		AbsSSHDir: sshDir,
+	}
+
+	// Run ReadDeviceKnownHosts
+	entries, err := ReadDeviceKnownHosts("mock_device")
+	if err != nil {
+		t.Fatalf("ReadDeviceKnownHosts failed: %v", err)
+	}
+
+	if len(entries) != 4 {
+		t.Fatalf("expected 4 entries, got %d", len(entries))
+	}
+
+	// Verify Entry 0: Same
+	if entries[0].IsNew || entries[0].IsConflict {
+		t.Errorf("entry 0 (same) should not be new or conflict: isNew=%t, isConflict=%t", entries[0].IsNew, entries[0].IsConflict)
+	}
+
+	// Verify Entry 1: Conflict
+	if entries[1].IsNew || !entries[1].IsConflict {
+		t.Errorf("entry 1 (conflict) expected isNew=false, isConflict=true: isNew=%t, isConflict=%t", entries[1].IsNew, entries[1].IsConflict)
+	}
+	if entries[1].LocalKeyType != "ssh-ed25519" || entries[1].LocalKeyData != "AAAAC3NzaC1lZDI1NTE5AAAAZWRsb2NhbA==" {
+		t.Errorf("entry 1 (conflict) local details mismatch: type=%s, data=%s", entries[1].LocalKeyType, entries[1].LocalKeyData)
+	}
+
+	// Verify Entry 2: New (different key type)
+	if !entries[2].IsNew || entries[2].IsConflict {
+		t.Errorf("entry 2 (different type) should be new and not conflict: isNew=%t, isConflict=%t", entries[2].IsNew, entries[2].IsConflict)
+	}
+
+	// Verify Entry 3: New (new host)
+	if !entries[3].IsNew || entries[3].IsConflict {
+		t.Errorf("entry 3 (new host) should be new and not conflict: isNew=%t, isConflict=%t", entries[3].IsNew, entries[3].IsConflict)
+	}
+
+	// 3. Test Import without force
+	toImport := []string{
+		"example.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCsYW1wbGVyZW1vdGVyc2E=",        // Should be imported
+		"example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAZWRyZW1vdGVkc3luY2RpZmY=",        // Conflict, should not be imported
+	}
+	err = ImportKnownHostsLines("mock_device", toImport, false)
+	if err != nil {
+		t.Fatalf("ImportKnownHostsLines failed: %v", err)
+	}
+
+	importedData, err := os.ReadFile(localPath)
+	if err != nil {
+		t.Fatalf("failed to read imported local known_hosts: %v", err)
+	}
+	importedStr := string(importedData)
+
+	if !strings.Contains(importedStr, "example.com ssh-rsa") {
+		t.Errorf("expected imported file to contain ssh-rsa key")
+	}
+	if strings.Contains(importedStr, "ZWRyZW1vdGVkc3luY2RpZmY=") {
+		t.Errorf("should not contain conflicting key when force=false")
+	}
+
+	// 4. Test Import with force
+	err = ImportKnownHostsLines("mock_device", toImport, true)
+	if err != nil {
+		t.Fatalf("ImportKnownHostsLines with force failed: %v", err)
+	}
+
+	importedData2, err := os.ReadFile(localPath)
+	if err != nil {
+		t.Fatalf("failed to read imported local known_hosts: %v", err)
+	}
+	importedStr2 := string(importedData2)
+
+	if !strings.Contains(importedStr2, "ZWRyZW1vdGVkc3luY2RpZmY=") {
+		t.Errorf("expected imported file to contain conflicting key when force=true")
+	}
+	if strings.Contains(importedStr2, "ZWRsb2NhbA==") {
+		t.Errorf("expected local conflicting key to be overwritten when force=true")
+	}
+}
