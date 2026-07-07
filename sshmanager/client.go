@@ -1347,7 +1347,7 @@ func getSSHClient(name string, term TerminalUI, identity string,
 	}
 
 	client, err = dialFunc(sshConfig)
-	if err != nil && strings.Contains(err.Error(), "no supported methods remain") && term != nil {
+	if err != nil && (strings.Contains(err.Error(), "no supported methods remain") || strings.Contains(err.Error(), "unexpected message type 51")) && term != nil {
 		// Try password fallback
 		pass, perr := term.PromptMasked(fmt.Sprintf("%s@%s's password: ", user, host))
 		if perr == nil {

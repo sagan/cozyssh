@@ -211,7 +211,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 
 			if err != nil {
 				errStr := strings.ToLower(err.Error())
-				if strings.Contains(errStr, "mismatch") || strings.Contains(errStr, "auth") {
+				if strings.Contains(errStr, "mismatch") || strings.Contains(errStr, "auth") || strings.Contains(errStr, "unexpected message type 51") {
 					conn.WriteMessage(websocket.TextMessage, models.WsMsgStateDisconnectedFatal)
 				}
 				return
@@ -281,7 +281,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					errStr := strings.ToLower(err.Error())
 					if strings.Contains(errStr, "mismatch") || strings.Contains(errStr, "auth") ||
-						strings.Contains(errStr, "interactive") {
+						strings.Contains(errStr, "interactive") || strings.Contains(errStr, "unexpected message type 51") {
 						return nil, nil, fmt.Errorf("fatal: %v", err)
 					}
 					return nil, nil, err
