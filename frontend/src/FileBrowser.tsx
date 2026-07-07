@@ -31,15 +31,8 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import { Menu, MenuItem, TableSortLabel, InputBase } from "@mui/material";
 
 import type { FileInfo, FileMkdirRequest, FileRenameRequest, FsList, FsToken } from "./api";
-import {
-  BROWSER_STORAGE_KEY_TOKEN,
-  HEADER_AUTHORIZATION,
-  HEADER_AUTHORIZATION_BEARER_PREFIX,
-  HEADER_CONTENT_TYPE,
-  METHOD_POST,
-  MIME_JSON,
-} from "./constants";
-import { formatSize, type Order } from "./common";
+import { type Order, apiReqHeaders, formatSize, triggerDownload } from "./common";
+import { METHOD_POST } from "./constants";
 import TextEditor from "./TextEditor";
 import { dialogs } from "./Dialogs";
 
@@ -109,11 +102,8 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   const fetchFiles = async (path: string = "") => {
     setLoading(true);
     try {
-      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
       const res = await fetch(`/api/fs/list?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(path)}`, {
-        headers: {
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        },
+        headers: apiReqHeaders(),
       });
       if (res.ok) {
         const data: FsList = await res.json();
@@ -226,13 +216,10 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
 
     setLoading(true);
     try {
-      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
       const res = await fetch(
         `/api/fs/stat?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(targetPath)}`,
         {
-          headers: {
-            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-          },
+          headers: apiReqHeaders(),
         },
       );
 
@@ -272,15 +259,12 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
     const formData = new FormData();
     formData.append("file", file);
 
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     try {
       const res = await fetch(
         `/api/fs/upload?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(currentPath)}`,
         {
           method: METHOD_POST,
-          headers: {
-            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-          },
+          headers: apiReqHeaders(true),
           body: formData,
         },
       );
@@ -301,54 +285,41 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
     }
   };
 
-  const handleDownload = async (fileName: string) => {
+  const handleDownload = async (filename: string) => {
     setContextMenu(null);
     const join = getPathJoiner(currentPath);
-    const targetPath = join(fileName);
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+    const targetPath = join(filename);
     try {
       const res = await fetch(
         `/api/fs/token?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(targetPath)}`,
         {
           method: METHOD_POST,
-          headers: {
-            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-          },
+          headers: apiReqHeaders(),
         },
       );
-      if (res.ok) {
-        const data: FsToken = await res.json();
-        const dlUrl = `/api/fs/download?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(
-          targetPath,
-        )}&expires=${data.expires}&sig=${data.sig}`;
-        const a = document.createElement("a");
-        a.href = dlUrl;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      } else {
-        dialogs.alert("Failed to initiate secure download.");
+      if (!res.ok) {
+        throw new Error(`status=${res.status}`);
       }
-    } catch (e) {
-      console.error(e);
-      dialogs.alert("Error initiating secure download.");
+      const data: FsToken = await res.json();
+      const dlUrl = `/api/fs/download?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(
+        targetPath,
+      )}&expires=${data.expires}&sig=${data.sig}`;
+      triggerDownload(dlUrl, filename);
+    } catch (err: unknown) {
+      dialogs.alert(`Error downloading file ${filename}: ${err}`);
     }
   };
 
   const handleEditAsText = async (file: FileInfo, fullPath?: string) => {
     setContextMenu(null);
     const targetPath = fullPath || getPathJoiner(currentPath)(file.name);
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     setLoading(true);
     try {
       const res = await fetch(
         `/api/fs/token?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(targetPath)}`,
         {
           method: METHOD_POST,
-          headers: {
-            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-          },
+          headers: apiReqHeaders(),
         },
       );
       if (res.ok) {
@@ -356,11 +327,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
         const dlUrl = `/api/fs/download?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(
           targetPath,
         )}&expires=${data.expires}&sig=${data.sig}`;
-        const dlRes = await fetch(dlUrl, {
-          headers: {
-            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-          },
-        });
+        const dlRes = await fetch(dlUrl, { headers: apiReqHeaders() });
         if (dlRes.ok) {
           const text = await dlRes.text();
           setEditorContent(text);
@@ -385,7 +352,6 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
       return;
     }
     setLoading(true);
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     try {
       // Get the parent directory of editingPath
       const isWin = isWindowsHost || isWindowsPath(editingPath);
@@ -410,9 +376,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
         `/api/fs/upload?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(parentDir)}`,
         {
           method: METHOD_POST,
-          headers: {
-            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-          },
+          headers: apiReqHeaders(true),
           body: formData,
         },
       );
@@ -439,21 +403,15 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
     if (!newName || newName === file.name) {
       return;
     }
-
     const join = getPathJoiner(currentPath);
     const oldPath = join(file.name);
     const newPath = join(newName);
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-
     try {
       const res = await fetch(
         `/api/fs/rename?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(oldPath)}`,
         {
           method: METHOD_POST,
-          headers: {
-            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-            [HEADER_CONTENT_TYPE]: MIME_JSON,
-          },
+          headers: apiReqHeaders(),
           body: JSON.stringify({ newPath } satisfies FileRenameRequest),
         },
       );
@@ -472,17 +430,12 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
     if (!(await dialogs.confirm(`Are you sure you want to delete ${file.name}?`))) {
       return;
     }
-
     const join = getPathJoiner(currentPath);
     const path = join(file.name);
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-
     try {
       const res = await fetch(`/api/fs/delete?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(path)}`, {
         method: METHOD_POST,
-        headers: {
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        },
+        headers: apiReqHeaders(),
       });
       if (res.ok) {
         fetchFiles(currentPath);
@@ -500,16 +453,12 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
       return;
     }
 
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     try {
       const res = await fetch(
         `/api/fs/mkdir?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(currentPath)}`,
         {
           method: METHOD_POST,
-          headers: {
-            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-            [HEADER_CONTENT_TYPE]: MIME_JSON,
-          },
+          headers: apiReqHeaders(),
           body: JSON.stringify({ name } satisfies FileMkdirRequest),
         },
       );
@@ -528,9 +477,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
     if (!name) {
       return;
     }
-
     setLoading(true);
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     try {
       const blob = new Blob([""], { type: "text/plain" });
       const formData = new FormData();
@@ -540,9 +487,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
         `/api/fs/upload?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(currentPath)}`,
         {
           method: METHOD_POST,
-          headers: {
-            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-          },
+          headers: apiReqHeaders(true),
           body: formData,
         },
       );

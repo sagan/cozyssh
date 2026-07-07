@@ -5,7 +5,18 @@ import { Liquid } from "liquidjs";
 import { join } from "shlex";
 
 import type { ButtonData, HostData, LocalShell } from "./api";
-import { DEFAULT_BUTTON_GROUP, DEFAULT_FONT_SIZE, LOCAL_NAME, TAG_GROUP_PREFIX, TAG_ORDER_PREFIX } from "./constants";
+import {
+  BROWSER_STORAGE_KEY_TOKEN,
+  DEFAULT_BUTTON_GROUP,
+  DEFAULT_FONT_SIZE,
+  HEADER_AUTHORIZATION,
+  HEADER_AUTHORIZATION_BEARER_PREFIX,
+  HEADER_CONTENT_TYPE,
+  LOCAL_NAME,
+  MIME_JSON,
+  TAG_GROUP_PREFIX,
+  TAG_ORDER_PREFIX,
+} from "./constants";
 
 export type Expect<T extends true> = T;
 export type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2 ? true : false;
@@ -271,6 +282,11 @@ export const appShortcuts = new Set([
   "alt+enter",
   "ctrl+alt+shift+r",
   "ctrl+alt+0",
+  "ctrl+alt+1",
+  "ctrl+alt+2",
+  "ctrl+alt+3",
+  "ctrl+alt+`",
+  "ctrl+alt+g",
   "alt+-",
   "alt+shift+_",
   "alt+=",
@@ -1387,4 +1403,43 @@ export function createSetProxy<T>(initialValue: Iterable<T> | null | undefined, 
   });
 
   return setProxy;
+}
+
+/**
+ * Returns standard headers (with auth) for API requests.
+ */
+export function apiReqHeaders(noJson = false): HeadersInit {
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN) || "";
+  return {
+    [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
+    ...(!noJson ? { [HEADER_CONTENT_TYPE]: MIME_JSON } : {}),
+  };
+}
+
+export function triggerDownload(url: string, filename: string) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+export async function triggerAuthedUrlDownload(url: string, filename: string) {
+  const response = await fetch(url, { headers: apiReqHeaders() });
+  if (!response.ok) {
+    throw new Error(`Failed to download ${filename}: ${response.statusText}`);
+  }
+  const blob = await response.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  triggerDownload(blobUrl, filename);
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+}
+
+export function triggerDownloadString(contents: string, filename: string) {
+  const blob = new Blob([contents], { type: "text/plain;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  triggerDownload(url, filename);
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
 }

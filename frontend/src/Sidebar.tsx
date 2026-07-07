@@ -55,9 +55,6 @@ import FolderIcon from "@mui/icons-material/Folder";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
-import SSHImportTab from "./SSHImportTab";
-import SSHExportTab from "./SSHExportTab";
-
 import { version as PACKAGE_JSON_VERSION } from "../package.json";
 import type {
   HostData,
@@ -74,13 +71,12 @@ import type {
   SaveWebdavSettingsRequest,
   SyncDetectionResult,
   WebdavStatus,
+  LoginResponse,
 } from "./api";
 import {
   METHOD_PUT,
   METHOD_POST,
   METHOD_DELETE,
-  HEADER_AUTHORIZATION_BEARER_PREFIX,
-  HEADER_AUTHORIZATION,
   MIME_JSON,
   HEADER_CONTENT_TYPE,
   BROWSER_STORAGE_KEY_TOKEN,
@@ -89,7 +85,6 @@ import {
   ID_SIDEBAR_FILTER,
   DEFAULT_SCROLL_ITEMS,
   VAR_CS_SCROLL_ITEMS,
-  BROWSER_STORAGE_KEY_EXPANDED_GROUPS,
   TAG_GROUP_PREFIX,
   TAG_ORDER_PREFIX,
   TAG_FAV,
@@ -99,6 +94,7 @@ import {
 import {
   type HostForm,
   type ServiceWorkerStatus,
+  apiReqHeaders,
   cutPrefix,
   filterHosts,
   forceReload,
@@ -138,9 +134,15 @@ import {
   moveGroup,
   fetchSessions,
   updateConfig,
+  setAllExpanded,
+  setAutoExpanded,
+  setFavExpanded,
+  setExpandedGroups,
 } from "./store";
 import { useShallow } from "zustand/react/shallow";
 import FreeTextField from "./components/FreeTextField";
+import SSHImportTab from "./SSHImportTab";
+import SSHExportTab from "./SSHExportTab";
 
 const drawerWidth = 260;
 
@@ -225,6 +227,10 @@ export default function Sidebar({
   const [passwordsState, setPasswordsState] = useState<PasswordsResponse>({ locked: true, keys: [] });
   const [revealedPasswords, setRevealedPasswords] = useState<{ [key: string]: string }>({});
   const activeTunnels = useStore((state) => state.activeTunnels);
+  const favExpanded = useStore((state) => state.favExpanded);
+  const allExpanded = useStore((state) => state.allExpanded);
+  const autoExpanded = useStore((state) => state.autoExpanded);
+  const expandedGroups = useStore((state) => state.expandedGroups);
 
   const [swStatus, setSwStatus] = useState<ServiceWorkerStatus>("unknown");
 
@@ -288,13 +294,8 @@ export default function Sidebar({
   const [currentUploadSSHData, setCurrentUploadSSHData] = useState(false);
 
   const fetchWebdavStatus = useCallback(async (onlyStatus = false) => {
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     try {
-      const r = await fetch("/api/settings/webdav/status", {
-        headers: {
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        },
-      });
+      const r = await fetch("/api/settings/webdav/status", { headers: apiReqHeaders() });
 
       const data = (await r.json()) as WebdavStatus;
 
@@ -339,15 +340,11 @@ export default function Sidebar({
 
   const handleToggleWebdavEnabled = async () => {
     const nextEnabled = !webdavEnabled;
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
 
     try {
       const res = await fetch("/api/settings/webdav", {
         method: METHOD_POST,
-        headers: {
-          [HEADER_CONTENT_TYPE]: MIME_JSON,
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        },
+        headers: apiReqHeaders(),
         body: JSON.stringify({
           url: currentWebdavUrl,
           user: currentWebdavUser,
@@ -377,16 +374,12 @@ export default function Sidebar({
 
   const handleSaveWebdav = useCallback(async () => {
     setIsTestingWebdav(true);
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
 
     try {
       if (isCleared) {
         const res = await fetch("/api/settings/webdav", {
           method: METHOD_POST,
-          headers: {
-            [HEADER_CONTENT_TYPE]: MIME_JSON,
-            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-          },
+          headers: apiReqHeaders(),
           body: JSON.stringify({
             url: "",
             user: "",
@@ -428,10 +421,7 @@ export default function Sidebar({
       ) {
         const detectRes = await fetch("/api/settings/webdav/detect", {
           method: METHOD_POST,
-          headers: {
-            [HEADER_CONTENT_TYPE]: MIME_JSON,
-            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-          },
+          headers: apiReqHeaders(),
           body: JSON.stringify({
             url: webdavUrl,
             user: webdavUser,
@@ -464,10 +454,7 @@ export default function Sidebar({
 
           const retryRes = await fetch("/api/settings/webdav/detect", {
             method: METHOD_POST,
-            headers: {
-              [HEADER_CONTENT_TYPE]: MIME_JSON,
-              [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-            },
+            headers: apiReqHeaders(),
             body: JSON.stringify({
               url: webdavUrl,
               user: webdavUser,
@@ -526,10 +513,7 @@ export default function Sidebar({
 
       const saveRes = await fetch("/api/settings/webdav", {
         method: METHOD_POST,
-        headers: {
-          [HEADER_CONTENT_TYPE]: MIME_JSON,
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        },
+        headers: apiReqHeaders(),
         body: JSON.stringify({
           url: webdavUrl,
           user: webdavUser,
@@ -588,15 +572,11 @@ export default function Sidebar({
       setIsTestingWebdav(false);
       return;
     }
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
 
     try {
       const res = await fetch("/api/settings/webdav", {
         method: METHOD_POST,
-        headers: {
-          [HEADER_CONTENT_TYPE]: MIME_JSON,
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        },
+        headers: apiReqHeaders(),
         body: JSON.stringify({
           url: "",
           user: "",
@@ -633,16 +613,10 @@ export default function Sidebar({
   }, [fetchWebdavStatus, masterKey, webdavEncrypted]);
 
   const handleSyncNow = useCallback(async () => {
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     setSyncStatus("syncing");
 
     try {
-      const res = await fetch("/api/settings/webdav/sync", {
-        method: METHOD_POST,
-        headers: {
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        },
-      });
+      const res = await fetch("/api/settings/webdav/sync", { method: METHOD_POST, headers: apiReqHeaders() });
 
       if (res.ok) {
         notify("Sync triggered", "success", TOAST_KEY_SYNC);
@@ -676,19 +650,6 @@ export default function Sidebar({
   const [tagContextMenuOpen, setTagContextMenuOpen] = useState(false);
   const [tagContextMenu, setTagContextMenu] = useState<{ element: Element; tag: string } | null>(null);
 
-  // Expanded state of folders in Tree View
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
-    try {
-      const saved = localStorage.getItem(BROWSER_STORAGE_KEY_EXPANDED_GROUPS);
-      if (saved) {
-        return new Set(JSON.parse(saved));
-      }
-    } catch (e) {
-      console.error(e);
-    }
-    return new Set<string>();
-  });
-
   const toggleGroupExpanded = useCallback((path: string) => {
     setExpandedGroups((prev) => {
       const next = new Set(prev);
@@ -697,61 +658,6 @@ export default function Sidebar({
       } else {
         next.add(path);
       }
-      localStorage.setItem(BROWSER_STORAGE_KEY_EXPANDED_GROUPS, JSON.stringify(Array.from(next)));
-      return next;
-    });
-  }, []);
-
-  const [favExpanded, setFavExpanded] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem("cozyssh_section_expanded_favourites");
-      return saved !== "false";
-    } catch (e) {
-      console.error(e);
-    }
-    return true;
-  });
-
-  const [allExpanded, setAllExpanded] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem("cozyssh_section_expanded_all_servers");
-      return saved !== "false";
-    } catch (e) {
-      console.error(e);
-    }
-    return true;
-  });
-
-  const [autoExpanded, setAutoExpanded] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem("cozyssh_section_expanded_auto_servers");
-      return saved !== "false";
-    } catch (e) {
-      console.error(e);
-    }
-    return true;
-  });
-
-  const toggleFavExpanded = useCallback(() => {
-    setFavExpanded((prev) => {
-      const next = !prev;
-      localStorage.setItem("cozyssh_section_expanded_favourites", String(next));
-      return next;
-    });
-  }, []);
-
-  const toggleAllExpanded = useCallback(() => {
-    setAllExpanded((prev) => {
-      const next = !prev;
-      localStorage.setItem("cozyssh_section_expanded_all_servers", String(next));
-      return next;
-    });
-  }, []);
-
-  const toggleAutoExpanded = useCallback(() => {
-    setAutoExpanded((prev) => {
-      const next = !prev;
-      localStorage.setItem("cozyssh_section_expanded_auto_servers", String(next));
       return next;
     });
   }, []);
@@ -817,15 +723,10 @@ export default function Sidebar({
   }, []);
 
   const fetchPasswords = useCallback(async () => {
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     try {
-      const r = await fetch("/api/passwords", {
-        headers: {
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        },
-      });
-      if (r.ok) {
-        const data = (await r.json()) as PasswordsResponse;
+      const res = await fetch("/api/passwords", { headers: apiReqHeaders() });
+      if (res.ok) {
+        const data = (await res.json()) as PasswordsResponse;
         setPasswordsState(data);
       }
     } catch (e) {
@@ -835,14 +736,8 @@ export default function Sidebar({
 
   const handleLock = useCallback(async () => {
     setDialogAppPassword(null);
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     try {
-      const res = await fetch("/api/passwords/lock", {
-        method: METHOD_POST,
-        headers: {
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        },
-      });
+      const res = await fetch("/api/passwords/lock", { method: METHOD_POST, headers: apiReqHeaders() });
       if (res.ok) {
         setRevealedPasswords({});
         fetchPasswords();
@@ -878,14 +773,10 @@ export default function Sidebar({
         if (entered === null) {
           return;
         }
-        const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
         try {
           const verifyRes = await fetch("/api/passwords/unlock", {
             method: METHOD_POST,
-            headers: {
-              [HEADER_CONTENT_TYPE]: MIME_JSON,
-              [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-            },
+            headers: apiReqHeaders(),
             body: JSON.stringify({ app_password: entered } satisfies PasswordsUnlockRequest),
           });
           if (!verifyRes.ok) {
@@ -902,14 +793,10 @@ export default function Sidebar({
         }
       }
 
-      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
       try {
         const res = await fetch("/api/passwords/reveal", {
           method: METHOD_POST,
-          headers: {
-            [HEADER_CONTENT_TYPE]: MIME_JSON,
-            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-          },
+          headers: apiReqHeaders(),
           body: JSON.stringify({ key } satisfies PasswordsRevealRequest),
         });
         if (res.ok) {
@@ -936,14 +823,10 @@ export default function Sidebar({
           if (entered === null) {
             return;
           }
-          const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
           try {
             const verifyRes = await fetch("/api/passwords/unlock", {
               method: METHOD_POST,
-              headers: {
-                [HEADER_CONTENT_TYPE]: MIME_JSON,
-                [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-              },
+              headers: apiReqHeaders(),
               body: JSON.stringify({ app_password: entered } satisfies PasswordsUnlockRequest),
             });
             if (!verifyRes.ok) {
@@ -960,14 +843,10 @@ export default function Sidebar({
           }
         }
 
-        const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
         try {
           const res = await fetch("/api/passwords/reveal", {
             method: METHOD_POST,
-            headers: {
-              [HEADER_CONTENT_TYPE]: MIME_JSON,
-              [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-            },
+            headers: apiReqHeaders(),
             body: JSON.stringify({ key } satisfies PasswordsRevealRequest),
           });
           if (res.ok) {
@@ -1003,14 +882,10 @@ export default function Sidebar({
         if (entered === null) {
           return;
         }
-        const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
         try {
           const verifyRes = await fetch("/api/passwords/unlock", {
             method: METHOD_POST,
-            headers: {
-              [HEADER_CONTENT_TYPE]: MIME_JSON,
-              [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-            },
+            headers: apiReqHeaders(),
             body: JSON.stringify({ app_password: entered } satisfies PasswordsUnlockRequest),
           });
           if (!verifyRes.ok) {
@@ -1031,14 +906,10 @@ export default function Sidebar({
         return;
       }
 
-      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
       try {
         const res = await fetch("/api/passwords/change", {
           method: METHOD_POST,
-          headers: {
-            [HEADER_CONTENT_TYPE]: MIME_JSON,
-            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-          },
+          headers: apiReqHeaders(),
           body: JSON.stringify({ key, password: newPwd } satisfies PasswordsChangeRequest),
         });
         if (res.ok) {
@@ -1065,14 +936,10 @@ export default function Sidebar({
       if (!(await dialogs.confirm(`Are you sure you want to delete the password for ${key}?`))) {
         return;
       }
-      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
       try {
         const res = await fetch("/api/passwords/delete", {
           method: METHOD_POST,
-          headers: {
-            [HEADER_CONTENT_TYPE]: MIME_JSON,
-            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-          },
+          headers: apiReqHeaders(),
           body: JSON.stringify({ key } satisfies PasswordsDeleteRequest),
         });
         if (res.ok) {
@@ -1106,13 +973,9 @@ export default function Sidebar({
       dialogs.alert("Passwords don't match");
       return;
     }
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     const res = await fetch("/api/settings/password", {
       method: METHOD_POST,
-      headers: {
-        [HEADER_CONTENT_TYPE]: MIME_JSON,
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      },
+      headers: apiReqHeaders(),
       body: JSON.stringify({ new_password: newPwd, force: false } satisfies PasswordUpdateRequest),
     });
 
@@ -1138,16 +1001,12 @@ export default function Sidebar({
           });
 
           if (loginRes.ok) {
-            const loginData = (await loginRes.json()) as { token: string };
-            const newToken = loginData.token;
-            localStorage.setItem(BROWSER_STORAGE_KEY_TOKEN, newToken);
+            const loginData = (await loginRes.json()) as LoginResponse;
+            localStorage.setItem(BROWSER_STORAGE_KEY_TOKEN, loginData.token);
 
             const retryRes = await fetch("/api/settings/password", {
               method: METHOD_POST,
-              headers: {
-                [HEADER_CONTENT_TYPE]: MIME_JSON,
-                [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + newToken,
-              },
+              headers: apiReqHeaders(),
               body: JSON.stringify({ new_password: newPwd, force: false } satisfies PasswordUpdateRequest),
             });
 
@@ -1171,10 +1030,7 @@ export default function Sidebar({
           if (forceConfirm) {
             const forceRes = await fetch("/api/settings/password", {
               method: METHOD_POST,
-              headers: {
-                [HEADER_CONTENT_TYPE]: MIME_JSON,
-                [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-              },
+              headers: apiReqHeaders(),
               body: JSON.stringify({ new_password: newPwd, force: true } satisfies PasswordUpdateRequest),
             });
 
@@ -1364,13 +1220,7 @@ export default function Sidebar({
     const target = contextMenu.target;
     setContextMenuOpen(false);
     if (await dialogs.confirm(`Are you extremely certain you want to permanently delete "${target.name}"?`)) {
-      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-      await fetch(`/api/hosts/${target.name}`, {
-        method: METHOD_DELETE,
-        headers: {
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        },
-      });
+      await fetch(`/api/hosts/${target.name}`, { method: METHOD_DELETE, headers: apiReqHeaders() });
       fetchHosts();
     }
   }, [contextMenu]);
@@ -1386,13 +1236,10 @@ export default function Sidebar({
         `Are you extremely certain you want to permanently delete "${target.hostname}" from known_hosts?`,
       )
     ) {
-      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
       const port = target.port || "22";
       const res = await fetch(`/api/known_hosts/${target.hostname}?port=${port}`, {
         method: METHOD_DELETE,
-        headers: {
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        },
+        headers: apiReqHeaders(),
       });
       if (res.ok) {
         notify("Successfully removed entry from known_hosts", "success");
@@ -1410,7 +1257,6 @@ export default function Sidebar({
     }
     const target = contextMenu.target;
     setContextMenuOpen(false);
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
 
     let newTags = target.tags ? [...target.tags] : [];
     if (target.isFavourite) {
@@ -1436,10 +1282,7 @@ export default function Sidebar({
 
     await fetch("/api/hosts", {
       method: METHOD_PUT,
-      headers: {
-        [HEADER_CONTENT_TYPE]: MIME_JSON,
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      },
+      headers: apiReqHeaders(),
       body: JSON.stringify([payload]),
     });
     fetchHosts();
@@ -1452,15 +1295,8 @@ export default function Sidebar({
     const target = contextMenu.target;
     setContextMenuOpen(false);
 
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-    const headers = {
-      [HEADER_CONTENT_TYPE]: MIME_JSON,
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-    };
-
     let passwordInput: string | undefined = undefined;
     let expectedFingerprint: string | undefined = undefined;
-
     while (true) {
       try {
         const payload: CopyIDRequest = {
@@ -1471,7 +1307,7 @@ export default function Sidebar({
 
         const res = await fetch("/api/hosts/copy-id", {
           method: METHOD_POST,
-          headers,
+          headers: apiReqHeaders(),
           body: JSON.stringify(payload),
         });
 
@@ -1494,22 +1330,15 @@ export default function Sidebar({
           if (!appPwd) {
             break;
           }
-          const loginRes = await fetch("/api/login", {
+          const res = await fetch("/api/login", {
             method: METHOD_POST,
             headers: {
               [HEADER_CONTENT_TYPE]: MIME_JSON,
             },
             body: JSON.stringify({ password: appPwd }),
           });
-          if (loginRes.ok) {
-            const loginData = (await loginRes.json()) as { token: string };
-            const newToken = loginData.token;
-            localStorage.setItem(BROWSER_STORAGE_KEY_TOKEN, newToken);
-            headers[HEADER_AUTHORIZATION] = HEADER_AUTHORIZATION_BEARER_PREFIX + newToken;
-          } else {
-            dialogs.alert(
-              `ssh-copy-id "${payload.name}": Invalid CozySSH app password. Failed to unlock password store.`,
-            );
+          if (!res.ok) {
+            dialogs.alert(`ssh-copy-id "${payload.name}": Invalid app password, can't unlock password store.`);
             break;
           }
         } else if (data.status === "need_password") {
@@ -1615,13 +1444,9 @@ export default function Sidebar({
       return;
     }
     const nextGroups = [...groups, newPath];
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     const res = await fetch("/api/groups", {
       method: METHOD_POST,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        [HEADER_CONTENT_TYPE]: MIME_JSON,
-      },
+      headers: apiReqHeaders(),
       body: JSON.stringify(nextGroups),
     });
     if (res.ok) {
@@ -1629,7 +1454,6 @@ export default function Sidebar({
       setExpandedGroups((prev) => {
         const next = new Set(prev);
         next.add(parentPath);
-        localStorage.setItem(BROWSER_STORAGE_KEY_EXPANDED_GROUPS, JSON.stringify(Array.from(next)));
         return next;
       });
     } else {
@@ -1658,13 +1482,9 @@ export default function Sidebar({
       return;
     }
     const nextGroups = [...groups, trimmed];
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     const res = await fetch("/api/groups", {
       method: METHOD_POST,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        [HEADER_CONTENT_TYPE]: MIME_JSON,
-      },
+      headers: apiReqHeaders(),
       body: JSON.stringify(nextGroups),
     });
     if (res.ok) {
@@ -1724,14 +1544,9 @@ export default function Sidebar({
         return g;
       });
 
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-
     const groupsRes = await fetch("/api/groups", {
       method: METHOD_POST,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        [HEADER_CONTENT_TYPE]: MIME_JSON,
-      },
+      headers: apiReqHeaders(),
       body: JSON.stringify(nextGroups),
     });
 
@@ -1741,10 +1556,7 @@ export default function Sidebar({
 
     await fetch("/api/hosts", {
       method: METHOD_PUT,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        [HEADER_CONTENT_TYPE]: MIME_JSON,
-      },
+      headers: apiReqHeaders(),
       body: JSON.stringify(updatedHosts),
     });
 
@@ -1826,15 +1638,10 @@ export default function Sidebar({
       }
     }
 
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-
     // Save next groups
     const groupsRes = await fetch("/api/groups", {
       method: METHOD_POST,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        [HEADER_CONTENT_TYPE]: MIME_JSON,
-      },
+      headers: apiReqHeaders(),
       body: JSON.stringify(nextGroups),
     });
 
@@ -1853,7 +1660,6 @@ export default function Sidebar({
             next.add(path);
           }
         }
-        localStorage.setItem(BROWSER_STORAGE_KEY_EXPANDED_GROUPS, JSON.stringify(Array.from(next)));
         return next;
       });
     } else {
@@ -1863,10 +1669,7 @@ export default function Sidebar({
 
     await fetch("/api/hosts", {
       method: METHOD_PUT,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        [HEADER_CONTENT_TYPE]: MIME_JSON,
-      },
+      headers: apiReqHeaders(),
       body: JSON.stringify(updatedHosts),
     });
 
@@ -1879,7 +1682,6 @@ export default function Sidebar({
       return;
     }
     const finalName = hostFormData.name.trim() || hostFormData.hostname.trim();
-    let token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
 
     const parsedTags = hostFormData.tags
       .replace(/,/g, " ")
@@ -1913,10 +1715,7 @@ export default function Sidebar({
 
     const res = await fetch("/api/hosts" + (editHostName ? "/" + editHostName : ""), {
       method: METHOD_POST,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-        [HEADER_CONTENT_TYPE]: MIME_JSON,
-      },
+      headers: apiReqHeaders(),
       body: JSON.stringify(payload),
     });
 
@@ -1940,15 +1739,11 @@ export default function Sidebar({
 
         if (loginRes.ok) {
           const loginData = (await loginRes.json()) as { token: string };
-          token = loginData.token;
-          localStorage.setItem(BROWSER_STORAGE_KEY_TOKEN, token);
+          localStorage.setItem(BROWSER_STORAGE_KEY_TOKEN, loginData.token);
 
           const retryRes = await fetch("/api/hosts", {
             method: METHOD_PUT,
-            headers: {
-              [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-              [HEADER_CONTENT_TYPE]: MIME_JSON,
-            },
+            headers: apiReqHeaders(),
             body: JSON.stringify([payload]),
           });
 
@@ -2554,7 +2349,7 @@ export default function Sidebar({
             </Box>
             {showTagsToggle && (
               <Box sx={{ textAlign: "center", mt: -0.5 }}>
-                <IconButton size="small" onClick={() => setTagsExpanded(+!tagsExpanded)} sx={{ p: 0 }}>
+                <IconButton size="small" onClick={() => setTagsExpanded()} sx={{ p: 0 }}>
                   {tagsExpanded ? (
                     <Typography variant="caption" color="text.secondary">
                       ▲
@@ -2613,7 +2408,7 @@ export default function Sidebar({
           {filteredHosts.favourite.length > 0 && (
             <>
               <Box
-                onClick={toggleFavExpanded}
+                onClick={() => setFavExpanded()}
                 sx={{
                   px: 2,
                   py: 0.5,
@@ -2636,7 +2431,7 @@ export default function Sidebar({
                   FAVOURITES
                 </Typography>
               </Box>
-              <Collapse in={favExpanded} timeout={0} unmountOnExit>
+              <Collapse in={!!favExpanded} timeout={0} unmountOnExit>
                 <List disablePadding>
                   {filteredHosts.favourite.map((host) => {
                     const itemIdx = flatList.findIndex((item) => item.id === `sidebar-fav-${host.name}`);
@@ -2659,7 +2454,7 @@ export default function Sidebar({
           )}
 
           <Box
-            onClick={toggleAllExpanded}
+            onClick={() => setAllExpanded()}
             sx={{
               px: 2,
               py: 0.5,
@@ -2701,7 +2496,7 @@ export default function Sidebar({
             </IconButton>
           </Box>
 
-          <Collapse in={allExpanded} timeout={0} unmountOnExit>
+          <Collapse in={!!allExpanded} timeout={0} unmountOnExit>
             <Box
               onDragOver={handleRootDragOver}
               onDrop={handleRootDrop}
@@ -2722,7 +2517,7 @@ export default function Sidebar({
             <>
               <Divider sx={{ my: 1 }} />
               <Box
-                onClick={toggleAutoExpanded}
+                onClick={() => setAutoExpanded()}
                 sx={{
                   px: 2,
                   py: 0.5,
@@ -2745,7 +2540,7 @@ export default function Sidebar({
                   AUTO
                 </Typography>
               </Box>
-              <Collapse in={autoExpanded} timeout={0} unmountOnExit>
+              <Collapse in={!!autoExpanded} timeout={0} unmountOnExit>
                 <List disablePadding>
                   {filteredHosts.auto.map((host) => {
                     const itemIdx = flatList.findIndex((item) => item.id === `sidebar-auto-${host.name}`);
@@ -3555,6 +3350,12 @@ export default function Sidebar({
                   <b>Shift + Enter</b> to open context menu
                   <br />
                   <b>Alt + Shift + I</b> : Focus sidebar search filter and clear current value
+                  <br />
+                  <b>Ctrl + Alt + Backquote</b> : Toggle sidebar tags section expandness
+                  <br />
+                  <b>Ctrl + Alt + 1/2/3</b> : Toggle sidebar fav/all/auto section expandness
+                  <br />
+                  <b>Ctrl + Alt + G</b> : Toggle sidebar all groups expandness
                   <br />
                   <b>Alt + G</b> : Focus active terminal session
                   <br />

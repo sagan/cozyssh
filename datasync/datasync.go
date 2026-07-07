@@ -26,6 +26,7 @@ import (
 	"cozyssh/config"
 	"cozyssh/constants"
 	"cozyssh/models"
+	"cozyssh/passstore"
 	"cozyssh/scratchpad"
 
 	"filippo.io/xaes256gcm"
@@ -531,7 +532,7 @@ func performSync() error {
 					}
 				}
 				filename := fmt.Sprintf("button_%s_%d%s", id, localTS, ext)
-				resp, err := makeRequest("PUT", davBaseUrl+filename, bytes.NewReader(data), gCfg)
+				resp, err := makeRequest(http.MethodPut, davBaseUrl+filename, bytes.NewReader(data), gCfg)
 				if err != nil {
 					return err
 				}
@@ -556,7 +557,7 @@ func performSync() error {
 					}
 				}
 				filename := fmt.Sprintf("button_%s_%d_d%s", id, localTS, ext)
-				resp, err := makeRequest("PUT", davBaseUrl+filename, bytes.NewReader(data), gCfg)
+				resp, err := makeRequest(http.MethodPut, davBaseUrl+filename, bytes.NewReader(data), gCfg)
 				if err != nil {
 					return err
 				}
@@ -684,7 +685,7 @@ func performSync() error {
 					}
 				}
 				filename := fmt.Sprintf("scratchpad_%s_%d%s", id, localTS, ext)
-				resp, err := makeRequest("PUT", davBaseUrl+filename, bytes.NewReader(data), gCfg)
+				resp, err := makeRequest(http.MethodPut, davBaseUrl+filename, bytes.NewReader(data), gCfg)
 				if err != nil {
 					return err
 				}
@@ -700,7 +701,7 @@ func performSync() error {
 					}
 				}
 				filename := fmt.Sprintf("scratchpad_%s_%d_d%s", id, localTS, ext)
-				resp, err := makeRequest("PUT", davBaseUrl+filename, bytes.NewReader(data), gCfg)
+				resp, err := makeRequest(http.MethodPut, davBaseUrl+filename, bytes.NewReader(data), gCfg)
 				if err != nil {
 					return err
 				}
@@ -927,7 +928,7 @@ func performSync() error {
 			}
 
 			filename := fmt.Sprintf("config_%d%s", maxTS, ext)
-			resp, err := makeRequest("PUT", davBaseUrl+filename, bytes.NewReader(data), gCfg)
+			resp, err := makeRequest(http.MethodPut, davBaseUrl+filename, bytes.NewReader(data), gCfg)
 			if err != nil {
 				return err
 			}
@@ -958,7 +959,7 @@ func performSync() error {
 	}
 
 	for _, f := range remoteFilesToDelete {
-		resp, err := makeRequest("DELETE", davBaseUrl+f, nil, gCfg)
+		resp, err := makeRequest(http.MethodDelete, davBaseUrl+f, nil, gCfg)
 		if err == nil {
 			resp.Body.Close()
 		}
@@ -1061,7 +1062,7 @@ func syncSSHData(remoteFiles []remoteFileInfo, davBaseUrl string, dek []byte) er
 					}
 				}
 				filename := fmt.Sprintf("%s_%s_%d%s", itemType, deviceName, localMtime, ext)
-				resp, err := makeRequest("PUT", davBaseUrl+filename, bytes.NewReader(uploadData), gCfg)
+				resp, err := makeRequest(http.MethodPut, davBaseUrl+filename, bytes.NewReader(uploadData), gCfg)
 				if err != nil {
 					log.Printf("syncSSHData: upload %s: %v", filename, err)
 					continue
@@ -1071,7 +1072,7 @@ func syncSSHData(remoteFiles []remoteFileInfo, davBaseUrl string, dek []byte) er
 				// Delete old own-device files for this type
 				for _, rf := range ownFiles {
 					if rf.filename != filename {
-						r, err := makeRequest("DELETE", davBaseUrl+rf.filename, nil, gCfg)
+						r, err := makeRequest(http.MethodDelete, davBaseUrl+rf.filename, nil, gCfg)
 						if err == nil {
 							r.Body.Close()
 						}
@@ -1406,9 +1407,51 @@ func ImportSSHConfigHosts(deviceName string, hostNames []string) error {
 		return nil
 	}
 
+	var cleanBlocks []string
+	for _, block := range blocks {
+		lines := strings.Split(block, "\n")
+		var hostname, user, port, password string
+		var cleanLines []string
+
+		for _, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			lower := strings.ToLower(trimmed)
+
+			// Check for password comment
+			if strings.HasPrefix(trimmed, "# CozySshPassword ") {
+				password = strings.TrimSpace(trimmed[len("# CozySshPassword "):])
+				continue // skip writing this line to cleanLines
+			}
+
+			if strings.HasPrefix(lower, "hostname ") {
+				hostname = strings.TrimSpace(trimmed[len("hostname "):])
+			} else if strings.HasPrefix(lower, "user ") {
+				user = strings.TrimSpace(trimmed[len("user "):])
+			} else if strings.HasPrefix(lower, "port ") {
+				port = strings.TrimSpace(trimmed[len("port "):])
+			}
+			cleanLines = append(cleanLines, line)
+		}
+
+		if password != "" && hostname != "" {
+			if user == "" {
+				user = common.User
+			}
+			if port == "" {
+				port = "22"
+			}
+			canonical := fmt.Sprintf("%s@%s:%s", user, hostname, port)
+			if err := passstore.Set(canonical, password); err != nil {
+				log.Printf("Failed to save password for %s: %v", canonical, err)
+			}
+		}
+
+		cleanBlocks = append(cleanBlocks, strings.Join(cleanLines, "\n"))
+	}
+
 	localCfgPath := filepath.Join(gCfg.AbsSSHDir, "config")
 	existing, _ := os.ReadFile(localCfgPath)
-	combined := strings.TrimRight(string(existing), "\n") + "\n\n" + strings.Join(blocks, "\n\n") + "\n"
+	combined := strings.TrimRight(string(existing), "\n") + "\n\n" + strings.Join(cleanBlocks, "\n\n") + "\n"
 
 	return common.AtomicWriteFileContents(localCfgPath, []byte(combined))
 }
@@ -2040,7 +2083,7 @@ func WriteEncryptionFlag(cfg *config.Config, masterKeyStr string) error {
 	}
 
 	davUrl := strings.TrimRight(cfg.WebdavUrl, "/") + "/" + ROOT_DIR + "/" + FLAG_FILE
-	resp, err := makeRequest("PUT", davUrl, bytes.NewReader(encrypted), cfg)
+	resp, err := makeRequest(http.MethodPut, davUrl, bytes.NewReader(encrypted), cfg)
 	if err != nil {
 		return err
 	}

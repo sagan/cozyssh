@@ -26,9 +26,12 @@ export const BROWSER_STORAGE_KEY_RECENT_BUTTONS = "cozy_recent_buttons";
 export const BROWSER_STORAGE_KEY_TOKEN = "cozy_token";
 export const BROWSER_STORAGE_KEY_VARS = "cozy_vars";
 export const BROWSER_STORAGE_KEY_TAGS_EXPANDED = "cozy_tags_expanded";
+export const BROWSER_STORAGE_KEY_FAV_EXPANDED = "cozy_fav_expanded";
+export const BROWSER_STORAGE_KEY_ALL_EXPANDED = "cozy_all_expanded";
+export const BROWSER_STORAGE_KEY_AUTO_EXPANDED = "cozy_auto_expanded";
 export const BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE = "cozy_scratchpad_sync_state";
 export const BROWSER_STORAGE_KEY_SCRATCHPAD_CACHE = "cozy_scratchpad_cache";
-export const BROWSER_STORAGE_KEY_EXPANDED_GROUPS = "cozyssh_expanded_groups";
+export const BROWSER_STORAGE_KEY_EXPANDED_GROUPS = "cozy_expanded_groups";
 
 export const LOCAL_VAR_PREFIX = "local_";
 export const VAR_CS_SCROLL_LINES = "cs_scroll_lines";
@@ -115,6 +118,11 @@ export const MISC_FUNCTIONS: BuiltinButton[] = [
   { value: "BUTTONS_SCROLL_RIGHT", label: "Buttons Scroll Right" },
   { value: "NEXT_BUTTON_GROUP", label: "Next Button Group", shortcut: "alt+v" },
   { value: "PREV_BUTTON_GROUP", label: "Prev Button Group", shortcut: "alt+shift+v" },
+  { value: "TOGGLE_SIDEBAR_TAGS", label: "Toggle Sidebar Tags", shortcut: "ctrl+alt+backquote" },
+  { value: "TOGGLE_SIDEBAR_FAV", label: "Toggle Sidebar Fav", shortcut: "ctrl+alt+1" },
+  { value: "TOGGLE_SIDEBAR_ALL", label: "Toggle Sidebar All", shortcut: "ctrl+alt+2" },
+  { value: "TOGGLE_SIDEBAR_AUTO", label: "Toggle Sidebar Auto", shortcut: "ctrl+alt+3" },
+  { value: "TOGGLE_SIDEBAR_GROUPS", label: "Toggle Sidebar Groups", shortcut: "ctrl+alt+g" },
   { value: "OPEN_SCRATCHPAD", label: "Open Scratchpad", shortcut: "alt+s" },
   { value: "REFRESH", label: "Refresh Data" },
 ] as const;

@@ -26,6 +26,7 @@ import {
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutlined";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutlined";
@@ -34,16 +35,11 @@ import CloudDownloadIcon from "@mui/icons-material/CloudDownload";
 import SearchIcon from "@mui/icons-material/Search";
 import FileUploadIcon from "@mui/icons-material/FileUpload";
 
-import { HEADER_AUTHORIZATION, HEADER_AUTHORIZATION_BEARER_PREFIX, BROWSER_STORAGE_KEY_TOKEN } from "./constants";
+import { METHOD_DELETE, METHOD_POST } from "./constants";
 import { notify, refreshData } from "./store";
 import type { DeviceSSHData, RemoteHostEntry, RemoteKnownHostEntry } from "./api";
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function authHeaders() {
-  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN) ?? "";
-  return { [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token };
-}
+import { apiReqHeaders, triggerDownloadString } from "./common";
+import { dialogs } from "./Dialogs";
 
 function keyFingerprint(keyData: string): string {
   try {
@@ -67,7 +63,7 @@ function DeviceListView({ onSelectDevice }: { onSelectDevice: (device: DeviceSSH
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch("/api/settings/webdav/devices", { headers: authHeaders() });
+      const r = await fetch("/api/settings/webdav/devices", { headers: apiReqHeaders() });
       if (r.ok) {
         const data = await r.json();
         setDevices(data.devices ?? []);
@@ -80,72 +76,96 @@ function DeviceListView({ onSelectDevice }: { onSelectDevice: (device: DeviceSSH
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) {
+        return;
+      }
 
-    const filename = file.name;
-    if (
-      filename !== "config" &&
-      filename !== "known_hosts" &&
-      filename !== "config.txt" &&
-      filename !== "known_hosts.txt"
-    ) {
-      notify("Acceptable files are OpenSSH format 'config' & 'known_hosts' file.", "error");
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      return;
-    }
+      const filename = file.name;
+      let fileType: "" | "csv" | "config" | "known_hosts" = "";
+      if (filename.toLowerCase().endsWith(".csv")) {
+        fileType = "csv";
+      } else if (/^config(\b|_)/.test(filename)) {
+        fileType = "config";
+      } else if (/^known_hosts(\b|_)/.test(filename)) {
+        fileType = "known_hosts";
+      }
+      if (!fileType) {
+        notify(`Acceptable files are OpenSSH format "config", "known_hosts" or a "CSV" file.`, "error");
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+        return;
+      }
+      if (file.size >= 10 << 20) {
+        notify(`File size ${file.size} bytes is too large. Maximum size is 10MiB.`, "error");
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+        return;
+      }
 
-    const formData = new FormData();
-    formData.append("file", file);
+      const formData = new FormData();
+      formData.append("file", file);
 
-    setLoading(true);
-    try {
-      const r = await fetch("/api/settings/webdav/devices/upload", {
-        method: "POST",
-        headers: authHeaders(),
-        body: formData,
-      });
-      if (r.ok) {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/settings/webdav/devices/upload?type=${fileType}`, {
+          method: METHOD_POST,
+          headers: apiReqHeaders(true),
+          body: formData,
+        });
+        if (!res.ok) {
+          throw new Error(`status=${res.status}, msg=${await res.text()}`);
+        }
+        load();
         notify("File uploaded successfully.", "success");
-        load();
-      } else {
-        const txt = await r.text();
-        notify("Upload failed: " + txt, "error");
+      } catch (err: unknown) {
+        notify(`Upload failed: ${err}`, "error");
+      } finally {
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        setLoading(false);
       }
-    } catch (err: unknown) {
-      notify(`Upload failed: ${err}`, "error");
-    } finally {
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      setLoading(false);
-    }
-  };
+    },
+    [load],
+  );
 
-  const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete the uploaded files?")) {
-      return;
-    }
-    setLoading(true);
-    try {
-      const r = await fetch("/api/settings/webdav/devices/upload", {
-        method: "DELETE",
-        headers: authHeaders(),
-      });
-      if (r.ok) {
-        notify("Uploaded files deleted successfully.", "success");
-        load();
-      } else {
-        const txt = await r.text();
-        notify("Delete failed: " + txt, "error");
+  const handleDelete = useCallback(
+    async (id: string) => {
+      if (!(await dialogs.confirm(`Are you sure you want to delete ${id} files?`))) {
+        return;
       }
-    } catch (err: unknown) {
-      notify(`Delete failed: ${err}`, "error");
-    } finally {
-      setLoading(false);
-    }
-  };
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/settings/webdav/devices/upload?id=${id}`, {
+          method: METHOD_DELETE,
+          headers: apiReqHeaders(),
+        });
+        if (!res.ok) {
+          throw new Error(`status=${res.status}, msg=${await res.text()}`);
+        }
+        load();
+      } catch (err: unknown) {
+        notify(`Delete failed: ${err}`, "error");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [load],
+  );
+
+  const downloadCSVTemplate = useCallback(() => {
+    const csvContent =
+      "name,host,port,user,password,comment,tags,ProxyJump\n" +
+      "web-server-1,192.168.1.10,22,ubuntu,ubuntu_pass,Production web server,prod;web,\n" +
+      "db-server-1,10.0.0.15,22,postgres,,Database server with SSH key,db;internal,192.168.1.10\n";
+    triggerDownloadString(csvContent, "cozyssh_import_template.csv");
+  }, []);
 
   if (loading && devices.length === 0) {
     return (
@@ -161,16 +181,25 @@ function DeviceListView({ onSelectDevice }: { onSelectDevice: (device: DeviceSSH
       <Button
         size="small"
         variant="outlined"
-        title="Upload files to import. Supported formats: OpenSSH config & known_hosts"
+        title="Download sample CSV template for importing hosts"
+        startIcon={<CloudDownloadIcon />}
+        onClick={downloadCSVTemplate}
+      >
+        CSV Template
+      </Button>
+      <Button
+        size="small"
+        variant="outlined"
+        title="Upload files to import. Supported formats: OpenSSH config, known_hosts, and CSV (.csv)"
         startIcon={<FileUploadIcon />}
         onClick={() => fileInputRef.current?.click()}
         disabled={loading}
       >
         Upload
       </Button>
-      <Button size="small" onClick={load} disabled={loading}>
-        Refresh
-      </Button>
+      <IconButton size="small" onClick={load} title="Refresh">
+        <RefreshIcon fontSize="small" />
+      </IconButton>
     </Stack>
   );
 
@@ -178,7 +207,7 @@ function DeviceListView({ onSelectDevice }: { onSelectDevice: (device: DeviceSSH
     <Box>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
         <Typography variant="subtitle2" sx={{ fontWeight: "bold" }}>
-          Available Devices
+          Devices
         </Typography>
         {actionButtons}
       </Box>
@@ -190,8 +219,8 @@ function DeviceListView({ onSelectDevice }: { onSelectDevice: (device: DeviceSSH
             No SSH data from other devices yet.
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Other devices with WebDAV sync enabled will upload their SSH data automatically. Once fetched, they'll
-            appear here. Or upload an OpenSSH 'config' or 'known_hosts' file directly.
+            Other devices with WebDAV sync enabled can choose to upload their SSH data. Once fetched, they'll appear
+            here.
           </Typography>
         </Box>
       ) : (
@@ -247,7 +276,7 @@ function DeviceListView({ onSelectDevice }: { onSelectDevice: (device: DeviceSSH
                           size="small"
                           variant="outlined"
                           color="error"
-                          onClick={() => handleDelete()}
+                          onClick={() => handleDelete(d.deviceName)}
                           disabled={loading}
                         >
                           Delete
@@ -294,7 +323,7 @@ function SSHConfigImportView({
       setLoading(true);
       try {
         const r = await fetch(`/api/settings/webdav/devices/sshconfig/${encodeURIComponent(device.deviceName)}`, {
-          headers: authHeaders(),
+          headers: apiReqHeaders(),
         });
         if (r.ok) {
           const data = await r.json();
@@ -370,8 +399,8 @@ function SSHConfigImportView({
     setImporting(true);
     try {
       const r = await fetch("/api/settings/webdav/import/sshconfig", {
-        method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        method: METHOD_POST,
+        headers: apiReqHeaders(),
         body: JSON.stringify({ deviceName: device.deviceName, hostNames: Array.from(selected) }),
       });
       if (r.ok) {
@@ -638,7 +667,7 @@ function KnownHostsImportView({
       setLoading(true);
       try {
         const r = await fetch(`/api/settings/webdav/devices/knownhosts/${encodeURIComponent(device.deviceName)}`, {
-          headers: authHeaders(),
+          headers: apiReqHeaders(),
         });
         if (r.ok) {
           const data = await r.json();
@@ -710,18 +739,19 @@ function KnownHostsImportView({
     try {
       const lines = Array.from(selected);
       const hasConflicts = entries.some((e) => e.isConflict && selected.has(e.line));
-      const r = await fetch("/api/settings/webdav/import/knownhosts", {
-        method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
+      const res = await fetch("/api/settings/webdav/import/knownhosts", {
+        method: METHOD_POST,
+        headers: apiReqHeaders(),
         body: JSON.stringify({ deviceName: device.deviceName, lines, force: hasConflicts }),
       });
-      if (r.ok) {
-        notify(`Imported ${lines.length} known_hosts entry/entries`, "success");
-        onDone();
-        refreshData({ sync: 2 });
-      } else {
-        notify("Import failed: " + (await r.text()), "error");
+      if (!res.ok) {
+        throw new Error(`status=${res.status}, msg=${await res.text()}`);
       }
+      notify(`Imported ${lines.length} known_hosts entry/entries`, "success");
+      onDone();
+      refreshData({ sync: 2 });
+    } catch (e: unknown) {
+      notify(`Import failed: ${e}`, "error");
     } finally {
       setImporting(false);
     }
@@ -1017,8 +1047,8 @@ export default function SSHImportTab() {
   return (
     <Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2, mt: -1 }}>
-        <b>SSH Data Import</b>: Import SSH data from other devices of same WebDAV server, or upload OpenSSH config &
-        known_hosts files to import
+        <b>SSH Data Import</b>: Import SSH data from other devices of same WebDAV server, or upload a file directly
+        (Supported file formats: OpenSSH "config", "known_hosts"; csv file).
       </Typography>
 
       {selectedDevice ? (

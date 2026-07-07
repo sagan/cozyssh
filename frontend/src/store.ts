@@ -36,6 +36,7 @@ import {
   type ShellIntegration,
   type Toast,
   type ViewMode,
+  apiReqHeaders,
   createSetProxy,
   genPaneId,
   genTabId,
@@ -54,6 +55,10 @@ import type { ScratchpadHandle } from "./Scratchpad";
 import {
   APP_NAME,
   BROWSER_STORAGE_KEY_ACTIVE_GROUP,
+  BROWSER_STORAGE_KEY_ALL_EXPANDED,
+  BROWSER_STORAGE_KEY_AUTO_EXPANDED,
+  BROWSER_STORAGE_KEY_EXPANDED_GROUPS,
+  BROWSER_STORAGE_KEY_FAV_EXPANDED,
   BROWSER_STORAGE_KEY_LOCAL_VARS,
   BROWSER_STORAGE_KEY_RECENT_BUTTONS,
   BROWSER_STORAGE_KEY_RECENTS,
@@ -66,15 +71,11 @@ import {
   DEFAULT_BUTTON_GROUP,
   DEFAULT_FONT_SIZE,
   DEFAULT_TERMINAL_FONT_SIZE,
-  HEADER_AUTHORIZATION,
-  HEADER_AUTHORIZATION_BEARER_PREFIX,
-  HEADER_CONTENT_TYPE,
   LOCAL_NAME,
   LOCAL_VAR_PREFIX,
   METHOD_DELETE,
   METHOD_POST,
   METHOD_PUT,
-  MIME_JSON,
   TAG_GROUP_PREFIX,
   TAG_ORDER_PREFIX,
   TOAST_KEY_API_SETTINGS,
@@ -151,6 +152,10 @@ interface Store {
   buttons: ButtonData[];
   sysinfo: Sysinfo;
   tagsExpanded: number;
+  favExpanded: number;
+  allExpanded: number;
+  autoExpanded: number;
+  expandedGroups: Set<string>;
   vars: Record<string, string>;
   /** Local (browser-only) vars. All names have a "local_" (case-insensitive) prefix. */
   localVars: Record<string, string>;
@@ -172,6 +177,14 @@ export interface CsScriptModule {
  */
 export const moduleCache: Record<string, CsScriptModule> = {};
 
+/**
+ * Load value from a localStorage item. The parsing behavior depends on T (infered from defaultValue at runtime).
+ * If T is a string, it will be returned as-is (don't parse it as a "" quoted JSON string).
+ * If T is a Set, it will be parsed as an array, and then converted to a Set.
+ * Otherwise, it will be parsed as a JSON object.
+ * @param key The key of the localStorage item.
+ * @param defaultValue The default value to return if the item is not found or parsing fails.
+ */
 function loadFromStorage<T>(key: string, defaultValue: T): T {
   const varsStr = localStorage.getItem(key);
   if (typeof defaultValue === "string") {
@@ -179,7 +192,10 @@ function loadFromStorage<T>(key: string, defaultValue: T): T {
   }
   if (varsStr) {
     try {
-      return JSON.parse(varsStr);
+      if (defaultValue instanceof Set) {
+        return new Set(JSON.parse(varsStr)) as T;
+      }
+      return JSON.parse(varsStr) as T;
     } catch {
       /* empty */
     }
@@ -278,6 +294,10 @@ export const useStore = create<Store>(() => ({
     ssh_dir: "",
   },
   tagsExpanded: loadFromStorage(BROWSER_STORAGE_KEY_TAGS_EXPANDED, 0),
+  favExpanded: loadFromStorage(BROWSER_STORAGE_KEY_FAV_EXPANDED, 1),
+  allExpanded: loadFromStorage(BROWSER_STORAGE_KEY_ALL_EXPANDED, 1),
+  autoExpanded: loadFromStorage(BROWSER_STORAGE_KEY_AUTO_EXPANDED, 1),
+  expandedGroups: loadFromStorage(BROWSER_STORAGE_KEY_EXPANDED_GROUPS, new Set<string>()),
   vars: loadFromStorage(BROWSER_STORAGE_KEY_VARS, {}),
   localVars: loadFromStorage(BROWSER_STORAGE_KEY_LOCAL_VARS, {}),
   recentButtonIds: loadFromStorage(BROWSER_STORAGE_KEY_RECENT_BUTTONS, []),
@@ -616,12 +636,65 @@ export const nextButtonGroup = (includeHidden = false) => {
   });
 };
 
-export const setTagsExpanded = (update: number | ((prev: number) => number)) =>
+/**
+ * If update is undefined, toggle the expandness, otherwise use the update value
+ */
+export const setTagsExpanded = (update?: number | ((prev: number) => number)) =>
   useStore.setState((state) => {
-    const tagsExpanded = typeof update === "function" ? update(state.tagsExpanded) : update;
+    const tagsExpanded =
+      update === undefined ? +!state.tagsExpanded : typeof update === "function" ? update(state.tagsExpanded) : update;
     localStorage.setItem(BROWSER_STORAGE_KEY_TAGS_EXPANDED, JSON.stringify(tagsExpanded));
     return { tagsExpanded };
   });
+
+/**
+ * If update is undefined, toggle the expandness, otherwise use the update value
+ */
+export const setFavExpanded = (update?: number | ((prev: number) => number)) =>
+  useStore.setState((state) => {
+    const favExpanded =
+      update === undefined ? +!state.favExpanded : typeof update === "function" ? update(state.favExpanded) : update;
+    localStorage.setItem(BROWSER_STORAGE_KEY_FAV_EXPANDED, JSON.stringify(favExpanded));
+    return { favExpanded };
+  });
+
+/**
+ * If update is undefined, toggle the expandness, otherwise use the update value
+ */
+export const setAllExpanded = (update?: number | ((prev: number) => number)) =>
+  useStore.setState((state) => {
+    const allExpanded =
+      update === undefined ? +!state.allExpanded : typeof update === "function" ? update(state.allExpanded) : update;
+    localStorage.setItem(BROWSER_STORAGE_KEY_ALL_EXPANDED, JSON.stringify(allExpanded));
+    return { allExpanded };
+  });
+
+/**
+ * If update is undefined, toggle the expandness, otherwise use the update value
+ */
+export const setAutoExpanded = (update?: number | ((prev: number) => number)) =>
+  useStore.setState((state) => {
+    const autoExpanded =
+      update === undefined ? +!state.autoExpanded : typeof update === "function" ? update(state.autoExpanded) : update;
+    localStorage.setItem(BROWSER_STORAGE_KEY_AUTO_EXPANDED, JSON.stringify(autoExpanded));
+    return { autoExpanded };
+  });
+
+export const setExpandedGroups = (update: Set<string> | ((prev: Set<string>) => Set<string>)) =>
+  useStore.setState((state) => {
+    const expandedGroups = typeof update === "function" ? update(state.expandedGroups) : update;
+    localStorage.setItem(BROWSER_STORAGE_KEY_EXPANDED_GROUPS, JSON.stringify(Array.from(expandedGroups)));
+    return { expandedGroups };
+  });
+
+export const toggleExpandAllGroups = () => {
+  const { expandedGroups, groups } = getStore();
+  if (JSON.stringify(Array.from(expandedGroups).sort()) === JSON.stringify([...groups].sort())) {
+    setExpandedGroups(new Set<string>());
+  } else {
+    setExpandedGroups(new Set<string>(groups));
+  }
+};
 
 export const setVars = (vars: Record<string, string>) => {
   useStore.setState({ vars });
@@ -695,6 +768,17 @@ window.addEventListener("storage", (e) => {
       case BROWSER_STORAGE_KEY_TAGS_EXPANDED:
         useStore.setState({ tagsExpanded: e.newValue ? JSON.parse(e.newValue) : 0 });
         break;
+      case BROWSER_STORAGE_KEY_FAV_EXPANDED:
+        useStore.setState({ favExpanded: e.newValue ? JSON.parse(e.newValue) : 1 });
+        break;
+      case BROWSER_STORAGE_KEY_ALL_EXPANDED:
+        useStore.setState({ allExpanded: e.newValue ? JSON.parse(e.newValue) : 1 });
+        break;
+      case BROWSER_STORAGE_KEY_AUTO_EXPANDED:
+        useStore.setState({ autoExpanded: e.newValue ? JSON.parse(e.newValue) : 1 });
+        break;
+      case BROWSER_STORAGE_KEY_EXPANDED_GROUPS:
+        useStore.setState({ expandedGroups: e.newValue ? new Set(JSON.parse(e.newValue)) : new Set<string>() });
     }
   } catch (err) {
     console.warn("Failed to sync cross-tab localStorage update:", err);
@@ -844,29 +928,19 @@ export function increaseFontSize(terminalFontSize: boolean, globalFontSize: bool
 }
 
 export async function fetchActiveTunnels() {
-  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
   try {
-    const r = await fetch("/api/tunnels", {
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      },
-    });
-    if (r.ok) {
-      const data = (await r.json()) as ActiveTunnel[];
+    const res = await fetch("/api/tunnels", { headers: apiReqHeaders() });
+    if (res.ok) {
+      const data = (await res.json()) as ActiveTunnel[];
       setActiveTunnels(data || []);
     }
-  } catch (e) {
-    console.error("Failed to fetch active tunnels:", e);
+  } catch (err) {
+    console.error(`Failed to fetch active tunnels: ${err}`);
   }
 }
 
 export async function fetchSessions(pinnedOnly = false): Promise<Session[]> {
-  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-  const res = await fetch(`/api/sessions?pinned=${pinnedOnly ? "1" : "0"}`, {
-    headers: {
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-    },
-  });
+  const res = await fetch(`/api/sessions?pinned=${pinnedOnly ? "1" : "0"}`, { headers: apiReqHeaders() });
   if (!res.ok) {
     throw new Error(`Failed to fetch sessions: status=${res.status}`);
   }
@@ -1026,14 +1100,10 @@ export async function openHost(
 
   // Record recent
   if (!noUpdateRecent && host !== LOCAL_NAME) {
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     try {
       fetch("/api/recents", {
         method: METHOD_POST,
-        headers: {
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-          [HEADER_CONTENT_TYPE]: MIME_JSON,
-        },
+        headers: apiReqHeaders(),
         body: JSON.stringify({ host } satisfies RecentUpdateRequest),
       });
 
@@ -1066,19 +1136,11 @@ export async function logout() {
       return;
     }
   }
-  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-  if (token) {
-    await fetch("/api/sessions/close_all_normal", {
-      method: METHOD_POST,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      },
-    });
-    await fetch("/api/logout", {
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      },
-    });
+  if (localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN)) {
+    await fetch("/api/sessions/close_all_normal", { method: METHOD_POST, headers: apiReqHeaders() }).catch(
+      Function.prototype as never,
+    );
+    await fetch("/api/logout", { method: METHOD_POST, headers: apiReqHeaders() }).catch(Function.prototype as never);
   }
   safeLogout();
 }
@@ -1094,20 +1156,13 @@ export async function logoutAll() {
       return;
     }
   }
-  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-  if (token) {
-    await fetch("/api/sessions/close_all_normal", {
-      method: METHOD_POST,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      },
-    }).catch((e) => console.error(e));
-    await fetch("/api/logout_all", {
-      method: METHOD_POST,
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      },
-    }).catch((e) => console.error(e));
+  if (localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN)) {
+    await fetch("/api/sessions/close_all_normal", { method: METHOD_POST, headers: apiReqHeaders() }).catch(
+      Function.prototype as never,
+    );
+    await fetch("/api/logout_all", { method: METHOD_POST, headers: apiReqHeaders() }).catch(
+      Function.prototype as never,
+    );
   }
   safeLogout();
 }
@@ -1175,13 +1230,9 @@ export async function attachSession(id: string, host: string, title: string, isL
     );
     return;
   }
-  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
   await fetch("/api/sessions/attach", {
     method: METHOD_POST,
-    headers: {
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      [HEADER_CONTENT_TYPE]: MIME_JSON,
-    },
+    headers: apiReqHeaders(),
     body: JSON.stringify({ id } satisfies SessionsAttachRequest),
   });
   const tabId = genTabId(host);
@@ -1209,13 +1260,9 @@ export async function unpinTab(id?: string) {
     return;
   }
   const backendSessionId = tab.panes[0]?.sessionId || tab.panes[0]?.id || id;
-  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
   await fetch("/api/sessions/unpin", {
     method: METHOD_POST,
-    headers: {
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      [HEADER_CONTENT_TYPE]: MIME_JSON,
-    },
+    headers: apiReqHeaders(),
     body: JSON.stringify({ id: backendSessionId } satisfies SessionsUnpinRequest),
   });
 }
@@ -1235,15 +1282,11 @@ export async function pinTab(id?: string) {
     return;
   }
   const backendSessionId = pane.sessionId || pane.id;
-  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
   // Pinning only supports single-pane tabs for now (backend requirement)
   const host = pane.host || LOCAL_NAME;
   await fetch("/api/sessions/pin", {
     method: METHOD_POST,
-    headers: {
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      [HEADER_CONTENT_TYPE]: MIME_JSON,
-    },
+    headers: apiReqHeaders(),
     body: JSON.stringify({ id: backendSessionId, host, title: tab.title } satisfies SessionsPinRequest),
   });
   setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, isPinned: true } : t)));
@@ -1264,14 +1307,10 @@ export async function unlockTab(id?: string) {
     return;
   }
   const paneId = pane.sessionId || pane.id;
-  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
   const host = pane.host || LOCAL_NAME;
   await fetch("/api/sessions/pin", {
     method: METHOD_POST,
-    headers: {
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      [HEADER_CONTENT_TYPE]: MIME_JSON,
-    },
+    headers: apiReqHeaders(),
     body: JSON.stringify({ id: paneId, host, title: tab.title } satisfies SessionsPinRequest),
   });
   setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, isLocked: false } : t)));
@@ -1292,14 +1331,10 @@ export async function lockTab(id?: string) {
     return;
   }
   const backendSessionId = pane.sessionId || pane.id;
-  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
   const host = pane.host || LOCAL_NAME;
   await fetch("/api/sessions/lock", {
     method: METHOD_POST,
-    headers: {
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      [HEADER_CONTENT_TYPE]: MIME_JSON,
-    },
+    headers: apiReqHeaders(),
     body: JSON.stringify({ id: backendSessionId, host, title: tab.title } satisfies SessionsLockRequest),
   });
   setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, isLocked: true } : t)));
@@ -1312,15 +1347,11 @@ export function closeTab(id: string) {
     unpinTab(id);
   }
   if (targetTab && !targetTab.isLocked) {
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     targetTab.panes.forEach((p) => {
       if (p.state !== "stolen") {
         fetch("/api/sessions/close", {
           method: METHOD_POST,
-          headers: {
-            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-            [HEADER_CONTENT_TYPE]: MIME_JSON,
-          },
+          headers: apiReqHeaders(),
           body: JSON.stringify({ id: p.sessionId || p.id } satisfies SessionsCloseRequest),
         }).catch((e) => console.error(e));
       }
@@ -1381,15 +1412,11 @@ export function closeTabOrPane(tabOrPaneId?: string) {
       }
 
       if (!parentTab.isLocked && targetPane.state !== "stolen") {
-        const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
         fetch("/api/sessions/close", {
           method: METHOD_POST,
-          headers: {
-            [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-            [HEADER_CONTENT_TYPE]: MIME_JSON,
-          },
+          headers: apiReqHeaders(),
           body: JSON.stringify({ id: targetPane.sessionId || targetPane.id } satisfies SessionsCloseRequest),
-        }).catch((e) => console.error(e));
+        }).catch(Function.prototype as never);
       }
 
       setTabs((prev) =>
@@ -1419,14 +1446,10 @@ export async function renameTab(targetId?: string) {
   newTitle = newTitle.trim();
   if (newTitle && newTitle !== targetTab.title) {
     if (targetTab.isPinned) {
-      const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
       const backendSessionId = targetTab.panes[0]?.sessionId || targetTab.panes[0]?.id || targetId;
       await fetch("/api/sessions/rename", {
         method: METHOD_POST,
-        headers: {
-          [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-          [HEADER_CONTENT_TYPE]: MIME_JSON,
-        },
+        headers: apiReqHeaders(),
         body: JSON.stringify({ id: backendSessionId, title: newTitle } satisfies SessionsRenameRequest),
       });
     }
@@ -1435,21 +1458,16 @@ export async function renameTab(targetId?: string) {
 }
 
 export async function fetchHosts() {
-  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
   try {
-    const r = await fetch("/api/hosts", {
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      },
-    });
-    if (r.status === 401) {
+    const res = await fetch("/api/hosts", { headers: apiReqHeaders() });
+    if (res.status === 401) {
       safeLogout(true);
       return;
     }
-    const data: HostData[] = await r.json();
+    const data: HostData[] = await res.json();
     setHosts(data || []);
-  } catch (e) {
-    console.error(e);
+  } catch (err) {
+    console.error(err);
   }
 }
 
@@ -1559,7 +1577,6 @@ export function openScratchpad() {
 }
 
 export async function saveButton() {
-  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
   const { editButton, buttonFormData } = getStore();
 
   // Auto-update liquidjs value based on detected user variables
@@ -1584,22 +1601,11 @@ export async function saveButton() {
     }
     delete moduleCache[id];
   }
-  await fetch(url, {
-    method,
-    headers: {
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      [HEADER_CONTENT_TYPE]: MIME_JSON,
-    },
-    body: JSON.stringify(finalButtonFormData),
-  });
+  await fetch(url, { method, headers: apiReqHeaders(), body: JSON.stringify(finalButtonFormData) });
   setInitialBtnFormData(null);
   setEditButtonDialogOpen(false);
-  const r = await fetch("/api/buttons", {
-    headers: {
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-    },
-  });
-  const data = (await r.json()) as ButtonData[];
+  const res = await fetch("/api/buttons", { headers: apiReqHeaders() });
+  const data = (await res.json()) as ButtonData[];
   setButtons(data || []);
   setActiveGroup(getStore().buttonFormData.group || DEFAULT_BUTTON_GROUP);
 }
@@ -1615,37 +1621,19 @@ export async function deleteButton(id: string, name: string) {
     }
     delete moduleCache[id];
   }
-  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-  await fetch(`/api/buttons/${id}`, {
-    method: METHOD_DELETE,
-    headers: {
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-    },
-  });
-  const res = await fetch("/api/buttons", {
-    headers: {
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-    },
-  });
+  await fetch(`/api/buttons/${id}`, { method: METHOD_DELETE, headers: apiReqHeaders() });
+  const res = await fetch("/api/buttons", { headers: apiReqHeaders() });
   const data: ButtonData[] = await res.json();
   setButtons(data || []);
 }
 
 export async function moveButton(id: string, direction: number) {
-  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
   await fetch("/api/buttons/move", {
     method: METHOD_POST,
-    headers: {
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      [HEADER_CONTENT_TYPE]: MIME_JSON,
-    },
+    headers: apiReqHeaders(),
     body: JSON.stringify({ id, direction } satisfies ButtonsMoveRequest),
   });
-  const res = await fetch("/api/buttons", {
-    headers: {
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-    },
-  });
+  const res = await fetch("/api/buttons", { headers: apiReqHeaders() });
   const data: ButtonData[] = await res.json();
   setButtons(data || []);
 }
@@ -1686,21 +1674,16 @@ export function getIntVar(name: string, defaultValue = 0): number {
 }
 
 export async function refreshData({ sync = 0, refresh = 0 } = {}) {
-  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
   try {
-    const r = await fetch(`/api/fulldata?sync=${sync}&refresh=${refresh}`, {
-      headers: {
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      },
-    });
-    if (r.status === 401) {
+    const res = await fetch(`/api/fulldata?sync=${sync}&refresh=${refresh}`, { headers: apiReqHeaders() });
+    if (res.status === 401) {
       safeLogout(true);
       return;
     }
-    const data: FullData = await r.json();
+    const data: FullData = await res.json();
     useStore.setState(data);
-  } catch (e) {
-    console.error(e);
+  } catch (err) {
+    console.error(err);
   }
 }
 
@@ -1734,7 +1717,6 @@ export async function moveServer(serverName: string, destGroupPath: string | nul
   }
 
   const updatedHosts: HostData[] = [];
-  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
   for (let i = 0; i < newSortedList.length; i++) {
     const h = newSortedList[i];
     const newOrder = (i + 1) * 10;
@@ -1771,10 +1753,7 @@ export async function moveServer(serverName: string, destGroupPath: string | nul
 
   await fetch("/api/hosts", {
     method: METHOD_PUT,
-    headers: {
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      [HEADER_CONTENT_TYPE]: MIME_JSON,
-    },
+    headers: apiReqHeaders(),
     body: JSON.stringify(updatedHosts),
   });
 
@@ -1794,13 +1773,9 @@ export async function moveGroup(srcPath: string, beforeSiblingPath: string) {
     nextGroups.push(...draggedGroupList);
   }
 
-  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
   const res = await fetch("/api/groups", {
     method: METHOD_POST,
-    headers: {
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      [HEADER_CONTENT_TYPE]: MIME_JSON,
-    },
+    headers: apiReqHeaders(),
     body: JSON.stringify(nextGroups),
   });
   if (res.ok) {
@@ -1811,19 +1786,14 @@ export async function moveGroup(srcPath: string, beforeSiblingPath: string) {
 }
 
 export async function updateConfig(config: ConfigRequest) {
-  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
   try {
     const res = await fetch("/api/settings/config", {
       method: METHOD_POST,
-      headers: {
-        [HEADER_CONTENT_TYPE]: MIME_JSON,
-        [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      },
+      headers: apiReqHeaders(),
       body: JSON.stringify(config),
     });
     if (!res.ok) {
-      const msg = await res.text();
-      throw new Error(`status=${res.status}, msg=${msg}`);
+      throw new Error(`status=${res.status}, msg=${await res.text()}`);
     }
     setSysinfo(config satisfies Partial<Sysinfo>);
     notify("Settings saved", "success", TOAST_KEY_API_SETTINGS);

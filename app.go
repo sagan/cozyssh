@@ -784,7 +784,8 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 
 	mux.Handle("/api/settings/webdav/devices/upload", securityMiddleware(auth.Middleware(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodPost {
+			switch r.Method {
+			case http.MethodPost:
 				err := r.ParseMultipartForm(10 << 20) // max 10MB
 				if err != nil {
 					http.Error(w, "Failed to parse multipart form: "+err.Error(), http.StatusBadRequest)
@@ -798,51 +799,79 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				defer file.Close()
 
 				filename := filepath.Base(header.Filename)
+				var destDir string
 				var destName string
+				var isCSV bool
+
 				typeParam := r.URL.Query().Get("type")
-				if typeParam == "config" || typeParam == "known_hosts" {
-					destName = typeParam
-				} else if filename == "config" || filename == "config.txt" {
+				if typeParam == "csv" || strings.HasSuffix(strings.ToLower(filename), ".csv") {
+					isCSV = true
+					destDir = filepath.Join(cfg.ConfigDir, "devices_sshdata", "$upload_csv")
 					destName = "config"
-				} else if filename == "known_hosts" || filename == "known_hosts.txt" {
-					destName = "known_hosts"
+				} else {
+					destDir = filepath.Join(cfg.ConfigDir, "devices_sshdata", "$upload_openssh")
+					if typeParam == "config" || typeParam == "known_hosts" {
+						destName = typeParam
+					} else if filename == "config" || filename == "config.txt" {
+						destName = "config"
+					} else if filename == "known_hosts" || filename == "known_hosts.txt" {
+						destName = "known_hosts"
+					}
 				}
 
 				if destName == "" {
-					http.Error(w, "Invalid file. Only 'config' or 'known_hosts' files are accepted.", http.StatusBadRequest)
+					http.Error(w, "Invalid file. Only 'config', 'known_hosts' or '.csv' files are accepted.", http.StatusBadRequest)
 					return
 				}
 
-				destDir := filepath.Join(cfg.ConfigDir, "devices_sshdata", "$upload_openssh")
 				if err := os.MkdirAll(destDir, 0755); err != nil {
 					http.Error(w, "Failed to create target directory: "+err.Error(), http.StatusInternalServerError)
 					return
 				}
 
 				destPath := filepath.Join(destDir, destName)
-				out, err := os.Create(destPath)
-				if err != nil {
-					http.Error(w, "Failed to create destination file: "+err.Error(), http.StatusInternalServerError)
-					return
-				}
-				defer out.Close()
 
-				if _, err := io.Copy(out, file); err != nil {
-					http.Error(w, "Failed to write file contents: "+err.Error(), http.StatusInternalServerError)
-					return
+				if isCSV {
+					configStr, err := ParseCSVToSSHConfig(file)
+					if err != nil {
+						http.Error(w, "Failed to parse CSV file: "+err.Error(), http.StatusBadRequest)
+						return
+					}
+					if err := os.WriteFile(destPath, []byte(configStr), 0644); err != nil {
+						http.Error(w, "Failed to write config file: "+err.Error(), http.StatusInternalServerError)
+						return
+					}
+				} else {
+					out, err := os.Create(destPath)
+					if err != nil {
+						http.Error(w, "Failed to create destination file: "+err.Error(), http.StatusInternalServerError)
+						return
+					}
+					defer out.Close()
+
+					if _, err := io.Copy(out, file); err != nil {
+						http.Error(w, "Failed to write file contents: "+err.Error(), http.StatusInternalServerError)
+						return
+					}
 				}
 
 				w.WriteHeader(http.StatusNoContent)
 				return
-			} else if r.Method == http.MethodDelete {
-				destDir := filepath.Join(cfg.ConfigDir, "devices_sshdata", "$upload_openssh")
-				if err := os.RemoveAll(destDir); err != nil {
+			case http.MethodDelete:
+				id := r.URL.Query().Get("id")
+				if !strings.HasPrefix(id, "$") || strings.ContainsAny(id, ".\\/\r\n\t ") {
+					http.Error(w, "Bad Request", http.StatusBadRequest)
+					return
+				}
+				destDir := filepath.Join(cfg.ConfigDir, "devices_sshdata", id)
+				err := os.RemoveAll(destDir)
+				if err != nil {
 					http.Error(w, "Failed to delete uploaded files: "+err.Error(), http.StatusInternalServerError)
 					return
 				}
 				w.WriteHeader(http.StatusNoContent)
 				return
-			} else {
+			default:
 				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			}
 		}))))

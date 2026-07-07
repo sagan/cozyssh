@@ -24,8 +24,6 @@ import {
   DEFAULT_SCROLL_LINES,
   BROWSER_STORAGE_KEY_TOKEN,
   DEFAULT_BUTTON_GROUP,
-  HEADER_AUTHORIZATION,
-  HEADER_AUTHORIZATION_BEARER_PREFIX,
   LOCAL_NAME,
   VAR_CS_NOAUTOLOAD,
   VAR_CS_NOAUTORUN,
@@ -46,6 +44,7 @@ import {
   genPaneId,
   getTemplateVariables,
   liquidEngine,
+  apiReqHeaders,
 } from "./common";
 import {
   type TabData,
@@ -82,6 +81,11 @@ import {
   unpinTab,
   renameTab,
   openSaveTabToButtonDialog,
+  setTagsExpanded,
+  setAllExpanded,
+  setAutoExpanded,
+  setFavExpanded,
+  toggleExpandAllGroups,
 } from "./store";
 import { setupPluginAPI, runScript } from "./pluginAPI";
 import { useKeyboardManager } from "./useKeyboardManager";
@@ -684,6 +688,26 @@ export default function Dashboard({ initialData }: DashboardProps) {
               prevButtonGroup();
               break;
             }
+            case "TOGGLE_SIDEBAR_TAGS": {
+              setTagsExpanded();
+              break;
+            }
+            case "TOGGLE_SIDEBAR_FAV": {
+              setFavExpanded();
+              break;
+            }
+            case "TOGGLE_SIDEBAR_ALL": {
+              setAllExpanded();
+              break;
+            }
+            case "TOGGLE_SIDEBAR_AUTO": {
+              setAutoExpanded();
+              break;
+            }
+            case "TOGGLE_SIDEBAR_GROUPS": {
+              toggleExpandAllGroups();
+              break;
+            }
             case "OPEN_SCRATCHPAD":
               openScratchpad();
               break;
@@ -711,7 +735,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   useEffect(() => {
     const autorun = getIntVar(VAR_CS_NOAUTORUN) !== 1 && startupParams.get(VAR_NOAUTORUN) !== "1";
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
     let hash = window.location.hash.substring(1);
     if (hash) {
       window.history.replaceState(null, "", window.location.pathname + window.location.search);
@@ -727,22 +750,17 @@ export default function Dashboard({ initialData }: DashboardProps) {
       let data = initialData;
       if (!data) {
         try {
-          const r = await fetch("/api/fulldata", {
-            headers: {
-              [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-            },
-          });
-          if (r.status === 401) {
+          const res = await fetch("/api/fulldata", { headers: apiReqHeaders() });
+          if (res.status === 401) {
             localStorage.removeItem(BROWSER_STORAGE_KEY_TOKEN);
             window.location.href = "/login";
             return;
           }
-          if (!r.ok) {
-            throw new Error(`status=${r.status}`);
+          if (!res.ok) {
+            throw new Error(`status=${res.status}`);
           }
-          data = (await r.json()) as FullData;
-        } catch (e) {
-          console.error(e);
+          data = (await res.json()) as FullData;
+        } catch (e: unknown) {
           notify(`Fail to load data: ${e}`, "error", TOAST_KEY_API_FULLDATA);
           const tabId = genTabId(LOCAL_NAME);
           const paneId = genPaneId(LOCAL_NAME);

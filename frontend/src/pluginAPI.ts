@@ -23,7 +23,6 @@ import {
   BROWSER_STORAGE_KEY_TOKEN,
   HEADER_AUTHORIZATION,
   HEADER_AUTHORIZATION_BEARER_PREFIX,
-  HEADER_CONTENT_TYPE,
   HEADER_COOKIE,
   HEADER_ORIGIN,
   HEADER_REFERER,
@@ -33,7 +32,6 @@ import {
   METHOD_DELETE,
   METHOD_POST,
   METHOD_PUT,
-  MIME_JSON,
   LOCAL_VAR_PREFIX,
   DEFAULT_FONT_SIZE,
   VAR_CS_FONT_SIZE,
@@ -48,6 +46,7 @@ import {
   passthroughKeyShortcuts,
   blackholeShortcuts,
   disableShortcuts,
+  apiReqHeaders,
 } from "./common";
 import {
   type CsScriptModule,
@@ -257,13 +256,9 @@ window.csFetch = async (url: string, options = {}) => {
 };
 
 window.csExec = async (cmdline: string) => {
-  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
   const res = await fetch("/api/exec", {
     method: METHOD_POST,
-    headers: {
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      [HEADER_CONTENT_TYPE]: MIME_JSON,
-    },
+    headers: apiReqHeaders(),
     body: JSON.stringify({ cmdline } satisfies ExecRequest),
   });
   if (!res.ok) {
@@ -273,15 +268,11 @@ window.csExec = async (cmdline: string) => {
 };
 
 window.csExecInTerminal = async (cmdline: string, paneId?: string) => {
-  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
   // Resolve paneId: use provided value, fall back to active pane.
   const resolvedPaneId = paneId ?? getStore().activePaneId;
   const res = await fetch("/api/exec_in_terminal", {
     method: METHOD_POST,
-    headers: {
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      [HEADER_CONTENT_TYPE]: MIME_JSON,
-    },
+    headers: apiReqHeaders(),
     body: JSON.stringify({ cmdline, paneId: resolvedPaneId }),
   });
   if (!res.ok) {
@@ -456,7 +447,6 @@ export interface PluginAPICallbacks {
 
 window.csSetVar = async (nameOrVars: string | Record<string, string | undefined>, value?: string | undefined) => {
   const { vars, localVars } = getStore();
-  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
   const updates: Record<string, string | null> = {};
   const localUpdates: Record<string, string | undefined> = {};
 
@@ -492,16 +482,13 @@ window.csSetVar = async (nameOrVars: string | Record<string, string | undefined>
     return;
   }
 
-  const r = await fetch("/api/vars", {
+  const res = await fetch("/api/vars", {
     method: METHOD_PUT,
-    headers: {
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      [HEADER_CONTENT_TYPE]: MIME_JSON,
-    },
+    headers: apiReqHeaders(),
     body: JSON.stringify(updates),
   });
-  if (!r.ok) {
-    throw new Error(await r.text());
+  if (!res.ok) {
+    throw new Error(`status=${res.status}, msg=${await res.text()}`);
   }
 
   const nextVars = { ...vars };
@@ -520,14 +507,10 @@ window.csSetVar = async (nameOrVars: string | Record<string, string | undefined>
 
 window.csUpdateButton = async (btn: ButtonData | ButtonData[]): Promise<void> => {
   const btns = Array.isArray(btn) ? btn : [btn];
-  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
 
   const res = await fetch("/api/buttons", {
     method: METHOD_POST,
-    headers: {
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      [HEADER_CONTENT_TYPE]: MIME_JSON,
-    },
+    headers: apiReqHeaders(),
     body: JSON.stringify(btns),
   });
 
@@ -536,11 +519,7 @@ window.csUpdateButton = async (btn: ButtonData | ButtonData[]): Promise<void> =>
   }
 
   // Refresh buttons in store
-  const refreshRes = await fetch("/api/buttons", {
-    headers: {
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-    },
-  });
+  const refreshRes = await fetch("/api/buttons", { headers: apiReqHeaders() });
   if (refreshRes.ok) {
     const data: ButtonData[] = await refreshRes.json();
     setButtons(data || []);
@@ -554,24 +533,14 @@ window.csDeleteButton = async (id: string): Promise<void> => {
     }
     delete moduleCache[id];
   }
-  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-  const res = await fetch(`/api/buttons/${id}`, {
-    method: METHOD_DELETE,
-    headers: {
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-    },
-  });
+  const res = await fetch(`/api/buttons/${id}`, { method: METHOD_DELETE, headers: apiReqHeaders() });
 
   if (!res.ok) {
     throw new Error(`Failed to delete button: ${res.statusText}`);
   }
 
   // Refresh buttons in store
-  const refreshRes = await fetch("/api/buttons", {
-    headers: {
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-    },
-  });
+  const refreshRes = await fetch("/api/buttons", { headers: apiReqHeaders() });
   if (refreshRes.ok) {
     const data: ButtonData[] = await refreshRes.json();
     setButtons(data || []);
@@ -579,14 +548,9 @@ window.csDeleteButton = async (id: string): Promise<void> => {
 };
 
 window.csUpdateHost = async (host: HostData | HostData[]): Promise<void> => {
-  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
-
   const res = await fetch("/api/hosts", {
     method: METHOD_PUT,
-    headers: {
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-      [HEADER_CONTENT_TYPE]: MIME_JSON,
-    },
+    headers: apiReqHeaders(),
     body: JSON.stringify(Array.isArray(host) ? host : [host]),
   });
 
@@ -595,11 +559,7 @@ window.csUpdateHost = async (host: HostData | HostData[]): Promise<void> => {
   }
 
   // Refresh hosts in store
-  const refreshRes = await fetch("/api/hosts", {
-    headers: {
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-    },
-  });
+  const refreshRes = await fetch("/api/hosts", { headers: apiReqHeaders() });
   if (refreshRes.ok) {
     const data: HostData[] = await refreshRes.json();
     setHosts(data || []);
@@ -607,12 +567,9 @@ window.csUpdateHost = async (host: HostData | HostData[]): Promise<void> => {
 };
 
 window.csDeleteHost = async (name: string): Promise<void> => {
-  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
   const res = await fetch(`/api/hosts/${encodeURIComponent(name)}`, {
     method: METHOD_DELETE,
-    headers: {
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-    },
+    headers: apiReqHeaders(),
   });
 
   if (!res.ok) {
@@ -620,11 +577,7 @@ window.csDeleteHost = async (name: string): Promise<void> => {
   }
 
   // Refresh hosts in store
-  const refreshRes = await fetch("/api/hosts", {
-    headers: {
-      [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-    },
-  });
+  const refreshRes = await fetch("/api/hosts", { headers: apiReqHeaders() });
   if (refreshRes.ok) {
     const data: HostData[] = await refreshRes.json();
     setHosts(data || []);

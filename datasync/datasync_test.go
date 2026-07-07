@@ -18,6 +18,8 @@ import (
 
 	"cozyssh/config"
 	"cozyssh/models"
+	"cozyssh/passstore"
+	"cozyssh/yescrypt"
 )
 
 func TestTriggerSyncDebounce(t *testing.T) {
@@ -128,7 +130,7 @@ func TestWebdavOldDeletionCleanup(t *testing.T) {
 </D:multistatus>`))
 			return
 		}
-		if r.Method == "DELETE" {
+		if r.Method == http.MethodDelete {
 			deletedMu.Lock()
 			deletedFiles = append(deletedFiles, r.URL.Path)
 			deletedMu.Unlock()
@@ -188,7 +190,7 @@ func TestWebdavE2EESync(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 			return
 		}
-		if r.Method == "PUT" {
+		if r.Method == http.MethodPut {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
@@ -225,7 +227,7 @@ func TestWebdavE2EESync(t *testing.T) {
 			w.Write(data)
 			return
 		}
-		if r.Method == "DELETE" {
+		if r.Method == http.MethodDelete {
 			mu.Lock()
 			delete(remoteFilesMap, r.URL.Path)
 			mu.Unlock()
@@ -390,7 +392,7 @@ func TestWebdavUploadSSHDataToggle(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 			return
 		}
-		if r.Method == "PUT" {
+		if r.Method == http.MethodPut {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
@@ -524,10 +526,10 @@ func TestKnownHostsConflictDetection(t *testing.T) {
 		t.Fatalf("failed to create device dir: %v", err)
 	}
 	remoteLines := []string{
-		"example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAZWRsb2NhbA==",                      // Same
-		"example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAZWRyZW1vdGVkaWZmZXJlbnQ=",        // Conflict (same type, different data)
-		"example.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCsYW1wbGVyZW1vdGVyc2E=",        // New (different type)
-		"newhost.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAbmV3aG9zdGtleQ==",               // New (new host)
+		"example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAZWRsb2NhbA==",             // Same
+		"example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAZWRyZW1vdGVkaWZmZXJlbnQ=", // Conflict (same type, different data)
+		"example.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCsYW1wbGVyZW1vdGVyc2E=", // New (different type)
+		"newhost.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAbmV3aG9zdGtleQ==",         // New (new host)
 	}
 	remotePath := filepath.Join(deviceDir, "known_hosts")
 	if err := os.WriteFile(remotePath, []byte(strings.Join(remoteLines, "\n")+"\n"), 0600); err != nil {
@@ -574,8 +576,8 @@ func TestKnownHostsConflictDetection(t *testing.T) {
 
 	// 3. Test Import without force
 	toImport := []string{
-		"example.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCsYW1wbGVyZW1vdGVyc2E=",        // Should be imported
-		"example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAZWRyZW1vdGVkc3luY2RpZmY=",        // Conflict, should not be imported
+		"example.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCsYW1wbGVyZW1vdGVyc2E=", // Should be imported
+		"example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAZWRyZW1vdGVkc3luY2RpZmY=", // Conflict, should not be imported
 	}
 	err = ImportKnownHostsLines("mock_device", toImport, false)
 	if err != nil {
@@ -612,5 +614,77 @@ func TestKnownHostsConflictDetection(t *testing.T) {
 	}
 	if strings.Contains(importedStr2, "ZWRsb2NhbA==") {
 		t.Errorf("expected local conflicting key to be overwritten when force=true")
+	}
+}
+
+func TestImportSSHConfigHosts_WithPassword(t *testing.T) {
+	tmpDir := t.TempDir()
+	sshDir := filepath.Join(tmpDir, "ssh")
+	if err := os.MkdirAll(sshDir, 0755); err != nil {
+		t.Fatalf("failed to create ssh dir: %v", err)
+	}
+
+	// 1. Setup mock cached device ssh config with CozySshPassword comment
+	deviceDir := filepath.Join(tmpDir, "devices_sshdata", "mock_csv_device")
+	if err := os.MkdirAll(deviceDir, 0755); err != nil {
+		t.Fatalf("failed to create device dir: %v", err)
+	}
+
+	configContent := `Host my-csv-host
+    HostName 10.0.0.99
+    User my-csv-user
+    Port 2222
+    # CozySshPassword super-secret-password-123
+`
+	if err := os.WriteFile(filepath.Join(deviceDir, "config"), []byte(configContent), 0600); err != nil {
+		t.Fatalf("failed to write mock config: %v", err)
+	}
+
+	gCfg = &config.Config{
+		ConfigDir: tmpDir,
+		AbsSSHDir: sshDir,
+	}
+
+	// Setup passstore and unlock it
+	pwdHash, err := yescrypt.GenerateFromPassword([]byte("my-app-pass"))
+	if err != nil {
+		t.Fatalf("failed to generate app password hash: %v", err)
+	}
+	passstore.Init(tmpDir, string(pwdHash))
+	if !passstore.SetEncryptionKey("my-app-pass") {
+		t.Fatalf("failed to unlock passstore")
+	}
+
+	// Import the host
+	err = ImportSSHConfigHosts("mock_csv_device", []string{"my-csv-host"})
+	if err != nil {
+		t.Fatalf("ImportSSHConfigHosts failed: %v", err)
+	}
+
+	// 2. Verify password was saved in passstore under canonical address "my-csv-user@10.0.0.99:2222"
+	savedPwd, err := passstore.Get("my-csv-user@10.0.0.99:2222")
+	if err != nil {
+		t.Fatalf("failed to get saved password from passstore: %v", err)
+	}
+	if savedPwd != "super-secret-password-123" {
+		t.Errorf("expected password 'super-secret-password-123', got '%s'", savedPwd)
+	}
+
+	// 3. Verify local config was written and comment is stripped
+	localCfgPath := filepath.Join(sshDir, "config")
+	localData, err := os.ReadFile(localCfgPath)
+	if err != nil {
+		t.Fatalf("failed to read local config: %v", err)
+	}
+	localStr := string(localData)
+
+	if !strings.Contains(localStr, "Host my-csv-host") {
+		t.Error("missing Host my-csv-host in local config")
+	}
+	if !strings.Contains(localStr, "HostName 10.0.0.99") {
+		t.Error("missing HostName 10.0.0.99 in local config")
+	}
+	if strings.Contains(localStr, "CozySshPassword") {
+		t.Error("expected CozySshPassword comment to be stripped from local config")
 	}
 }

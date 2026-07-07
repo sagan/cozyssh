@@ -1,40 +1,34 @@
-import {
-  Box,
-  Typography,
-  Card,
-  CardContent,
-  Button,
-} from "@mui/material";
+import { useCallback } from "react";
+import { Box, Typography, Card, CardContent, Button } from "@mui/material";
 import DownloadIcon from "@mui/icons-material/Download";
 import SettingsIcon from "@mui/icons-material/Settings";
 import ShieldIcon from "@mui/icons-material/Shield";
 
-import { BROWSER_STORAGE_KEY_TOKEN } from "./constants";
+import { triggerAuthedUrlDownload } from "./common";
+import { notify } from "./store";
 
 export default function SSHExportTab() {
-  const triggerDownload = (url: string, filename: string) => {
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
+  const handleExportSSHConfig = useCallback(async () => {
+    try {
+      triggerAuthedUrlDownload("/api/settings/export/sshconfig", "config");
+    } catch (err: unknown) {
+      notify(`${err}`, "error");
+    }
+  }, []);
 
-  const handleExportSSHConfig = () => {
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN) ?? "";
-    triggerDownload(`/api/settings/export/sshconfig?token=${encodeURIComponent(token)}`, "config");
-  };
-
-  const handleExportKnownHosts = () => {
-    const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN) ?? "";
-    triggerDownload(`/api/settings/export/knownhosts?token=${encodeURIComponent(token)}`, "known_hosts");
-  };
+  const handleExportKnownHosts = useCallback(async () => {
+    try {
+      triggerAuthedUrlDownload("/api/settings/export/knownhosts", "known_hosts");
+    } catch (err: unknown) {
+      notify(`${err}`, "error");
+    }
+  }, []);
 
   return (
     <Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 4, mt: -1 }}>
-        <b>SSH Data Export</b>: Download your local OpenSSH configuration files to your computer for backup, migration, or sharing.
+        <b>SSH Data Export</b>: Download your local OpenSSH configuration files to your computer for backup, migration,
+        or sharing.
       </Typography>
 
       <Box
@@ -84,7 +78,8 @@ export default function SSHExportTab() {
             </Box>
 
             <Typography variant="body2" color="text.secondary" sx={{ minHeight: 48 }}>
-              Download your local OpenSSH configuration file (<code>~/.ssh/config</code>). This contains all of your configured host aliases, hostnames, usernames, ports, and custom directives.
+              Download your local OpenSSH configuration file (<code>~/.ssh/config</code>). This contains all of your
+              configured host aliases, hostnames, usernames, ports, and custom directives.
             </Typography>
 
             <Box sx={{ flexGrow: 1 }} />
@@ -151,7 +146,8 @@ export default function SSHExportTab() {
             </Box>
 
             <Typography variant="body2" color="text.secondary" sx={{ minHeight: 48 }}>
-              Download your local known hosts file (<code>~/.ssh/known_hosts</code>). This contains the cryptographic host key signatures verifying the identity of servers you have connected to.
+              Download your local known hosts file (<code>~/.ssh/known_hosts</code>). This contains the cryptographic
+              host key signatures verifying the identity of servers you have connected to.
             </Typography>
 
             <Box sx={{ flexGrow: 1 }} />

@@ -24,15 +24,10 @@ import { liquid } from "@codemirror/lang-liquid";
 
 import type { HostData, ButtonData } from "./api";
 import {
-  BROWSER_STORAGE_KEY_TOKEN,
   DEFAULT_BUTTON_GROUP,
-  HEADER_AUTHORIZATION,
-  HEADER_AUTHORIZATION_BEARER_PREFIX,
-  HEADER_CONTENT_TYPE,
   ID_INPUT_DIALOG_INPUT,
   LOCAL_NAME,
   METHOD_POST,
-  MIME_JSON,
   MISC_FUNCTIONS,
   TERMINAL_FUNCTIONS,
 } from "./constants";
@@ -49,6 +44,7 @@ import {
   openHostInNewWindow,
   cutString,
   cutSuffix,
+  apiReqHeaders,
 } from "./common";
 import {
   type TabData,
@@ -568,13 +564,7 @@ export default function DialogManager({
                 {tab.type === "scratchpad" && (
                   <MenuItem
                     onClick={() => {
-                      fetch("/api/scratchpad/reload", {
-                        method: METHOD_POST,
-                        headers: {
-                          [HEADER_AUTHORIZATION]:
-                            HEADER_AUTHORIZATION_BEARER_PREFIX + localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN),
-                        },
-                      }).then(() => {
+                      fetch("/api/scratchpad/reload", { method: METHOD_POST, headers: apiReqHeaders() }).then(() => {
                         // csNotify("Reloading Scratchpad from disk...");
                       });
                       handleCloseMenu();
@@ -1369,14 +1359,10 @@ export default function DialogManager({
             known = hosts.find((h) => h.name === parsedHost.hostname || getCanonicalHostString(h) === parsedHostString);
             if (!known) {
               // Automatically add to ~/.ssh/config
-              const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
               try {
                 await fetch("/api/hosts", {
                   method: METHOD_POST,
-                  headers: {
-                    [HEADER_AUTHORIZATION]: HEADER_AUTHORIZATION_BEARER_PREFIX + token,
-                    [HEADER_CONTENT_TYPE]: MIME_JSON,
-                  },
+                  headers: apiReqHeaders(),
                   body: JSON.stringify({
                     user: "",
                     port: "22",

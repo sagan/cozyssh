@@ -215,8 +215,8 @@ func TestUpdateVarsOldMarkerCleanup(t *testing.T) {
 			"activeKey": "activeVal",
 		},
 		VarsMtime: map[string]int64{
-			"activeKey": 17000000,
-			"oldDeletedKey": 100, // Very old, should be cleaned up
+			"activeKey":        17000000,
+			"oldDeletedKey":    100,                           // Very old, should be cleaned up
 			"recentDeletedKey": time.Now().UnixMilli() - 1000, // Recent, should remain
 		},
 	}
@@ -237,4 +237,3 @@ func TestUpdateVarsOldMarkerCleanup(t *testing.T) {
 		t.Error("Expected activeKey to remain in VarsMtime")
 	}
 }
-

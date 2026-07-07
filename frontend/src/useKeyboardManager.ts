@@ -57,6 +57,11 @@ import {
   setToasts,
   unlockTab,
   lockTab,
+  setFavExpanded,
+  setAllExpanded,
+  setAutoExpanded,
+  setTagsExpanded,
+  toggleExpandAllGroups,
 } from "./store";
 
 export interface KeyboardManagerOptions {
@@ -135,6 +140,31 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         case "ctrl+alt+0": {
           e.preventDefault();
           resetFontSize(true, true);
+          return;
+        }
+        case "ctrl+alt+1": {
+          e.preventDefault();
+          setFavExpanded();
+          return;
+        }
+        case "ctrl+alt+2": {
+          e.preventDefault();
+          setAllExpanded();
+          return;
+        }
+        case "ctrl+alt+3": {
+          e.preventDefault();
+          setAutoExpanded();
+          return;
+        }
+        case "ctrl+alt+`": {
+          e.preventDefault();
+          setTagsExpanded();
+          return;
+        }
+        case "ctrl+alt+g": {
+          e.preventDefault();
+          toggleExpandAllGroups();
           return;
         }
         case "alt+-":
