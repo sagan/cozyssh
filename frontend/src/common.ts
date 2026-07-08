@@ -754,6 +754,7 @@ export function parseHostName(
   let password: string | undefined;
   let port: string | undefined;
 
+  // 1. Separate user/password from the host info
   const i = name.lastIndexOf("@");
   if (i === -1) {
     hostname = name;
@@ -767,20 +768,43 @@ export function parseHostName(
       try {
         password = decodeURIComponent(password);
       } catch {
-        // ignore
+        /* ignore */
       }
     }
     try {
       user = decodeURIComponent(user);
     } catch {
-      // ignore
+      /* ignore */
     }
   }
-  const j = hostname.lastIndexOf(":");
-  if (j !== -1) {
-    port = hostname.slice(j + 1);
-    hostname = hostname.slice(0, j);
+
+  // 2. Robust Hostname & Port Parsing (IPv4, IPv6, and Domain Names)
+  if (hostname.startsWith("[")) {
+    // Handle bracketed IPv6 addresses, e.g., "[2001:db8::1]:22" or "[2001:db8::1]"
+    const closingBracket = hostname.indexOf("]");
+    if (closingBracket !== -1) {
+      const remainder = hostname.slice(closingBracket + 1);
+      if (remainder.startsWith(":")) {
+        port = remainder.slice(1);
+      }
+      // Extract the raw IPv6 address from inside the brackets
+      hostname = hostname.slice(1, closingBracket);
+    }
+  } else {
+    // Handle IPv4, Named Hosts, or Unbracketed IPv6
+    const colonCount = (hostname.match(/:/g) || []).length;
+
+    if (colonCount === 1) {
+      // Exactly one colon means it's definitely a host:port setup (e.g., "127.0.0.1:80" or "example.com:443")
+      const j = hostname.lastIndexOf(":");
+      port = hostname.slice(j + 1);
+      hostname = hostname.slice(0, j);
+    } else if (colonCount > 1) {
+      // Multiple colons without brackets mean it's a raw IPv6 address without a port (e.g., "2001:db8::1")
+      // Leave hostname as-is; port remains undefined
+    }
   }
+
   return {
     user: user || defaultUser,
     password,
@@ -1140,7 +1164,8 @@ export function getSSHConfigBlock(host: HostData | HostForm): string {
       block += "\n";
     }
   }
-  block += `Host ${host.name || host.hostname}\n`;
+  // In some cases (such as the host is server returned auto host) the host.name is "root@host" format.
+  block += `Host ${host.name ? parseHostName(host.name).hostname : host.hostname}\n`;
   block += `    HostName ${host.hostname}\n`;
   if (host.user) {
     block += `    User ${host.user}\n`;
@@ -1442,4 +1467,16 @@ export function triggerDownloadString(contents: string, filename: string) {
   const url = URL.createObjectURL(blob);
   triggerDownload(url, filename);
   setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+/**
+ * Returns a label for the host in the format of "[user@]hostname[:port]".
+ * The user part is present if the host user is not root or if alwaysIncludeUser is true.
+ * The port part is present if the host port is not 22.
+ */
+export function hostLabel(host: HostData | HostForm, alwaysIncludeUser = false): string {
+  const user = host.user || "root";
+  return `${alwaysIncludeUser || user !== "root" ? user + "@" : ""}${host.hostname}${
+    host.port && host.port !== "22" ? `:` + host.port : ""
+  }`;
 }

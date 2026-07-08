@@ -473,7 +473,7 @@ func ListHosts() ([]*models.HostData, error) {
 		for _, host := range cfg.Hosts {
 			for _, pattern := range host.Patterns {
 				name := pattern.String()
-				if name == "*" || name == "" {
+				if name == "" || strings.ContainsAny(name, "*?!_") {
 					continue
 				}
 

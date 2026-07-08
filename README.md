@@ -137,7 +137,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - `Alt + Shift + W` : Close active tab
   - `Ctrl + Alt + Shift + W` : Close other tabs
   - `Ctrl + Alt + Shift + L` : Toggle Lock/Unlock current tab
-  - `Alt + I` : Focus sidebar search filter, then use `↑ ↓` to select, `Enter` to open, `Alt + Enter` to open in current tab, `Ctrl + Enter` to open in new window, `Shift + Enter` to open context menu
+  - `Alt + I` : Focus sidebar search filter, then use `↑ ↓` to select, `Enter` to open (or toggle group expandness), `Alt + Enter` to open in current tab, `Ctrl + Enter` to open in new window (or toggle group and all sub-groups expandness), `Shift + Enter` to open context menu
   - `Alt + Shift + I` : Focus sidebar search filter and clear current value
   - `Ctrl + Alt + Backquote` : Toggle sidebar tags section expandness
   - `Ctrl + Alt + 1/2/3` : Toggle sidebar fav/all/auto section expandness

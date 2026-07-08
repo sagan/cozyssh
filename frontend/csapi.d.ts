@@ -1937,7 +1937,7 @@ export interface ISearchDecorationOptions {
 	activeMatchColorOverviewRuler: string;
 }
 export interface TerminalHandle {
-	sendData: (data: string) => void;
+	sendData: (data: string | BufferSource | Blob) => void;
 	focus: () => void;
 	getSelection: () => string;
 	selectAll: () => void;
@@ -1990,6 +1990,7 @@ export interface TabData {
 }
 export type TerminalRefMap = Record<string, TerminalHandle | ScratchpadHandle | null>;
 export interface Store {
+	filterStr: string;
 	asyncDialogOpen: boolean;
 	sendScope: 0 | 1 | 2;
 	/**
@@ -2036,6 +2037,10 @@ export interface Store {
 	buttons: ButtonData[];
 	sysinfo: Sysinfo;
 	tagsExpanded: number;
+	favExpanded: number;
+	allExpanded: number;
+	autoExpanded: number;
+	expandedGroups: Set<string>;
 	vars: Record<string, string>;
 	/** Local (browser-only) vars. All names have a "local_" (case-insensitive) prefix. */
 	localVars: Record<string, string>;
@@ -2255,10 +2260,12 @@ declare global {
 	 */
 	function csRunScript(payload: CsRunScriptPayload): Promise<void>;
 	/**
-	 * Send data to the terminal with the given pane id.
+	 * Send input data to the terminal with the given pane id.
+	 * @param data Data to send. If string, it will first be converted to \r line breaks and encoded as UTF-8.
+	 *             If BufferSource or Blob, it will be sent as is.
 	 * @param paneId defaults to active terminal pane id.
 	 */
-	function csSendData(data: string, paneId?: string): void;
+	function csSendData(data: string | BufferSource | Blob, paneId?: string): void;
 	/**
 	 * Get all state of CozySSH.
 	 */

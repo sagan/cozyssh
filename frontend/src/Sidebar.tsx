@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
-import { useSearchParams } from "react-router";
 import {
   List,
   ListItem,
@@ -95,7 +94,6 @@ import {
   type HostForm,
   type ServiceWorkerStatus,
   apiReqHeaders,
-  cutPrefix,
   filterHosts,
   forceReload,
   getHostGroupPath,
@@ -103,6 +101,7 @@ import {
   getSSHCommand,
   getSSHConfigBlock,
   getSSHCopyIdCommand,
+  hostLabel,
   isValidHostname,
   localShellHost,
   openHostInNewWindow,
@@ -138,6 +137,9 @@ import {
   setAutoExpanded,
   setFavExpanded,
   setExpandedGroups,
+  toggleGroupExpanded,
+  setFilterStr,
+  openAddHostForm,
 } from "./store";
 import { useShallow } from "zustand/react/shallow";
 import FreeTextField from "./components/FreeTextField";
@@ -231,6 +233,7 @@ export default function Sidebar({
   const allExpanded = useStore((state) => state.allExpanded);
   const autoExpanded = useStore((state) => state.autoExpanded);
   const expandedGroups = useStore((state) => state.expandedGroups);
+  const filterStr = useStore((state) => state.filterStr);
 
   const [swStatus, setSwStatus] = useState<ServiceWorkerStatus>("unknown");
 
@@ -629,8 +632,6 @@ export default function Sidebar({
     }
   }, [fetchWebdavStatus]);
 
-  const [startupParams] = useSearchParams();
-  const [filterStr, setFilterStr] = useState(startupParams.get("filter") || "");
   const [showTagsToggle, setShowTagsToggle] = useState(false);
   const tagsContainerRef = useRef<HTMLDivElement | null>(null);
   const localShellRef = useRef<HTMLLIElement | null>(null);
@@ -649,18 +650,6 @@ export default function Sidebar({
   } | null>(null);
   const [tagContextMenuOpen, setTagContextMenuOpen] = useState(false);
   const [tagContextMenu, setTagContextMenu] = useState<{ element: Element; tag: string } | null>(null);
-
-  const toggleGroupExpanded = useCallback((path: string) => {
-    setExpandedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(path)) {
-        next.delete(path);
-      } else {
-        next.add(path);
-      }
-      return next;
-    });
-  }, []);
 
   // Group context menu states
   const [groupContextMenuOpen, setGroupContextMenuOpen] = useState(false);
@@ -714,13 +703,6 @@ export default function Sidebar({
       setLoading(false);
     }
   }, [hosts, loading]);
-
-  useEffect(() => {
-    window.csSetSidebarFilter = setFilterStr;
-    return () => {
-      delete (window as Partial<typeof globalThis>).csSetSidebarFilter;
-    };
-  }, []);
 
   const fetchPasswords = useCallback(async () => {
     try {
@@ -1142,36 +1124,6 @@ export default function Sidebar({
     const url = `${window.location.origin}/##${tag}`;
     navigator.clipboard.writeText(url);
   }, [tagContextMenu]);
-
-  const handleAddOpen = useCallback(() => {
-    const data: HostForm = {
-      name: "",
-      hostname: "",
-      user: "root",
-      port: "22",
-      source: "",
-      identityFile: "",
-      proxyJump: "",
-      remoteCommand: "",
-      addressFamily: "",
-      userKnownHostsFile: "",
-      strictHostKeyChecking: "",
-      hostKeyAlgorithms: "",
-      verifyHostKeyDns: "",
-      sendEnv: "",
-      localForward: "",
-      remoteForward: "",
-      tags: "",
-      comment: "",
-      password: "",
-      passwordExists: false,
-      clearPassword: false,
-    };
-    setEditHostName("");
-    setHostFormData(data);
-    setInitialHostFormData(data);
-    setEditHostDialogOpen(true);
-  }, []);
 
   const handleEditOpen = useCallback(() => {
     if (!contextMenu) {
@@ -2078,7 +2030,7 @@ export default function Sidebar({
           if (selectedIndex >= 0 && selectedIndex < flatList.length) {
             const selectedItem = flatList[selectedIndex];
             if (selectedItem.type === "group") {
-              toggleGroupExpanded(selectedItem.path);
+              toggleGroupExpanded(selectedItem.path, e.ctrlKey);
             } else {
               if (e.ctrlKey) {
                 openHostInNewWindow(selectedItem.host.name);
@@ -2091,7 +2043,7 @@ export default function Sidebar({
         }
       }
     },
-    [flatList, flatListIds, selectedIndex, toggleGroupExpanded],
+    [flatList, flatListIds, selectedIndex],
   );
 
   const uniqueTags = useMemo(() => {
@@ -2130,7 +2082,6 @@ export default function Sidebar({
             isMobile={isMobile}
             isTouch={isTouch}
             expandedGroups={expandedGroups}
-            toggleGroupExpanded={toggleGroupExpanded}
             setDraggedItem={setDraggedItem}
             draggedItem={draggedItem}
             dragOverTarget={dragOverTarget}
@@ -2290,7 +2241,7 @@ export default function Sidebar({
           <IconButton
             size="small"
             title="New Server"
-            onClick={handleAddOpen}
+            onClick={openAddHostForm}
             sx={{ bgcolor: "action.hover", border: "1px solid #ccc" }}
           >
             <AddIcon fontSize="small" />
@@ -2619,7 +2570,7 @@ export default function Sidebar({
             const target = contextMenu.target;
             setContextMenuOpen(false);
             const url = `${window.location.origin}/#${
-              target.source !== "known_hosts" ? target.name : `${target.user || "root"}@${target.hostname}`
+              target.source !== "known_hosts" ? target.name : hostLabel(target, true)
             }`;
             navigator.clipboard.writeText(url);
           }}
@@ -3345,8 +3296,10 @@ export default function Sidebar({
                   <br />
                   <b>Ctrl + Alt + Shift + L</b> : Toggle Lock/Unlock current tab
                   <br />
-                  <b>Alt + I</b> : Focus sidebar search filter, use <b>↑ ↓</b> to select, <b>Enter</b> to open,&nbsp;
-                  <b>Alt + Enter</b> to open in current tab, <b>Ctrl + Enter</b> to open in new window,&nbsp;
+                  <b>Alt + I</b> : Focus sidebar search filter, use <b>↑ ↓</b> to select, <b>Enter</b> to open (or
+                  toggle group expandness),&nbsp;
+                  <b>Alt + Enter</b> to open in current tab, <b>Ctrl + Enter</b> to open in new window (or toggle group
+                  and all sub-groups expandness),&nbsp;
                   <b>Shift + Enter</b> to open context menu
                   <br />
                   <b>Alt + Shift + I</b> : Focus sidebar search filter and clear current value
@@ -3741,7 +3694,7 @@ function HostListItem({
   }, [isSelected]);
 
   const isFavourite = host.isFavourite;
-  let secondaryText = `${host.user && host.user !== "root" ? host.user + "@" : ""}${host.hostname}`;
+  let secondaryText = hostLabel(host);
   if (filter && host.comment) {
     const matchedComment = searchStringAny(host.comment, filter);
     if (matchedComment) {
@@ -3805,7 +3758,7 @@ function HostListItem({
                   color: isFavourite ? "primary.main" : "text.primary",
                 }}
               >
-                {section === "auto" ? cutPrefix(host.name, "root@")[0] : host.name}
+                {section === "auto" ? hostLabel(host) : host.name}
               </Typography>
               <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 0.25 }}>
                 {host.tags &&
@@ -3852,7 +3805,6 @@ function TreeGroupItem({
   isMobile,
   isTouch,
   expandedGroups,
-  toggleGroupExpanded,
   setDraggedItem,
   draggedItem,
   dragOverTarget,
@@ -3866,7 +3818,6 @@ function TreeGroupItem({
   isMobile: boolean;
   isTouch: boolean;
   expandedGroups: Set<string>;
-  toggleGroupExpanded: (path: string) => void;
   setDraggedItem: (item: { type: "group"; path: string } | { type: "server"; name: string } | null) => void;
   draggedItem: { type: "group"; path: string } | { type: "server"; name: string } | null;
   dragOverTarget: { id: string; effect: "before" | "inside" } | null;
@@ -3950,7 +3901,7 @@ function TreeGroupItem({
         cursor: "grab",
       }}
     >
-      <ListItemButton onClick={() => toggleGroupExpanded(node.path)} sx={{ py: 0.25, px: 1 }}>
+      <ListItemButton onClick={(e) => toggleGroupExpanded(node.path, e.ctrlKey)} sx={{ py: 0.25, px: 1 }}>
         <ListItemIcon sx={{ minWidth: 24 }}>
           {isExpanded ? (
             <ExpandMoreIcon fontSize="small" sx={{ color: "text.secondary" }} />
@@ -4011,7 +3962,7 @@ function TreeServerItem({
   const host = node.host;
   const isDragOver = dragOverTarget?.id === node.id;
   const isFavourite = host.isFavourite;
-  let secondaryText = `${host.user && host.user !== "root" ? host.user + "@" : ""}${host.hostname}`;
+  let secondaryText = hostLabel(host);
   if (filterStr && host.comment) {
     const matchedComment = searchStringAny(host.comment, filterStr);
     if (matchedComment) {
@@ -4133,7 +4084,7 @@ function TreeServerItem({
             </Box>
           }
           secondary={
-            (!host.isAuto || host.name !== `${host.user || "root"}@${host.hostname}`) && (
+            !host.isAuto && (
               <Typography
                 variant="caption"
                 color="text.secondary"

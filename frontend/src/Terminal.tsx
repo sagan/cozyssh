@@ -48,7 +48,7 @@ import {
 import { type PaneData, notify, getIntVar } from "./store";
 
 export interface TerminalHandle {
-  sendData: (data: string) => void;
+  sendData: (data: string | BufferSource | Blob) => void;
   focus: () => void;
   getSelection: () => string;
   selectAll: () => void;
@@ -182,10 +182,14 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
     }, [isAltActive]);
 
     useImperativeHandle(ref, () => ({
-      sendData: (data: string) => {
+      sendData: (data: string | BufferSource | Blob) => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
-          data = data.replace(/\r\n|\r|\n/g, "\n");
-          wsRef.current.send(new TextEncoder().encode(data));
+          if (typeof data === "string") {
+            // PTY input expects \r as Enter / new line
+            data = data.replace(/\r?\n|\r/g, "\r");
+            data = new TextEncoder().encode(data);
+          }
+          wsRef.current.send(data);
         }
       },
       focus: () => {

@@ -109,6 +109,7 @@ export interface TabData {
 export type TerminalRefMap = Record<string, TerminalHandle | ScratchpadHandle | null>;
 
 interface Store {
+  filterStr: string;
   asyncDialogOpen: boolean;
   sendScope: 0 | 1 | 2;
   /**
@@ -224,7 +225,10 @@ channel.onmessage = (event) => {
   }
 };
 
+const initialSearchParams = new URLSearchParams(location.search);
+
 export const useStore = create<Store>(() => ({
+  filterStr: initialSearchParams.get("filter") || "",
   asyncDialogOpen: false,
   sendScope: 0,
   appendNewLine: true,
@@ -368,6 +372,8 @@ export const updateRecentButtonId = (id: string) => {
     return { recentButtonIds: updated };
   });
 };
+
+export const setFilterStr = (filterStr: string) => useStore.setState({ filterStr });
 
 export const setAsyncDialogOpen = (update: boolean | ((data: boolean) => boolean)) =>
   useStore.setState((state) => ({
@@ -1800,4 +1806,50 @@ export async function updateConfig(config: ConfigRequest) {
   } catch (e) {
     notify(`Failed to save setting: ${e}`, "error", TOAST_KEY_API_SETTINGS);
   }
+}
+
+export function toggleGroupExpanded(path: string, includeChildren = false) {
+  const { expandedGroups, groups } = getStore();
+  const next = new Set(expandedGroups);
+  const subGroups = includeChildren ? groups.filter((g) => g === path || g.startsWith(path + "/")) : [path];
+  if (next.has(path)) {
+    for (const g of subGroups) {
+      next.delete(g);
+    }
+  } else {
+    for (const g of subGroups) {
+      next.add(g);
+    }
+  }
+  setExpandedGroups(next);
+}
+
+export function openAddHostForm() {
+  const data: HostForm = {
+    name: "",
+    hostname: "",
+    user: "root",
+    port: "22",
+    source: "",
+    identityFile: "",
+    proxyJump: "",
+    remoteCommand: "",
+    addressFamily: "",
+    userKnownHostsFile: "",
+    strictHostKeyChecking: "",
+    hostKeyAlgorithms: "",
+    verifyHostKeyDns: "",
+    sendEnv: "",
+    localForward: "",
+    remoteForward: "",
+    tags: "",
+    comment: "",
+    password: "",
+    passwordExists: false,
+    clearPassword: false,
+  };
+  setEditHostName("");
+  setHostFormData(data);
+  setInitialHostFormData(data);
+  setEditHostDialogOpen(true);
 }

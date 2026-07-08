@@ -68,6 +68,7 @@ import {
   refreshData,
   toastKeyMuteSet,
   fetchSessions,
+  setFilterStr,
 } from "./store";
 import { dialogs } from "./Dialogs";
 import type { AppletData } from "./AppletWrapper";
@@ -119,6 +120,28 @@ if (__CS_ENV__ === 1) {
   };
   window.addEventListener("click", urlClickHandle);
   window.addEventListener("auxclick", urlClickHandle);
+  const location = {};
+  Object.defineProperty(location, "href", {
+    get() {
+      return undefined;
+    },
+    set(value) {
+      if (value) {
+        appOpenUrl!(value);
+      }
+    },
+  });
+  const dummyWindow = { location } as Window;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (window as any)["_open"] = window.open;
+  (window as Partial<typeof globalThis>).open = function (url) {
+    if (url) {
+      appOpenUrl!(new URL(url).href);
+      return null;
+    } else {
+      return dummyWindow;
+    }
+  };
 }
 
 // Use Proxy to intercept __CS_TERMINAL_OPTIONS__
@@ -220,6 +243,7 @@ window.csAttach = attachSession;
 window.csRefresh = refreshData;
 window.csClose = closeTabOrPane;
 window.csGetSessions = fetchSessions;
+window.csSetSidebarFilter = setFilterStr;
 
 window.csFocus = (tabOrPaneId?: string) => {
   if (isMuiModalOpen()) {
@@ -630,7 +654,7 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     };
   };
 
-  window.csSendData = (data: string, paneId?: string) => {
+  window.csSendData = (data: string | BufferSource | Blob, paneId?: string) => {
     const { activePaneId } = getStore();
     const refs = cb.getTerminalRefs();
     const term = refs[paneId ?? activePaneId];

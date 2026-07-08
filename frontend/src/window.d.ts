@@ -216,10 +216,12 @@ declare global {
    */
   function csRunScript(payload: CsRunScriptPayload): Promise<void>;
   /**
-   * Send data to the terminal with the given pane id.
+   * Send input data to the terminal with the given pane id.
+   * @param data Data to send. If string, it will first be converted to \r line breaks and encoded as UTF-8.
+   *             If BufferSource or Blob, it will be sent as is.
    * @param paneId defaults to active terminal pane id.
    */
-  function csSendData(data: string, paneId?: string): void;
+  function csSendData(data: string | BufferSource | Blob, paneId?: string): void;
   /**
    * Get all state of CozySSH.
    */
