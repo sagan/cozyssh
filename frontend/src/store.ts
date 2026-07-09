@@ -699,10 +699,11 @@ export const setExpandedGroups = (update: Set<string> | ((prev: Set<string>) => 
 
 export const toggleExpandAllGroups = (open?: boolean) => {
   const { expandedGroups, groups } = getStore();
-  if (open === false || JSON.stringify(Array.from(expandedGroups).sort()) === JSON.stringify([...groups].sort())) {
-    setExpandedGroups(new Set<string>());
-  } else {
+  open = open ?? JSON.stringify(Array.from(expandedGroups).sort()) !== JSON.stringify([...groups].sort());
+  if (open) {
     setExpandedGroups(new Set<string>(groups));
+  } else {
+    setExpandedGroups(new Set<string>());
   }
 };
 
