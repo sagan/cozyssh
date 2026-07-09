@@ -40,6 +40,8 @@ export interface Sysinfo {
     savePassword?: "ask" | "always" | "never";
     configDir?: string;
     sshDir?: string;
+    defaultIdentityPath?: string;
+    defaultIdentityPublicKey?: string;
 }
 export interface SaveWebdavSettingsRequest {
     url: string;

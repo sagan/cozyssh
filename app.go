@@ -225,16 +225,19 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 			groups = []string{}
 		}
 		pinned := session.GlobalManager.GetAll(true)
+		identityPath, identityPublicKey := sshmanager.GetDefaultIdentityInfo()
 		return &models.FullData{
 			Sysinfo: models.Sysinfo{
-				Username:        common.User,
-				Sitename:        displayHostname,
-				Version:         Version,
-				InsecureAllowed: flags.AllowInsecure,
-				IsSecure:        isSecureRequest(r),
-				SavePassword:    cfg.SavePassword,
-				ConfigDir:       cfg.ConfigDir,
-				SSHDir:          cfg.AbsSSHDir,
+				Username:                 common.User,
+				Sitename:                 displayHostname,
+				Version:                  Version,
+				InsecureAllowed:          flags.AllowInsecure,
+				IsSecure:                 isSecureRequest(r),
+				SavePassword:             cfg.SavePassword,
+				ConfigDir:                cfg.ConfigDir,
+				SSHDir:                   cfg.AbsSSHDir,
+				DefaultIdentityPath:      identityPath,
+				DefaultIdentityPublicKey: identityPublicKey,
 			},
 			Hosts:   hosts,
 			Groups:  groups,

@@ -165,6 +165,7 @@ export const TOAST_KEY_SCRIPT = "cs-script";
 export const TOAST_KEY_API_SETTINGS = "cs-api-settings";
 export const TOAST_KEY_API_FULLDATA = "cs-api-fulldata";
 export const TOAST_KEY_COPY_TUNNEL_ENTRYPOINT = "cs-copy-tunnel-entrypoint";
+export const TOAST_KEY_COPY = "cs-copy";
 
 /**
  * Used as a special flag in url hash to indicate the mobile input panel is currently open.

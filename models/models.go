@@ -47,14 +47,16 @@ type WebdavStatus struct {
 }
 
 type Sysinfo struct {
-	Username        string `json:"username,omitempty"`
-	Sitename        string `json:"sitename,omitempty"`
-	Version         string `json:"version,omitempty"`
-	InsecureAllowed bool   `json:"insecureAllowed,omitempty"`
-	IsSecure        bool   `json:"isSecure,omitempty"`
-	SavePassword    string `json:"savePassword,omitempty" ts_type:"\"ask\" | \"always\" | \"never\""`
-	ConfigDir       string `json:"configDir,omitempty"`
-	SSHDir          string `json:"sshDir,omitempty"`
+	Username                 string `json:"username,omitempty"`
+	Sitename                 string `json:"sitename,omitempty"`
+	Version                  string `json:"version,omitempty"`
+	InsecureAllowed          bool   `json:"insecureAllowed,omitempty"`
+	IsSecure                 bool   `json:"isSecure,omitempty"`
+	SavePassword             string `json:"savePassword,omitempty" ts_type:"\"ask\" | \"always\" | \"never\""`
+	ConfigDir                string `json:"configDir,omitempty"`
+	SSHDir                   string `json:"sshDir,omitempty"`
+	DefaultIdentityPath      string `json:"defaultIdentityPath,omitempty"`
+	DefaultIdentityPublicKey string `json:"defaultIdentityPublicKey,omitempty"`
 }
 
 type SaveWebdavSettingsRequest struct {

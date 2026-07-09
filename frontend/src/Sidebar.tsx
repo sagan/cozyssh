@@ -59,8 +59,6 @@ import type {
   HostData,
   PasswordUpdateRequest,
   Session,
-  CopyIDRequest,
-  CopyIDResponse,
   PasswordsResponse,
   PasswordsUnlockRequest,
   PasswordsRevealRequest,
@@ -140,11 +138,14 @@ import {
   toggleGroupExpanded,
   setFilterStr,
   openAddHostForm,
+  toggleExpandAllGroups,
+  sshCopyId,
 } from "./store";
 import { useShallow } from "zustand/react/shallow";
 import FreeTextField from "./components/FreeTextField";
 import SSHImportTab from "./SSHImportTab";
 import SSHExportTab from "./SSHExportTab";
+import ChipCopy from "./components/ChipCopy";
 
 const drawerWidth = 260;
 
@@ -204,6 +205,8 @@ export default function Sidebar({
   const sysSitename = useStore((state) => state.sysinfo.sitename);
   const sysConfigDir = useStore((state) => state.sysinfo.configDir);
   const sysSshDir = useStore((state) => state.sysinfo.sshDir);
+  const sysDefaultIdentityPath = useStore((state) => state.sysinfo.defaultIdentityPath);
+  const sysDefaultIdentityPublicKey = useStore((state) => state.sysinfo.defaultIdentityPublicKey);
   const activeSessionIds = useStore(
     useShallow((state) =>
       state.tabs.flatMap((t) => t.panes.filter((p) => p.state !== "stolen").map((p) => p.sessionId || p.id)),
@@ -670,6 +673,23 @@ export default function Sidebar({
     navigator.clipboard.writeText(getSSHConfigBlock(getStore().hostFormData));
   }, []);
 
+  const handleCopyUploadIdentityCommand = useCallback(() => {
+    setHostTitleMenuAnchor(null);
+    navigator.clipboard.writeText(
+      getSSHCopyIdCommand(getStore().hostFormData, getStore().sysinfo.defaultIdentityPublicKey),
+    );
+  }, []);
+
+  const handleCopySSHCopyIdCommand = useCallback(() => {
+    setHostTitleMenuAnchor(null);
+    navigator.clipboard.writeText(getSSHCopyIdCommand(getStore().hostFormData));
+  }, []);
+
+  const handleRunSSHCopyId = useCallback(() => {
+    setHostTitleMenuAnchor(null);
+    sshCopyId(getStore().hostFormData);
+  }, []);
+
   const handlePasteSshConfigBlock = useCallback(async () => {
     setHostTitleMenuAnchor(null);
     try {
@@ -1132,29 +1152,7 @@ export default function Sidebar({
     const target = contextMenu.target;
     setContextMenuOpen(false);
     const isAuto = target.source === "known_hosts";
-    const data: HostForm = {
-      name: isAuto ? target.hostname : target.name,
-      hostname: target.hostname,
-      user: target.user || "root",
-      port: target.port || "22",
-      source: "",
-      identityFile: target.identityFile || "",
-      proxyJump: target.proxyJump || "",
-      remoteCommand: target.remoteCommand || "",
-      addressFamily: target.addressFamily || "",
-      userKnownHostsFile: target.userKnownHostsFile || "",
-      strictHostKeyChecking: target.strictHostKeyChecking || "",
-      hostKeyAlgorithms: target.hostKeyAlgorithms || "",
-      verifyHostKeyDns: target.verifyHostKeyDns || "",
-      sendEnv: target.sendEnv || "",
-      localForward: target.localForward || "",
-      remoteForward: target.remoteForward || "",
-      tags: target.tags ? target.tags.join(" ") : "",
-      comment: target.comment || "",
-      password: target.passwordExists ? PASSWORD_PLACEHOLDER : "",
-      passwordExists: target.passwordExists,
-      clearPassword: false,
-    };
+    const data: HostForm = { ...target, tags: target.tags?.join(" ") || "" };
     setEditHostName(isAuto ? "" : target.name);
     setHostFormData(data);
     setInitialHostFormData(data);
@@ -1246,87 +1244,20 @@ export default function Sidebar({
     }
     const target = contextMenu.target;
     setContextMenuOpen(false);
-
-    let passwordInput: string | undefined = undefined;
-    let expectedFingerprint: string | undefined = undefined;
-    while (true) {
-      try {
-        const payload: CopyIDRequest = {
-          name: target.name,
-          password: passwordInput,
-          expectedFingerprint,
-        };
-
-        const res = await fetch("/api/hosts/copy-id", {
-          method: METHOD_POST,
-          headers: apiReqHeaders(),
-          body: JSON.stringify(payload),
-        });
-
-        if (!res.ok) {
-          const text = await res.text();
-          dialogs.alert(`ssh-copy-id "${payload.name}": Error copying SSH key: ${text || res.statusText}`);
-          break;
-        }
-
-        const data = (await res.json()) as CopyIDResponse;
-        if (data.status === "success") {
-          dialogs.alert(`ssh-copy-id "${payload.name}": ${data.message}`);
-          break;
-        } else if (data.status === "need_app_password") {
-          const appPwd = await dialogs.promptPassword(
-            `ssh-copy-id "${payload.name}": ${
-              data.message || "The password store is locked. Enter your CozySSH app password to unlock it:"
-            }`,
-          );
-          if (!appPwd) {
-            break;
-          }
-          const res = await fetch("/api/login", {
-            method: METHOD_POST,
-            headers: {
-              [HEADER_CONTENT_TYPE]: MIME_JSON,
-            },
-            body: JSON.stringify({ password: appPwd }),
-          });
-          if (!res.ok) {
-            dialogs.alert(`ssh-copy-id "${payload.name}": Invalid app password, can't unlock password store.`);
-            break;
-          }
-        } else if (data.status === "need_password") {
-          const promptMsg = `ssh-copy-id "${payload.name}": ${
-            data.message || `Enter password for ${target.user || "root"}@${target.hostname}:`
-          }`;
-          const pwd = await dialogs.promptPassword(promptMsg);
-          if (pwd === null) {
-            break;
-          }
-          passwordInput = pwd;
-        } else if (data.status === "need_hostkey_confirm") {
-          if (
-            !(await dialogs.confirm(
-              `ssh-copy-id "${payload.name}": host key isn't trusted: ${data.message}. ` +
-                `New host key finterprint: ${data.fingerprint}. Accept it?`,
-              "",
-              true,
-            ))
-          ) {
-            return;
-          }
-          if (!data.fingerprint) {
-            break;
-          }
-          expectedFingerprint = data.fingerprint;
-        } else {
-          dialogs.alert(`ssh-copy-id "${payload.name}": Error: ${data.message}`);
-          break;
-        }
-      } catch (err: unknown) {
-        dialogs.alert(`ssh-copy-id "${target.name}": Error: ${err}`);
-        break;
-      }
-    }
+    sshCopyId(target);
   }, [contextMenu]);
+
+  const handleToggleExpandAll = useCallback(() => {
+    setGroupContextMenuOpen(false);
+    if (!groupContextMenu) {
+      return;
+    }
+    if (groupContextMenu.path) {
+      toggleGroupExpanded(groupContextMenu.path, true);
+    } else {
+      toggleExpandAllGroups();
+    }
+  }, [groupContextMenu]);
 
   const handleOpenGroupAll = useCallback(() => {
     setGroupContextMenuOpen(false);
@@ -1897,6 +1828,27 @@ export default function Sidebar({
     };
   }, [hosts, groups, filterStr, getGroupOrder]);
 
+  const groupHostCounts = useMemo(() => {
+    const counts: Record<string, number> = { "": 0 };
+    const process = (node: TreeNode) => {
+      if (node.type === "group") {
+        for (const child of node.children) {
+          process(child);
+        }
+      } else {
+        const gp = getHostGroupPath(node.host);
+        counts[""]++;
+        if (gp) {
+          counts[gp] = (counts[gp] || 0) + 1;
+        }
+      }
+    };
+    for (const node of filteredHosts.treeNodes) {
+      process(node);
+    }
+    return counts;
+  }, [filteredHosts.treeNodes]);
+
   const [flatList, flatListIds] = useMemo(() => {
     const list: SelectableItem[] = [];
     const ids: string[] = [];
@@ -2082,6 +2034,7 @@ export default function Sidebar({
             isMobile={isMobile}
             isTouch={isTouch}
             expandedGroups={expandedGroups}
+            groupHostCounts={groupHostCounts}
             setDraggedItem={setDraggedItem}
             draggedItem={draggedItem}
             dragOverTarget={dragOverTarget}
@@ -2379,7 +2332,7 @@ export default function Sidebar({
                   variant="caption"
                   sx={{ fontWeight: 700, color: "text.secondary", letterSpacing: "0.08em" }}
                 >
-                  FAVOURITES
+                  FAVOURITES{filteredHosts.favourite.length > 0 && ` (${filteredHosts.favourite.length})`}
                 </Typography>
               </Box>
               <Collapse in={!!favExpanded} timeout={0} unmountOnExit>
@@ -2405,7 +2358,13 @@ export default function Sidebar({
           )}
 
           <Box
-            onClick={() => setAllExpanded()}
+            onClick={(e) => {
+              const currentExpanded = getStore().allExpanded;
+              setAllExpanded(+!currentExpanded);
+              if (e.ctrlKey) {
+                toggleExpandAllGroups(!currentExpanded);
+              }
+            }}
             sx={{
               px: 2,
               py: 0.5,
@@ -2430,7 +2389,7 @@ export default function Sidebar({
                 <ChevronRightIcon fontSize="small" sx={{ mr: 0.5, opacity: 0.7 }} />
               )}
               <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary", letterSpacing: "0.08em" }}>
-                ALL
+                ALL{groupHostCounts[""] > 0 && ` (${groupHostCounts[""]})`}
               </Typography>
             </Box>
             <IconButton
@@ -2448,20 +2407,22 @@ export default function Sidebar({
           </Box>
 
           <Collapse in={!!allExpanded} timeout={0} unmountOnExit>
-            <Box
-              onDragOver={handleRootDragOver}
-              onDrop={handleRootDrop}
-              sx={{
-                minHeight: 40,
-                bgcolor: dragOverTarget?.id === "root" ? "action.selected" : "transparent",
-                borderRadius: 1,
-                transition: "background-color 0.2s",
-                border: dragOverTarget?.id === "root" ? "1px dashed" : "none",
-                borderColor: "primary.main",
-              }}
-            >
-              {filteredHosts.treeNodes.length > 0 && filteredHosts.treeNodes.map((node) => renderTreeNode(node, 0))}
-            </Box>
+            {filteredHosts.treeNodes.length > 0 && (
+              <Box
+                onDragOver={handleRootDragOver}
+                onDrop={handleRootDrop}
+                sx={{
+                  minHeight: 40,
+                  bgcolor: dragOverTarget?.id === "root" ? "action.selected" : "transparent",
+                  borderRadius: 1,
+                  transition: "background-color 0.2s",
+                  border: dragOverTarget?.id === "root" ? "1px dashed" : "none",
+                  borderColor: "primary.main",
+                }}
+              >
+                {filteredHosts.treeNodes.map((node) => renderTreeNode(node, 0))}
+              </Box>
+            )}
           </Collapse>
 
           {filteredHosts.auto.length > 0 && (
@@ -2488,7 +2449,7 @@ export default function Sidebar({
                   variant="caption"
                   sx={{ fontWeight: 700, color: "text.secondary", letterSpacing: "0.08em" }}
                 >
-                  AUTO
+                  AUTO{filteredHosts.auto.length > 0 && ` (${filteredHosts.auto.length})`}
                 </Typography>
               </Box>
               <Collapse in={!!autoExpanded} timeout={0} unmountOnExit>
@@ -2596,10 +2557,10 @@ export default function Sidebar({
             }
             const target = contextMenu.target;
             setContextMenuOpen(false);
-            navigator.clipboard.writeText(getSSHCopyIdCommand(target));
+            navigator.clipboard.writeText(getSSHCopyIdCommand(target, getStore().sysinfo.defaultIdentityPublicKey));
           }}
         >
-          Copy ssh-copy-id Command
+          Copy Upload Identity Command
         </MenuItem>
         <MenuItem
           onClick={() => {
@@ -2671,14 +2632,23 @@ export default function Sidebar({
         onClose={() => setGroupContextMenuOpen(false)}
         anchorEl={groupContextMenu?.element}
       >
-        <MenuItem onClick={handleOpenGroupAll}>Open All ({groupContextMenu?.path})</MenuItem>
-        <MenuItem onClick={handleOpenGroupAllInNewWindow}>Open All (New Window)</MenuItem>
-        <MenuItem onClick={handleOpenGroupAllSplitScreen}>Open All (Split Screen)</MenuItem>
-        <MenuItem onClick={handleAddSubGroupClick}>Add Sub-Group</MenuItem>
-        {groupContextMenu?.path && <MenuItem onClick={handleRenameGroupClick}>Rename Group</MenuItem>}
-        <MenuItem onClick={handleDeleteGroupClick} sx={{ color: "error.main" }}>
-          Delete Group
-        </MenuItem>
+        {!!groupContextMenu?.path && (
+          <>
+            <MenuItem onClick={handleOpenGroupAll}>Open All ({groupContextMenu?.path})</MenuItem>
+            <MenuItem onClick={handleOpenGroupAllInNewWindow}>Open All (New Window)</MenuItem>
+            <MenuItem onClick={handleOpenGroupAllSplitScreen}>Open All (Split Screen)</MenuItem>
+          </>
+        )}
+        <MenuItem onClick={handleToggleExpandAll}>Expand/Collapse All</MenuItem>
+        {!!groupContextMenu?.path && (
+          <>
+            <MenuItem onClick={handleAddSubGroupClick}>Add Sub-Group</MenuItem>
+            <MenuItem onClick={handleRenameGroupClick}>Rename Group</MenuItem>
+            <MenuItem onClick={handleDeleteGroupClick} sx={{ color: "error.main" }}>
+              Delete Group
+            </MenuItem>
+          </>
+        )}
       </Menu>
 
       {/* Dashboard Dialog */}
@@ -2926,7 +2896,7 @@ export default function Sidebar({
 
             {dialogTab === 3 && (
               <>
-                <Typography variant="subtitle2" sx={{ display: "flex", gap: 1 }} gutterBottom>
+                <Typography variant="subtitle2" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }} gutterBottom>
                   <code>Service Worker:</code>
                   <Chip label={swStatus} color={swStatus === "active" ? "success" : "default"} variant="outlined" />
                   <Button variant="outlined" color="error" size="small" onClick={handleClearCache}>
@@ -2934,21 +2904,29 @@ export default function Sidebar({
                   </Button>
                 </Typography>
                 <Divider sx={{ my: 1 }} />
-                <Typography variant="subtitle2" sx={{ display: "flex", gap: 1 }} gutterBottom>
+                <Typography variant="subtitle2" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }} gutterBottom>
                   <code>Config Dir:</code>
-                  <Chip color="default" label={sysConfigDir} />
+                  <ChipCopy label={sysConfigDir} />
                 </Typography>
-                <Typography variant="subtitle2" sx={{ display: "flex", gap: 1 }} gutterBottom>
+                <Typography variant="subtitle2" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }} gutterBottom>
                   <code>SSH Dir:</code>
-                  <Chip color="default" label={sysSshDir} />
+                  <ChipCopy label={sysSshDir} />
                 </Typography>
-                <Typography variant="subtitle2" sx={{ display: "flex", gap: 1 }} gutterBottom>
+                <Typography variant="subtitle2" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }} gutterBottom>
+                  <code>Default Identity Path:</code>
+                  <ChipCopy label={sysDefaultIdentityPath} />
+                </Typography>
+                <Typography variant="subtitle2" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }} gutterBottom>
+                  <code>Default Identity Public Key:</code>
+                  <ChipCopy label={sysDefaultIdentityPublicKey} />
+                </Typography>
+                <Typography variant="subtitle2" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }} gutterBottom>
                   <code>OS Username:</code>
-                  <Chip color="default" label={sysUsername} />
+                  <ChipCopy label={sysUsername} />
                 </Typography>
-                <Typography variant="subtitle2" sx={{ display: "flex", gap: 1 }} gutterBottom>
+                <Typography variant="subtitle2" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }} gutterBottom>
                   <code>Sitename:</code>
-                  <Chip color="default" label={sysSitename} />
+                  <ChipCopy label={sysSitename} />
                   <Button variant="text" size="small" onClick={handleChangeSitename}>
                     Change
                   </Button>
@@ -3260,7 +3238,8 @@ export default function Sidebar({
                   <b>Alt + O</b> : Open new tab dialog, use <b>← →</b> (or <b>Alt + H/L</b>) to switch view,&nbsp;
                   <b>↓ ↑</b> (or <b>Alt + J/K</b>) to select, <b>Enter</b> to open, <b>Alt + Enter</b> to open in
                   current tab, <b>Ctrl + Enter</b> to open in new window. Use <b>Alt + ↓↑</b> (or&nbsp;
-                  <b>Alt + Shift + J/K</b>) to jump through items quickly; Hold <b>Ctrl</b> to jump to top/bottom
+                  <b>Alt + Shift + J/K</b>) to jump through items quickly; Hold <b>Ctrl</b> to jump to top/bottom.&nbsp;
+                  <b>Ctrl/Alt + Mouse Click</b> also works
                   <br />
                   <b>Alt + A</b> : Open new tab dialog - tabs view
                   <br />
@@ -3300,7 +3279,7 @@ export default function Sidebar({
                   toggle group expandness),&nbsp;
                   <b>Alt + Enter</b> to open in current tab, <b>Ctrl + Enter</b> to open in new window (or toggle group
                   and all sub-groups expandness),&nbsp;
-                  <b>Shift + Enter</b> to open context menu
+                  <b>Shift + Enter</b> to open context menu. <b>Ctrl/Alt + Mouse Click</b> also works
                   <br />
                   <b>Alt + Shift + I</b> : Focus sidebar search filter and clear current value
                   <br />
@@ -3441,6 +3420,9 @@ export default function Sidebar({
           onClose={handleHostTitleMenuClose}
         >
           <MenuItem onClick={handleCopySshConfigBlock}>Copy SSH Config Block</MenuItem>
+          <MenuItem onClick={handleCopyUploadIdentityCommand}>Copy Upload Identity Command</MenuItem>
+          <MenuItem onClick={handleCopySSHCopyIdCommand}>Copy ssh-copy-id Command</MenuItem>
+          <MenuItem onClick={handleRunSSHCopyId}>Run ssh-copy-id</MenuItem>
           <MenuItem onClick={handlePasteSshConfigBlock}>Paste SSH Config Block</MenuItem>
         </Menu>
         <DialogContent>
@@ -3805,6 +3787,7 @@ function TreeGroupItem({
   isMobile,
   isTouch,
   expandedGroups,
+  groupHostCounts,
   setDraggedItem,
   draggedItem,
   dragOverTarget,
@@ -3818,6 +3801,7 @@ function TreeGroupItem({
   isMobile: boolean;
   isTouch: boolean;
   expandedGroups: Set<string>;
+  groupHostCounts: Record<string, number>;
   setDraggedItem: (item: { type: "group"; path: string } | { type: "server"; name: string } | null) => void;
   draggedItem: { type: "group"; path: string } | { type: "server"; name: string } | null;
   dragOverTarget: { id: string; effect: "before" | "inside" } | null;
@@ -3916,6 +3900,7 @@ function TreeGroupItem({
           primary={
             <Typography variant="body2" sx={{ fontWeight: 600, color: "text.primary" }}>
               {node.name}
+              {groupHostCounts[node.path] > 0 && ` (${groupHostCounts[node.path]})`}
             </Typography>
           }
         />

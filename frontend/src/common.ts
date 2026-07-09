@@ -1131,19 +1131,35 @@ export function getSSHCommand(host: HostData, hosts?: HostData[]): string {
   if (host.port && host.port !== "22") {
     command += ` -p ${host.port}`;
   }
-  command += ` ${host.user}@${host.hostname}`;
+  if (host.user) {
+    command += ` ${host.user}@${host.hostname}`;
+  } else {
+    command += ` ${host.hostname}`;
+  }
   return command;
 }
 
-export function getSSHCopyIdCommand(host: HostData): string {
-  let command = `ssh-copy-id`;
-  if (host.identityFile) {
-    command += ` -i "${host.identityFile}"`;
+export function getSSHCopyIdCommand(host: HostData | HostForm, publicKey?: string): string {
+  let command: string;
+  if (publicKey) {
+    command = "ssh";
+  } else {
+    command = `ssh-copy-id`;
+    if (host.identityFile) {
+      command += ` -i "${host.identityFile}"`;
+    }
   }
   if (host.port !== "22") {
     command += ` -p ${host.port}`;
   }
-  command += ` ${host.user}@${host.hostname}`;
+  if (host.user) {
+    command += ` ${host.user}@${host.hostname}`;
+  } else {
+    command += ` ${host.hostname}`;
+  }
+  if (publicKey) {
+    command += ` "mkdir -p ~/.ssh && chmod 700 ~/.ssh && touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && grep -qF '${publicKey}' ~/.ssh/authorized_keys || echo '${publicKey}' >> ~/.ssh/authorized_keys"`;
+  }
   return command;
 }
 

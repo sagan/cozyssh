@@ -1706,6 +1706,23 @@ func GetIdentityPathForHost(h *models.HostData) string {
 	return identityFile
 }
 
+func GetDefaultIdentityInfo() (identityPath string, identityPublicKey string) {
+	identityFile := filepath.Join(globalConfig.AbsSSHDir, "id_ed25519")
+	if _, err := os.Stat(identityFile); os.IsNotExist(err) {
+		identityFile = filepath.Join(globalConfig.AbsSSHDir, "id_rsa")
+	} else if err != nil {
+		return identityFile, ""
+	}
+	if _, err := os.Stat(identityFile); err != nil {
+		return identityFile, ""
+	}
+	publicKey, err := getPubKeyContent(identityFile)
+	if err != nil {
+		return identityFile, ""
+	}
+	return identityFile, publicKey
+}
+
 func getPubKeyContent(identityFile string) (string, error) {
 	pubPath := identityFile + ".pub"
 	pubBytes, err := os.ReadFile(pubPath)

@@ -29,6 +29,8 @@ import type {
   FullData,
   Session,
   ConfigRequest,
+  CopyIDRequest,
+  CopyIDResponse,
 } from "./api";
 import {
   type HostForm,
@@ -71,11 +73,13 @@ import {
   DEFAULT_BUTTON_GROUP,
   DEFAULT_FONT_SIZE,
   DEFAULT_TERMINAL_FONT_SIZE,
+  HEADER_CONTENT_TYPE,
   LOCAL_NAME,
   LOCAL_VAR_PREFIX,
   METHOD_DELETE,
   METHOD_POST,
   METHOD_PUT,
+  MIME_JSON,
   TAG_GROUP_PREFIX,
   TAG_ORDER_PREFIX,
   TOAST_KEY_API_SETTINGS,
@@ -693,9 +697,9 @@ export const setExpandedGroups = (update: Set<string> | ((prev: Set<string>) => 
     return { expandedGroups };
   });
 
-export const toggleExpandAllGroups = () => {
+export const toggleExpandAllGroups = (open?: boolean) => {
   const { expandedGroups, groups } = getStore();
-  if (JSON.stringify(Array.from(expandedGroups).sort()) === JSON.stringify([...groups].sort())) {
+  if (open === false || JSON.stringify(Array.from(expandedGroups).sort()) === JSON.stringify([...groups].sort())) {
     setExpandedGroups(new Set<string>());
   } else {
     setExpandedGroups(new Set<string>(groups));
@@ -1852,4 +1856,86 @@ export function openAddHostForm() {
   setHostFormData(data);
   setInitialHostFormData(data);
   setEditHostDialogOpen(true);
+}
+
+export async function sshCopyId(target: HostData | HostForm) {
+  let passwordInput: string | undefined = undefined;
+  let expectedFingerprint: string | undefined = undefined;
+  while (true) {
+    try {
+      const payload: CopyIDRequest = {
+        name: target.name,
+        password: passwordInput,
+        expectedFingerprint,
+      };
+
+      const res = await fetch("/api/hosts/copy-id", {
+        method: METHOD_POST,
+        headers: apiReqHeaders(),
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        dialogs.alert(`ssh-copy-id "${payload.name}": Error copying SSH key: ${text || res.statusText}`);
+        break;
+      }
+
+      const data = (await res.json()) as CopyIDResponse;
+      if (data.status === "success") {
+        dialogs.alert(`ssh-copy-id "${payload.name}": ${data.message}`);
+        break;
+      } else if (data.status === "need_app_password") {
+        const appPwd = await dialogs.promptPassword(
+          `ssh-copy-id "${payload.name}": ${
+            data.message || "The password store is locked. Enter your CozySSH app password to unlock it:"
+          }`,
+        );
+        if (!appPwd) {
+          break;
+        }
+        const res = await fetch("/api/login", {
+          method: METHOD_POST,
+          headers: {
+            [HEADER_CONTENT_TYPE]: MIME_JSON,
+          },
+          body: JSON.stringify({ password: appPwd }),
+        });
+        if (!res.ok) {
+          dialogs.alert(`ssh-copy-id "${payload.name}": Invalid app password, can't unlock password store.`);
+          break;
+        }
+      } else if (data.status === "need_password") {
+        const promptMsg = `ssh-copy-id "${payload.name}": ${
+          data.message || `Enter password for ${target.user || "root"}@${target.hostname}:`
+        }`;
+        const pwd = await dialogs.promptPassword(promptMsg);
+        if (pwd === null) {
+          break;
+        }
+        passwordInput = pwd;
+      } else if (data.status === "need_hostkey_confirm") {
+        if (
+          !(await dialogs.confirm(
+            `ssh-copy-id "${payload.name}": host key isn't trusted: ${data.message}. ` +
+              `New host key finterprint: ${data.fingerprint}. Accept it?`,
+            "",
+            true,
+          ))
+        ) {
+          return;
+        }
+        if (!data.fingerprint) {
+          break;
+        }
+        expectedFingerprint = data.fingerprint;
+      } else {
+        dialogs.alert(`ssh-copy-id "${payload.name}": Error: ${data.message}`);
+        break;
+      }
+    } catch (err: unknown) {
+      dialogs.alert(`ssh-copy-id "${target.name}": Error: ${err}`);
+      break;
+    }
+  }
 }
