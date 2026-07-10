@@ -688,7 +688,7 @@ export default function Sidebar({
 
   const handleCopySSHCopyIdCommand = useCallback(() => {
     setHostTitleMenuAnchor(null);
-    navigator.clipboard.writeText(getSSHCopyIdCommand(getStore().hostFormData));
+    navigator.clipboard.writeText(getSSHCopyIdCommand(getStore().hostFormData, getStore().sysinfo.defaultIdentityPath));
   }, []);
 
   const handleRunSSHCopyId = useCallback(() => {
@@ -2562,7 +2562,13 @@ export default function Sidebar({
             }
             const target = contextMenu.target;
             setContextMenuOpen(false);
-            navigator.clipboard.writeText(getSSHCopyIdCommand(target, getStore().sysinfo.defaultIdentityPublicKey));
+            navigator.clipboard.writeText(
+              getSSHCopyIdCommand(
+                target,
+                getStore().sysinfo.defaultIdentityPath,
+                getStore().sysinfo.defaultIdentityPublicKey,
+              ),
+            );
           }}
         >
           Copy Upload Identity Command
@@ -3447,11 +3453,21 @@ export default function Sidebar({
           open={!!hostTitleMenuAnchor}
           onClose={handleHostTitleMenuClose}
         >
-          <MenuItem onClick={handleCopySSHCommand}>Copy SSH Command</MenuItem>
-          <MenuItem onClick={handleCopyUploadIdentityCommand}>Copy Upload Identity Command</MenuItem>
-          <MenuItem onClick={handleCopySSHCopyIdCommand}>Copy ssh-copy-id Command</MenuItem>
-          <MenuItem onClick={handleCopySshConfigBlock}>Copy SSH Config Block</MenuItem>
-          <MenuItem onClick={handleRunSSHCopyId}>Run ssh-copy-id</MenuItem>
+          <MenuItem disabled={!hostFormData.hostname} onClick={handleCopySSHCommand}>
+            Copy SSH Command
+          </MenuItem>
+          <MenuItem disabled={!hostFormData.hostname} onClick={handleCopyUploadIdentityCommand}>
+            Copy Upload Identity Command
+          </MenuItem>
+          <MenuItem disabled={!hostFormData.hostname} onClick={handleCopySSHCopyIdCommand}>
+            Copy ssh-copy-id Command
+          </MenuItem>
+          <MenuItem disabled={!hostFormData.hostname} onClick={handleCopySshConfigBlock}>
+            Copy SSH Config Block
+          </MenuItem>
+          <MenuItem disabled={!hostFormData.hostname} onClick={handleRunSSHCopyId}>
+            Run ssh-copy-id
+          </MenuItem>
           <MenuItem onClick={handlePasteSshConfigBlock}>Paste SSH Config Block</MenuItem>
         </Menu>
         <DialogContent>
@@ -3683,7 +3699,11 @@ export default function Sidebar({
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditHostDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleSaveHost} disabled={!hostFormData.hostname || !hostFormDirty}>
+          <Button
+            variant="contained"
+            onClick={handleSaveHost}
+            disabled={!hostFormData.hostname || (!!editHostName && !hostFormDirty)}
+          >
             Save
           </Button>
         </DialogActions>

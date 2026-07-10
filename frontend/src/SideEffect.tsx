@@ -49,7 +49,7 @@ export default function SideEffect() {
       if ((btn.group || DEFAULT_BUTTON_GROUP) === activeGroup) {
         continue;
       }
-      if (btn.shortcut && btn.shortcut.length > 1) {
+      if (btn.shortcut && btn.shortcut.length > 1 && !btn.shortcut_scope) {
         shortcutButtons[btn.shortcut.toLowerCase()] = btn;
       }
     }

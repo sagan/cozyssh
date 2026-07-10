@@ -144,6 +144,8 @@ export interface ButtonData {
     shortcut: string;
     liquidjs?: number;
     mtime?: number;
+    shortcut_scope?: number;
+    meta?: Record<string, string>;
 }
 export interface ButtonsMoveRequest {
     id: string;

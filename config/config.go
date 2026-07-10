@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"math"
 	"os"
 	"path/filepath"
@@ -354,9 +355,7 @@ func (c *Config) GetVarsMtime() map[string]int64 {
 	defer c.mu.Unlock()
 
 	copied := make(map[string]int64, len(c.VarsMtime))
-	for k, v := range c.VarsMtime {
-		copied[k] = v
-	}
+	maps.Copy(copied, c.VarsMtime)
 	return copied
 }
 
@@ -365,30 +364,17 @@ func (c *Config) GetVars() map[string]string {
 	defer c.mu.Unlock()
 
 	copied := make(map[string]string, len(c.Vars))
-	for k, v := range c.Vars {
-		copied[k] = v
-	}
+	maps.Copy(copied, c.Vars)
 	return copied
 }
 
 func (c *Config) GetButtons() []*models.ButtonData {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
 	copied := make([]*models.ButtonData, len(c.Buttons))
 	for i, b := range c.Buttons {
-		copied[i] = &models.ButtonData{
-			Id:       b.Id,
-			Name:     b.Name,
-			Type:     b.Type,
-			Payload:  b.Payload,
-			Group:    b.Group,
-			AutoRun:  b.AutoRun,
-			Order:    b.Order,
-			Shortcut: b.Shortcut,
-			LiquidJS: b.LiquidJS,
-			Mtime:    b.Mtime,
-		}
+		copiedBtn := *b
+		copied[i] = &copiedBtn
 	}
 	return copied
 }

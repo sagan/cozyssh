@@ -625,31 +625,29 @@ export const setSysinfo = (sysinfo: Partial<Sysinfo>) =>
   useStore.setState((state) => ({ sysinfo: { ...state.sysinfo, ...sysinfo } }));
 
 export const prevButtonGroup = (includeHidden = false) => {
-  useStore.setState((state) => {
-    const groups = Array.from(new Set([DEFAULT_BUTTON_GROUP, ...state.buttons.map((button) => button.group)])).sort();
-    const idx = groups.indexOf(state.activeGroup);
-    let nextIdx = (idx - 1 + groups.length) % groups.length;
-    if (!includeHidden) {
-      while (nextIdx !== idx && groups[nextIdx].startsWith("_")) {
-        nextIdx = (nextIdx - 1 + groups.length) % groups.length;
-      }
+  const { buttons, activeGroup } = getStore();
+  const groups = Array.from(new Set([DEFAULT_BUTTON_GROUP, ...buttons.map((button) => button.group)])).sort();
+  const idx = groups.indexOf(activeGroup);
+  let nextIdx = (idx - 1 + groups.length) % groups.length;
+  if (!includeHidden) {
+    while (nextIdx !== idx && groups[nextIdx].startsWith("_")) {
+      nextIdx = (nextIdx - 1 + groups.length) % groups.length;
     }
-    return { activeGroup: groups[nextIdx] };
-  });
+  }
+  setActiveGroup(groups[nextIdx]);
 };
 
 export const nextButtonGroup = (includeHidden = false) => {
-  useStore.setState((state) => {
-    const groups = Array.from(new Set([DEFAULT_BUTTON_GROUP, ...state.buttons.map((button) => button.group)])).sort();
-    const idx = groups.indexOf(state.activeGroup);
-    let nextIdx = (idx + 1) % groups.length;
-    if (!includeHidden) {
-      while (nextIdx !== idx && groups[nextIdx].startsWith("_")) {
-        nextIdx = (nextIdx + 1) % groups.length;
-      }
+  const { buttons, activeGroup } = getStore();
+  const groups = Array.from(new Set([DEFAULT_BUTTON_GROUP, ...buttons.map((button) => button.group)])).sort();
+  const idx = groups.indexOf(activeGroup);
+  let nextIdx = (idx + 1) % groups.length;
+  if (!includeHidden) {
+    while (nextIdx !== idx && groups[nextIdx].startsWith("_")) {
+      nextIdx = (nextIdx + 1) % groups.length;
     }
-    return { activeGroup: groups[nextIdx] };
-  });
+  }
+  setActiveGroup(groups[nextIdx]);
 };
 
 /**
@@ -2024,16 +2022,7 @@ export function openEditTabHost(target?: TabData | string) {
 }
 
 export function openEditButtonDialog(btn: ButtonData) {
-  const data: ButtonForm = {
-    name: btn.name,
-    type: btn.type,
-    payload: btn.payload,
-    group: btn.group || DEFAULT_BUTTON_GROUP,
-    autorun: btn.autorun || 0,
-    order: btn.order || 0,
-    shortcut: btn.shortcut || "",
-    liquidjs: btn.liquidjs || 0,
-  };
+  const data: ButtonForm = { ...btn, group: btn.group || DEFAULT_BUTTON_GROUP };
   setEditButton(btn);
   setButtonFormData(data);
   setInitialBtnFormData(data);

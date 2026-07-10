@@ -64,6 +64,8 @@ export const ButtonDataSchema = z.object({
   shortcut: z.string().optional().default(""),
   liquidjs: z.number().int().min(0).max(2).optional(),
   mtime: z.number().int().optional(),
+  shortcut_scope: z.number().int().optional(),
+  meta: z.record(z.string(), z.string()).optional(),
 });
 
 // check client defined button schema type match with server side button type
@@ -1141,7 +1143,7 @@ export function getSSHCommand(host: HostData | HostForm, hosts?: HostData[]): st
   return command;
 }
 
-export function getSSHCopyIdCommand(host: HostData | HostForm, publicKey?: string): string {
+export function getSSHCopyIdCommand(host: HostData | HostForm, defaultIdentity?: string, publicKey?: string): string {
   let command: string;
   if (publicKey) {
     command = "ssh";
@@ -1149,6 +1151,8 @@ export function getSSHCopyIdCommand(host: HostData | HostForm, publicKey?: strin
     command = `ssh-copy-id`;
     if (host.identityFile) {
       command += ` -i "${host.identityFile}"`;
+    } else if (defaultIdentity) {
+      command += ` -i "${defaultIdentity}"`;
     }
   }
   if (host.port !== "22") {

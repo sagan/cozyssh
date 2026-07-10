@@ -129,6 +129,7 @@ export const MISC_FUNCTIONS: BuiltinButton[] = [
   { value: "TOGGLE_SIDEBAR_GROUPS", label: "Toggle Sidebar Groups", shortcut: "ctrl+alt+g" },
   { value: "OPEN_SCRATCHPAD", label: "Open Scratchpad", shortcut: "alt+s" },
   { value: "REFRESH", label: "Refresh Data" },
+  { value: "NONE", label: "None (Do Nothing)" },
 ] as const;
 
 export const BUILTIN_BUTTONS = [

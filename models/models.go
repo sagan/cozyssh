@@ -198,6 +198,9 @@ type ButtonData struct {
 	Shortcut string `json:"shortcut"`
 	LiquidJS int    `json:"liquidjs,omitempty"`
 	Mtime    int64  `json:"mtime,omitempty"` // button modified unix timestamp in milliseconds
+	// 0 - everywhere; 1 - active group only
+	ShortcutScope int               `json:"shortcut_scope,omitempty"`
+	Meta          map[string]string `json:"meta,omitempty" ts_type:"Record<string, string>"` // custom metadata
 }
 
 type ButtonsMoveRequest struct {

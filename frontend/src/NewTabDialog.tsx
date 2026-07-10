@@ -382,7 +382,10 @@ export default function NewTabDialog({
     if (viewMode !== "buttons") {
       return [];
     }
-    const list: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs" | "group" | "shortcut">[] = [];
+    const list: Pick<
+      ButtonData,
+      "id" | "name" | "type" | "payload" | "liquidjs" | "group" | "shortcut" | "shortcut_scope"
+    >[] = [];
     recentButtonIds.forEach((id) => {
       const userBtn = buttons.find((b) => b.id === id);
       if (userBtn) {
@@ -618,7 +621,7 @@ export default function NewTabDialog({
           subtitle,
           tooltip: b.type !== "run_script" ? b.payload : undefined,
           btn: b,
-          tag: b.shortcut,
+          tag: !b.shortcut_scope || (b.group || DEFAULT_BUTTON_GROUP) === activeGroup ? b.shortcut : undefined,
         });
       });
       addSection("Recently used", recentList);
@@ -667,7 +670,7 @@ export default function NewTabDialog({
           subtitle,
           tooltip: b.type !== "run_script" ? b.payload : undefined,
           btn: b,
-          tag: b.shortcut,
+          tag: !b.shortcut_scope ? b.shortcut : undefined,
         });
       });
       addSection("Other Groups", otherGroupList);
@@ -1117,21 +1120,20 @@ export default function NewTabDialog({
                         >
                           {item.label}
                         </Typography>
-                        <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 0.25 }}>
-                          {item.tag && (
-                            <Typography
-                              variant="caption"
-                              sx={{
-                                color: "inherit",
-                                fontSize: "typography.caption.fontSize",
-                                fontWeight: 600,
-                                opacity: 0.8,
-                              }}
-                            >
-                              {item.tag}
-                            </Typography>
-                          )}
-                        </Box>
+                        {item.tag && (
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              color: "inherit",
+                              lineHeight: 1.2,
+                              fontSize: "typography.caption.fontSize",
+                              fontWeight: 600,
+                              opacity: 0.8,
+                            }}
+                          >
+                            {item.tag}
+                          </Typography>
+                        )}
                       </Box>
                     }
                     secondary={

@@ -753,6 +753,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
             case "REFRESH":
               refreshData({ sync: 2 });
               break;
+            case "NONE":
+              break;
             default:
               break;
           }

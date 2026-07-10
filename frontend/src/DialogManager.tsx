@@ -909,6 +909,20 @@ export default function DialogManager({
               }}
               sx={{ flexGrow: 1 }}
             />
+            <FormControlLabel
+              title="Enable shortcut only if the button group is currently the active button group"
+              sx={{ flexShrink: 0, mr: 0, ml: 0, whiteSpace: "nowrap" }}
+              control={
+                <Checkbox
+                  checked={buttonFormData.shortcut_scope === 1}
+                  onChange={(e) =>
+                    setButtonFormData({ ...buttonFormData, shortcut_scope: e.target.checked ? 1 : undefined })
+                  }
+                  size="small"
+                />
+              }
+              label={<Typography variant="body2">Local shortcut</Typography>}
+            />
             {(buttonFormData.type === "run_script" || buttonFormData.type === "open_terminal") && (
               <FormControlLabel
                 title={`Automatically ${
@@ -1123,7 +1137,7 @@ export default function DialogManager({
           <Button
             variant="contained"
             onClick={saveButton}
-            disabled={!buttonFormData.name || !buttonFormData.payload || !buttonFormDirty}
+            disabled={!buttonFormData.name || !buttonFormData.payload || (!!editButton && !buttonFormDirty)}
           >
             Save
           </Button>
