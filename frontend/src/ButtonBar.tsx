@@ -51,7 +51,10 @@ const getButtonStyle = (btn: Pick<ButtonData, "type" | "liquidjs">) => {
 
 export interface ButtonBarProps {
   groups: string[];
-  handleButtonClick: (btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">) => void;
+  handleButtonClick: (
+    btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">,
+    alternativeMode?: number,
+  ) => void;
 }
 
 export default function ButtonBar({ groups, handleButtonClick }: ButtonBarProps) {
@@ -143,7 +146,7 @@ export default function ButtonBar({ groups, handleButtonClick }: ButtonBarProps)
                 btn.shortcut ? " (" + btn.shortcut.toUpperCase() + ")" : ""
               }${btn.type !== "run_script" ? ": " + btn.payload : ""}`}
               component="div"
-              onClick={() => handleButtonClick(btn)}
+              onClick={(e) => handleButtonClick(btn, e.ctrlKey ? 3 : e.shiftKey ? 2 : e.altKey ? 1 : 0)}
               onContextMenu={(e) => {
                 e.preventDefault();
                 setBtnMenuAnchor({ anchor: e.currentTarget, btn });
@@ -172,7 +175,7 @@ export default function ButtonBar({ groups, handleButtonClick }: ButtonBarProps)
         })}
       </Tabs>
       <Box sx={{ flexShrink: 0, px: 1, borderLeft: 1, borderColor: "divider" }}>
-        <IconButton size="small" title="New Button" onClick={openNewButtonDialog} sx={{ p: 0.5 }}>
+        <IconButton size="small" title="New Button" onClick={() => openNewButtonDialog()} sx={{ p: 0.5 }}>
           <AddIcon fontSize="small" />
         </IconButton>
       </Box>

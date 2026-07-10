@@ -66,7 +66,7 @@ import {
 
 export interface KeyboardManagerOptions {
   /** Called when a button shortcut is triggered */
-  handleButtonClick: (btn: ButtonData, isAutoRun?: boolean) => void;
+  handleButtonClick: (btn: ButtonData, alternativeMode?: number) => void;
   /** Getter for the live terminal ref map */
   getTerminalRefs: () => TerminalRefMap;
 }

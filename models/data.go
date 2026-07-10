@@ -33,23 +33,29 @@ var (
 		Type: WsTerminalMessageTypeHistoryStart,
 	})
 	WsMsgTabStateNormal, _ = json.Marshal(&WsTerminalMessage{
-		Type:     WsTerminalMessageTypeTabState,
-		IsPinned: false,
-		IsLocked: false,
+		Type: WsTerminalMessageTypeTabState,
 	})
 	WsMsgTabStatePinned, _ = json.Marshal(&WsTerminalMessage{
 		Type:     WsTerminalMessageTypeTabState,
 		IsPinned: true,
-		IsLocked: false,
 	})
 	WsMsgTabStateLocked, _ = json.Marshal(&WsTerminalMessage{
 		Type:     WsTerminalMessageTypeTabState,
 		IsPinned: true,
 		IsLocked: true,
 	})
+	WsMsgTabStateHidden, _ = json.Marshal(&WsTerminalMessage{
+		Type:     WsTerminalMessageTypeTabState,
+		IsPinned: true,
+		IsLocked: true,
+		IsHidden: true,
+	})
 )
 
-func GetWsTabStateMsg(isPinned bool, isLocked bool) []byte {
+func GetWsTabStateMsg(isPinned bool, isLocked bool, isHidden bool) []byte {
+	if isHidden {
+		return WsMsgTabStateHidden
+	}
 	if isLocked {
 		return WsMsgTabStateLocked
 	}

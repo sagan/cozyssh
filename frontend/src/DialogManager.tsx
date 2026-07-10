@@ -36,7 +36,6 @@ import {
   type ToastData,
   getKeyCombination,
   ButtonDataSchema,
-  generatePassword,
   parseHostName,
   getCanonicalHostString,
   getTemplateVariables,
@@ -83,9 +82,14 @@ import {
   saveButton,
   deleteButton,
   moveButton,
-  onButtonDialogClose,
   refreshData,
   openSaveTabToButtonDialog,
+  openEditHost,
+  openEditTabHost,
+  closeTabOrPane,
+  closeTab,
+  hideTab,
+  openAddHostForm,
 } from "./store";
 import NewTabDialog from "./NewTabDialog";
 import { dialogs } from "./Dialogs";
@@ -101,7 +105,10 @@ export interface DialogManagerProps {
   handleToggleFiles: () => void;
   handleReconnectTab: (id: string) => void;
   sendParsedString: (s: string, isLiquid?: boolean, userVars?: Record<string, string>) => void;
-  handleButtonClick: (btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">) => Promise<void>;
+  handleButtonClick: (
+    btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">,
+    alternativeMode?: number,
+  ) => Promise<void>;
 }
 
 const PluginManagerUrl =
@@ -136,6 +143,7 @@ export default function DialogManager({
   const btnMenuAnchor = useStore((state) => state.btnMenuAnchor);
   const toasts = useStore((state) => state.toasts);
   const buttonFormData = useStore((state) => state.buttonFormData);
+  const initialBtnFormData = useStore((state) => state.initialBtnFormData);
   const editButtonDialogOpen = useStore((state) => state.editButtonDialogOpen);
   const newTabDialogOpen = useStore((state) => state.newTabDialogOpen);
   const tabs = useStore((state) => state.tabs);
@@ -309,7 +317,6 @@ export default function DialogManager({
           }
 
           setButtonFormData({
-            id: validatedData.id || generatePassword(12),
             name: validatedData.name,
             type: validatedData.type,
             payload: validatedData.payload,
@@ -375,7 +382,6 @@ export default function DialogManager({
           }
 
           setButtonFormData({
-            id: buttonId || generatePassword(12),
             name: buttonName,
             type: "run_script",
             payload: text,
@@ -412,6 +418,10 @@ export default function DialogManager({
     await importFromUrl(PluginManagerUrl);
   }, [importFromUrl]);
 
+  const buttonFormDirty = useMemo(() => {
+    return !!initialBtnFormData && JSON.stringify(buttonFormData) !== JSON.stringify(initialBtnFormData);
+  }, [buttonFormData, initialBtnFormData]);
+
   return (
     <>
       <Menu
@@ -428,8 +438,18 @@ export default function DialogManager({
             }
             return (
               <>
-                {tab.type !== "scratchpad" && (
+                {tab.type !== "scratchpad" && tab.panes.length === 1 && (
                   <>
+                    {tab.panes[0].host !== LOCAL_NAME && (
+                      <MenuItem
+                        onClick={() => {
+                          handleCloseMenu();
+                          openEditTabHost(tab);
+                        }}
+                      >
+                        Edit {tab.panes[0].host}
+                      </MenuItem>
+                    )}
                     {tab.isPinned ? (
                       <MenuItem
                         className="hide-desktop"
@@ -441,7 +461,7 @@ export default function DialogManager({
                       >
                         Unpin Tab
                       </MenuItem>
-                    ) : tab.panes.length === 1 ? (
+                    ) : (
                       <MenuItem
                         className="hide-desktop"
                         onClick={() => {
@@ -452,7 +472,7 @@ export default function DialogManager({
                       >
                         Pin Tab
                       </MenuItem>
-                    ) : null}
+                    )}
                     {tab.isLocked ? (
                       <MenuItem
                         onClick={() => {
@@ -477,19 +497,47 @@ export default function DialogManager({
                     <MenuItem
                       onClick={() => {
                         handleCloseMenu();
-                        setSearchOpen(true);
-                        if (getStore().activeTabId === tab.id) {
-                          triggerFocusSearchInput();
-                        } else {
-                          activatePane(tab.activePaneId, tab.id);
-                          setTimeout(() => triggerFocusSearchInput(), 200);
-                        }
+                        hideTab(memoTabId);
+                        triggerFocus();
                       }}
                     >
-                      Find
+                      Run in Background
                     </MenuItem>
                   </>
                 )}
+                <MenuItem
+                  onClick={() => {
+                    handleCloseMenu();
+                    setSearchOpen(true);
+                    if (getStore().activeTabId === tab.id) {
+                      triggerFocusSearchInput();
+                    } else {
+                      activatePane(tab.activePaneId, tab.id);
+                      setTimeout(() => triggerFocusSearchInput(), 200);
+                    }
+                  }}
+                >
+                  Find
+                </MenuItem>
+                {tab.panes.length > 1 && (
+                  <MenuItem
+                    onClick={() => {
+                      handleCloseMenu();
+                      closeTab();
+                    }}
+                  >
+                    Close Tab
+                  </MenuItem>
+                )}
+                <MenuItem
+                  onClick={() => {
+                    handleCloseMenu();
+                    closeTabOrPane();
+                  }}
+                >
+                  Close Pane/Tab
+                </MenuItem>
+
                 {tab.type !== "scratchpad" && (
                   <>
                     <MenuItem
@@ -733,7 +781,12 @@ export default function DialogManager({
         disableRestoreFocus
         data-id={editButton?.id || ""}
         open={editButtonDialogOpen}
-        onClose={onButtonDialogClose}
+        onClose={() => {
+          if (buttonFormDirty) {
+            return;
+          }
+          setEditButtonDialogOpen(false);
+        }}
         fullWidth
         maxWidth="lg"
       >
@@ -1014,6 +1067,8 @@ export default function DialogManager({
                 <br />- <b>env</b>: Environment variables to send to SSH server. Format: <code>name=value</code>.&nbsp;
                 Use&nbsp;
                 <code>%0A</code> (\n) to seperate multiple variables.
+                <br />- <b>state</b>: Set the initial state of the opened terminal session: 0=normal, 1=pinned,
+                2=locked, 3=hidden.
                 <br /> E.g. <b>local?id=local-abc&title=Local&remoteCommand=tmux attach || tmux new</b>
                 <br /> It's possible to set multiple (up to 4) comma-separated servers to open them in split screen.
               </Typography>
@@ -1065,7 +1120,11 @@ export default function DialogManager({
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditButtonDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={saveButton} disabled={!buttonFormData.name || !buttonFormData.payload}>
+          <Button
+            variant="contained"
+            onClick={saveButton}
+            disabled={!buttonFormData.name || !buttonFormData.payload || !buttonFormDirty}
+          >
             Save
           </Button>
         </DialogActions>
@@ -1378,8 +1437,14 @@ export default function DialogManager({
             }
           }
           const hostStr = (known?.name || cutSuffix(parsedHostString, ":22")[0]) + (query ? "?" + query : "");
-          if (alternativeMode === 2) {
+          if (alternativeMode === 3) {
             openHostInNewWindow(hostStr);
+          } else if (alternativeMode === 2) {
+            if (known) {
+              openEditHost(known);
+            } else {
+              openAddHostForm(parsedHost);
+            }
           } else {
             openHost(hostStr, { target: alternativeMode ? "_self" : undefined });
           }

@@ -43,6 +43,7 @@ export const VAR_CS_NOMODTEXTAREA = "cs_nomodtextarea";
 export const VAR_CS_NOIMAGE = "cs_noimage";
 export const VAR_CS_NOWEBLINKS = "cs_noweblinks";
 export const VAR_CS_NOWEBGL = "cs_nowebgl";
+export const VAR_CS_NO_SANITIZE_HASH = "cs_no_sanitize_hash";
 /**
  * Flag to disable terminal ctrl+l (let browser handle it) and remap ctrl+shift+l & ctrl+alt+l to ctrl+l in terminal.
  */
@@ -96,7 +97,10 @@ export const TERMINAL_FUNCTIONS: BuiltinButton[] = [
   { value: "UNLOCK_TAB", label: "Unlock (Tab)", shortcut: "ctrl+alt+shift+l" },
   { value: "PIN_TAB", label: "Pin (Tab)" },
   { value: "UNPIN_TAB", label: "Unpin (Tab)" },
+  { value: "HIDE_TAB", label: "Hide (Tab)" },
   { value: "RENAME_TAB", label: "Rename (Tab)" },
+  { value: "ATTACH", label: "Attach (Background Session)" },
+  { value: "EDIT_TAB_HOST", label: "Edit (Tab Host)" },
   { value: "SAVE_TAB", label: "Save (Tab)" },
 ] as const;
 
@@ -166,6 +170,7 @@ export const TOAST_KEY_API_SETTINGS = "cs-api-settings";
 export const TOAST_KEY_API_FULLDATA = "cs-api-fulldata";
 export const TOAST_KEY_COPY_TUNNEL_ENTRYPOINT = "cs-copy-tunnel-entrypoint";
 export const TOAST_KEY_COPY = "cs-copy";
+export const TOAST_KEY_HOST_NOT_FOUND = "cs-host-not-found";
 
 /**
  * Used as a special flag in url hash to indicate the mobile input panel is currently open.

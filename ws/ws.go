@@ -330,6 +330,10 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			s.Resize(uint16(rows), uint16(cols))
 		}
 	}
+	if query.Has("state") {
+		state, _ := strconv.Atoi(query.Get("state"))
+		s.SetState(state)
+	}
 
 	session.GlobalManager.CancelDisconnectTimer(sessionID)
 	listener, history := s.AddListener()
@@ -343,7 +347,8 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 		conn.WriteMessage(websocket.BinaryMessage, history)
 	}
 
-	conn.WriteMessage(websocket.TextMessage, models.GetWsTabStateMsg(s.IsPinned, s.IsLocked))
+	isPinned, isLocked, isHidden := s.GetState()
+	conn.WriteMessage(websocket.TextMessage, models.GetWsTabStateMsg(isPinned, isLocked, isHidden))
 
 	// Keepalive: send a WebSocket ping every 30 s and require a pong within
 	// 10 s. Without this, silently-dead TCP connections (browser crash, mobile

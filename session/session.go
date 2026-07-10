@@ -48,8 +48,9 @@ type Session struct {
 	ID         string
 	Host       string
 	Title      string
-	IsPinned   bool
-	IsLocked   bool
+	isPinned   bool
+	isLocked   bool
+	isHidden   bool
 	Reader     io.Reader
 	Writer     io.Writer
 	CloseFunc  func() error
@@ -60,6 +61,36 @@ type Session struct {
 
 	mu        sync.Mutex
 	listeners []chan []byte
+}
+
+func (s *Session) GetState() (isPinned, isLocked, isHidden bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.isPinned, s.isLocked, s.isHidden
+}
+
+// 0: normal, 1: pinned, 2: pinned + locked, 3: pinned + locked + hidden
+func (s *Session) SetState(state int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	switch state {
+	case 0:
+		s.isPinned = false
+		s.isLocked = false
+		s.isHidden = false
+	case 1:
+		s.isPinned = true
+		s.isLocked = false
+		s.isHidden = false
+	case 2:
+		s.isPinned = true
+		s.isLocked = true
+		s.isHidden = false
+	case 3:
+		s.isPinned = true
+		s.isLocked = true
+		s.isHidden = true
+	}
 }
 
 func NewSession(id, host string, r io.Reader, w io.Writer, closeFunc func() error, resizeFunc func(rows, cols uint16) error) *Session {
@@ -189,7 +220,7 @@ func (s *Session) Broadcast(data []byte) {
 
 func (s *Session) BroadcastTabState() {
 	s.mu.Lock()
-	stateMsg := append([]byte(models.WS_MSG_PREFIX_STATE), models.GetWsTabStateMsg(s.IsPinned, s.IsLocked)...)
+	stateMsg := append([]byte(models.WS_MSG_PREFIX_STATE), models.GetWsTabStateMsg(s.isPinned, s.isLocked, s.isHidden)...)
 	for _, l := range s.listeners {
 		select {
 		case l <- stateMsg:
@@ -258,7 +289,7 @@ func (m *SessionManager) CloseIfNotLocked(id string) {
 
 	if ok {
 		s.mu.Lock()
-		locked := s.IsLocked
+		locked := s.isLocked
 		s.mu.Unlock()
 
 		if !locked {
@@ -273,7 +304,7 @@ func (m *SessionManager) CloseAllNormal() {
 	var toClose []*Session
 	for _, s := range m.sessions {
 		s.mu.Lock()
-		if !s.IsLocked {
+		if !s.isLocked {
 			toClose = append(toClose, s)
 		}
 		s.mu.Unlock()
@@ -310,7 +341,7 @@ func (m *SessionManager) ClearInactive(id string) {
 	if s, ok := m.sessions[id]; ok {
 		s.mu.Lock()
 		listenerCount := len(s.listeners)
-		isPinned := s.IsPinned || s.IsLocked
+		isPinned := s.isPinned || s.isLocked
 		s.mu.Unlock()
 
 		if !isPinned && listenerCount == 0 {
@@ -351,13 +382,14 @@ func (m *SessionManager) GetAll(pinnedOnly bool) []*models.Session {
 	sessions := []*models.Session{}
 	for _, s := range m.sessions {
 		s.mu.Lock()
-		if !pinnedOnly || s.IsPinned || s.IsLocked {
+		if !pinnedOnly || s.isPinned || s.isLocked {
 			sessions = append(sessions, &models.Session{
 				Id:            s.ID,
 				Host:          s.Host,
 				Title:         s.Title,
-				IsPinned:      s.IsPinned,
-				IsLocked:      s.IsLocked,
+				IsPinned:      s.isPinned,
+				IsLocked:      s.isLocked,
+				IsHidden:      s.isHidden,
 				ListenerCount: len(s.listeners),
 			})
 		}

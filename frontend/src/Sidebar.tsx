@@ -45,6 +45,7 @@ import AddIcon from "@mui/icons-material/Add";
 import StarIcon from "@mui/icons-material/Star";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
+import PushPinIcon from "@mui/icons-material/PushPin";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import LockIcon from "@mui/icons-material/Lock";
@@ -89,7 +90,6 @@ import {
   TOAST_KEY_SYNC,
 } from "./constants";
 import {
-  type HostForm,
   type ServiceWorkerStatus,
   apiReqHeaders,
   filterHosts,
@@ -113,7 +113,6 @@ import {
   getStore,
   notify,
   setEditHostDialogOpen,
-  setEditHostName,
   setHostFormData,
   setInitialHostFormData,
   setMobileOpen,
@@ -140,6 +139,7 @@ import {
   openAddHostForm,
   toggleExpandAllGroups,
   sshCopyId,
+  openEditHost,
 } from "./store";
 import { useShallow } from "zustand/react/shallow";
 import FreeTextField from "./components/FreeTextField";
@@ -237,6 +237,7 @@ export default function Sidebar({
   const autoExpanded = useStore((state) => state.autoExpanded);
   const expandedGroups = useStore((state) => state.expandedGroups);
   const filterStr = useStore((state) => state.filterStr);
+  const initialHostFormData = useStore((state) => state.initialHostFormData);
 
   const [swStatus, setSwStatus] = useState<ServiceWorkerStatus>("unknown");
 
@@ -666,6 +667,11 @@ export default function Sidebar({
 
   const handleHostTitleMenuClose = useCallback(() => {
     setHostTitleMenuAnchor(null);
+  }, []);
+
+  const handleCopySSHCommand = useCallback(() => {
+    setHostTitleMenuAnchor(null);
+    navigator.clipboard.writeText(getSSHCommand(getStore().hostFormData));
   }, []);
 
   const handleCopySshConfigBlock = useCallback(() => {
@@ -1151,12 +1157,7 @@ export default function Sidebar({
     }
     const target = contextMenu.target;
     setContextMenuOpen(false);
-    const isAuto = target.source === "known_hosts";
-    const data: HostForm = { ...target, tags: target.tags?.join(" ") || "" };
-    setEditHostName(isAuto ? "" : target.name);
-    setHostFormData(data);
-    setInitialHostFormData(data);
-    setEditHostDialogOpen(true);
+    openEditHost(target);
   }, [contextMenu]);
 
   const closeMobileSidebar = useCallback(() => {
@@ -1657,14 +1658,16 @@ export default function Sidebar({
     fetchHosts();
   }, []);
 
-  const handleCloseHostDialog = useCallback((_e: unknown, reason: string) => {
-    const { hostFormData, initialHostFormData } = getStore();
-    const isDirty = initialHostFormData && JSON.stringify(hostFormData) !== JSON.stringify(initialHostFormData);
-    if (isDirty && (reason === "backdropClick" || reason === "escapeKeyDown")) {
+  const hostFormDirty = useMemo(() => {
+    return !!initialHostFormData && JSON.stringify(hostFormData) !== JSON.stringify(initialHostFormData);
+  }, [hostFormData, initialHostFormData]);
+
+  const handleCloseHostDialog = useCallback(() => {
+    if (hostFormDirty) {
       return;
     }
     setEditHostDialogOpen(false);
-  }, []);
+  }, [hostFormDirty]);
 
   const filteredHosts = useMemo(() => {
     const filteredAll = filterHosts(hosts, filterStr);
@@ -1986,6 +1989,8 @@ export default function Sidebar({
             } else {
               if (e.ctrlKey) {
                 openHostInNewWindow(selectedItem.host.name);
+              } else if (e.shiftKey) {
+                openEditHost(selectedItem.host);
               } else {
                 openHost(selectedItem.host.name, { target: e.altKey ? "_self" : undefined });
               }
@@ -2194,7 +2199,7 @@ export default function Sidebar({
           <IconButton
             size="small"
             title="New Server"
-            onClick={openAddHostForm}
+            onClick={() => openAddHostForm()}
             sx={{ bgcolor: "action.hover", border: "1px solid #ccc" }}
           >
             <AddIcon fontSize="small" />
@@ -2692,6 +2697,17 @@ export default function Sidebar({
                   const canAttach = !activeSessionIds.includes(ps.id);
                   return (
                     <ListItem key={ps.id} divider>
+                      <ListItemIcon>
+                        {ps.isHidden ? (
+                          <VisibilityOffIcon />
+                        ) : ps.isLocked ? (
+                          <LockIcon />
+                        ) : ps.isPinned ? (
+                          <PushPinIcon />
+                        ) : (
+                          <ComputerIcon />
+                        )}
+                      </ListItemIcon>
                       <ListItemText primary={ps.title} secondary={`${ps.host} (Listeners: ${ps.listenerCount})`} />
                       {canAttach && (
                         <Button
@@ -2914,7 +2930,13 @@ export default function Sidebar({
                 </Typography>
                 <Typography variant="subtitle2" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }} gutterBottom>
                   <code>Default Identity Path:</code>
-                  <ChipCopy label={sysDefaultIdentityPath} />
+                  {sysDefaultIdentityPath ? (
+                    <ChipCopy label={sysDefaultIdentityPath} />
+                  ) : (
+                    <>
+                      (none). Generate one use: <ChipCopy label="ssh-keygen -t ed25519" />
+                    </>
+                  )}
                 </Typography>
                 <Typography variant="subtitle2" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }} gutterBottom>
                   <code>Default Identity Public Key:</code>
@@ -3237,9 +3259,10 @@ export default function Sidebar({
                 <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }} gutterBottom>
                   <b>Alt + O</b> : Open new tab dialog, use <b>← →</b> (or <b>Alt + H/L</b>) to switch view,&nbsp;
                   <b>↓ ↑</b> (or <b>Alt + J/K</b>) to select, <b>Enter</b> to open, <b>Alt + Enter</b> to open in
-                  current tab, <b>Ctrl + Enter</b> to open in new window. Use <b>Alt + ↓↑</b> (or&nbsp;
+                  current tab, <b>Ctrl + Enter</b> to open in new window, <b>Shift + Enter</b> to edit selected host.
+                  Use <b>Alt + ↓↑</b> (or&nbsp;
                   <b>Alt + Shift + J/K</b>) to jump through items quickly; Hold <b>Ctrl</b> to jump to top/bottom.&nbsp;
-                  <b>Ctrl/Alt + Mouse Click</b> also works
+                  <b>Ctrl/Alt/Shift + Mouse Click</b> is same as <b>Clt/Alt/Shift + Enter</b>
                   <br />
                   <b>Alt + A</b> : Open new tab dialog - tabs view
                   <br />
@@ -3279,7 +3302,8 @@ export default function Sidebar({
                   toggle group expandness),&nbsp;
                   <b>Alt + Enter</b> to open in current tab, <b>Ctrl + Enter</b> to open in new window (or toggle group
                   and all sub-groups expandness),&nbsp;
-                  <b>Shift + Enter</b> to open context menu. <b>Ctrl/Alt + Mouse Click</b> also works
+                  <b>Shift + Enter</b> to open context menu. <b>Ctrl/Alt + Mouse Click</b> is same as&nbsp;
+                  <b>Ctrl/Alt + Enter</b>, <b>Shift + Mouse Click</b> to edit host.
                   <br />
                   <b>Alt + Shift + I</b> : Focus sidebar search filter and clear current value
                   <br />
@@ -3336,6 +3360,10 @@ export default function Sidebar({
                   <b>Mouse Middle Click</b> on a tab to close it
                   <br />
                   <b>Alt + Mouse Wheel</b> in terminal to fast scroll up / down
+                  <br />
+                  <b>Shift + Mouse Click</b> on a button in button bar to edit it; <b>Ctrl/Alt + Mouse Click</b> on a
+                  "Open Terminal" type button to open it in new window / current tab; <b>Ctrl + Mouse Click</b> on a
+                  "Send String" type button to open it in "Terminal Input" dialog
                 </Typography>
                 {__CS_ENV__ === 1 && (
                   <>
@@ -3419,9 +3447,10 @@ export default function Sidebar({
           open={!!hostTitleMenuAnchor}
           onClose={handleHostTitleMenuClose}
         >
-          <MenuItem onClick={handleCopySshConfigBlock}>Copy SSH Config Block</MenuItem>
+          <MenuItem onClick={handleCopySSHCommand}>Copy SSH Command</MenuItem>
           <MenuItem onClick={handleCopyUploadIdentityCommand}>Copy Upload Identity Command</MenuItem>
           <MenuItem onClick={handleCopySSHCopyIdCommand}>Copy ssh-copy-id Command</MenuItem>
+          <MenuItem onClick={handleCopySshConfigBlock}>Copy SSH Config Block</MenuItem>
           <MenuItem onClick={handleRunSSHCopyId}>Run ssh-copy-id</MenuItem>
           <MenuItem onClick={handlePasteSshConfigBlock}>Paste SSH Config Block</MenuItem>
         </Menu>
@@ -3445,6 +3474,20 @@ export default function Sidebar({
               onChange={(e) => setHostFormData({ ...hostFormData, hostname: e.target.value })}
               required
               autoFocus={!hostFormData.hostname}
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        disabled={!hostFormData.hostname}
+                        onClick={() => navigator.clipboard.writeText(hostFormData.hostname)}
+                      >
+                        <ContentCopyIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                },
+              }}
             />
             <FreeTextField
               fullWidth
@@ -3640,7 +3683,7 @@ export default function Sidebar({
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditHostDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleSaveHost} disabled={!hostFormData.hostname}>
+          <Button variant="contained" onClick={handleSaveHost} disabled={!hostFormData.hostname || !hostFormDirty}>
             Save
           </Button>
         </DialogActions>
@@ -3709,6 +3752,9 @@ function HostListItem({
         onClick={(e) => {
           if (e.ctrlKey) {
             openHostInNewWindow(host.name);
+          } else if (e.shiftKey) {
+            openEditHost(host);
+            setMobileOpen(false);
           } else {
             openHost(host.name, { target: e.altKey ? "_self" : undefined });
             setMobileOpen(false);
@@ -4014,6 +4060,9 @@ function TreeServerItem({
         onClick={(e) => {
           if (e.ctrlKey) {
             openHostInNewWindow(host.name);
+          } else if (e.shiftKey) {
+            openEditHost(host);
+            setMobileOpen(false);
           } else {
             openHost(host.name, { target: e.altKey ? "_self" : undefined });
             setMobileOpen(false);

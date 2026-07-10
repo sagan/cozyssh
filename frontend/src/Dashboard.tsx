@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useSearchParams } from "react-router";
 import { useShallow } from "zustand/react/shallow";
 import {
   Box,
@@ -35,6 +34,7 @@ import {
   TAG_GROUP_PREFIX,
   TAG_FAV,
   TOAST_KEY_API_FULLDATA,
+  VAR_CS_NO_SANITIZE_HASH,
 } from "./constants";
 import {
   type ContextMenu,
@@ -45,6 +45,8 @@ import {
   getTemplateVariables,
   liquidEngine,
   apiReqHeaders,
+  cutString,
+  openHostInNewWindow,
 } from "./common";
 import {
   type TabData,
@@ -86,6 +88,12 @@ import {
   setAutoExpanded,
   setFavExpanded,
   toggleExpandAllGroups,
+  openEditTabHost,
+  openEditButtonDialog,
+  openNewButtonDialog,
+  hideTab,
+  fetchSessions,
+  startupParams,
 } from "./store";
 import { setupPluginAPI, runScript } from "./pluginAPI";
 import { useKeyboardManager } from "./useKeyboardManager";
@@ -389,40 +397,60 @@ export default function Dashboard({ initialData }: DashboardProps) {
     return () => clearTimeout(t);
   }, [extraKeysOpen]);
 
-  // these variables are only used in initial phrase, so don't add them to dependency array
-  const [startupParams] = useSearchParams();
-
   const handleButtonClick = useCallback(
-    async (btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">) => {
+    async (btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">, alternativeMode = 0) => {
+      if (alternativeMode === 2) {
+        let button: ButtonData | undefined;
+        if (btn.id) {
+          button = getStore().buttons.find((b) => b.id === btn.id);
+        }
+        if (button) {
+          openEditButtonDialog(button);
+        } else {
+          openNewButtonDialog({ ...btn, shortcut: undefined });
+        }
+        return;
+      }
       window.navigator.vibrate?.(VIBRATE_PATTERN);
       let noFocus = false;
       switch (btn.type) {
-        case "send_string":
-          if (btn.liquidjs === 1 || btn.liquidjs === 2) {
-            const varsList = getTemplateVariables(btn.payload);
-            if (varsList.length === 0) {
-              await sendParsedString(btn.payload, true);
-            } else {
-              openInputDialog({
-                inputValue: btn.payload,
-                inputLiquid: true,
-                sendScope: 0,
-                appendNewLine: false,
-              });
-            }
+        case "send_string": {
+          const openDialog = alternativeMode === 3 || (!!btn.liquidjs && getTemplateVariables(btn.payload).length > 0);
+          if (openDialog) {
+            openInputDialog({
+              inputValue: btn.payload,
+              inputLiquid: !!btn.liquidjs,
+              sendScope: 0,
+              appendNewLine: false,
+            });
           } else {
             await sendParsedString(btn.payload);
+            triggerFocus();
           }
-          triggerFocus();
           break;
+        }
 
         case "open_terminal": {
-          const hosts = btn.payload.split(/\s*,\s*/);
-          openHostsAsSplit2(hosts);
+          if (alternativeMode === 3) {
+            openHostInNewWindow(btn.payload);
+          } else {
+            const hosts = btn.payload.split(/\s*,\s*/);
+            openHostsAsSplit2(hosts, { target: alternativeMode === 1 ? "_self" : undefined });
+          }
           break;
         }
 
         case "terminal_function": {
+          if (btn.payload === "ATTACH") {
+            (async () => {
+              const sessions = await fetchSessions(true);
+              const session = sessions.find((s) => !s.isHidden);
+              if (session) {
+                attachSession(session.id, session.host, session.title, session.isLocked);
+              }
+            })();
+            return;
+          }
           const term = terminalRefs.current[getStore().activePaneId];
           if (!term || !("getXterm" in term)) {
             return;
@@ -612,9 +640,20 @@ export default function Dashboard({ initialData }: DashboardProps) {
               break;
             }
 
+            case "HIDE_TAB": {
+              hideTab();
+              break;
+            }
+
             case "RENAME_TAB": {
               noFocus = true;
               renameTab();
+              break;
+            }
+
+            case "EDIT_TAB_HOST": {
+              noFocus = true;
+              openEditTabHost();
               break;
             }
 
@@ -723,7 +762,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
           break;
 
         case "run_script":
-          await runScript({ button: btn });
+          await runScript({ button: btn, alternativeMode });
           break;
 
         default:
@@ -735,6 +774,10 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   useEffect(() => {
     const autorun = getIntVar(VAR_CS_NOAUTORUN) !== 1 && startupParams.get(VAR_NOAUTORUN) !== "1";
+    const sanitizeHash =
+      __CS_ENV__ === 0 &&
+      getIntVar(VAR_CS_NO_SANITIZE_HASH) !== 1 &&
+      startupParams.get(VAR_CS_NO_SANITIZE_HASH) !== "1";
     let hash = window.location.hash.substring(1);
     if (hash) {
       window.history.replaceState(null, "", window.location.pathname + window.location.search);
@@ -743,6 +786,17 @@ export default function Dashboard({ initialData }: DashboardProps) {
       hash = decodeURIComponent(hash);
     } catch {
       /* empty */
+    }
+    // hash comes from url and is suecptible to XSS attacks, so sanitize it by default
+    if (sanitizeHash) {
+      const elements = hash.split(/\s*,\s*/);
+      for (let i = 0; i < elements.length; i++) {
+        let element = elements[i];
+        [element] = cutString(element, "?");
+        element = element.replace(/[^a-z0-9._:@-[\]]+/gi, "");
+        elements[i] = element;
+      }
+      hash = elements.filter(Boolean).join(",");
     }
 
     const initAsync = async () => {
@@ -804,7 +858,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       }
       __CS_AUTORUN_DONE__ = 1;
 
-      const pinnedTabsData = data.pinned || [];
+      const pinnedTabsData = data.pinned.filter((p) => !p.isHidden);
       const pinnedElsewhere = pinnedTabsData.some((p) => p.listenerCount > 0);
 
       const autoload =

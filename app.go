@@ -1006,8 +1006,7 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				return
 			}
 			if s := session.GlobalManager.Get(req.Id); s != nil {
-				s.IsPinned = true
-				s.IsLocked = false
+				s.SetState(1)
 				s.Title = req.Title
 				s.BroadcastTabState()
 			}
@@ -1025,9 +1024,25 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 			return
 		}
 		if s := session.GlobalManager.Get(req.Id); s != nil {
-			s.IsPinned = true
-			s.IsLocked = true
+			s.SetState(2)
 			s.Title = req.Title
+			s.BroadcastTabState()
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))))
+
+	mux.Handle("/api/sessions/hide", securityMiddleware(auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req models.SessionsHideRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		if s := session.GlobalManager.Get(req.Id); s != nil {
+			s.SetState(3)
 			s.BroadcastTabState()
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -1044,8 +1059,7 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 			return
 		}
 		if s := session.GlobalManager.Get(req.Id); s != nil {
-			s.IsPinned = false
-			s.IsLocked = false
+			s.SetState(0)
 			s.BroadcastTabState()
 			session.GlobalManager.ClearInactive(req.Id)
 		}
@@ -1093,6 +1107,10 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				return
 			}
 			if s := session.GlobalManager.Get(req.Id); s != nil {
+				_, _, isHidden := s.GetState()
+				if isHidden {
+					s.SetState(2)
+				}
 				s.Steal()
 			}
 			w.WriteHeader(http.StatusNoContent)

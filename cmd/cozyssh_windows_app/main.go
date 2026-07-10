@@ -331,6 +331,66 @@ func main() {
 	// 4. Directly hook system tray interface and window interceptions on the main loop thread
 	setupSystemTrayAndHook(w, hwnd, cfg)
 
+	// Inject app bindings into the main window context
+	bindAppFunctions(w, hwnd, cfg)
+
+	w.Navigate(serverURL + "/")
+
+	lastNonMaxW, lastNonMaxH := constants.APP_DEFAULT_WIDTH, constants.APP_DEFAULT_HEIGHT
+
+	stopPoll := make(chan struct{})
+	go func() {
+		var prevW, prevH int
+		var prevMax bool
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stopPoll:
+				return
+			case <-ticker.C:
+				if isMinimized(hwnd) || !isVisible(hwnd) {
+					continue
+				}
+				cw, ch, cmax := windowState(hwnd)
+				if cw < 400 || ch < 300 {
+					continue
+				}
+				if cw == prevW && ch == prevH && cmax == prevMax {
+					continue
+				}
+				prevW, prevH, prevMax = cw, ch, cmax
+				if !cmax {
+					lastNonMaxW, lastNonMaxH = cw, ch
+				}
+				saveAppConfig(cfg.ConfigDir, &AppConfig{
+					Width:     lastNonMaxW,
+					Height:    lastNonMaxH,
+					Maximized: cmax,
+				})
+			}
+		}
+	}()
+
+	w.Run()
+	close(stopPoll)
+
+	if trayInstance != nil {
+		trayInstance.Remove()
+	}
+
+	cancel()
+	select {
+	case err := <-serverErr:
+		if err != nil && err != context.Canceled {
+			_ = err
+		}
+	case <-time.After(3 * time.Second):
+	}
+}
+
+// bindAppFunctions maps API endpoints to a WebView2 context and its specific HWND.
+func bindAppFunctions(w webview2.WebView, hwnd uintptr, cfg *config.Config) {
 	var isFullscreen bool
 	var savedWindowRect winRect
 	var savedWindowStyle uint32
@@ -338,10 +398,12 @@ func main() {
 	w.Bind("appOpenUrl", func(u string) {
 		windows.ShellExecute(0, nil, windows.StringToUTF16Ptr(u), nil, nil, windows.SW_SHOWNORMAL)
 	})
+
 	w.Bind("appAuth", func() (string, error) {
 		token := auth.GenerateToken()
 		return token, nil
 	})
+
 	w.Bind("appToggleFullscreen", func() {
 		w.Dispatch(func() {
 			if !isFullscreen {
@@ -404,8 +466,13 @@ func main() {
 				return
 			}
 
+			subHwnd := uintptr(subW.Window())
+
+			// Recursively bind app methods to the newly spawned window instance
+			bindAppFunctions(subW, subHwnd, cfg)
+
 			subW.Navigate(targetURL)
-			setWindowIcon(uintptr(subW.Window()))
+			setWindowIcon(subHwnd)
 			subW.Run()
 			subW.Destroy()
 
@@ -430,60 +497,6 @@ func main() {
 			}
 		}()
 	})
-
-	w.Navigate(serverURL + "/")
-
-	lastNonMaxW, lastNonMaxH := constants.APP_DEFAULT_WIDTH, constants.APP_DEFAULT_HEIGHT
-
-	stopPoll := make(chan struct{})
-	go func() {
-		var prevW, prevH int
-		var prevMax bool
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-stopPoll:
-				return
-			case <-ticker.C:
-				if isMinimized(hwnd) || !isVisible(hwnd) {
-					continue
-				}
-				cw, ch, cmax := windowState(hwnd)
-				if cw < 400 || ch < 300 {
-					continue
-				}
-				if cw == prevW && ch == prevH && cmax == prevMax {
-					continue
-				}
-				prevW, prevH, prevMax = cw, ch, cmax
-				if !cmax {
-					lastNonMaxW, lastNonMaxH = cw, ch
-				}
-				saveAppConfig(cfg.ConfigDir, &AppConfig{
-					Width:     lastNonMaxW,
-					Height:    lastNonMaxH,
-					Maximized: cmax,
-				})
-			}
-		}
-	}()
-
-	w.Run()
-	close(stopPoll)
-
-	if trayInstance != nil {
-		trayInstance.Remove()
-	}
-
-	cancel()
-	select {
-	case err := <-serverErr:
-		if err != nil && err != context.Canceled {
-			_ = err
-		}
-	case <-time.After(3 * time.Second):
-	}
 }
 
 // setupSystemTrayAndHook builds the tray interface and window procedures on the active thread.

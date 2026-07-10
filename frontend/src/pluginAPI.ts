@@ -69,6 +69,7 @@ import {
   toastKeyMuteSet,
   fetchSessions,
   setFilterStr,
+  fetchActiveTunnels,
 } from "./store";
 import { dialogs } from "./Dialogs";
 import type { AppletData } from "./AppletWrapper";
@@ -243,6 +244,7 @@ window.csAttach = attachSession;
 window.csRefresh = refreshData;
 window.csClose = closeTabOrPane;
 window.csGetSessions = fetchSessions;
+window.csGetTunnels = fetchActiveTunnels;
 window.csSetSidebarFilter = setFilterStr;
 
 window.csFocus = (tabOrPaneId?: string) => {
@@ -371,7 +373,7 @@ const virtualModulesImportRegex = (() => {
   );
 })();
 
-export async function runScript({ button, background }: CsRunScriptPayload) {
+export async function runScript({ button, background, alternativeMode }: CsRunScriptPayload) {
   let moduleObj: CsScriptModule;
   let cached = false;
 
@@ -426,7 +428,7 @@ export async function runScript({ button, background }: CsRunScriptPayload) {
 
   if (moduleObj.default?.run) {
     try {
-      await moduleObj.default.run({ button, background });
+      await moduleObj.default.run({ button, background, alternativeMode });
     } catch (e) {
       console.error(`Script ${button.name} run() Error:`, e);
       notify(`Script ${button.name} run() Error: ${e}`, "error", TOAST_KEY_SCRIPT);

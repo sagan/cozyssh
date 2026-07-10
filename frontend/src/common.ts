@@ -71,6 +71,8 @@ export type _checkButtonDataType = Expect<Equal<z.infer<typeof ButtonDataSchema>
 
 export type HostForm = Omit<HostData, "tags"> & { tags: string };
 
+export type ButtonForm = Omit<ButtonData, "id" | "mtime">;
+
 export type Order = "asc" | "desc";
 
 export interface CommandHistoryEntry {
@@ -1064,7 +1066,7 @@ export const getHostGroupPath = (host: HostData): string | null => {
   return null;
 };
 
-export function getSSHCommand(host: HostData, hosts?: HostData[]): string {
+export function getSSHCommand(host: HostData | HostForm, hosts?: HostData[]): string {
   let command = `ssh`;
   if (host.identityFile) {
     command += ` -i "${host.identityFile}"`;

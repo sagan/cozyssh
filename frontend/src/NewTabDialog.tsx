@@ -23,6 +23,8 @@ import StarIcon from "@mui/icons-material/Star";
 import TabIcon from "@mui/icons-material/Tab";
 import ShortcutIcon from "@mui/icons-material/Shortcut";
 import PushPinIcon from "@mui/icons-material/PushPin";
+import LockIcon from "@mui/icons-material/Lock";
+import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import TagIcon from "@mui/icons-material/Tag";
 import SmartButtonIcon from "@mui/icons-material/SmartButton";
 
@@ -81,6 +83,7 @@ interface DialogItem {
   id?: string;
   host?: string;
   isLocked?: boolean;
+  isHidden?: boolean;
   btn?: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">;
   tag?: string;
   flatIndex: number;
@@ -99,7 +102,10 @@ interface NewTabDialogProps {
   onSelect: (host: string, alternativeMode?: number) => void;
   onSelectTab: (tabId: string) => void;
   onAttachPinned: (id: string, host: string, title: string, isLocked: boolean) => void;
-  onExecuteButton: (btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">) => void;
+  onExecuteButton: (
+    btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">,
+    alternativeMode?: number,
+  ) => void;
 }
 
 const modes = [
@@ -581,8 +587,9 @@ export default function NewTabDialog({
         value: p.id,
         host: p.host,
         label: p.title || p.host,
-        subtitle: `Attach to pinned session`,
+        subtitle: "Terminal: " + p.host,
         isLocked: p.isLocked,
+        isHidden: p.isHidden,
       }));
       addSection("Attachable Pinned Tabs", pinnedTabsItems);
     } else if (viewMode === "buttons") {
@@ -753,10 +760,10 @@ export default function NewTabDialog({
         onAttachPinned(item.id!, item.host!, item.label, !!item.isLocked);
         onClose();
       } else if (item.type === "button" || item.type === "other_button" || item.type === "builtin_button") {
-        if (item.btn?.id) {
+        if (item.btn?.id && alternativeMode === 0) {
           updateRecentButtonId(item.btn.id);
         }
-        onExecuteButton(item.btn!);
+        onExecuteButton(item.btn!, alternativeMode);
         onClose();
       } else if (item.type === "tag") {
         setNewTabDialogFilter("#" + item.value + " ");
@@ -819,7 +826,7 @@ export default function NewTabDialog({
         e.preventDefault();
         e.stopPropagation();
         if (items[selectedIndex]) {
-          handleSelect(items[selectedIndex], e.ctrlKey ? 2 : e.altKey ? 1 : 0);
+          handleSelect(items[selectedIndex], e.ctrlKey ? 3 : e.shiftKey ? 2 : e.altKey ? 1 : 0);
         }
       } else if (key === "escape") {
         onClose();
@@ -894,7 +901,13 @@ export default function NewTabDialog({
       case "tab":
         return <TabIcon {...activeProps} />;
       case "pinned_tab":
-        return <PushPinIcon {...activeProps} />;
+        return item.isHidden ? (
+          <VisibilityOffIcon {...activeProps} />
+        ) : item.isLocked ? (
+          <LockIcon {...activeProps} />
+        ) : (
+          <PushPinIcon {...activeProps} />
+        );
       case "button":
       case "other_button":
       case "builtin_button":
@@ -1067,7 +1080,7 @@ export default function NewTabDialog({
                   key={item.flatIndex}
                   selected={selectedIndex === item.flatIndex}
                   ref={selectedIndex === item.flatIndex ? selectedItemRef : null}
-                  onClick={(e) => handleSelect(item, e.ctrlKey ? 2 : e.altKey ? 1 : 0)}
+                  onClick={(e) => handleSelect(item, e.ctrlKey ? 3 : e.shiftKey ? 2 : e.altKey ? 1 : 0)}
                   title={item.tooltip}
                   data-type={item.type}
                   data-value={item.value}

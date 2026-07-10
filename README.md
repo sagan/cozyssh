@@ -7,11 +7,12 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
 - [CozySSH](#cozyssh)
 - [Screenshots](#screenshots)
 - [Features](#features)
-- [Getting Started](#getting-started)
+- [Guide](#guide)
   - [Installation](#installation)
   - [Usage](#usage)
   - [Config \& Data](#config--data)
   - [Run as systemd service](#run-as-systemd-service)
+  - [OpenSSH compatibility](#openssh-compatibility)
 - [Development](#development)
   - [Prerequisites](#prerequisites)
   - [Build](#build)
@@ -119,7 +120,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   ```
 
 - **Full keyboard Shortcuts**: It supports a complete set of keyboard shortcuts.
-  - `Alt + O` : Open new tab dialog, use `← →` (or `Alt + H/L`) to switch view, `↓ ↑` (or `Alt + J/K`) to select, `Enter` to open, `Alt + Enter` to open in current tab, `Ctrl + Enter` to open in new window. Use `Alt + ↓↑` (or `Alt + Shift + J/K`) to jump through items quickly; Hold `Ctrl` to jump to top/bottom. `Ctrl/Alt + Mouse Click` also works
+  - `Alt + O` : Open new tab dialog, use `← →` (or `Alt + H/L`) to switch view, `↓ ↑` (or `Alt + J/K`) to select, `Enter` to open, `Alt + Enter` to open in current tab, `Ctrl + Enter` to open in new window, `Shift + Enter` to edit selected host. Use `Alt + ↓↑` (or `Alt + Shift + J/K`) to jump through items quickly; Hold `Ctrl` to jump to top/bottom. `Ctrl/Alt + Mouse Click` is same as `Clt/Alt/Shift + Enter`
   - `Alt + A` : Open new tab dialog - tabs view
   - `Alt + E / Ctrl + Shift + P` : Open new tab dialog - buttons view
   - `Alt + P` : Open new tab dialog - tags view
@@ -137,7 +138,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - `Alt + Shift + W` : Close active tab
   - `Ctrl + Alt + Shift + W` : Close other tabs
   - `Ctrl + Alt + Shift + L` : Toggle Lock/Unlock current tab
-  - `Alt + I` : Focus sidebar search filter, then use `↑ ↓` to select, `Enter` to open (or toggle group expandness), `Alt + Enter` to open in current tab, `Ctrl + Enter` to open in new window (or toggle group and all sub-groups expandness), `Shift + Enter` to open context menu. `Ctrl/Alt + Mouse Click` also works
+  - `Alt + I` : Focus sidebar search filter, then use `↑ ↓` to select, `Enter` to open (or toggle group expandness), `Alt + Enter` to open in current tab, `Ctrl + Enter` to open in new window (or toggle group and all sub-groups expandness), `Shift + Enter` to open context menu. `Ctrl/Alt + Mouse Click` is same as `Ctrl/Alt + Enter`, `Shift + Mouse Click` to edit host.
   - `Alt + Shift + I` : Focus sidebar search filter and clear current value
   - `Ctrl + Alt + Backquote` : Toggle sidebar tags section expandness
   - `Ctrl + Alt + 1/2/3` : Toggle sidebar fav/all/auto section expandness
@@ -165,6 +166,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - `Mouse Right Click` in terminal to paste
   - `Mouse Middle Click` on a tab to close it
   - `Alt + Mouse Wheel` in terminal to fast scroll up / down
+  - `Shift + Mouse Click` on a button in button bar to edit it; `Ctrl/Alt + Mouse Click` on a "Open Terminal" type button to open it in new window / current tab; `Ctrl + Mouse Click` on a "Send String" type button to open it in "Terminal Input" dialog
 - **Advanced SSH Management**: 🔑
   - **ProxyJump Support**: Full support for OpenSSH standard `ProxyJump` configuration, allowing you to connect to hosts via intermediate jump servers.
   - **RemoteCommand Support**: Support ssh_config `RemoteCommand` configuration, execute a custom command on the remote ssh server after successfully connecting to it.
@@ -193,7 +195,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
 - **Custom Scripting**: Fully programmable / extendable via a built-in powerful & TypeScript-capable scripting engine. See [Scripts Documentation](docs/SCRIPTS.md). It also has a [Plugins Repository][CozySSH Plugins] which includes many official scripts/plugins that can be installed directly from CozySSH frontend.
 - **Self-Hosted**: Distributed as a single Go binary that embeds the entire React frontend.
 
-## Getting Started
+## Guide
 
 ### Installation
 
@@ -271,6 +273,18 @@ WantedBy=multi-user.target
 ```
 
 </details>
+
+### OpenSSH compatibility
+
+CozySSH aims to behavior the same way as standard OpenSSH client. But it still has lots of quirks:
+
+- `Host *` pattern or any other pattern which includes special chars (like `*`, `!`) is ignored.
+- Only `~/.ssh/config` config file is used. CozySSH doesn't read `/etc/ssh/ssh_config`, nor does it read `Include *.conf` directive introduced sub-config files.
+- Only one identity file is supported for each host. If host `IdentityFile` is not set, CozySSH use `~/.ssh/id_ed25519` (if exists) of `~/.ssh/id_rsa` automatically.
+- SSH Agent protocol and relative directives are not supported at this time.
+- ssh_config directives `TOKENS` expansion is limited, only basic tokens are supported.
+- Only `RemoteCommand` but not`LocalCommand` is suuported.
+- Only `ProxyJump` but not `ProxyCommand` is supported at this time.
 
 ## Development
 

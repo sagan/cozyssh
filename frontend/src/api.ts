@@ -155,6 +155,7 @@ export interface Session {
     title: string;
     isPinned: boolean;
     isLocked: boolean;
+    isHidden: boolean;
     listenerCount: number;
 }
 export interface SessionsAttachRequest {
@@ -183,6 +184,9 @@ export interface SessionsLockRequest {
     id: string;
     host: string;
     title: string;
+}
+export interface SessionsHideRequest {
+    id: string;
 }
 export interface Recent {
     host: string;
@@ -286,6 +290,7 @@ export interface WsTerminalMessage {
     state: "stolen" | "disconnected" | "connected" | "connecting" | "exited" | "";
     isPinned: boolean;
     isLocked: boolean;
+    isHidden: boolean;
 }
 export interface WsResizeMsg {
     type: "resize";

@@ -211,6 +211,7 @@ type Session struct {
 	Title         string `json:"title"`
 	IsPinned      bool   `json:"isPinned"`
 	IsLocked      bool   `json:"isLocked"`
+	IsHidden      bool   `json:"isHidden"`
 	ListenerCount int    `json:"listenerCount"`
 }
 
@@ -250,6 +251,10 @@ type SessionsLockRequest struct {
 	Id    string `json:"id"`
 	Host  string `json:"host"`
 	Title string `json:"title"`
+}
+
+type SessionsHideRequest struct {
+	Id string `json:"id"`
 }
 
 type Recent struct {
@@ -383,8 +388,9 @@ const (
 type WsTerminalMessage struct {
 	Type     WsTerminalMessageType `json:"type" ts_type:"\"historyStart\" | \"tabState\" | \"state\""`
 	State    string                `json:"state" ts_type:"\"stolen\" | \"disconnected\" | \"connected\" | \"connecting\" | \"exited\" | \"\""`
-	IsPinned bool                  `json:"isPinned"`
-	IsLocked bool                  `json:"isLocked"`
+	IsPinned bool                  `json:"isPinned"` // pinned session (running in background after browser disconnect)
+	IsLocked bool                  `json:"isLocked"` // locked session (prevent accidental close). implied pinned
+	IsHidden bool                  `json:"isHidden"` // hidden session running in server's background. implies pinned & locked
 }
 
 type WsResizeMsg struct {

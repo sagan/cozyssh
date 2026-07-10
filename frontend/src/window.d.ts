@@ -1,6 +1,6 @@
 import type { ITerminalOptions, Terminal } from "@xterm/xterm";
 
-import type { ButtonData, HostData, Session } from "./api";
+import type { ButtonData, HostData, Session, ActiveTunnel } from "./api";
 import type {
   CS_EVENT_SHELL_INTEGRATION,
   CS_EVENT_TERMINAL_CHANGE,
@@ -41,6 +41,14 @@ declare global {
      * If true, the script is executed in the backgrund (without user explicitly clicking the button)
      */
     background?: boolean;
+    /**
+     * Defines the trigger way of the script button
+     * - 0 / undefined : normal / default;
+     * - 1 : Alt + Mouse Click
+     * - 2 : Shift + Mouse Click
+     * - 3 : Ctrl + Mouse Click
+     */
+    alternativeMode?: number;
   }
   /**
    * The optional default export type of custom script
@@ -178,11 +186,12 @@ declare global {
    *                       Special values:
    *                       - `_blank` : open in new tab (default)
    *                       - `_self` : open in active tab
+   * @returns Returns the opened tab id
    */
   function csOpen(
     hosts: HostData | string | (HostData | string)[],
     options?: { title?: string; target?: string },
-  ): void;
+  ): string | Promise<string>;
   /**
    * Close a tab or pane.
    * @param tabOrPaneId defaults to active pane id. If it's a tab id, it will close the tab.
@@ -241,6 +250,10 @@ declare global {
    * @param pinnedOnly Whether to only get sessions whose `isPinned` or `isLocked` property is true.
    */
   function csGetSessions(pinnedOnly?: boolean): Promise<Session[]>;
+  /**
+   * Get all active tunnels.
+   */
+  function csGetTunnels(): Promise<ActiveTunnel[]>;
   /**
    * Performs an HTTP request via the CozySSH backend proxy to bypass browser CORS restrictions.
    * @param init the fetch `RequestInit` object, with an additional optional `key` property.
@@ -353,8 +366,9 @@ declare global {
   function csSetTheme(options: unknown, ...args: unknown[]): void;
   /**
    * Attach a new terminal to an existing tab.
+   * @returns Returns the opened tab id
    */
-  function csAttach(id: string, host: string, title: string, isLocked?: boolean): void;
+  function csAttach(id: string, host: string, title: string, isLocked?: boolean): Promise<string>;
   /**
    * Display an async alert dialog.
    * The behavior is the same as `window.alert` except it's non-blocking.

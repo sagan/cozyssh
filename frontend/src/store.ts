@@ -31,8 +31,10 @@ import type {
   ConfigRequest,
   CopyIDRequest,
   CopyIDResponse,
+  SessionsHideRequest,
 } from "./api";
 import {
+  type ButtonForm,
   type HostForm,
   type Severity,
   type ShellIntegration,
@@ -42,6 +44,8 @@ import {
   createSetProxy,
   genPaneId,
   genTabId,
+  generatePassword,
+  getCanonicalHostString,
   getHostGroupPath,
   getHostOrder,
   getTemplateVariables,
@@ -49,6 +53,7 @@ import {
   isMuiModalOpen,
   nextName,
   nextTerminalFontSize,
+  parseHostName,
   prevTerminalFontSize,
   removePassFromHost,
 } from "./common";
@@ -135,8 +140,8 @@ interface Store {
   btnMenuAnchor: { anchor: HTMLElement; btn: ButtonData } | null;
   hostFormData: HostForm;
   initialHostFormData: HostForm | null;
-  buttonFormData: ButtonData;
-  initialBtnFormData: ButtonData | null;
+  buttonFormData: ButtonForm;
+  initialBtnFormData: ButtonForm | null;
   editButtonDialogOpen: boolean;
   editHostDialogOpen: boolean;
   inputDialogOpen: boolean;
@@ -229,10 +234,13 @@ channel.onmessage = (event) => {
   }
 };
 
-const initialSearchParams = new URLSearchParams(location.search);
+/**
+ * The initial URL params parsed from location.search
+ */
+export const startupParams = new URLSearchParams(location.search);
 
 export const useStore = create<Store>(() => ({
-  filterStr: initialSearchParams.get("filter") || "",
+  filterStr: startupParams.get("filter") || "",
   asyncDialogOpen: false,
   sendScope: 0,
   appendNewLine: true,
@@ -263,14 +271,12 @@ export const useStore = create<Store>(() => ({
   },
   initialHostFormData: null,
   buttonFormData: {
-    id: "",
     name: "",
     type: "send_string",
     payload: "",
     group: DEFAULT_BUTTON_GROUP,
     autorun: 0,
     order: 0,
-    mtime: 0,
     shortcut: "",
   },
   initialBtnFormData: null,
@@ -429,8 +435,8 @@ export const setEditHostName = (editHostName: string) => useStore.setState({ edi
 export const setHostFormData = (hostFormData: HostForm) => useStore.setState({ hostFormData });
 export const setInitialHostFormData = (initialHostFormData: HostForm | null) =>
   useStore.setState({ initialHostFormData });
-export const setButtonFormData = (buttonFormData: ButtonData) => useStore.setState({ buttonFormData });
-export const setInitialBtnFormData = (initialBtnFormData: ButtonData | null) =>
+export const setButtonFormData = (buttonFormData: ButtonForm) => useStore.setState({ buttonFormData });
+export const setInitialBtnFormData = (initialBtnFormData: ButtonForm | null) =>
   useStore.setState({ initialBtnFormData });
 export const setEditButtonDialogOpen = (editButtonDialogOpen: boolean) => useStore.setState({ editButtonDialogOpen });
 export const setEditHostDialogOpen = (editHostDialogOpen: boolean) => useStore.setState({ editHostDialogOpen });
@@ -938,16 +944,14 @@ export function increaseFontSize(terminalFontSize: boolean, globalFontSize: bool
   }
 }
 
-export async function fetchActiveTunnels() {
-  try {
-    const res = await fetch("/api/tunnels", { headers: apiReqHeaders() });
-    if (res.ok) {
-      const data = (await res.json()) as ActiveTunnel[];
-      setActiveTunnels(data || []);
-    }
-  } catch (err) {
-    console.error(`Failed to fetch active tunnels: ${err}`);
+export async function fetchActiveTunnels(): Promise<ActiveTunnel[]> {
+  const res = await fetch("/api/tunnels", { headers: apiReqHeaders() });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch active tunnels: status=${res.status}`);
   }
+  const data = (await res.json()) as ActiveTunnel[];
+  setActiveTunnels(data); // for now, leave side effect here
+  return data;
 }
 
 export async function fetchSessions(pinnedOnly = false): Promise<Session[]> {
@@ -958,7 +962,11 @@ export async function fetchSessions(pinnedOnly = false): Promise<Session[]> {
   return (await res.json()) as Session[];
 }
 
-export function openHostsAsSplit(title: string, hosts: string[], hostOptions?: (Record<string, string> | undefined)[]) {
+export function openHostsAsSplit(
+  title: string,
+  hosts: string[],
+  hostOptions?: (Record<string, string> | undefined)[],
+): string {
   const tabId = genTabId(title);
   const panes: PaneData[] = hosts.map(
     (host, i) =>
@@ -979,12 +987,13 @@ export function openHostsAsSplit(title: string, hosts: string[], hostOptions?: (
   setTabs((prev) => [...prev, newTab]);
   setActiveTabId(newTab.id);
   setActivePaneId(panes[0].id);
+  return tabId;
 }
 
 export function openHostsAsSplit2(
   host: HostData | string | (HostData | string)[],
   { title, target }: { title?: string; target?: string } = {},
-) {
+): string | Promise<string> {
   const { hosts } = getStore();
   const targetHosts = Array.isArray(host) ? host.slice(0, 4) : [host];
   const hostNames: string[] = [];
@@ -1028,9 +1037,9 @@ export function openHostsAsSplit2(
     target = undefined;
   }
   if (hostNames.length > 1) {
-    openHostsAsSplit(title, hostNames, hostOptions);
+    return openHostsAsSplit(title, hostNames, hostOptions);
   } else {
-    openHost(hostNames[0], { title, target, options: hostOptions[0] });
+    return openHost(hostNames[0], { title, target, options: hostOptions[0] });
   }
 }
 
@@ -1047,7 +1056,7 @@ export async function openHost(
     options?: Record<string, string>;
     noUpdateRecent?: boolean;
   } = {},
-) {
+): Promise<string> {
   const i = host.lastIndexOf("?");
   if (i !== -1) {
     options = { ...Object.fromEntries(new URLSearchParams(host.slice(i))), ...options };
@@ -1065,7 +1074,7 @@ export async function openHost(
         if (pane.id === options.id) {
           activatePane(pane.id, tab.id);
           triggerFocus();
-          return;
+          return tab.id;
         }
       }
     }
@@ -1083,9 +1092,10 @@ export async function openHost(
     if (targetTab && targetTab.panes.length >= 4) {
       // target = "";
       // targetTab = undefined;
-      return; // do nothing
+      return targetTab.id; // do nothing
     }
   }
+  let tabId: string;
   if (targetTab) {
     const newPane: PaneData = { id: paneId, sessionId, host, options, state: "" };
     setTabs((prev) =>
@@ -1093,8 +1103,9 @@ export async function openHost(
     );
     setActiveTabId(targetTab.id);
     setActivePaneId(paneId);
+    tabId = targetTab.id;
   } else {
-    const tabId = target || genTabId(host);
+    tabId = target || genTabId(host);
     const newTab: TabData = {
       id: tabId,
       title: title || hostTitle(host),
@@ -1134,6 +1145,7 @@ export async function openHost(
       console.error("Failed to record recent:", e);
     }
   }
+  return tabId;
 }
 
 export async function logout() {
@@ -1230,7 +1242,12 @@ export async function cloneSession(id: string, cloneInSameTab?: boolean) {
   setActivePaneId(newPaneId);
 }
 
-export async function attachSession(id: string, host: string, title: string, isLocked: boolean = false) {
+export async function attachSession(
+  id: string,
+  host: string,
+  title: string,
+  isLocked: boolean = false,
+): Promise<string> {
   const existing = getStore().tabs.find((t) =>
     t.panes.some((p) => (p.sessionId || p.id) === id && p.state !== "stolen"),
   );
@@ -1239,7 +1256,7 @@ export async function attachSession(id: string, host: string, title: string, isL
     setActivePaneId(
       existing.panes.find((p) => (p.sessionId || p.id) === id && p.state !== "stolen")?.id || existing.activePaneId,
     );
-    return;
+    return existing.id;
   }
   await fetch("/api/sessions/attach", {
     method: METHOD_POST,
@@ -1262,6 +1279,7 @@ export async function attachSession(id: string, host: string, title: string, isL
   ]);
   setActiveTabId(tabId);
   setActivePaneId(paneId);
+  return tabId;
 }
 
 export async function unpinTab(id?: string) {
@@ -1351,8 +1369,48 @@ export async function lockTab(id?: string) {
   setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, isLocked: true } : t)));
 }
 
-export function closeTab(id: string) {
+export async function hideTab(id?: string) {
+  id = id || getStore().activeTabId;
+  const tab = getStore().tabs.find((t) => t.id === id);
+  if (!tab) {
+    return;
+  }
+  if (tab.panes.length > 1) {
+    dialogs.alert("Only single-pane tabs can be hided.");
+    return;
+  }
+  const pane = tab.panes[0];
+  if (!pane) {
+    return;
+  }
+  const backendSessionId = pane.sessionId || pane.id;
+  await fetch("/api/sessions/hide", {
+    method: METHOD_POST,
+    headers: apiReqHeaders(),
+    body: JSON.stringify({ id: backendSessionId } satisfies SessionsHideRequest),
+  });
+  const { tabs, activeTabId } = getStore();
+  const idx = tabs.findIndex((t) => t.id === id);
+  if (idx === -1) {
+    return;
+  }
+  const newTabs = [...tabs];
+  newTabs.splice(idx, 1);
+  setTabs(newTabs);
+  if (activeTabId === id && newTabs.length > 0) {
+    const nextIdx = idx > 0 ? idx - 1 : 0;
+    const nextTab = newTabs[nextIdx];
+    setActiveTabId(nextTab.id);
+    setActivePaneId(nextTab.activePaneId);
+  } else if (newTabs.length === 0) {
+    setActiveTabId("");
+    setActivePaneId("");
+  }
+}
+
+export function closeTab(id?: string) {
   const { activeTabId, tabs } = getStore();
+  id = id || activeTabId;
   const targetTab = tabs.find((t) => t.id === id);
   if (targetTab?.isPinned && !targetTab?.isLocked) {
     unpinTab(id);
@@ -1482,7 +1540,7 @@ export async function fetchHosts() {
   }
 }
 
-export function openNewButtonDialog() {
+export function openNewButtonDialog(initial?: Partial<ButtonForm>) {
   const { activeGroup, buttons } = getStore();
   const maxOrder = buttons.length > 0 ? Math.max(...buttons.map((b) => b.order || 0)) : 0;
   const data: ButtonData = {
@@ -1495,6 +1553,7 @@ export function openNewButtonDialog() {
     order: maxOrder + 10 || 10,
     shortcut: "",
   };
+  Object.assign(data, initial);
   setEditButton(null);
   setButtonFormData(data);
   setInitialBtnFormData(data);
@@ -1555,16 +1614,6 @@ export async function openSaveTabToButtonDialog(tabId?: string) {
   setEditButtonDialogOpen(true);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function onButtonDialogClose(_e: unknown, _reason: "backdropClick" | "escapeKeyDown") {
-  const { buttonFormData, initialBtnFormData } = getStore();
-  const isDirty = initialBtnFormData && JSON.stringify(buttonFormData) !== JSON.stringify(initialBtnFormData);
-  if (isDirty) {
-    return;
-  }
-  setEditButtonDialogOpen(false);
-}
-
 export function openScratchpad() {
   const existing = getStore().tabs.find((t) => t.type === "scratchpad");
   if (existing) {
@@ -1591,9 +1640,9 @@ export async function saveButton() {
   const { editButton, buttonFormData } = getStore();
 
   // Auto-update liquidjs value based on detected user variables
-  const finalButtonFormData = { ...buttonFormData };
+  const finalButtonFormData: ButtonData = { ...buttonFormData, id: editButton?.id || generatePassword(12) };
   if (finalButtonFormData.type === "send_string") {
-    if (finalButtonFormData.liquidjs !== 0) {
+    if (finalButtonFormData.liquidjs !== undefined && finalButtonFormData.liquidjs !== 0) {
       const varsList = getTemplateVariables(finalButtonFormData.payload);
       finalButtonFormData.liquidjs = varsList.length > 0 ? 2 : 1;
     } else {
@@ -1829,7 +1878,7 @@ export function toggleGroupExpanded(path: string, includeChildren = false) {
   setExpandedGroups(next);
 }
 
-export function openAddHostForm() {
+export function openAddHostForm(initial?: Partial<HostData>) {
   const data: HostForm = {
     name: "",
     hostname: "",
@@ -1853,6 +1902,7 @@ export function openAddHostForm() {
     passwordExists: false,
     clearPassword: false,
   };
+  Object.assign(data, initial);
   setEditHostName("");
   setHostFormData(data);
   setInitialHostFormData(data);
@@ -1939,4 +1989,53 @@ export async function sshCopyId(target: HostData | HostForm) {
       break;
     }
   }
+}
+
+export function openEditHost(target: HostData) {
+  const isAuto = target.source === "known_hosts";
+  const data: HostForm = { ...target, name: parseHostName(target.name).hostname, tags: target.tags?.join(" ") || "" };
+  setEditHostName(isAuto ? "" : target.name);
+  setHostFormData(data);
+  setInitialHostFormData(data);
+  setEditHostDialogOpen(true);
+}
+
+export function openEditTabHost(target?: TabData | string) {
+  const { hosts, tabs, activeTabId } = getStore();
+  target = target || activeTabId;
+  if (typeof target === "string") {
+    target = tabs.find((t) => t.id === target);
+  }
+  if (!target || target.type !== "terminal") {
+    return;
+  }
+  const parsedHost = parseHostName(target.panes[0].host);
+  const parsedHostString = getCanonicalHostString(parsedHost);
+  if (parsedHost.hostname === LOCAL_NAME) {
+    dialogs.alert("local shell can't be edited");
+    return;
+  }
+  const known = hosts.find((h) => h.name === parsedHost.hostname || getCanonicalHostString(h) === parsedHostString);
+  if (known) {
+    openEditHost(known);
+  } else {
+    openAddHostForm(parsedHost);
+  }
+}
+
+export function openEditButtonDialog(btn: ButtonData) {
+  const data: ButtonForm = {
+    name: btn.name,
+    type: btn.type,
+    payload: btn.payload,
+    group: btn.group || DEFAULT_BUTTON_GROUP,
+    autorun: btn.autorun || 0,
+    order: btn.order || 0,
+    shortcut: btn.shortcut || "",
+    liquidjs: btn.liquidjs || 0,
+  };
+  setEditButton(btn);
+  setButtonFormData(data);
+  setInitialBtnFormData(data);
+  setEditButtonDialogOpen(true);
 }
