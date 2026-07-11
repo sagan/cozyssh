@@ -96,6 +96,7 @@ import {
   forceReload,
   getHostGroupPath,
   getHostOrder,
+  getKeyCombination,
   getSSHCommand,
   getSSHConfigBlock,
   getSSHCopyIdCommand,
@@ -1954,26 +1955,43 @@ export default function Sidebar({
 
   const handleFilterKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      const key = e.key.toLowerCase();
-      if (key === "arrowdown" || (e.altKey && key === "j")) {
+      const keycb = getKeyCombination(e as unknown as KeyboardEvent);
+      if (
+        keycb === "arrowdown" ||
+        keycb === "alt+arrowdown" ||
+        keycb === "shift+arrowdown" ||
+        keycb === "ctrl+arrowdown" ||
+        keycb === "tab" ||
+        keycb === "alt+j" ||
+        keycb === "ctrl+alt+j" ||
+        keycb === "alt+shift+j"
+      ) {
         const step = e.ctrlKey
           ? flatList.length
-          : (key === "j" ? e.shiftKey : e.altKey)
+          : (keycb.endsWith("+j") ? e.shiftKey : e.altKey)
             ? getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS)
             : 1;
         e.preventDefault();
         e.stopPropagation();
         setSelectedIndex((prev) => Math.min(prev + step, flatList.length - 1));
-      } else if (key === "arrowup" || (e.altKey && key === "k")) {
+      } else if (
+        keycb === "arrowup" ||
+        keycb === "alt+arrowup" ||
+        keycb === "shift+arrowup" ||
+        keycb === "ctrl+arrowup" ||
+        keycb === "alt+k" ||
+        keycb === "ctrl+alt+k" ||
+        keycb === "alt+shift+k"
+      ) {
         const step = e.ctrlKey
           ? flatList.length
-          : (key === "k" ? e.shiftKey : e.altKey)
+          : (keycb.endsWith("+k") ? e.shiftKey : e.altKey)
             ? getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS)
             : 1;
         e.preventDefault();
         e.stopPropagation();
         setSelectedIndex((prev) => Math.max(prev - step, 0));
-      } else if (key === "enter") {
+      } else if (keycb === "enter" || keycb === "ctrl+enter" || keycb === "shift+enter" || keycb === "alt+enter") {
         e.preventDefault();
         e.stopPropagation();
         if (e.shiftKey) {
@@ -2454,7 +2472,7 @@ export default function Sidebar({
                   variant="caption"
                   sx={{ fontWeight: 700, color: "text.secondary", letterSpacing: "0.08em" }}
                 >
-                  AUTO{filteredHosts.auto.length > 0 && ` (${filteredHosts.auto.length})`}
+                  Known Hosts{filteredHosts.auto.length > 0 && ` (${filteredHosts.auto.length})`}
                 </Typography>
               </Box>
               <Collapse in={!!autoExpanded} timeout={0} unmountOnExit>
@@ -3469,6 +3487,18 @@ export default function Sidebar({
             Run ssh-copy-id
           </MenuItem>
           <MenuItem onClick={handlePasteSshConfigBlock}>Paste SSH Config Block</MenuItem>
+          <MenuItem
+            disabled={!hostFormDirty}
+            onClick={() => {
+              setHostTitleMenuAnchor(null);
+              const initialForm = getStore().initialHostFormData;
+              if (initialForm) {
+                setHostFormData(initialForm);
+              }
+            }}
+          >
+            Reset
+          </MenuItem>
         </Menu>
         <DialogContent>
           <Box sx={{ mt: 1, display: "flex", flexDirection: "column", gap: 2 }}>

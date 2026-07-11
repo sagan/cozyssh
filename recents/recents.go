@@ -39,10 +39,7 @@ func load() error {
 	return json.Unmarshal(data, &recents)
 }
 
-func Save() error {
-	recentsMu.Lock()
-	defer recentsMu.Unlock()
-
+func save() error {
 	return common.AtomicWriteFile(filePath, func(w io.Writer) error {
 		return json.NewEncoder(w).Encode(recents)
 	})
@@ -69,10 +66,7 @@ func Add(host string) {
 	if !found {
 		recents = append(recents, &models.Recent{Host: host, LastUsed: now})
 	}
-
-	// Keep only top 50 recents
-	// Sort by last used (newest first)
-	// We'll sort before saving or returning for simplicity
+	save()
 }
 
 func Get() []*models.Recent {
@@ -81,6 +75,25 @@ func Get() []*models.Recent {
 
 	// Return a copy
 	res := make([]*models.Recent, len(recents))
-	copy(res, recents)
+	for i, recent := range recents {
+		recentCopy := *recent
+		res[i] = &recentCopy
+	}
 	return res
+}
+
+// Delete removes the entry with the given host from recents.
+// Returns true if an entry was found and removed.
+func Delete(host string) bool {
+	recentsMu.Lock()
+	defer recentsMu.Unlock()
+
+	for i, r := range recents {
+		if r.Host == host {
+			recents = append(recents[:i], recents[i+1:]...)
+			save()
+			return true
+		}
+	}
+	return false
 }

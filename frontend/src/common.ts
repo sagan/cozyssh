@@ -653,27 +653,24 @@ export function formatSize(size: number) {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/**
- * If name is "Foo", return "Foo (1)";
- * If name is already "Foo (1)" style, return "Foo (2)".
- */
-export function nextName(name: string): string {
-  const match = name.match(/^(.*) \((\d+)\)$/);
-  if (match) {
-    const base = match[1];
-    const num = parseInt(match[2], 10);
-    return `${base} (${num + 1})`;
+export function hostTitle(host: string): string {
+  const i = host.lastIndexOf("@");
+  if (i !== -1) {
+    host = host.slice(i + 1);
   }
-  return `${name} (1)`;
+  host = cutSuffix(host, ":22")[0];
+  return host;
 }
 
-export function hostTitle(name: string): string {
-  const i = name.lastIndexOf("@");
-  if (i !== -1) {
-    name = name.slice(i + 1);
+/**
+ * If name is "Foo (1)", "Foo (2)"..., return "Foo".
+ */
+export function removeNameNumSuffix(name: string): string {
+  const match = name.match(/^(.*) \((\d+)\)$/);
+  if (match) {
+    return match[1];
   }
-  name = cutSuffix(name, ":22")[0];
-  return name || "server";
+  return name;
 }
 
 /**
@@ -692,8 +689,9 @@ export function removePassFromHost(host: string): string {
   return userpass.slice(0, j) + host.slice(i);
 }
 
-export function genTabId(name: string): string {
-  return `t-${hostTitle(name)}-${generatePassword(12)}`;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function genTabId(_name: string): string {
+  return `t-${generatePassword(12)}`;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -752,7 +750,7 @@ export function isMuiModalOpen(countDialog = false): boolean {
 export function parseHostName(
   name: string,
   defaultUser?: string,
-): Pick<HostData, "name" | "hostname"> & Partial<Pick<HostData, "user" | "password" | "port">> {
+): Pick<HostData, "hostname"> & Partial<Pick<HostData, "user" | "password" | "port">> {
   let hostname = "";
   let user: string | undefined;
   let password: string | undefined;
@@ -814,13 +812,12 @@ export function parseHostName(
     password,
     port,
     hostname,
-    name: hostname,
   };
 }
 
 /**
  * Return `hostname`, `user@hostname`, `user@hostname:port` or `hostname:port`, depends on host and arguments:
- * - If defaultUser or host.user is present, the result contains user part.
+ * - If defaultUser or host.user is not empty, the result contains user part.
  * - If alwaysHasPort is true or host.port is not "22", the result contains port part.
  */
 export function getCanonicalHostString(
@@ -884,7 +881,7 @@ export function getTemplateVariables(templateStr: string): string[] {
       internalVars.add(match[1]);
     }
 
-    const excluded = new Set(["vars", "localVars", "shellIntegration"]);
+    const excluded = new Set(["vars", "localVars", "shellIntegration", "host", "clipboard"]);
 
     return allVars.filter((v) => !excluded.has(v) && !internalVars.has(v));
   } catch (e) {
@@ -1194,7 +1191,7 @@ export function getSSHConfigBlock(host: HostData | HostForm): string {
     }
   }
   // In some cases (such as the host is server returned auto host) the host.name is "root@host" format.
-  block += `Host ${host.name ? parseHostName(host.name).hostname : host.hostname}\n`;
+  block += `Host ${host.name ? parseHostName(host.name || host.hostname).hostname : host.hostname}\n`;
   block += `    HostName ${host.hostname}\n`;
   if (host.user) {
     block += `    User ${host.user}\n`;

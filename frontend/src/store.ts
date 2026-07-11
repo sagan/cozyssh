@@ -51,10 +51,10 @@ import {
   getTemplateVariables,
   hostTitle,
   isMuiModalOpen,
-  nextName,
   nextTerminalFontSize,
   parseHostName,
   prevTerminalFontSize,
+  removeNameNumSuffix,
   removePassFromHost,
 } from "./common";
 import type { TerminalHandle } from "./Terminal";
@@ -378,6 +378,31 @@ export const updateRecentButtonId = (id: string) => {
     }
     const filtered = state.recentButtonIds.filter((i) => i !== id);
     const updated = [id, ...filtered].slice(0, 10);
+    localStorage.setItem(BROWSER_STORAGE_KEY_RECENT_BUTTONS, JSON.stringify(updated));
+    return { recentButtonIds: updated };
+  });
+};
+
+/**
+ * Remove a host from the server-side recents list.
+ * Optimistically removes from local state, then persists via DELETE /api/recents/:host.
+ */
+export const deleteRecent = (host: string) => {
+  // Optimistic update
+  setRecents((prev) => prev.filter((r) => r.host !== host));
+  // Persist to server
+  fetch(`/api/recents/${encodeURIComponent(host)}`, {
+    method: METHOD_DELETE,
+    headers: apiReqHeaders(),
+  }).catch((e) => console.error("Failed to delete recent:", e));
+};
+
+/**
+ * Remove a button id from the browser-only recent buttons list.
+ */
+export const removeRecentButtonId = (id: string) => {
+  useStore.setState((state) => {
+    const updated = state.recentButtonIds.filter((i) => i !== id);
     localStorage.setItem(BROWSER_STORAGE_KEY_RECENT_BUTTONS, JSON.stringify(updated));
     return { recentButtonIds: updated };
   });
@@ -992,7 +1017,6 @@ export function openHostsAsSplit2(
   host: HostData | string | (HostData | string)[],
   { title, target }: { title?: string; target?: string } = {},
 ): string | Promise<string> {
-  const { hosts } = getStore();
   const targetHosts = Array.isArray(host) ? host.slice(0, 4) : [host];
   const hostNames: string[] = [];
   const hostOptions: (Record<string, string> | undefined)[] = [];
@@ -1019,8 +1043,8 @@ export function openHostsAsSplit2(
       if (targetHost === LOCAL_NAME) {
         hostNames.push(LOCAL_NAME);
       } else {
-        const known = hosts.find((h) => h.name === targetHost || h.hostname === targetHost);
-        if (known) {
+        const known = getHost(targetHost);
+        if (known.source === "config") {
           hostNames.push(known.name);
         } else {
           hostNames.push(targetHost);
@@ -1106,7 +1130,7 @@ export async function openHost(
     tabId = target || genTabId(host);
     const newTab: TabData = {
       id: tabId,
-      title: title || hostTitle(host),
+      title: title || newTabTitle(hostTitle(host)),
       panes: [{ id: paneId, host, options, state: "" }],
       activePaneId: paneId,
       type: "terminal",
@@ -1226,7 +1250,7 @@ export async function cloneSession(id: string, cloneInSameTab?: boolean) {
       ...prev,
       {
         id: newTabId,
-        title: nextName(tab.title),
+        title: newTabTitle(removeNameNumSuffix(tab.title)),
         panes: [newPane],
         activePaneId: newPaneId,
         showFiles: false,
@@ -1991,7 +2015,11 @@ export async function sshCopyId(target: HostData | HostForm) {
 
 export function openEditHost(target: HostData) {
   const isAuto = target.source === "known_hosts";
-  const data: HostForm = { ...target, name: parseHostName(target.name).hostname, tags: target.tags?.join(" ") || "" };
+  const data: HostForm = {
+    ...target,
+    name: parseHostName(target.name || target.hostname).hostname,
+    tags: target.tags?.join(" ") || "",
+  };
   setEditHostName(isAuto ? "" : target.name);
   setHostFormData(data);
   setInitialHostFormData(data);
@@ -2019,13 +2047,32 @@ export function openEditTabHost(target?: TabData | string) {
   }
 }
 
-export function getHost(host: string): HostData {
-  const parsedHost = parseHostName(host);
+/**
+ * Find a host. It always returns a HostData.
+ * It first tries to match the host with existing store hosts record.
+ * If not found, it constructs and returns a new HostData object which source = "".
+ */
+export function getHost(
+  host: string | (Pick<HostData, "hostname"> & Partial<Pick<HostData, "port" | "user" | "password">>),
+): HostData {
+  const parsedHost = typeof host === "string" ? parseHostName(host) : host;
   const parsedHostString = getCanonicalHostString(parsedHost, undefined, true);
   const known = getStore().hosts.find(
-    (h) => h.name === parsedHost.name || getCanonicalHostString(h) === parsedHostString,
+    (h) =>
+      (parsedHost.user === undefined &&
+        parsedHost.password === undefined &&
+        parsedHost.port === undefined &&
+        h.name === parsedHost.hostname) ||
+      getCanonicalHostString(h, undefined, true) === parsedHostString,
   );
-  return known || Object.assign(parsedHost, { port: parsedHost.port || "22", user: parsedHost.user || "" });
+  return (
+    known ||
+    Object.assign(parsedHost, {
+      name: parsedHost.hostname,
+      port: parsedHost.port || "22",
+      user: parsedHost.user || "root",
+    })
+  );
 }
 
 export function openEditButtonDialog(btn: ButtonData) {
@@ -2052,4 +2099,24 @@ export function getPane(paneId?: string): PaneData | undefined {
     }
   }
   return undefined;
+}
+
+export function newTabTitle(baseTitle: string): string {
+  baseTitle = baseTitle || "server";
+  const tabNames = getStore().tabs.reduce((v, t) => {
+    if (t.type === "terminal") {
+      v.add(t.title);
+    }
+    return v;
+  }, new Set<string>());
+
+  if (!tabNames.has(baseTitle)) {
+    return baseTitle;
+  }
+  let num = 1;
+  let title = "";
+  do {
+    title = `${baseTitle} (${num++})`;
+  } while (tabNames.has(title));
+  return title;
 }

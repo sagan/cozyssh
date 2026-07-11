@@ -254,6 +254,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
             shellIntegration: shellIntegrations[activePaneId] || {},
             vars: vars || {},
             localVars: localVars || {},
+            host: getHost(activePaneId),
+            clipboard,
             ...(userVars || {}),
           };
           renderedInput = await liquidEngine.parseAndRender(input, context);

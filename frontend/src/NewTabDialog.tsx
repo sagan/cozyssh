@@ -11,10 +11,9 @@ import {
   ListItemText,
   Typography,
   Box,
-  IconButton,
-  InputAdornment,
 } from "@mui/material";
 import ComputerIcon from "@mui/icons-material/Computer";
+import CloseIcon from "@mui/icons-material/Close";
 import DnsIcon from "@mui/icons-material/Dns";
 import HelpIcon from "@mui/icons-material/Help";
 import HistoryIcon from "@mui/icons-material/History";
@@ -43,6 +42,7 @@ import {
   cutString,
   filterButtons,
   filterHosts,
+  getKeyCombination,
   isValidHostname,
   localShellHost,
   parseHostName,
@@ -50,15 +50,17 @@ import {
 } from "./common";
 import {
   changeNewTabDialogViewMode,
+  deleteRecent,
   fetchActiveTunnels,
-  getStore,
   notify,
   parseNewTabDialogFilter,
+  removeRecentButtonId,
   setNewTabDialogFilter,
   updateRecentButtonId,
   useStore,
   getIntVar,
   fetchSessions,
+  getHost,
 } from "./store";
 
 interface DialogItem {
@@ -87,6 +89,8 @@ interface DialogItem {
   btn?: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">;
   tag?: string;
   flatIndex: number;
+  /** True for items that can be removed from the recents list */
+  isDeletable?: boolean;
 }
 
 interface DialogSection {
@@ -190,6 +194,7 @@ export default function NewTabDialog({
   const recentButtonIds = useStore((state) => state.recentButtonIds);
   const newTabDialogFilter = useStore((state) => state.newTabDialogFilter);
   const activeTunnels = useStore((state) => state.activeTunnels);
+  const recents = useStore((state) => state.recents);
 
   const defaultShell = shells[0];
   const alternativeShell = shells[1];
@@ -266,15 +271,15 @@ export default function NewTabDialog({
     if (viewMode !== "servers") {
       return [[], []];
     }
-    const recents = getStore()
-      .recents.filter((r) => r.host.toLowerCase().includes(f))
+    const matchedRecents = recents
+      .filter((r) => r.host.toLowerCase().includes(f))
       .sort((a, b) => b.last_used - a.last_used);
 
     if (f) {
-      return [recents.slice(0, 5), []];
+      return [matchedRecents.slice(0, 5), []];
     }
-    return [recents.slice(0, 5), recents.slice(5)];
-  }, [f, viewMode]);
+    return [matchedRecents.slice(0, 5), matchedRecents.slice(5)];
+  }, [f, viewMode, recents]);
 
   const filteredHosts = useMemo(() => {
     if (viewMode !== "servers") {
@@ -432,7 +437,7 @@ export default function NewTabDialog({
       // Recents
       const recentList: Omit<DialogItem, "flatIndex">[] = [];
       filteredRecents.forEach((r) => {
-        const knownHost = hosts.find((h) => h.name === r.host);
+        const knownHost = getHost(r.host);
         recentList.push({
           type: "recent",
           value: r.host,
@@ -443,6 +448,7 @@ export default function NewTabDialog({
             ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX))
             .map((t) => "#" + t)
             .join(" "),
+          isDeletable: true,
         });
       });
       addSection("Recents", recentList);
@@ -464,7 +470,7 @@ export default function NewTabDialog({
       // Older recents
       const olderRecentList: Omit<DialogItem, "flatIndex">[] = [];
       filteredOlderRecents.forEach((r) => {
-        const knownHost = hosts.find((h) => h.name === r.host);
+        const knownHost = getHost(r.host);
         olderRecentList.push({
           type: "recent",
           value: r.host,
@@ -475,6 +481,7 @@ export default function NewTabDialog({
             ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX))
             .map((t) => "#" + t)
             .join(" "),
+          isDeletable: true,
         });
       });
       addSection("Older Recents", olderRecentList);
@@ -622,6 +629,7 @@ export default function NewTabDialog({
           tooltip: b.type !== "run_script" ? b.payload : undefined,
           btn: b,
           tag: !b.shortcut_scope || (b.group || DEFAULT_BUTTON_GROUP) === activeGroup ? b.shortcut : undefined,
+          isDeletable: true,
         });
       });
       addSection("Recently used", recentList);
@@ -754,6 +762,22 @@ export default function NewTabDialog({
     }
   }, [selectedIndex]);
 
+  const handleDeleteItem = useCallback((item: (typeof items)[number]) => {
+    if (!item.isDeletable) {
+      return;
+    }
+    if (item.type === "recent") {
+      deleteRecent(item.value);
+    } else if ((item.type === "button" || item.type === "builtin_button") && item.id) {
+      removeRecentButtonId(item.id);
+    }
+    // Keep the dialog open; adjust selection if needed
+    setSelectedIndex((prev) => Math.max(0, prev - 1));
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 0);
+  }, []);
+
   const handleSelect = useCallback(
     (item: (typeof items)[number], alternativeMode = 0) => {
       if (item.type === "tab") {
@@ -798,44 +822,73 @@ export default function NewTabDialog({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      const key = e.key.toLowerCase();
-      if (key === "arrowdown" || (e.altKey && key === "j")) {
+      const keycb = getKeyCombination(e as unknown as KeyboardEvent);
+      if (
+        keycb === "arrowdown" ||
+        keycb === "alt+arrowdown" ||
+        keycb === "shift+arrowdown" ||
+        keycb === "ctrl+arrowdown" ||
+        keycb === "tab" ||
+        keycb === "alt+j" ||
+        keycb === "ctrl+alt+j" ||
+        keycb === "alt+shift+j"
+      ) {
         const step = e.ctrlKey
           ? items.length
-          : (key === "j" ? e.shiftKey : e.altKey)
+          : (keycb.endsWith("+j") ? e.shiftKey : e.altKey)
             ? getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS)
             : 1;
         e.preventDefault();
         e.stopPropagation();
         setSelectedIndex((prev) => Math.min(prev + step, items.length - 1));
-      } else if (key === "arrowup" || (e.altKey && key === "k")) {
+      } else if (
+        keycb === "arrowup" ||
+        keycb === "alt+arrowup" ||
+        keycb === "shift+arrowup" ||
+        keycb === "ctrl+arrowup" ||
+        keycb === "alt+k" ||
+        keycb === "ctrl+alt+k" ||
+        keycb === "alt+shift+k"
+      ) {
         const step = e.ctrlKey
           ? items.length
-          : (key === "k" ? e.shiftKey : e.altKey)
+          : (keycb.endsWith("+k") ? e.shiftKey : e.altKey)
             ? getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS)
             : 1;
         e.preventDefault();
         e.stopPropagation();
         setSelectedIndex((prev) => Math.max(prev - step, 0));
-      } else if ((key === "arrowleft" && !f) || (e.altKey && key === "h")) {
+      } else if ((keycb === "arrowleft" && !f) || keycb === "alt+h") {
         e.stopPropagation();
         e.preventDefault();
         changeNewTabDialogViewMode(true);
-      } else if ((key === "arrowright" && !f) || (e.altKey && key === "l")) {
+      } else if ((keycb === "arrowright" && !f) || keycb === "alt+l") {
         e.stopPropagation();
         e.preventDefault();
         changeNewTabDialogViewMode();
-      } else if (key === "enter") {
+      } else if (keycb === "enter" || keycb === "ctrl+enter" || keycb === "shift+enter" || keycb === "alt+enter") {
         e.preventDefault();
         e.stopPropagation();
         if (items[selectedIndex]) {
           handleSelect(items[selectedIndex], e.ctrlKey ? 3 : e.shiftKey ? 2 : e.altKey ? 1 : 0);
         }
-      } else if (key === "escape") {
+      } else if (keycb === "delete" || keycb === "alt+d") {
+        // Remove from recents only when:
+        //   - the selected item is deletable AND
+        //   - the cursor is at end-of-input (or input is empty) so normal Delete editing still works
+        const input = inputRef.current;
+        const atEndOrEmpty = !input || input.value === "" || input.selectionStart === input.value.length;
+        const item = items[selectedIndex];
+        if (atEndOrEmpty && item?.isDeletable) {
+          e.preventDefault();
+          e.stopPropagation();
+          handleDeleteItem(item);
+        }
+      } else if (keycb === "escape") {
         onClose();
       }
     },
-    [f, handleSelect, items, onClose, selectedIndex],
+    [f, handleDeleteItem, handleSelect, items, onClose, selectedIndex],
   );
 
   useEffect(() => {
@@ -1035,36 +1088,6 @@ export default function NewTabDialog({
           autoComplete="off"
           type="search"
           sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
-          slotProps={{
-            input: {
-              endAdornment: (
-                <InputAdornment position="end">
-                  <IconButton
-                    onClick={() => {
-                      changeNewTabDialogViewMode();
-                      inputRef.current?.focus();
-                    }}
-                    color={viewMode !== "servers" ? "primary" : "default"}
-                    title={`Toggle View (Currently: ${viewMode}) (←, →) (or Alt+H / Alt+L)`}
-                  >
-                    {viewMode === "servers" ? (
-                      <DnsIcon />
-                    ) : viewMode === "tabs" ? (
-                      <TabIcon />
-                    ) : viewMode === "buttons" ? (
-                      <SmartButtonIcon />
-                    ) : viewMode === "tags" ? (
-                      <TagIcon />
-                    ) : viewMode === "tunnels" ? (
-                      <ShortcutIcon />
-                    ) : (
-                      <HelpIcon />
-                    )}
-                  </IconButton>
-                </InputAdornment>
-              ),
-            },
-          }}
         />
       </DialogTitle>
       <DialogContent sx={{ p: 0 }} dividers onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
@@ -1090,6 +1113,9 @@ export default function NewTabDialog({
                   className="new-tab-dialog-item"
                   sx={{
                     py: 0.5,
+                    // Show the delete button when this row is selected or hovered
+                    "& .ntd-delete-btn": { opacity: 0 },
+                    "&.Mui-selected .ntd-delete-btn, &:hover .ntd-delete-btn": { opacity: 1 },
                     "&.Mui-selected": {
                       bgcolor: "primary.main",
                       color: "white",
@@ -1152,6 +1178,33 @@ export default function NewTabDialog({
                       ) : undefined
                     }
                   />
+                  {item.isDeletable && (
+                    <Box
+                      component="span"
+                      className="ntd-delete-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteItem(item);
+                      }}
+                      title="Remove from recents (delete / alt+d)"
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        ml: 0.5,
+                        p: 0.5,
+                        borderRadius: 1,
+                        cursor: "pointer",
+                        flexShrink: 0,
+                        transition: "opacity 0.1s ease",
+                        "&:hover": {
+                          bgcolor: "rgba(255,255,255,0.15)",
+                        },
+                      }}
+                    >
+                      <CloseIcon sx={{ fontSize: 14 }} />
+                    </Box>
+                  )}
                 </ListItemButton>
               ))}
             </React.Fragment>

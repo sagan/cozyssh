@@ -15,6 +15,7 @@ import {
   Alert,
   IconButton,
   Chip,
+  useTheme,
 } from "@mui/material";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import CodeMirror from "@uiw/react-codemirror";
@@ -89,6 +90,7 @@ import {
   hideTab,
   openAddHostForm,
   getHost,
+  getPane,
 } from "./store";
 import NewTabDialog from "./NewTabDialog";
 import { dialogs } from "./Dialogs";
@@ -162,6 +164,8 @@ export default function DialogManager({
   const [userVars, setUserVars] = useState<Record<string, string>>({});
   const [renderedPreview, setRenderedPreview] = useState("");
 
+  const theme = useTheme();
+
   const varsList = useMemo(() => {
     if (!inputLiquid) {
       return [];
@@ -211,10 +215,19 @@ export default function DialogManager({
     const renderTemplate = async () => {
       try {
         const { vars, localVars } = getStore();
+        const pane = getPane(activePaneId);
+        let clipboard = "";
+        try {
+          clipboard = await navigator.clipboard.readText();
+        } catch {
+          // ignore
+        }
         const context = {
           shellIntegration: shellIntegrations[activePaneId] || {},
           vars: vars || {},
           localVars: localVars || {},
+          host: pane ? getHost(pane.host) : {},
+          clipboard,
           ...userVars,
         };
         const rendered = await liquidEngine.parseAndRender(inputValue, context);
@@ -827,6 +840,18 @@ export default function DialogManager({
           >
             Add Plugin Manager
           </MenuItem>
+          <MenuItem
+            disabled={!buttonFormDirty}
+            onClick={() => {
+              handleTitleMenuClose();
+              const initialForm = getStore().initialBtnFormData;
+              if (initialForm) {
+                setButtonFormData(initialForm);
+              }
+            }}
+          >
+            Reset
+          </MenuItem>
         </Menu>
         <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
           {importTip && (
@@ -978,6 +1003,17 @@ export default function DialogManager({
                     style={{ fontSize: "12px" }}
                   />
                 </Box>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Learn more about&nbsp;
+                  <a
+                    href="https://liquidjs.com/tutorials/intro-to-liquid.html"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: theme.palette.primary.main, textDecoration: "none" }}
+                  >
+                    Liquid Template
+                  </a>
+                </Typography>
                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.8 }}>
                   <b>Available System Variables</b>:&nbsp;
                   <Chip color="success" label="shellIntegration" />
@@ -1061,19 +1097,19 @@ export default function DialogManager({
                 }}
               />
               <Typography variant="body2" color="text.secondary">
-                Server name or <b>[username[:password]@]hostname[:port]</b>. Use <b>{LOCAL_NAME}</b> for local shell.
+                Server name or <b>[username[:password]@]hostname[:port]</b>. Use <b>local</b> for local shell.
                 <br />
                 Append <b>?id=abc&title=Local</b> style query string to set optional session-scope parameters (URL
                 Encoded):
                 <br />- <b>id</b> : The terminal pane id. If the same id pane exists, switch to it instead of opening a
-                new one
-                <br />- <b>title</b> : The opened tab title
-                <br />- <b>remoteCommand</b> : Remote shell command to execute on connected
-                <br />- <b>proxyJump</b> : Proxy jump server
+                new one.
+                <br />- <b>title</b> : The opened tab title.
+                <br />- <b>remoteCommand</b> : Remote shell command to execute on connected. It works on&nbsp;
+                <code>local</code> shell too.
+                <br />- <b>proxyJump</b> : Proxy jump server.
                 <br />- <b>target</b> : The tab id. If the same id tab exists, the new terminal will be opened in the
-                target tab, use <code>_self</code> for current tab
-                <br />- <b>exec</b> : Only valid for <code>{LOCAL_NAME}</code> host. If set to <code>1</code>, it
-                treats&nbsp;
+                target tab, use <code>_self</code> for current tab.
+                <br />- <b>exec</b> : Only valid for <code>local</code> host. If set to <code>1</code>, it treats&nbsp;
                 <code>remoteCommand</code> as a single program with args and execute it directly instead of executing it
                 using system shell.
                 <br />- <b>localForward</b> & <b>remoteForward</b> & <b>dynamicForward</b> : OpenSSH syntax SSH tunnel
@@ -1084,8 +1120,11 @@ export default function DialogManager({
                 <code>%0A</code> (\n) to seperate multiple variables.
                 <br />- <b>state</b>: Set the initial state of the opened terminal session: 0=normal, 1=pinned,
                 2=locked, 3=hidden.
-                <br /> E.g. <b>local?id=local-abc&title=Local&remoteCommand=tmux attach || tmux new</b>
                 <br /> It's possible to set multiple (up to 4) comma-separated servers to open them in split screen.
+                <br /> E.b. <b>local?title=Local</b> . More examples:
+                <br />- <b>local?id=local-abc&title=Local&remoteCommand=tmux attach || tmux new</b>
+                <br />- <b>local?remoteCommand=python&title=Python</b> : Start Python REPL.
+                <br />- <b>192.168.1.1?title=server1,192.168.1.2?title=server2</b> : Open two terminals in split screen.
               </Typography>
             </Box>
           ) : (
@@ -1195,7 +1234,14 @@ export default function DialogManager({
               <Box sx={{ flex: 1, display: "flex", flexDirection: "column", gap: 1.5 }}>
                 <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <Typography variant="subtitle2" color="text.secondary">
-                    Template
+                    <a
+                      href="https://liquidjs.com/tutorials/intro-to-liquid.html"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: theme.palette.primary.main, textDecoration: "none" }}
+                    >
+                      Liquid Template
+                    </a>
                   </Typography>
                   <Button
                     size="small"
@@ -1245,11 +1291,41 @@ export default function DialogManager({
                   System Variables
                 </Typography>
                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.8 }}>
-                  <Chip color="success" label="shellIntegration" />
-                  <Chip color="success" label="vars" />
-                  <Chip color="success" label="localVars" />
-                  <Chip color="success" label="host" />
-                  <Chip color="success" label="clipboard" />
+                  <Chip
+                    color="success"
+                    label="shellIntegration"
+                    onClick={() => {
+                      setInputValue(inputValue + " {{shellIntegration | json}}");
+                    }}
+                  />
+                  <Chip
+                    color="success"
+                    label="vars"
+                    onClick={() => {
+                      setInputValue(inputValue + " {{vars | json}}");
+                    }}
+                  />
+                  <Chip
+                    color="success"
+                    label="localVars"
+                    onClick={() => {
+                      setInputValue(inputValue + " {{localVars | json}}");
+                    }}
+                  />
+                  <Chip
+                    color="success"
+                    label="host"
+                    onClick={() => {
+                      setInputValue(inputValue + " {{host | json}}");
+                    }}
+                  />
+                  <Chip
+                    color="success"
+                    label="clipboard"
+                    onClick={() => {
+                      setInputValue(inputValue + " {{clipboard}}");
+                    }}
+                  />
                 </Box>
               </Box>
               <Box sx={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
@@ -1427,29 +1503,37 @@ export default function DialogManager({
         }}
         onSelect={async (host, alternativeMode = 0) => {
           const [hostname, query] = cutString(host, "?");
-          // Check if it's a direct connection and not in known hosts
-          const parsedHost = getHost(hostname);
-          if (parsedHost.hostname !== LOCAL_NAME && !parsedHost.source) {
-            (async () => {
-              await fetch("/api/hosts", {
-                method: METHOD_POST,
-                headers: apiReqHeaders(),
-                // don't save password from direct connect string
-                body: JSON.stringify({ ...parsedHost, password: undefined } satisfies HostData),
-              });
-              await refreshData({ sync: 2 });
-            })();
+          let hostStr = hostname;
+          let parsedHost: HostData | undefined;
+          if (hostname !== LOCAL_NAME) {
+            // Check if it's a direct connection and not in known hosts
+            parsedHost = getHost(hostname);
+            if (!parsedHost.source) {
+              (async () => {
+                await fetch("/api/hosts", {
+                  method: METHOD_POST,
+                  headers: apiReqHeaders(),
+                  // don't save password from direct connect string
+                  body: JSON.stringify({ ...parsedHost, password: undefined } satisfies HostData),
+                });
+                await refreshData({ sync: 2 });
+              })();
+            }
+            hostStr = parsedHost.source === "config" ? parsedHost.name : getCanonicalHostString(parsedHost);
           }
-          const hostStr =
-            (parsedHost.source === "config" ? parsedHost.name : getCanonicalHostString(parsedHost)) +
-            (query ? "?" + query : "");
+          if (query) {
+            hostStr += "?" + query;
+          }
+
           if (alternativeMode === 3) {
             openHostInNewWindow(hostStr);
           } else if (alternativeMode === 2) {
-            if (parsedHost.source) {
-              openEditHost(parsedHost);
-            } else {
-              openAddHostForm(parsedHost);
+            if (parsedHost) {
+              if (parsedHost.source) {
+                openEditHost(parsedHost);
+              } else {
+                openAddHostForm(parsedHost);
+              }
             }
           } else {
             openHost(hostStr, { target: alternativeMode ? "_self" : undefined });

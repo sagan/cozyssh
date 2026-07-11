@@ -333,7 +333,22 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				return
 			}
 			recents.Add(req.Host)
-			recents.Save()
+			w.WriteHeader(http.StatusNoContent)
+		}))))
+
+	// DELETE /api/recents/{host} — remove a specific host from the recents list
+	mux.Handle("/api/recents/", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodDelete {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			host := strings.TrimPrefix(r.URL.Path, "/api/recents/")
+			if host == "" {
+				http.Error(w, "Bad Request: missing host", http.StatusBadRequest)
+				return
+			}
+			recents.Delete(host)
 			w.WriteHeader(http.StatusNoContent)
 		}))))
 
