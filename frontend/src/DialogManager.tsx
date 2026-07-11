@@ -36,13 +36,11 @@ import {
   type ToastData,
   getKeyCombination,
   ButtonDataSchema,
-  parseHostName,
   getCanonicalHostString,
   getTemplateVariables,
   liquidEngine,
   openHostInNewWindow,
   cutString,
-  cutSuffix,
   apiReqHeaders,
 } from "./common";
 import {
@@ -90,6 +88,7 @@ import {
   closeTab,
   hideTab,
   openAddHostForm,
+  getHost,
 } from "./store";
 import NewTabDialog from "./NewTabDialog";
 import { dialogs } from "./Dialogs";
@@ -984,6 +983,8 @@ export default function DialogManager({
                   <Chip color="success" label="shellIntegration" />
                   <Chip color="success" label="vars" />
                   <Chip color="success" label="localVars" />
+                  <Chip color="success" label="host" />
+                  <Chip color="success" label="clipboard" />
                 </Box>
                 {editButtonVars.length > 0 && (
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.8 }}>
@@ -1247,6 +1248,8 @@ export default function DialogManager({
                   <Chip color="success" label="shellIntegration" />
                   <Chip color="success" label="vars" />
                   <Chip color="success" label="localVars" />
+                  <Chip color="success" label="host" />
+                  <Chip color="success" label="clipboard" />
                 </Box>
               </Box>
               <Box sx={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
@@ -1425,37 +1428,26 @@ export default function DialogManager({
         onSelect={async (host, alternativeMode = 0) => {
           const [hostname, query] = cutString(host, "?");
           // Check if it's a direct connection and not in known hosts
-          const parsedHost = parseHostName(hostname);
-          const parsedHostString = getCanonicalHostString(parsedHost);
-          let known: HostData | undefined;
-          if (parsedHost.hostname !== LOCAL_NAME) {
-            known = hosts.find((h) => h.name === parsedHost.hostname || getCanonicalHostString(h) === parsedHostString);
-            if (!known) {
-              // Automatically add to ~/.ssh/config
-              try {
-                await fetch("/api/hosts", {
-                  method: METHOD_POST,
-                  headers: apiReqHeaders(),
-                  body: JSON.stringify({
-                    user: "",
-                    port: "22",
-                    name: parsedHost.hostname,
-                    ...parsedHost,
-                    password: undefined, // don't save password from direct connect string
-                  } satisfies HostData),
-                });
-                refreshData({ sync: 2 });
-              } catch (e) {
-                console.error("Failed to auto-add host:", e);
-              }
-            }
+          const parsedHost = getHost(hostname);
+          if (parsedHost.hostname !== LOCAL_NAME && !parsedHost.source) {
+            (async () => {
+              await fetch("/api/hosts", {
+                method: METHOD_POST,
+                headers: apiReqHeaders(),
+                // don't save password from direct connect string
+                body: JSON.stringify({ ...parsedHost, password: undefined } satisfies HostData),
+              });
+              await refreshData({ sync: 2 });
+            })();
           }
-          const hostStr = (known?.name || cutSuffix(parsedHostString, ":22")[0]) + (query ? "?" + query : "");
+          const hostStr =
+            (parsedHost.source === "config" ? parsedHost.name : getCanonicalHostString(parsedHost)) +
+            (query ? "?" + query : "");
           if (alternativeMode === 3) {
             openHostInNewWindow(hostStr);
           } else if (alternativeMode === 2) {
-            if (known) {
-              openEditHost(known);
+            if (parsedHost.source) {
+              openEditHost(parsedHost);
             } else {
               openAddHostForm(parsedHost);
             }

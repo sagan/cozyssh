@@ -752,7 +752,7 @@ export function isMuiModalOpen(countDialog = false): boolean {
 export function parseHostName(
   name: string,
   defaultUser?: string,
-): Pick<HostData, "hostname"> & Partial<Pick<HostData, "user" | "password" | "port">> {
+): Pick<HostData, "name" | "hostname"> & Partial<Pick<HostData, "user" | "password" | "port">> {
   let hostname = "";
   let user: string | undefined;
   let password: string | undefined;
@@ -814,22 +814,29 @@ export function parseHostName(
     password,
     port,
     hostname,
+    name: hostname,
   };
 }
 
 /**
- * Return `user@hostname:port` or `hostname:port`. `port` is always present and defaults to `22`.
- * If defaultUser is provided, it always returns`user@hostname:port`
+ * Return `hostname`, `user@hostname`, `user@hostname:port` or `hostname:port`, depends on host and arguments:
+ * - If defaultUser or host.user is present, the result contains user part.
+ * - If alwaysHasPort is true or host.port is not "22", the result contains port part.
  */
 export function getCanonicalHostString(
   host: Pick<HostData, "hostname"> & Partial<Pick<HostData, "user" | "port">>,
   defaultUser?: string,
+  alwaysHasPort?: boolean,
 ): string {
+  let s = "";
   if (host.user || defaultUser) {
-    return `${encodeURIComponent((host.user || defaultUser) as string)}@${host.hostname}:${host.port || "22"}`;
-  } else {
-    return `${host.hostname}:${host.port || "22"}`;
+    s += `${encodeURIComponent((host.user || defaultUser)!)}@`;
   }
+  s += host.hostname;
+  if (alwaysHasPort || host.port !== "22") {
+    s += `:${host.port || "22"}`;
+  }
+  return s;
 }
 
 function liquidFs(): never {

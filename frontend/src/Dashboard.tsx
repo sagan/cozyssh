@@ -94,6 +94,10 @@ import {
   hideTab,
   fetchSessions,
   startupParams,
+  type PaneData,
+  getPane,
+  getTab,
+  getHost,
 } from "./store";
 import { setupPluginAPI, runScript } from "./pluginAPI";
 import { useKeyboardManager } from "./useKeyboardManager";
@@ -176,16 +180,16 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, []);
 
   const sendParsedString = useCallback(async (input: string, isLiquid?: boolean, userVars?: Record<string, string>) => {
-    const scope = getStore().sendScope;
-    const { tabs: currentTabs, activeTabId, activePaneId } = getStore();
-    let targetPaneIds: string[] = [];
-    if (scope === 2) {
-      targetPaneIds = currentTabs.flatMap((t) => t.panes.map((p) => p.id));
-    } else if (scope === 1) {
-      const currentTab = currentTabs.find((t) => t.id === activeTabId);
-      targetPaneIds = currentTab ? currentTab.panes.map((p) => p.id) : [activePaneId];
+    const { sendScope, tabs } = getStore();
+    let targetPanes: PaneData[] = [];
+    if (sendScope === 2) {
+      targetPanes = tabs.flatMap((t) => t.panes);
+    } else if (sendScope === 1) {
+      const currentTab = getTab();
+      targetPanes = currentTab ? currentTab.panes : [];
     } else {
-      targetPaneIds = [activePaneId];
+      const pane = getPane();
+      targetPanes = pane ? [pane] : [];
     }
 
     let hasShellIntegration = false;
@@ -199,16 +203,24 @@ export default function Dashboard({ initialData }: DashboardProps) {
       }
     }
 
+    let clipboard = "";
+    try {
+      clipboard = await navigator.clipboard.readText();
+    } catch {
+      /* empty */
+    }
+
     if (isLiquid && hasShellIntegration) {
       // Execute template independently for each terminal pane
-      for (const pid of targetPaneIds) {
-        if (!pid) continue;
+      for (const pane of targetPanes) {
         try {
           const { vars, localVars, shellIntegrations } = getStore();
           const context = {
-            shellIntegration: shellIntegrations[pid] || {},
+            shellIntegration: shellIntegrations[pane.id] || {},
             vars: vars || {},
             localVars: localVars || {},
+            host: getHost(pane.host),
+            clipboard,
             ...(userVars || {}),
           };
           const rendered = await liquidEngine.parseAndRender(input, context);
@@ -220,8 +232,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
             const ctrlMatch = part.match(/<ctrl-([!-~])>/);
             const dataToSend = ctrlMatch ? String.fromCharCode(ctrlMatch[1].charCodeAt(0) & 0x1f) : part;
 
-            if (terminalRefs.current[pid]) {
-              const term = terminalRefs.current[pid];
+            if (terminalRefs.current[pane.id]) {
+              const term = terminalRefs.current[pane.id];
               if (term && "getXterm" in term) {
                 term.sendData(dataToSend);
               }
@@ -229,7 +241,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             await new Promise((r) => setTimeout(r, ctrlMatch ? 50 : 10));
           }
         } catch (e) {
-          console.error(`Failed to render liquid template for pane ${pid}:`, e);
+          console.error(`Failed to render liquid template for pane ${pane.id} - ${pane.host}:`, e);
         }
       }
     } else {
@@ -258,9 +270,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
         const ctrlMatch = part.match(/<ctrl-([!-~])>/);
         const dataToSend = ctrlMatch ? String.fromCharCode(ctrlMatch[1].charCodeAt(0) & 0x1f) : part;
 
-        for (const pid of targetPaneIds) {
-          if (pid && terminalRefs.current[pid]) {
-            const term = terminalRefs.current[pid];
+        for (const pane of targetPanes) {
+          if (terminalRefs.current[pane.id]) {
+            const term = terminalRefs.current[pane.id];
             if (term && "getXterm" in term) {
               term.sendData(dataToSend);
             }

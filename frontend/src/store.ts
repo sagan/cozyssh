@@ -1999,7 +1999,7 @@ export function openEditHost(target: HostData) {
 }
 
 export function openEditTabHost(target?: TabData | string) {
-  const { hosts, tabs, activeTabId } = getStore();
+  const { tabs, activeTabId } = getStore();
   target = target || activeTabId;
   if (typeof target === "string") {
     target = tabs.find((t) => t.id === target);
@@ -2007,18 +2007,25 @@ export function openEditTabHost(target?: TabData | string) {
   if (!target || target.type !== "terminal") {
     return;
   }
-  const parsedHost = parseHostName(target.panes[0].host);
-  const parsedHostString = getCanonicalHostString(parsedHost);
-  if (parsedHost.hostname === LOCAL_NAME) {
+  const host = getHost(target.panes[0].host);
+  if (host.hostname === LOCAL_NAME) {
     dialogs.alert("local shell can't be edited");
     return;
   }
-  const known = hosts.find((h) => h.name === parsedHost.hostname || getCanonicalHostString(h) === parsedHostString);
-  if (known) {
-    openEditHost(known);
+  if (host.source) {
+    openEditHost(host);
   } else {
-    openAddHostForm(parsedHost);
+    openAddHostForm(host);
   }
+}
+
+export function getHost(host: string): HostData {
+  const parsedHost = parseHostName(host);
+  const parsedHostString = getCanonicalHostString(parsedHost, undefined, true);
+  const known = getStore().hosts.find(
+    (h) => h.name === parsedHost.name || getCanonicalHostString(h) === parsedHostString,
+  );
+  return known || Object.assign(parsedHost, { port: parsedHost.port || "22", user: parsedHost.user || "" });
 }
 
 export function openEditButtonDialog(btn: ButtonData) {
@@ -2027,4 +2034,22 @@ export function openEditButtonDialog(btn: ButtonData) {
   setButtonFormData(data);
   setInitialBtnFormData(data);
   setEditButtonDialogOpen(true);
+}
+
+export function getTab(tabId?: string): TabData | undefined {
+  const { tabs, activeTabId } = getStore();
+  tabId = tabId || activeTabId;
+  return tabs.find((t) => t.id === tabId);
+}
+
+export function getPane(paneId?: string): PaneData | undefined {
+  const { tabs, activePaneId } = getStore();
+  paneId = paneId || activePaneId;
+  for (const tab of tabs) {
+    const pane = tab.panes.find((p) => p.id === paneId);
+    if (pane) {
+      return pane;
+    }
+  }
+  return undefined;
 }
