@@ -35,6 +35,7 @@ import {
   TAG_FAV,
   TOAST_KEY_API_FULLDATA,
   VAR_CS_NO_SANITIZE_HASH,
+  TOAST_KEY_COPY,
 } from "./constants";
 import {
   type ContextMenu,
@@ -429,17 +430,24 @@ export default function Dashboard({ initialData }: DashboardProps) {
       let noFocus = false;
       switch (btn.type) {
         case "send_string": {
-          const openDialog = alternativeMode === 3 || (!!btn.liquidjs && getTemplateVariables(btn.payload).length > 0);
-          if (openDialog) {
-            openInputDialog({
-              inputValue: btn.payload,
-              inputLiquid: !!btn.liquidjs,
-              sendScope: 0,
-              appendNewLine: false,
-            });
-          } else {
-            await sendParsedString(btn.payload);
+          if (alternativeMode === 1) {
+            navigator.clipboard.writeText(btn.payload);
+            notify("Copied", "info", TOAST_KEY_COPY);
             triggerFocus();
+          } else {
+            const openDialog =
+              alternativeMode === 3 || (!!btn.liquidjs && getTemplateVariables(btn.payload).length > 0);
+            if (openDialog) {
+              openInputDialog({
+                inputValue: btn.payload,
+                inputLiquid: !!btn.liquidjs,
+                sendScope: 0,
+                appendNewLine: false,
+              });
+            } else {
+              await sendParsedString(btn.payload);
+              triggerFocus();
+            }
           }
           break;
         }

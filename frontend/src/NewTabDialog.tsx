@@ -24,9 +24,11 @@ import ShortcutIcon from "@mui/icons-material/Shortcut";
 import PushPinIcon from "@mui/icons-material/PushPin";
 import LockIcon from "@mui/icons-material/Lock";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
+import LinkIcon from "@mui/icons-material/Link";
 import TagIcon from "@mui/icons-material/Tag";
 import SmartButtonIcon from "@mui/icons-material/SmartButton";
 
+import { version as PACKAGE_JSON_VERSION } from "../package.json";
 import type { Session, ButtonData, HostData } from "./api";
 import {
   BUILTIN_BUTTONS,
@@ -37,11 +39,15 @@ import {
   ID_NEW_TAB_DIALOG_INPUT,
   TAG_ORDER_PREFIX,
   TOAST_KEY_COPY_TUNNEL_ENTRYPOINT,
+  LINK_COZYSSH_GITHUB,
+  LINK_COZYSSH_DOC_SCRIPTS,
+  LINK_COZYSSH_DOC_PLUGINS,
 } from "./constants";
 import {
   cutString,
   filterButtons,
   filterHosts,
+  forceReload,
   getKeyCombination,
   isValidHostname,
   localShellHost,
@@ -76,6 +82,8 @@ interface DialogItem {
     | "builtin_button"
     | "tag"
     | "tunnel"
+    | "link"
+    | "action"
     | "help";
   value: string;
   label: string;
@@ -91,6 +99,7 @@ interface DialogItem {
   flatIndex: number;
   /** True for items that can be removed from the recents list */
   isDeletable?: boolean;
+  action?: () => void;
 }
 
 interface DialogSection {
@@ -176,6 +185,35 @@ const helpOptions: Omit<DialogItem, "flatIndex">[] = [
   },
 ] as const;
 
+const helpLinks: Omit<DialogItem, "flatIndex">[] = [
+  {
+    type: "link",
+    value: LINK_COZYSSH_DOC_SCRIPTS,
+    label: "Scripts Docoment",
+    subtitle: "CozySSH custom scripts guide",
+  },
+  {
+    type: "link",
+    value: LINK_COZYSSH_DOC_SCRIPTS,
+    label: "Data Docoment",
+    subtitle: "CozySSH data storage document",
+  },
+  {
+    type: "link",
+    value: LINK_COZYSSH_DOC_PLUGINS,
+    label: "Plugin",
+    subtitle: "CozySSH official plugins repository",
+  },
+  {
+    type: "action",
+    action: forceReload,
+    value: "",
+    label: "Force Reload",
+    subtitle: "Unregister the Service Worker, clear all caches and reload",
+    tag: "ctrl+alt+shift+r",
+  },
+] as const;
+
 export default function NewTabDialog({
   isMobile,
   isTouch,
@@ -195,6 +233,7 @@ export default function NewTabDialog({
   const newTabDialogFilter = useStore((state) => state.newTabDialogFilter);
   const activeTunnels = useStore((state) => state.activeTunnels);
   const recents = useStore((state) => state.recents);
+  const appVersion = useStore((state) => state.sysinfo.version);
 
   const defaultShell = shells[0];
   const alternativeShell = shells[1];
@@ -204,6 +243,16 @@ export default function NewTabDialog({
   const swipeStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
   const [localPinned, setLocalPinned] = useState<Session[]>([]);
+
+  const aboutLink: Omit<DialogItem, "flatIndex"> = useMemo(() => {
+    return {
+      type: "link",
+      value: LINK_COZYSSH_GITHUB,
+      label: "About (GitHub)",
+      subtitle: `CozySSH ${appVersion} (Frontend: ${PACKAGE_JSON_VERSION})`,
+      tag: appVersion,
+    } satisfies Omit<DialogItem, "flatIndex">;
+  }, [appVersion]);
 
   const uniqueTags: { tag: string; count: number }[] = useMemo(() => {
     const set = new Map<string, number>();
@@ -726,6 +775,7 @@ export default function NewTabDialog({
         (o) => o.label.toLowerCase().includes(f) || o.subtitle?.toLowerCase().includes(f) || o.value.includes(f),
       );
       addSection("Command Palette Prefix Guide", filteredHelp);
+      addSection("Help", [aboutLink, ...helpLinks]);
     }
 
     return { sections, items };
@@ -738,7 +788,6 @@ export default function NewTabDialog({
     filteredHosts.normal,
     filteredHosts.auto,
     directConnect,
-    hosts,
     defaultShell,
     alternativeShell,
     f,
@@ -751,6 +800,7 @@ export default function NewTabDialog({
     builtinButtons,
     filteredActiveTunnels,
     filteredTags,
+    aboutLink,
   ]);
 
   useEffect(() => {
@@ -780,41 +830,60 @@ export default function NewTabDialog({
 
   const handleSelect = useCallback(
     (item: (typeof items)[number], alternativeMode = 0) => {
-      if (item.type === "tab") {
-        onSelectTab(item.id!);
-        onClose();
-      } else if (item.type === "pinned_tab") {
-        onAttachPinned(item.id!, item.host!, item.label, !!item.isLocked);
-        onClose();
-      } else if (item.type === "button" || item.type === "other_button" || item.type === "builtin_button") {
-        if (item.btn?.id && alternativeMode === 0) {
-          updateRecentButtonId(item.btn.id);
-        }
-        onExecuteButton(item.btn!, alternativeMode);
-        onClose();
-      } else if (item.type === "tag") {
-        setNewTabDialogFilter("#" + item.value + " ");
-        setSelectedIndex(0);
-        setTimeout(() => {
+      switch (item.type) {
+        case "tab":
+          onSelectTab(item.id!);
+          onClose();
+          break;
+        case "pinned_tab":
+          onAttachPinned(item.id!, item.host!, item.label, !!item.isLocked);
+          onClose();
+          break;
+        case "button":
+        case "other_button":
+        case "builtin_button":
+          if (item.btn?.id && alternativeMode === 0) {
+            updateRecentButtonId(item.btn.id);
+          }
+          onExecuteButton(item.btn!, alternativeMode);
+          onClose();
+          break;
+        case "tag":
+          setNewTabDialogFilter("#" + item.value + " ");
+          setSelectedIndex(0);
+          setTimeout(() => {
+            inputRef.current?.focus();
+          }, 0);
+          break;
+        case "help":
+          setNewTabDialogFilter(item.value);
+          setSelectedIndex(0);
+          setTimeout(() => {
+            inputRef.current?.focus();
+          }, 0);
+          break;
+        case "tunnel":
+          navigator.clipboard
+            .writeText(item.value)
+            .then(() =>
+              notify(`Tunnel entrypoint "${item.value}" copied to clipboard`, "info", TOAST_KEY_COPY_TUNNEL_ENTRYPOINT),
+            )
+            .catch(() => {});
+          onClose();
+          break;
+        case "link":
+          window.open(item.value);
           inputRef.current?.focus();
-        }, 0);
-      } else if (item.type === "help") {
-        setNewTabDialogFilter(item.value);
-        setSelectedIndex(0);
-        setTimeout(() => {
-          inputRef.current?.focus();
-        }, 0);
-      } else if (item.type === "tunnel") {
-        navigator.clipboard
-          .writeText(item.value)
-          .then(() =>
-            notify(`Tunnel entrypoint "${item.value}" copied to clipboard`, "info", TOAST_KEY_COPY_TUNNEL_ENTRYPOINT),
-          )
-          .catch(() => {});
-        onClose();
-      } else {
-        onSelect(item.value, alternativeMode);
-        onClose();
+          break;
+        case "action":
+          if (item.action) {
+            item.action();
+            inputRef.current?.focus();
+          }
+          break;
+        default:
+          onSelect(item.value, alternativeMode);
+          onClose();
       }
     },
     [onAttachPinned, onClose, onExecuteButton, onSelect, onSelectTab],
@@ -970,6 +1039,8 @@ export default function NewTabDialog({
         return <SmartButtonIcon {...activeProps} />;
       case "tunnel":
         return <ShortcutIcon {...activeProps} />;
+      case "link":
+        return <LinkIcon {...activeProps} />;
       case "help":
         if (item.value === ">") {
           return <SmartButtonIcon {...activeProps} />;

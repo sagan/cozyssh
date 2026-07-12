@@ -27,6 +27,7 @@ import type { HostData, ButtonData } from "./api";
 import {
   DEFAULT_BUTTON_GROUP,
   ID_INPUT_DIALOG_INPUT,
+  LINK_COZYSSH_DOC_SCRIPTS,
   LOCAL_NAME,
   METHOD_POST,
   MISC_FUNCTIONS,
@@ -1016,11 +1017,56 @@ export default function DialogManager({
                 </Typography>
                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.8 }}>
                   <b>Available System Variables</b>:&nbsp;
-                  <Chip color="success" label="shellIntegration" />
-                  <Chip color="success" label="vars" />
-                  <Chip color="success" label="localVars" />
-                  <Chip color="success" label="host" />
-                  <Chip color="success" label="clipboard" />
+                  <Chip
+                    color="success"
+                    label="shellIntegration"
+                    onClick={() => {
+                      setButtonFormData({
+                        ...buttonFormData,
+                        payload: buttonFormData.payload + " {{shellIntegration | json}}",
+                      });
+                    }}
+                  />
+                  <Chip
+                    color="success"
+                    label="vars"
+                    onClick={() => {
+                      setButtonFormData({
+                        ...buttonFormData,
+                        payload: buttonFormData.payload + " {{vars | json}}",
+                      });
+                    }}
+                  />
+                  <Chip
+                    color="success"
+                    label="localVars"
+                    onClick={() => {
+                      setButtonFormData({
+                        ...buttonFormData,
+                        payload: buttonFormData.payload + " {{localVars | json}}",
+                      });
+                    }}
+                  />
+                  <Chip
+                    color="success"
+                    label="host"
+                    onClick={() => {
+                      setButtonFormData({
+                        ...buttonFormData,
+                        payload: buttonFormData.payload + " {{host | json}}",
+                      });
+                    }}
+                  />
+                  <Chip
+                    color="success"
+                    label="clipboard"
+                    onClick={() => {
+                      setButtonFormData({
+                        ...buttonFormData,
+                        payload: buttonFormData.payload + " {{clipboard}}",
+                      });
+                    }}
+                  />
                 </Box>
                 {editButtonVars.length > 0 && (
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.8 }}>
@@ -1149,16 +1195,16 @@ export default function DialogManager({
                 }}
               >
                 <Typography variant="caption" color="text.secondary">
-                  Check{" "}
+                  Check&nbsp;
                   <a
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{ color: "#1976d2" }}
-                    href="https://github.com/sagan/cozyssh/blob/master/docs/SCRIPTS.md"
+                    href={LINK_COZYSSH_DOC_SCRIPTS}
                   >
                     help
-                  </a>{" "}
-                  about scripts.
+                  </a>
+                  &nbsp; about scripts.
                 </Typography>
               </Box>
               <CodeMirror

@@ -1681,16 +1681,16 @@ export interface IModes {
 	readonly wraparoundMode: boolean;
 }
 export interface Sysinfo {
-	username?: string;
-	sitename?: string;
-	version?: string;
+	username: string;
+	sitename: string;
+	version: string;
 	insecureAllowed?: boolean;
 	isSecure?: boolean;
-	savePassword?: "ask" | "always" | "never";
-	configDir?: string;
-	sshDir?: string;
-	defaultIdentityPath?: string;
-	defaultIdentityPublicKey?: string;
+	savePassword: "ask" | "always" | "never";
+	configDir: string;
+	sshDir: string;
+	defaultIdentityPath: string;
+	defaultIdentityPublicKey: string;
 }
 export interface HostData {
 	name: string;

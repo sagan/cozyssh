@@ -202,3 +202,8 @@ export const TAG_GROUP_PREFIX = "g-";
 export const TAG_ORDER_PREFIX = "o-";
 
 export const TAG_FAV = "fav";
+
+export const LINK_COZYSSH_GITHUB = "https://github.com/sagan/cozyssh";
+export const LINK_COZYSSH_DOC_DATA = "https://github.com/sagan/cozyssh/blob/master/docs/DATA.md";
+export const LINK_COZYSSH_DOC_SCRIPTS = "https://github.com/sagan/cozyssh/blob/master/docs/SCRIPTS.md";
+export const LINK_COZYSSH_DOC_PLUGINS = "https://github.com/sagan/cozyssh-plugins";

@@ -88,6 +88,8 @@ import {
   TAG_FAV,
   TOAST_KEY_PASTE_SSH_CONFIG_BLOCK,
   TOAST_KEY_SYNC,
+  LINK_COZYSSH_GITHUB,
+  LINK_COZYSSH_DOC_DATA,
 } from "./constants";
 import {
   type ServiceWorkerStatus,
@@ -683,7 +685,11 @@ export default function Sidebar({
   const handleCopyUploadIdentityCommand = useCallback(() => {
     setHostTitleMenuAnchor(null);
     navigator.clipboard.writeText(
-      getSSHCopyIdCommand(getStore().hostFormData, getStore().sysinfo.defaultIdentityPublicKey),
+      getSSHCopyIdCommand(
+        getStore().hostFormData,
+        getStore().sysinfo.defaultIdentityPath,
+        getStore().sysinfo.defaultIdentityPublicKey,
+      ),
     );
   }, []);
 
@@ -1257,7 +1263,13 @@ export default function Sidebar({
     if (groupContextMenu.path) {
       toggleGroupExpanded(groupContextMenu.path, true);
     } else {
-      toggleExpandAllGroups();
+      // "All" right click
+      if (!getStore().allExpanded) {
+        toggleExpandAllGroups(true);
+        setAllExpanded(1);
+      } else {
+        toggleExpandAllGroups();
+      }
     }
   }, [groupContextMenu]);
 
@@ -2472,7 +2484,7 @@ export default function Sidebar({
                   variant="caption"
                   sx={{ fontWeight: 700, color: "text.secondary", letterSpacing: "0.08em" }}
                 >
-                  Known Hosts{filteredHosts.auto.length > 0 && ` (${filteredHosts.auto.length})`}
+                  KNOWN HOSTS{filteredHosts.auto.length > 0 && ` (${filteredHosts.auto.length})`}
                 </Typography>
               </Box>
               <Collapse in={!!autoExpanded} timeout={0} unmountOnExit>
@@ -3044,11 +3056,7 @@ export default function Sidebar({
                   <b>Note</b>: OpenSSH hosts data sync is opt-in and semi-automatic; You must manually import other
                   device's hosts from "Import" page. OpenSSH private keys and saved passwords will&nbsp;
                   <b>NOT</b> be uploaded. See&nbsp;
-                  <a
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    href="https://github.com/sagan/cozyssh/blob/master/docs/DATA.md#sync"
-                  >
+                  <a target="_blank" rel="noopener noreferrer" href={LINK_COZYSSH_DOC_DATA + "#sync"}>
                     CozySSH Data doccument
                   </a>
                   &nbsp;for more details.
@@ -3387,7 +3395,8 @@ export default function Sidebar({
                   <br />
                   <b>Shift + Mouse Click</b> on a button in button bar to edit it; <b>Ctrl/Alt + Mouse Click</b> on a
                   "Open Terminal" type button to open it in new window / current tab; <b>Ctrl + Mouse Click</b> on a
-                  "Send String" type button to open it in "Terminal Input" dialog
+                  "Send String" type button to open it in "Terminal Input" dialog, <b>Alt + Mouse Click</b> on it to
+                  copy contents to clipboard
                 </Typography>
                 {__CS_ENV__ === 1 && (
                   <>
@@ -3424,7 +3433,7 @@ export default function Sidebar({
                 </Typography>
                 <Typography variant="body2" sx={{ mt: 3 }}>
                   <a
-                    href="https://github.com/sagan/cozyssh"
+                    href={LINK_COZYSSH_GITHUB}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{ color: theme.palette.primary.main, textDecoration: "none" }}

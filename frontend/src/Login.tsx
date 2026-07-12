@@ -3,7 +3,14 @@ import { Box, Button, TextField, Typography, Paper, ThemeProvider, CssBaseline }
 
 import { version as PACKAGE_JSON_VERSION } from "../package.json";
 import type { FullData, LoginRequest, LoginResponse, Manifest } from "./api";
-import { APP_NAME, BROWSER_STORAGE_KEY_TOKEN, HEADER_CONTENT_TYPE, METHOD_POST, MIME_JSON } from "./constants";
+import {
+  APP_NAME,
+  BROWSER_STORAGE_KEY_TOKEN,
+  HEADER_CONTENT_TYPE,
+  LINK_COZYSSH_GITHUB,
+  METHOD_POST,
+  MIME_JSON,
+} from "./constants";
 import { forceReload, getKeyCombination, loginTheme, blackholeShortcuts } from "./common";
 import { dialogs } from "./Dialogs";
 
@@ -143,7 +150,7 @@ Please remember the app password. You will need it to access your saved SSH pass
           </Button>
           <Typography variant="body2" sx={{ mt: 2, fontSize: "typography.caption.fontSize" }}>
             v{PACKAGE_JSON_VERSION}&nbsp;|&nbsp;
-            <a rel="noopener noreferrer" style={{ color: "#1976d2" }} href="https://github.com/sagan/cozyssh">
+            <a rel="noopener noreferrer" style={{ color: "#1976d2" }} href={LINK_COZYSSH_GITHUB}>
               GitHub
             </a>
           </Typography>

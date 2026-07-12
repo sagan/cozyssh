@@ -166,7 +166,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - `Mouse Right Click` in terminal to paste
   - `Mouse Middle Click` on a tab to close it
   - `Alt + Mouse Wheel` in terminal to fast scroll up / down
-  - `Shift + Mouse Click` on a button in button bar to edit it; `Ctrl/Alt + Mouse Click` on a "Open Terminal" type button to open it in new window / current tab; `Ctrl + Mouse Click` on a "Send String" type button to open it in "Terminal Input" dialog
+  - `Shift + Mouse Click` on a button in button bar to edit it; `Ctrl/Alt + Mouse Click` on a "Open Terminal" type button to open it in new window / current tab; `Ctrl + Mouse Click` on a "Send String" type button to open it in "Terminal Input" dialog, `Alt + Mouse Click` on it to copy contents to clipboard
 - **Advanced SSH Management**: 🔑
   - **ProxyJump Support**: Full support for OpenSSH standard `ProxyJump` configuration, allowing you to connect to hosts via intermediate jump servers.
   - **RemoteCommand Support**: Support ssh_config `RemoteCommand` configuration, execute a custom command on the remote ssh server after successfully connecting to it.
