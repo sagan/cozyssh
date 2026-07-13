@@ -27,6 +27,7 @@ import type { ShellIntegration, TerminalHandle } from "./Terminal";
 import type { Liquid } from "liquidjs";
 
 declare global {
+  type Modifier = "alt" | "ctrl" | "meta" | "shift";
   interface CsChooseAction {
     value: string; // The unique value returned when clicked (e.g., 'discard')
     label?: string; // The text displayed on the button (e.g., 'Save as Draft'), default to id
@@ -151,6 +152,12 @@ declare global {
    * For example, 'A-' matches 'A-1', 'A-2', etc.
    */
   var __CS_TOAST_KEY_MUTE_SET__: Set<string>;
+  /**
+   * The mac modifier key swap map. Only used on macOS.
+   * By default alt (option) and meta (command) keys are swapped:
+   * for example, press "command+o" in Mac is recognized as "alt+o" shortcut in CozySSH.
+   */
+  var __CS_MAC_MODIFIER_SWAP__: Map<Modifier, Modifier>;
   /**
    * Focus the terminal with the given pane id.
    * @param tabOrPaneId defaults to active terminal pane id.

@@ -6,6 +6,7 @@ import type { ButtonData } from "./api";
 import { openNewButtonDialog, setActiveGroup, setBtnMenuAnchor, setLastMenuBtn, useStore } from "./store";
 import { useShallow } from "zustand/react/shallow";
 import { DEFAULT_BUTTON_GROUP } from "./constants";
+import { isModifier } from "./common";
 
 const buttonStyleBorder: Record<ButtonData["type"], string> = {
   run_script: "2px dashed",
@@ -146,7 +147,9 @@ export default function ButtonBar({ groups, handleButtonClick }: ButtonBarProps)
                 btn.shortcut ? " (" + btn.shortcut.toUpperCase() + ")" : ""
               }${btn.type !== "run_script" ? ": " + btn.payload : ""}`}
               component="div"
-              onClick={(e) => handleButtonClick(btn, e.ctrlKey ? 3 : e.shiftKey ? 2 : e.altKey ? 1 : 0)}
+              onClick={(e) =>
+                handleButtonClick(btn, isModifier(e, "ctrl") ? 3 : e.shiftKey ? 2 : isModifier(e, "alt") ? 1 : 0)
+              }
               onContextMenu={(e) => {
                 e.preventDefault();
                 setBtnMenuAnchor({ anchor: e.currentTarget, btn });

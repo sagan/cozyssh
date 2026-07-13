@@ -31,7 +31,7 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import { Menu, MenuItem, TableSortLabel, InputBase } from "@mui/material";
 
 import type { FileInfo, FileMkdirRequest, FileRenameRequest, FsList, FsToken } from "./api";
-import { type Order, apiReqHeaders, formatSize, triggerDownload } from "./common";
+import { type Order, apiReqHeaders, formatSize, getKeyCombination, triggerDownload } from "./common";
 import { METHOD_POST } from "./constants";
 import TextEditor from "./TextEditor";
 import { dialogs } from "./Dialogs";
@@ -622,7 +622,8 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
             value={filterValue}
             onChange={(e) => setFilterValue(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.altKey) {
+              const kb = getKeyCombination(e);
+              if (kb === "enter") {
                 e.preventDefault();
                 e.stopPropagation();
                 handleGoTo();

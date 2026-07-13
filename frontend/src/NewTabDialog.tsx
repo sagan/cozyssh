@@ -49,10 +49,12 @@ import {
   filterHosts,
   forceReload,
   getKeyCombination,
+  isModifier,
   isValidHostname,
   localShellHost,
   parseHostName,
   searchStringAny,
+  shortcutLabel,
 } from "./common";
 import {
   changeNewTabDialogViewMode,
@@ -454,7 +456,7 @@ export default function NewTabDialog({
           type: builtinBtn.type,
           payload: builtinBtn.payload,
           group: "",
-          shortcut: builtinBtn.shortcut || "",
+          shortcut: builtinBtn.shortcut ? shortcutLabel(builtinBtn.shortcut) : "",
         });
       }
     });
@@ -677,7 +679,10 @@ export default function NewTabDialog({
           subtitle,
           tooltip: b.type !== "run_script" ? b.payload : undefined,
           btn: b,
-          tag: !b.shortcut_scope || (b.group || DEFAULT_BUTTON_GROUP) === activeGroup ? b.shortcut : undefined,
+          tag:
+            !b.shortcut_scope || (b.group || DEFAULT_BUTTON_GROUP) === activeGroup
+              ? shortcutLabel(b.shortcut)
+              : undefined,
           isDeletable: true,
         });
       });
@@ -703,7 +708,11 @@ export default function NewTabDialog({
           tooltip: b.type !== "run_script" ? b.payload : undefined,
           btn: b,
           tag:
-            b.shortcut + (idx < 10 ? (b.shortcut ? " " : "") + (idx < 9 ? `alt+shift+${idx + 1}` : "alt+shift+0") : ""),
+            shortcutLabel(b.shortcut) +
+            (idx < 10
+              ? (b.shortcut ? " " : "") +
+                (idx < 9 ? shortcutLabel(`alt+shift+${idx + 1}`) : shortcutLabel("alt+shift+0"))
+              : ""),
         });
       });
       addSection(`Active Group (${activeGroup || DEFAULT_BUTTON_GROUP})`, activeGroupList);
@@ -727,7 +736,7 @@ export default function NewTabDialog({
           subtitle,
           tooltip: b.type !== "run_script" ? b.payload : undefined,
           btn: b,
-          tag: !b.shortcut_scope ? b.shortcut : undefined,
+          tag: !b.shortcut_scope ? shortcutLabel(b.shortcut) : undefined,
         });
       });
       addSection("Other Groups", otherGroupList);
@@ -739,7 +748,7 @@ export default function NewTabDialog({
         label: b.name,
         subtitle: `Built-in | Type: ${b.type} | Payload: ${b.payload}`,
         btn: b,
-        tag: b.shortcut,
+        tag: b.shortcut ? shortcutLabel(b.shortcut) : undefined,
       }));
       addSection("Built-in Functions", builtinList);
     } else if (viewMode === "tunnels") {
@@ -891,7 +900,7 @@ export default function NewTabDialog({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      const keycb = getKeyCombination(e as unknown as KeyboardEvent);
+      const keycb = getKeyCombination(e);
       if (
         keycb === "arrowdown" ||
         keycb === "alt+arrowdown" ||
@@ -902,9 +911,9 @@ export default function NewTabDialog({
         keycb === "ctrl+alt+j" ||
         keycb === "alt+shift+j"
       ) {
-        const step = e.ctrlKey
+        const step = isModifier(e, "ctrl")
           ? items.length
-          : (keycb.endsWith("+j") ? e.shiftKey : e.altKey)
+          : (keycb.endsWith("+j") ? e.shiftKey : isModifier(e, "alt"))
             ? getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS)
             : 1;
         e.preventDefault();
@@ -919,9 +928,9 @@ export default function NewTabDialog({
         keycb === "ctrl+alt+k" ||
         keycb === "alt+shift+k"
       ) {
-        const step = e.ctrlKey
+        const step = isModifier(e, "ctrl")
           ? items.length
-          : (keycb.endsWith("+k") ? e.shiftKey : e.altKey)
+          : (keycb.endsWith("+k") ? e.shiftKey : isModifier(e, "alt"))
             ? getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS)
             : 1;
         e.preventDefault();
@@ -939,7 +948,7 @@ export default function NewTabDialog({
         e.preventDefault();
         e.stopPropagation();
         if (items[selectedIndex]) {
-          handleSelect(items[selectedIndex], e.ctrlKey ? 3 : e.shiftKey ? 2 : e.altKey ? 1 : 0);
+          handleSelect(items[selectedIndex], isModifier(e, "ctrl") ? 3 : e.shiftKey ? 2 : isModifier(e, "alt") ? 1 : 0);
         }
       } else if (keycb === "delete" || keycb === "alt+d") {
         // Remove from recents only when:
@@ -962,7 +971,7 @@ export default function NewTabDialog({
 
   useEffect(() => {
     const handleGlobalKeydown = (e: KeyboardEvent) => {
-      if (e.altKey && (e.key === "o" || e.key === "a" || e.key === "e")) {
+      if (isModifier(e, "alt") && (e.key === "o" || e.key === "a" || e.key === "e")) {
         e.preventDefault();
         e.stopPropagation();
         inputRef.current?.focus();
@@ -1177,7 +1186,9 @@ export default function NewTabDialog({
                   key={item.flatIndex}
                   selected={selectedIndex === item.flatIndex}
                   ref={selectedIndex === item.flatIndex ? selectedItemRef : null}
-                  onClick={(e) => handleSelect(item, e.ctrlKey ? 3 : e.shiftKey ? 2 : e.altKey ? 1 : 0)}
+                  onClick={(e) =>
+                    handleSelect(item, isModifier(e, "ctrl") ? 3 : e.shiftKey ? 2 : isModifier(e, "alt") ? 1 : 0)
+                  }
                   title={item.tooltip}
                   data-type={item.type}
                   data-value={item.value}

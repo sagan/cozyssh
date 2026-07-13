@@ -25,6 +25,7 @@ import {
   disableShortcuts,
   forceReload,
   getKeyCombination,
+  isModifier,
   isMuiModalOpen,
   localShellHost,
 } from "./common";
@@ -485,7 +486,14 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
       }
 
       // ── Alt+0-9: switch to tab by index ───────────────────────────────────
-      if (e.altKey && e.key >= "0" && e.key <= "9") {
+      if (
+        isModifier(e, "alt") &&
+        !isModifier(e, "ctrl") &&
+        !e.shiftKey &&
+        !isModifier(e, "meta") &&
+        e.key >= "0" &&
+        e.key <= "9"
+      ) {
         e.preventDefault();
         const tabs = getStore().tabs;
         let idx = parseInt(e.key);
@@ -502,7 +510,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
       }
 
       // ── Alt+Shift+0-9: trigger button by index ────────────────────────────
-      if (e.altKey && e.shiftKey) {
+      if (isModifier(e, "alt") && e.shiftKey && !isModifier(e, "ctrl") && !isModifier(e, "meta")) {
         const { buttons, activeGroup } = getStore();
         const digitMatch = e.code.match(/Digit(\d)/);
         if (digitMatch) {

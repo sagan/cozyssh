@@ -14,7 +14,12 @@ import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import CloudDoneIcon from "@mui/icons-material/CloudDone";
 import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
 
-import { type CSEventDetailTerminalChange, type ScratchpadSyncState, CS_EVENT_TERMINAL_CHANGE } from "./common";
+import {
+  type CSEventDetailTerminalChange,
+  type ScratchpadSyncState,
+  CS_EVENT_TERMINAL_CHANGE,
+  getKeyCombination,
+} from "./common";
 import {
   type TerminalRefMap,
   deleteUnreadTabId,
@@ -276,7 +281,8 @@ export default function TabBar({
                   }
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.altKey) {
+                  const kb = getKeyCombination(e);
+                  if (kb === "enter") {
                     e.preventDefault();
                     e.stopPropagation();
                     const term = terminalRefs.current[activePaneId];

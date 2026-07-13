@@ -47,6 +47,7 @@ import {
   blackholeShortcuts,
   disableShortcuts,
   apiReqHeaders,
+  macModifierSwap,
 } from "./common";
 import {
   type CsScriptModule,
@@ -89,6 +90,7 @@ window.__CS_LIQUID_ENGINE__ = liquidEngine;
 window.__CS_RUNNING_SCRIPT__ = undefined;
 window.__CS_SHORTCUT_BUTTONS__ = {};
 window.__CS_TOAST_KEY_MUTE_SET__ = toastKeyMuteSet;
+window.__CS_MAC_MODIFIER_SWAP__ = macModifierSwap;
 window.__CS_ENV__ = window.appToggleFullscreen ? 1 : 0;
 document.documentElement.dataset.csEnv = `${window.__CS_ENV__}`;
 document.documentElement.dataset.csVersion = PACKAGE_JSON_VERSION;

@@ -17,6 +17,7 @@ import {
   TAG_GROUP_PREFIX,
   TAG_ORDER_PREFIX,
 } from "./constants";
+import type React from "react";
 
 export type Expect<T extends true> = T;
 export type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2 ? true : false;
@@ -407,6 +408,43 @@ const codeKeys: Record<string, [string, string]> = {
   Digit0: ["0", ")"],
 };
 
+// Use userAgentData if available, fallback to userAgent string
+export const IS_APPLE =
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  !!navigator.userAgentData?.platform?.toLowerCase().includes("mac") ||
+  /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+
+let macModifierKeyRegex: RegExp | undefined;
+
+/**
+ * Modifier mapping for Mac. Editable by custom scripts.
+ * Note only `ctrl`, `alt` (option) and `meta` (command) mapping are supported, `shift` is not supported.
+ * Format: `<recognized modifier> => <Mac physical key>`.
+ * The entries MUST exist in pairs like foo => bar + bar => foo.
+ * The behavior is undefined if only foo => bar record but not the reverse one exists in map.
+ * The CozySSH shortcut system use PC as standard (e.g. `alt+o`).
+ * Since in PC keyboard layout from spacebar to left is `alt`, `meta` (windows), `ctrl`, `fn`
+ * and in Mac keyboard layout from spacebar to left is `meta` (command), `alt` (option), `ctrl`, `fn`,
+ * we simply swap `meta` and `alt` keys in Mac by default.
+ */
+export const macModifierSwap: Map<Modifier, Modifier> = createMapProxy(
+  [
+    ["meta", "alt"],
+    ["alt", "meta"],
+  ],
+  updateMacModifierKeyRegex,
+);
+updateMacModifierKeyRegex();
+
+function updateMacModifierKeyRegex() {
+  if (macModifierSwap.size > 0) {
+    macModifierKeyRegex = new RegExp(Array.from(macModifierSwap.keys()).join("|"), "g");
+  } else {
+    macModifierKeyRegex = undefined;
+  }
+}
+
 /**
  * Get a key combination string from a KeyboardEvent
  * @param ev KeyboardEvent
@@ -416,14 +454,14 @@ const codeKeys: Record<string, [string, string]> = {
  * So if user press "Alt + Shift + 1" it will return "alt+shift+!" since the shift version of "1" is "!".
  * It's a known limitation and may be changed in the future.
  */
-export function getKeyCombination(ev: KeyboardEvent): string {
+export function getKeyCombination(ev: KeyboardEvent | React.KeyboardEvent): string {
   let mods = "";
   const suppressKeys = new Set<string>();
-  if (ev.ctrlKey) {
+  if (isModifier(ev, "ctrl")) {
     suppressKeys.add("control");
     mods += "+ctrl";
   }
-  if (ev.altKey) {
+  if (isModifier(ev, "alt")) {
     suppressKeys.add("alt");
     mods += "+alt";
   }
@@ -431,21 +469,67 @@ export function getKeyCombination(ev: KeyboardEvent): string {
     suppressKeys.add("shift");
     mods += "+shift";
   }
-  if (ev.metaKey) {
+  if (isModifier(ev, "meta")) {
     suppressKeys.add("meta");
     mods += "+meta";
   }
-  let key = ev.key;
+  let key = ev.key.toLowerCase();
+  if (IS_APPLE && macModifierSwap.has(key as Modifier)) {
+    key = macModifierSwap.get(key as Modifier)!;
+  }
   // In some keyboard layout (like Windows English International layout) some keystrokes perse will produce "Dead" key,
   // e.g. ' since 'e is used to input é. We need to get the actual key.
-  if (key === "Dead" && codeKeys[ev.code]) {
+  if (key === "dead" && codeKeys[ev.code]) {
     key = codeKeys[ev.code][ev.shiftKey ? 1 : 0];
   }
-  key = key.toLowerCase();
   if (!suppressKeys.has(key)) {
     mods += "+" + key;
   }
   return mods.slice(1);
+}
+
+/**
+ * Check if the KeyboardEvent has the given modifier (ctrl / alt / meta / shift) in Mac aware way.
+ * @param ev KeyboardEvent, React.KeyboardEvent, MouseEvent, or React.MouseEvent
+ * @param modifier "ctrl", "meta", "alt", or "shift"
+ * @returns true if the event has the given modifier, false otherwise
+ */
+export function isModifier(
+  ev: KeyboardEvent | React.KeyboardEvent | MouseEvent | React.MouseEvent,
+  modifier: Modifier,
+): boolean {
+  if (IS_APPLE && macModifierSwap.has(modifier)) {
+    modifier = macModifierSwap.get(modifier)!;
+  }
+  switch (modifier) {
+    case "ctrl":
+      return ev.ctrlKey;
+    case "shift":
+      return ev.shiftKey;
+    case "meta":
+      return ev.metaKey;
+    case "alt":
+      return ev.altKey;
+    default:
+      return false;
+  }
+}
+
+export function shortcutLabel(shortcut: string): string {
+  if (IS_APPLE && macModifierKeyRegex) {
+    return shortcut.replace(macModifierKeyRegex, (match) => {
+      match = macModifierSwap.get(match as Modifier) || match;
+      switch (match) {
+        case "alt":
+          return "option";
+        case "meta":
+          return "command";
+        default:
+          return match;
+      }
+    });
+  }
+  return shortcut;
 }
 
 /**
@@ -1442,7 +1526,8 @@ export function createSetProxy<T>(initialValue: Iterable<T> | null | undefined, 
               });
             }
 
-            return result;
+            // If the method returns the raw target, return the proxy (receiver) instead to preserve chaining
+            return result === target ? receiver : result;
           };
         }
 
@@ -1454,6 +1539,54 @@ export function createSetProxy<T>(initialValue: Iterable<T> | null | undefined, 
   });
 
   return setProxy;
+}
+
+/**
+ * Creates a Map proxy that calls a callback whenever the map is mutated.
+ * @param cb The callback. It MUST NOT mutate the map.
+ */
+export function createMapProxy<K, V>(
+  initialValue: Iterable<readonly [K, V]> | null | undefined,
+  cb: (map: Map<K, V>) => void,
+): Map<K, V> {
+  const myMap = new Map<K, V>(initialValue);
+
+  // Track whether a microtask has already been scheduled
+  let isPending = false;
+
+  const mapProxy = new Proxy(myMap, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop);
+
+      if (typeof value === "function") {
+        const mutatingMethods = ["set", "delete", "clear"];
+
+        if (mutatingMethods.includes(prop as string)) {
+          return function (...args: unknown[]) {
+            const result = value.apply(target, args);
+
+            // If a microtask isn't already queued, queue one now
+            if (!isPending) {
+              isPending = true;
+
+              queueMicrotask(() => {
+                isPending = false; // Reset the flag before running the callback
+                cb(target);
+              });
+            }
+            // If the method returns the raw target, return the proxy (receiver) instead to preserve chaining
+            return result === target ? receiver : result;
+          };
+        }
+
+        return value.bind(target);
+      }
+
+      return value;
+    },
+  });
+
+  return mapProxy;
 }
 
 /**

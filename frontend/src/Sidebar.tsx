@@ -103,6 +103,7 @@ import {
   getSSHConfigBlock,
   getSSHCopyIdCommand,
   hostLabel,
+  isModifier,
   isValidHostname,
   localShellHost,
   openHostInNewWindow,
@@ -1978,9 +1979,9 @@ export default function Sidebar({
         keycb === "ctrl+alt+j" ||
         keycb === "alt+shift+j"
       ) {
-        const step = e.ctrlKey
+        const step = isModifier(e, "ctrl")
           ? flatList.length
-          : (keycb.endsWith("+j") ? e.shiftKey : e.altKey)
+          : (keycb.endsWith("+j") ? e.shiftKey : isModifier(e, "alt"))
             ? getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS)
             : 1;
         e.preventDefault();
@@ -1995,9 +1996,9 @@ export default function Sidebar({
         keycb === "ctrl+alt+k" ||
         keycb === "alt+shift+k"
       ) {
-        const step = e.ctrlKey
+        const step = isModifier(e, "ctrl")
           ? flatList.length
-          : (keycb.endsWith("+k") ? e.shiftKey : e.altKey)
+          : (keycb.endsWith("+k") ? e.shiftKey : isModifier(e, "alt"))
             ? getIntVar(VAR_CS_SCROLL_ITEMS, DEFAULT_SCROLL_ITEMS)
             : 1;
         e.preventDefault();
@@ -2015,14 +2016,14 @@ export default function Sidebar({
           if (selectedIndex >= 0 && selectedIndex < flatList.length) {
             const selectedItem = flatList[selectedIndex];
             if (selectedItem.type === "group") {
-              toggleGroupExpanded(selectedItem.path, e.ctrlKey);
+              toggleGroupExpanded(selectedItem.path, isModifier(e, "ctrl"));
             } else {
-              if (e.ctrlKey) {
+              if (isModifier(e, "ctrl")) {
                 openHostInNewWindow(selectedItem.host.name);
               } else if (e.shiftKey) {
                 openEditHost(selectedItem.host);
               } else {
-                openHost(selectedItem.host.name, { target: e.altKey ? "_self" : undefined });
+                openHost(selectedItem.host.name, { target: isModifier(e, "alt") ? "_self" : undefined });
               }
               document.getElementById(ID_SIDEBAR_FILTER)?.blur();
             }
@@ -2325,10 +2326,10 @@ export default function Sidebar({
           >
             <ListItemButton
               onClick={(e) => {
-                if (e.ctrlKey) {
+                if (isModifier(e, "ctrl")) {
                   openHostInNewWindow(LOCAL_NAME);
                 } else {
-                  openHost(LOCAL_NAME, { target: e.altKey ? "_self" : undefined });
+                  openHost(LOCAL_NAME, { target: isModifier(e, "alt") ? "_self" : undefined });
                   setMobileOpen(false);
                 }
               }}
@@ -2396,7 +2397,7 @@ export default function Sidebar({
             onClick={(e) => {
               const currentExpanded = getStore().allExpanded;
               setAllExpanded(+!currentExpanded);
-              if (e.ctrlKey) {
+              if (isModifier(e, "ctrl")) {
                 toggleExpandAllGroups(!currentExpanded);
               }
             }}
@@ -3286,7 +3287,9 @@ export default function Sidebar({
             {dialogTab === 7 && (
               <>
                 <Typography variant="subtitle2" gutterBottom>
-                  Keyboard Shortcuts
+                  Keyboard Shortcuts (Note: in Mac, by default <b>Command</b> key (JavaScript KeyboardEvent&nbsp;
+                  <code>ev.metaKey</code>) is recognized as <b>Alt</b> (Originally the <b>Option</b> key); and vice
+                  versa)
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }} gutterBottom>
                   <b>Alt + O</b> : Open new tab dialog, use <b>← →</b> (or <b>Alt + H/L</b>) to switch view,&nbsp;
@@ -3809,13 +3812,13 @@ function HostListItem({
       <ListItemButton
         title={host.comment || ""}
         onClick={(e) => {
-          if (e.ctrlKey) {
+          if (isModifier(e, "ctrl")) {
             openHostInNewWindow(host.name);
           } else if (e.shiftKey) {
             openEditHost(host);
             setMobileOpen(false);
           } else {
-            openHost(host.name, { target: e.altKey ? "_self" : undefined });
+            openHost(host.name, { target: isModifier(e, "alt") ? "_self" : undefined });
             setMobileOpen(false);
           }
         }}
@@ -3990,7 +3993,7 @@ function TreeGroupItem({
         cursor: "grab",
       }}
     >
-      <ListItemButton onClick={(e) => toggleGroupExpanded(node.path, e.ctrlKey)} sx={{ py: 0.25, px: 1 }}>
+      <ListItemButton onClick={(e) => toggleGroupExpanded(node.path, isModifier(e, "ctrl"))} sx={{ py: 0.25, px: 1 }}>
         <ListItemIcon sx={{ minWidth: 24 }}>
           {isExpanded ? (
             <ExpandMoreIcon fontSize="small" sx={{ color: "text.secondary" }} />
@@ -4117,13 +4120,13 @@ function TreeServerItem({
       <ListItemButton
         title={host.comment || ""}
         onClick={(e) => {
-          if (e.ctrlKey) {
+          if (isModifier(e, "ctrl")) {
             openHostInNewWindow(host.name);
           } else if (e.shiftKey) {
             openEditHost(host);
             setMobileOpen(false);
           } else {
-            openHost(host.name, { target: e.altKey ? "_self" : undefined });
+            openHost(host.name, { target: isModifier(e, "alt") ? "_self" : undefined });
             setMobileOpen(false);
           }
         }}

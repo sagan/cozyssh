@@ -865,6 +865,7 @@ export default function DialogManager({
               sx={{ flex: 2 }}
               label="Button Name"
               size="small"
+              required
               value={buttonFormData.name}
               onChange={(e) => setButtonFormData({ ...buttonFormData, name: e.target.value })}
             />
@@ -1082,6 +1083,7 @@ export default function DialogManager({
                 fullWidth
                 label="Command / String"
                 size="small"
+                required
                 multiline
                 rows={3}
                 value={buttonFormData.payload}

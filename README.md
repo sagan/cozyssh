@@ -120,6 +120,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   ```
 
 - **Full keyboard Shortcuts**: It supports a complete set of keyboard shortcuts.
+  - Note: in Mac, by default `Command` key (JavaScript KeyboardEvent `ev.metaKey`) is recognized as `Alt` (Originally the `Option` key); and vice versa. So press `Command + O` in Mac is recognized as `Alt + O` shortcut.
   - `Alt + O` : Open new tab dialog, use `← →` (or `Alt + H/L`) to switch view, `↓ ↑` (or `Alt + J/K`) to select, `Enter` to open, `Alt + Enter` to open in current tab, `Ctrl + Enter` to open in new window, `Shift + Enter` to edit selected host. Use `Alt + ↓↑` (or `Alt + Shift + J/K`) to jump through items quickly; Hold `Ctrl` to jump to top/bottom. `Ctrl/Alt + Mouse Click` is same as `Clt/Alt/Shift + Enter`
   - `Alt + A` : Open new tab dialog - tabs view
   - `Alt + E / Ctrl + Shift + P` : Open new tab dialog - buttons view
