@@ -1168,6 +1168,9 @@ export default function DialogManager({
                 <code>%0A</code> (\n) to seperate multiple variables.
                 <br />- <b>state</b>: Set the initial state of the opened terminal session: 0=normal, 1=pinned,
                 2=locked, 3=hidden.
+                <br />- <b>tabStyle</b> : JSON Object. Set the terminal tab bar tab CSS style. E.g.&nbsp;
+                <code>{`{"background":"red"}`}</code>.
+                <br />- <b>terminalStyle</b> : JSON Object. Set the terminal area CSS Style.
                 <br /> It's possible to set multiple (up to 4) comma-separated servers to open them in split screen.
                 <br /> E.b. <b>local?title=Local</b> . More examples:
                 <br />- <b>local?id=local-abc&title=Local&remoteCommand=tmux attach || tmux new</b>

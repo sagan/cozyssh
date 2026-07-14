@@ -149,7 +149,15 @@ export default function TabBar({
                       closeTab(tab.id);
                     }
                   }}
-                  sx={{ minHeight: 40, py: 0, textTransform: "none", minWidth: "auto" }}
+                  sx={{
+                    minHeight: 40,
+                    py: 0,
+                    textTransform: "none",
+                    minWidth: "auto",
+                    ...(tab.panes[0]?.options?.tabStyle
+                      ? (JSON.parse(tab.panes[0].options.tabStyle) as React.CSSProperties)
+                      : undefined),
+                  }}
                   label={
                     <Box sx={{ display: "flex", alignItems: "center" }}>
                       {tab.isLocked ? (

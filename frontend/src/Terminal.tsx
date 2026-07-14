@@ -11,6 +11,7 @@ import "@xterm/xterm/css/xterm.css";
 import type { WsResizeMsg, WsTerminalMessage } from "./api";
 import {
   BROWSER_STORAGE_KEY_TOKEN,
+  terminalClientSideParams,
   TOAST_KEY_TERMINAL,
   VAR_CS_NOIMAGE,
   VAR_CS_NOMODTEXTAREA,
@@ -801,7 +802,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
           identity = options.identity;
           delete options.identity;
           for (const [key, value] of Object.entries(options)) {
-            params.set(key, value);
+            if (!terminalClientSideParams.has(key)) {
+              params.set(key, value);
+            }
           }
         }
 
@@ -1239,7 +1242,16 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
     }, [isActive]);
 
     return (
-      <Box className="terminal-pane" ref={terminalRef} sx={{ width: "100%", height: "100%", overflow: "hidden" }} />
+      <Box
+        className="terminal-pane"
+        ref={terminalRef}
+        sx={{
+          width: "100%",
+          height: "100%",
+          overflow: "hidden",
+          ...(options?.terminalStyle ? (JSON.parse(options.terminalStyle) as React.CSSProperties) : undefined),
+        }}
+      />
     );
   },
 );
