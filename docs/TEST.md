@@ -25,7 +25,7 @@ To run these tests you need a Linux test server.
 
   ```bash
   # Install through go
-  go run github.com/playwright-community/playwright-go/cmd/playwright@latest install-deps
+  go run github.com/mxschmitt/playwright-go/cmd/playwright@latest install-deps
 
   # Or install through npm
   npx playwright install-deps

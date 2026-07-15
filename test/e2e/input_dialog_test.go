@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/playwright-community/playwright-go"
+	"github.com/mxschmitt/playwright-go"
 )
 
 // TestTerminalInputDialog verifies the full "INPUT (Prompt)" flow:

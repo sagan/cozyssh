@@ -14,15 +14,15 @@ require (
 	github.com/jchv/go-webview2 v0.0.0-20260205173254-56598839c808
 	github.com/kevinburke/ssh_config v1.6.0
 	github.com/miekg/dns v1.1.72
+	github.com/mxschmitt/playwright-go v0.6100.0
 	github.com/openwall/yescrypt-go v1.0.0
 	github.com/ory/dockertest/v4 v4.0.0
-	github.com/pkg/sftp v1.13.10
-	github.com/playwright-community/playwright-go v0.6000.0
+	github.com/pkg/sftp v1.13.11
 	github.com/things-go/go-socks5 v0.1.1
 	github.com/tkrajina/typescriptify-golang-structs v0.2.0
-	golang.org/x/crypto v0.53.0
-	golang.org/x/sys v0.46.0
-	golang.org/x/term v0.44.0
+	golang.org/x/crypto v0.54.0
+	golang.org/x/sys v0.47.0
+	golang.org/x/term v0.45.0
 )
 
 require (
@@ -62,10 +62,10 @@ require (
 	go.opentelemetry.io/otel v1.43.0 // indirect
 	go.opentelemetry.io/otel/metric v1.43.0 // indirect
 	go.opentelemetry.io/otel/trace v1.43.0 // indirect
-	golang.org/x/mod v0.37.0 // indirect
-	golang.org/x/net v0.56.0 // indirect
-	golang.org/x/sync v0.21.0 // indirect
-	golang.org/x/tools v0.47.0 // indirect
+	golang.org/x/mod v0.38.0 // indirect
+	golang.org/x/net v0.57.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
+	golang.org/x/tools v0.48.0 // indirect
 )
 
 replace github.com/jchv/go-webview2 => ./third_party/go-webview2

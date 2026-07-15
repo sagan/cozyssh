@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/playwright-community/playwright-go"
+	"github.com/mxschmitt/playwright-go"
 )
 
 // getToken extracts the cozy_token from a logged-in page's localStorage.

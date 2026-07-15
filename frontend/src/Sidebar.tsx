@@ -140,10 +140,12 @@ import {
   setExpandedGroups,
   toggleGroupExpanded,
   setFilterStr,
-  openAddHostForm,
+  openAddHostDialog,
   toggleExpandAllGroups,
   sshCopyId,
   openEditHost,
+  setSettingsOpen,
+  setSettingsTab,
 } from "./store";
 import { useShallow } from "zustand/react/shallow";
 import FreeTextField from "./components/FreeTextField";
@@ -222,16 +224,16 @@ export default function Sidebar({
   const groups = useStore((state) => state.groups);
   const shells = useStore((state) => state.shells);
   const tagsExpanded = useStore((state) => state.tagsExpanded);
+  const settingsOpen = useStore((state) => state.settingsOpen);
+  const settingsTab = useStore((state) => state.settingsTab);
 
   const theme = useTheme();
   const [loading, setLoading] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   // Settings State
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [newPwd, setNewPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
   const [pinnedSessions, setPinnedSessions] = useState<Session[]>([]);
-  const [dialogTab, setDialogTab] = useState(0);
   const [dialogAppPassword, setDialogAppPassword] = useState<string | null>(null);
   const [passwordsState, setPasswordsState] = useState<PasswordsResponse>({ locked: true, keys: [] });
   const [revealedPasswords, setRevealedPasswords] = useState<{ [key: string]: string }>({});
@@ -246,15 +248,15 @@ export default function Sidebar({
   const [swStatus, setSwStatus] = useState<ServiceWorkerStatus>("unknown");
 
   useEffect(() => {
-    if (settingsOpen && dialogTab === 1) {
+    if (settingsOpen && settingsTab === 1) {
       fetchActiveTunnels();
       const interval = setInterval(fetchActiveTunnels, 3000);
       return () => clearInterval(interval);
     }
-  }, [settingsOpen, dialogTab]);
+  }, [settingsOpen, settingsTab]);
 
   useEffect(() => {
-    if (settingsOpen && dialogTab === 2) {
+    if (settingsOpen && settingsTab === 2) {
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker
           .getRegistration()
@@ -275,7 +277,7 @@ export default function Sidebar({
         setSwStatus("unsupported");
       }
     }
-  }, [settingsOpen, dialogTab]);
+  }, [settingsOpen, settingsTab]);
 
   useEffect(() => {
     if (settingsOpen) {
@@ -343,11 +345,11 @@ export default function Sidebar({
   }, [settingsOpen, fetchWebdavStatus]);
 
   useEffect(() => {
-    if (settingsOpen && dialogTab === 4) {
+    if (settingsOpen && settingsTab === 4) {
       const interval = setInterval(() => fetchWebdavStatus(true), 3000);
       return () => clearInterval(interval);
     }
-  }, [settingsOpen, dialogTab, fetchWebdavStatus]);
+  }, [settingsOpen, settingsTab, fetchWebdavStatus]);
 
   const handleToggleWebdavEnabled = async () => {
     const nextEnabled = !webdavEnabled;
@@ -767,11 +769,11 @@ export default function Sidebar({
   }, [fetchPasswords]);
 
   useEffect(() => {
-    if (settingsOpen && dialogTab === 1) {
+    if (settingsOpen && settingsTab === 1) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchPasswords();
     }
-  }, [settingsOpen, dialogTab, fetchPasswords]);
+  }, [settingsOpen, settingsTab, fetchPasswords]);
 
   useEffect(() => {
     if (!settingsOpen) {
@@ -1676,6 +1678,20 @@ export default function Sidebar({
     return !!initialHostFormData && JSON.stringify(hostFormData) !== JSON.stringify(initialHostFormData);
   }, [hostFormData, initialHostFormData]);
 
+  const hostFormSubmitDisabled = !hostFormData.hostname || (!!editHostName && !hostFormDirty);
+
+  const handleEditHostFormKeyDown = useCallback(
+    (e: KeyboardEvent | React.KeyboardEvent) => {
+      const key = getKeyCombination(e);
+      if (key === "ctrl+enter" && !hostFormSubmitDisabled) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleSaveHost();
+      }
+    },
+    [hostFormSubmitDisabled, handleSaveHost],
+  );
+
   const handleCloseHostDialog = useCallback(() => {
     if (hostFormDirty) {
       return;
@@ -1968,7 +1984,7 @@ export default function Sidebar({
 
   const handleFilterKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      const keycb = getKeyCombination(e as unknown as KeyboardEvent);
+      const keycb = getKeyCombination(e);
       if (
         keycb === "arrowdown" ||
         keycb === "alt+arrowdown" ||
@@ -2230,7 +2246,7 @@ export default function Sidebar({
           <IconButton
             size="small"
             title="New Server"
-            onClick={() => openAddHostForm()}
+            onClick={() => openAddHostDialog()}
             sx={{ bgcolor: "action.hover", border: "1px solid #ccc" }}
           >
             <AddIcon fontSize="small" />
@@ -2709,8 +2725,8 @@ export default function Sidebar({
         <DialogTitle>Dashboard</DialogTitle>
         <Box sx={{ borderBottom: 1, borderColor: "divider", px: 3 }}>
           <Tabs
-            value={dialogTab}
-            onChange={(_, newVal) => setDialogTab(newVal)}
+            value={settingsTab}
+            onChange={(_, newVal) => setSettingsTab(newVal)}
             variant="scrollable"
             scrollButtons="auto"
             allowScrollButtonsMobile
@@ -2728,7 +2744,7 @@ export default function Sidebar({
         </Box>
         <DialogContent sx={{ p: 0 }}>
           <Box sx={{ p: 3, pt: 1, minWidth: 0 }}>
-            {dialogTab === 0 && (
+            {settingsTab === 0 && (
               <List dense sx={{ border: "1px solid #ddd", borderRadius: 1 }}>
                 {pinnedSessions.map((ps) => {
                   const canAttach = !activeSessionIds.includes(ps.id);
@@ -2766,7 +2782,7 @@ export default function Sidebar({
               </List>
             )}
 
-            {dialogTab === 1 && (
+            {settingsTab === 1 && (
               <>
                 <Typography
                   variant="subtitle2"
@@ -2829,7 +2845,7 @@ export default function Sidebar({
               </>
             )}
 
-            {dialogTab === 2 && (
+            {settingsTab === 2 && (
               <>
                 <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
                   <Typography variant="subtitle2" sx={{ fontSize: "typography.body1.fontSize", fontWeight: "bold" }}>
@@ -2947,7 +2963,7 @@ export default function Sidebar({
               </>
             )}
 
-            {dialogTab === 3 && (
+            {settingsTab === 3 && (
               <>
                 <Typography variant="subtitle2" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }} gutterBottom>
                   <code>Service Worker:</code>
@@ -3048,7 +3064,7 @@ export default function Sidebar({
               </>
             )}
 
-            {dialogTab === 4 && (
+            {settingsTab === 4 && (
               <>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1, mt: -1 }}>
                   <b>WebDAV Synchronization</b>: Sync CozySSH data (buttons, vars, scratchpad) with a custom WebDAV
@@ -3280,11 +3296,11 @@ export default function Sidebar({
               </>
             )}
 
-            {dialogTab === 5 && <SSHImportTab />}
+            {settingsTab === 5 && <SSHImportTab />}
 
-            {dialogTab === 6 && <SSHExportTab />}
+            {settingsTab === 6 && <SSHExportTab />}
 
-            {dialogTab === 7 && (
+            {settingsTab === 7 && (
               <>
                 <Typography variant="subtitle2" gutterBottom>
                   Keyboard Shortcuts (Note: in Mac, by default <b>Command</b> key (JavaScript KeyboardEvent&nbsp;
@@ -3424,7 +3440,7 @@ export default function Sidebar({
               </>
             )}
 
-            {dialogTab === 8 && (
+            {settingsTab === 8 && (
               <Box sx={{ textAlign: "center", mt: 4 }}>
                 <Typography variant="h5" gutterBottom sx={{ fontWeight: "bold" }}>
                   CozySSH
@@ -3520,6 +3536,7 @@ export default function Sidebar({
               size="small"
               type="search"
               value={hostFormData.name}
+              onKeyDown={handleEditHostFormKeyDown}
               onChange={(e) => setHostFormData({ ...hostFormData, name: e.target.value })}
               placeholder={hostFormData.hostname || "e.g. production-database"}
             />
@@ -3528,6 +3545,8 @@ export default function Sidebar({
               label="HostName (IP / Domain)"
               size="small"
               type="search"
+              placeholder="Ctrl + Enter to submit"
+              onKeyDown={handleEditHostFormKeyDown}
               value={hostFormData.hostname}
               onChange={(e) => setHostFormData({ ...hostFormData, hostname: e.target.value })}
               required
@@ -3553,6 +3572,7 @@ export default function Sidebar({
               size="small"
               placeholder="leave empty to use backend current user"
               options={["root", "ubuntu", "user", "administrator"]}
+              onKeyDown={handleEditHostFormKeyDown}
               value={hostFormData.user}
               onChange={(newValue) => {
                 setHostFormData({ ...hostFormData, user: newValue });
@@ -3565,6 +3585,7 @@ export default function Sidebar({
               placeholder="22"
               options={["22", "222", "2222"]}
               value={hostFormData.port || ""}
+              onKeyDown={handleEditHostFormKeyDown}
               onChange={(newValue) => {
                 setHostFormData({ ...hostFormData, port: newValue || "" });
               }}
@@ -3576,6 +3597,7 @@ export default function Sidebar({
               type="search"
               value={hostFormData.tags}
               onChange={(e) => setHostFormData({ ...hostFormData, tags: e.target.value })}
+              onKeyDown={handleEditHostFormKeyDown}
               placeholder="e.g. production web"
             />
             <TextField
@@ -3585,6 +3607,7 @@ export default function Sidebar({
               type="search"
               value={hostFormData.identityFile}
               onChange={(e) => setHostFormData({ ...hostFormData, identityFile: e.target.value })}
+              onKeyDown={handleEditHostFormKeyDown}
               placeholder="~/.ssh/id_ed25519"
             />
             <TextField
@@ -3602,6 +3625,7 @@ export default function Sidebar({
                 }
                 setHostFormData({ ...hostFormData, password: val });
               }}
+              onKeyDown={handleEditHostFormKeyDown}
               onFocus={(e) => {
                 if (hostFormData.password === PASSWORD_PLACEHOLDER) {
                   e.target.select();
@@ -3616,6 +3640,7 @@ export default function Sidebar({
               type="search"
               value={hostFormData.proxyJump}
               onChange={(e) => setHostFormData({ ...hostFormData, proxyJump: e.target.value })}
+              onKeyDown={handleEditHostFormKeyDown}
               placeholder="e.g. server-foo,server-bar"
             />
             <FreeTextField
@@ -3628,6 +3653,7 @@ export default function Sidebar({
               onChange={(newValue) => {
                 setHostFormData({ ...hostFormData, addressFamily: (newValue as "any" | "inet" | "inet6") || "" });
               }}
+              onKeyDown={handleEditHostFormKeyDown}
             />
             <FreeTextField
               fullWidth
@@ -3637,6 +3663,7 @@ export default function Sidebar({
               options={["/dev/null", "NUL"]}
               value={hostFormData.userKnownHostsFile || ""}
               onChange={(newValue) => setHostFormData({ ...hostFormData, userKnownHostsFile: newValue || "" })}
+              onKeyDown={handleEditHostFormKeyDown}
             />
             <FreeTextField
               fullWidth
@@ -3651,6 +3678,7 @@ export default function Sidebar({
                   strictHostKeyChecking: (newValue as "ask" | "yes" | "no") || "",
                 });
               }}
+              onKeyDown={handleEditHostFormKeyDown}
             />
             <FreeTextField
               fullWidth
@@ -3660,6 +3688,7 @@ export default function Sidebar({
               options={["+ssh-rsa"]}
               value={hostFormData.hostKeyAlgorithms || ""}
               onChange={(newValue) => setHostFormData({ ...hostFormData, hostKeyAlgorithms: newValue || "" })}
+              onKeyDown={handleEditHostFormKeyDown}
             />
             <FreeTextField
               fullWidth
@@ -3675,6 +3704,7 @@ export default function Sidebar({
                   verifyHostKeyDns: (newValue as "ask" | "yes" | "no") || "",
                 });
               }}
+              onKeyDown={handleEditHostFormKeyDown}
             />
             <FreeTextField
               fullWidth
@@ -3685,6 +3715,7 @@ export default function Sidebar({
               options={["LANG LC_* COLORTERM NO_COLOR"]}
               value={hostFormData.sendEnv || ""}
               onChange={(newValue) => setHostFormData({ ...hostFormData, sendEnv: newValue || "" })}
+              onKeyDown={handleEditHostFormKeyDown}
             />
             <FreeTextField
               fullWidth
@@ -3696,6 +3727,7 @@ export default function Sidebar({
               onChange={(newValue) => {
                 setHostFormData({ ...hostFormData, remoteCommand: newValue });
               }}
+              onKeyDown={handleEditHostFormKeyDown}
             />
             <TextField
               fullWidth
@@ -3705,6 +3737,7 @@ export default function Sidebar({
               rows={2}
               value={hostFormData.localForward || ""}
               onChange={(e) => setHostFormData({ ...hostFormData, localForward: e.target.value })}
+              onKeyDown={handleEditHostFormKeyDown}
               placeholder="e.g. 8080 localhost:80&#10;One rule per line"
             />
             <TextField
@@ -3715,6 +3748,7 @@ export default function Sidebar({
               rows={2}
               value={hostFormData.remoteForward || ""}
               onChange={(e) => setHostFormData({ ...hostFormData, remoteForward: e.target.value })}
+              onKeyDown={handleEditHostFormKeyDown}
               placeholder="e.g. 8080 localhost:80&#10;One rule per line"
             />
             <TextField
@@ -3725,6 +3759,7 @@ export default function Sidebar({
               rows={2}
               value={hostFormData.dynamicForward || ""}
               onChange={(e) => setHostFormData({ ...hostFormData, dynamicForward: e.target.value })}
+              onKeyDown={handleEditHostFormKeyDown}
               placeholder="e.g. 1080 or 127.0.0.1:1080&#10;One port per line"
             />
             <TextField
@@ -3735,17 +3770,14 @@ export default function Sidebar({
               rows={2}
               value={hostFormData.comment}
               onChange={(e) => setHostFormData({ ...hostFormData, comment: e.target.value })}
+              onKeyDown={handleEditHostFormKeyDown}
               placeholder="Host description..."
             />
           </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditHostDialogOpen(false)}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={handleSaveHost}
-            disabled={!hostFormData.hostname || (!!editHostName && !hostFormDirty)}
-          >
+          <Button variant="contained" onClick={handleSaveHost} disabled={hostFormSubmitDisabled}>
             Save
           </Button>
         </DialogActions>

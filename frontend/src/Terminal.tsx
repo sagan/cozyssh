@@ -11,7 +11,6 @@ import "@xterm/xterm/css/xterm.css";
 import type { WsResizeMsg, WsTerminalMessage } from "./api";
 import {
   BROWSER_STORAGE_KEY_TOKEN,
-  terminalClientSideParams,
   TOAST_KEY_TERMINAL,
   VAR_CS_NOIMAGE,
   VAR_CS_NOMODTEXTAREA,
@@ -20,6 +19,7 @@ import {
   WS_PROTOCOL_DUMMY,
   WS_PROTOCOL_IDENTITY_PREFIX,
   WS_PROTOCOL_QUERY_PREFIX,
+  terminalClientSideParams,
 } from "./constants";
 import {
   type CommandHistoryEntry,
@@ -768,7 +768,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
         return true;
       });
 
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const protocol = location.protocol === "https:" ? "wss:" : "ws:";
       const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
       const params = new URLSearchParams({
         host,
@@ -834,7 +834,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
           return;
         }
 
-        const wsUrl = `${protocol}//${window.location.host}/api/ws`;
+        const wsUrl = `${protocol}//${location.host}/api/ws`;
 
         if (isDisposed) {
           return;
@@ -884,7 +884,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
                 return;
               }
               if (msg.type === "tabState") {
-                onTabStateChange?.({ isPinned: msg.isPinned, isLocked: msg.isLocked });
+                onTabStateChange?.(msg);
                 return;
               }
               if (msg.type === "state") {

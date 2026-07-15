@@ -128,6 +128,10 @@ export const MISC_FUNCTIONS: BuiltinButton[] = [
   { value: "TOGGLE_SIDEBAR_AUTO", label: "Toggle Sidebar Auto", shortcut: "ctrl+alt+3" },
   { value: "TOGGLE_SIDEBAR_GROUPS", label: "Toggle Sidebar Groups", shortcut: "ctrl+alt+g" },
   { value: "OPEN_SCRATCHPAD", label: "Open Scratchpad", shortcut: "alt+s" },
+  { value: "OPEN_DASHBOARD_DIALOG", label: "Open Dashboard Dialog" },
+  { value: "OPEN_NEW_HOST_DIALOG", label: "Open New Host Dialog" },
+  { value: "OPEN_NEW_BUTTON_DIALOG", label: "Open New Button Dialog" },
+  { value: "CLEAR_UNREAD_TABS", label: "Clear Unread Tabs" },
   { value: "REFRESH", label: "Refresh Data" },
   { value: "NONE", label: "None (Do Nothing)" },
 ] as const;
@@ -207,6 +211,8 @@ export const LINK_COZYSSH_GITHUB = "https://github.com/sagan/cozyssh";
 export const LINK_COZYSSH_DOC_DATA = "https://github.com/sagan/cozyssh/blob/master/docs/DATA.md";
 export const LINK_COZYSSH_DOC_SCRIPTS = "https://github.com/sagan/cozyssh/blob/master/docs/SCRIPTS.md";
 export const LINK_COZYSSH_DOC_PLUGINS = "https://github.com/sagan/cozyssh-plugins";
+
+export const SETTINGS_TABS = 9;
 
 /**
  * terminal client side params are only used in frontend and are not sent to the server.

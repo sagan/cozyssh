@@ -3,7 +3,7 @@ import { Box, TextField, Tabs, Tab, IconButton } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 
 import type { ButtonData } from "./api";
-import { openNewButtonDialog, setActiveGroup, setBtnMenuAnchor, setLastMenuBtn, useStore } from "./store";
+import { openAddButtonDialog, setActiveGroup, setBtnMenuAnchor, setLastMenuBtn, useStore } from "./store";
 import { useShallow } from "zustand/react/shallow";
 import { DEFAULT_BUTTON_GROUP } from "./constants";
 import { isModifier } from "./common";
@@ -178,7 +178,7 @@ export default function ButtonBar({ groups, handleButtonClick }: ButtonBarProps)
         })}
       </Tabs>
       <Box sx={{ flexShrink: 0, px: 1, borderLeft: 1, borderColor: "divider" }}>
-        <IconButton size="small" title="New Button" onClick={() => openNewButtonDialog()} sx={{ p: 0.5 }}>
+        <IconButton size="small" title="New Button" onClick={() => openAddButtonDialog()} sx={{ p: 0.5 }}>
           <AddIcon fontSize="small" />
         </IconButton>
       </Box>

@@ -48,6 +48,7 @@ import {
   disableShortcuts,
   apiReqHeaders,
   macModifierSwap,
+  sendKeyDown,
 } from "./common";
 import {
   type CsScriptModule,
@@ -232,7 +233,6 @@ Object.defineProperty(window, "__CS_FONT_SIZE__", {
   enumerable: true,
 });
 
-// window.csSetSidebarFilter = undefined; // Assigned in Sidebar useEffect
 window.csAlert = dialogs.alert;
 window.csConfirm = dialogs.confirm;
 window.csPrompt = dialogs.prompt;
@@ -248,6 +248,7 @@ window.csClose = closeTabOrPane;
 window.csGetSessions = fetchSessions;
 window.csGetTunnels = fetchActiveTunnels;
 window.csSetSidebarFilter = setFilterStr;
+window.csSendKeyDown = sendKeyDown;
 
 window.csFocus = (tabOrPaneId?: string) => {
   if (isMuiModalOpen()) {
@@ -729,8 +730,8 @@ export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
     });
   };
 
-  window.csCloseApplet = (name: string) => {
-    cb.setApplets((prev) => prev.filter((a) => a.name !== name));
+  window.csCloseApplet = (name?: string) => {
+    cb.setApplets(name ? (prev) => prev.filter((a) => a.name !== name) : []);
   };
 
   return () => {

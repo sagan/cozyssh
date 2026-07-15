@@ -91,7 +91,7 @@ import {
   toggleExpandAllGroups,
   openEditTabHost,
   openEditButtonDialog,
-  openNewButtonDialog,
+  openAddButtonDialog,
   hideTab,
   fetchSessions,
   startupParams,
@@ -99,6 +99,9 @@ import {
   getPane,
   getTab,
   getHost,
+  setUnreadTabIds,
+  openAddHostDialog,
+  setSettingsOpen,
 } from "./store";
 import { setupPluginAPI, runScript } from "./pluginAPI";
 import { useKeyboardManager } from "./useKeyboardManager";
@@ -422,7 +425,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         if (button) {
           openEditButtonDialog(button);
         } else {
-          openNewButtonDialog({ ...btn, shortcut: undefined });
+          openAddButtonDialog({ ...btn, shortcut: undefined });
         }
         return;
       }
@@ -772,8 +775,20 @@ export default function Dashboard({ initialData }: DashboardProps) {
             case "OPEN_SCRATCHPAD":
               openScratchpad();
               break;
+            case "OPEN_DASHBOARD_DIALOG":
+              setSettingsOpen(true);
+              break;
+            case "OPEN_NEW_HOST_DIALOG":
+              openAddHostDialog();
+              break;
+            case "OPEN_NEW_BUTTON_DIALOG":
+              openAddButtonDialog();
+              break;
             case "REFRESH":
               refreshData({ sync: 2 });
+              break;
+            case "CLEAR_UNREAD_TABS":
+              setUnreadTabIds(new Set());
               break;
             case "NONE":
               break;
@@ -817,7 +832,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       for (let i = 0; i < elements.length; i++) {
         let element = elements[i];
         [element] = cutString(element, "?");
-        element = element.replace(/[^a-z0-9._:@-[\]]+/gi, "");
+        element = element.replace(/[^a-z0-9._:#@-[\]]+/gi, "");
         elements[i] = element;
       }
       hash = elements.filter(Boolean).join(",");

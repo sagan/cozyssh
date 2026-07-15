@@ -1830,7 +1830,7 @@ export type CSEventDetailActiveGroupChange = {
 	group: string;
 };
 export type CSEventDetailTerminalNew = {
-	terminal: Terminal;
+	terminal?: Terminal;
 	sessionId: string;
 	host: string;
 	params: URLSearchParams;
@@ -1997,6 +1997,8 @@ export interface TabData {
 }
 export type TerminalRefMap = Record<string, TerminalHandle | ScratchpadHandle | null>;
 export interface Store {
+	settingsTab: number;
+	settingsOpen: boolean;
 	filterStr: string;
 	asyncDialogOpen: boolean;
 	sendScope: 0 | 1 | 2;
@@ -2210,6 +2212,12 @@ declare global {
 	 */
 	var __CS_MAC_MODIFIER_SWAP__: Map<Modifier, Modifier>;
 	/**
+	 * Dispatches a keyboard event for the given key combination.
+	 * @param kc Key combination string, e.g. "ctrl+alt+shift+meta+a" (All lowercase, modifiers in order)
+	 * @param el Optional element to dispatch the event to. If not provided, the event is dispatched to the active element.
+	 */
+	function csSendKeyDown(kc: string, el?: HTMLElement | undefined): void;
+	/**
 	 * Focus the terminal with the given pane id.
 	 * @param tabOrPaneId defaults to active terminal pane id.
 	 */
@@ -2400,8 +2408,9 @@ declare global {
 	function csOpenMenu(anchorId: string | HTMLElement, options: string[]): Promise<string | null>;
 	/**
 	 * Close a custom UI applet.
+	 * @param name The name of the applet. If not provided, all applets will be closed.
 	 */
-	function csCloseApplet(name: string): void;
+	function csCloseApplet(name?: string): void;
 	/**
 	 * Get a custom UI applet.
 	 * @param name The name of the applet.

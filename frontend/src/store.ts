@@ -52,6 +52,7 @@ import {
   hostTitle,
   isMuiModalOpen,
   nextTerminalFontSize,
+  openBackgroundTerminal,
   parseHostName,
   prevTerminalFontSize,
   removeNameNumSuffix,
@@ -118,6 +119,8 @@ export interface TabData {
 export type TerminalRefMap = Record<string, TerminalHandle | ScratchpadHandle | null>;
 
 interface Store {
+  settingsTab: number;
+  settingsOpen: boolean;
   filterStr: string;
   asyncDialogOpen: boolean;
   sendScope: 0 | 1 | 2;
@@ -242,6 +245,8 @@ export const startupParams = new URLSearchParams(location.search);
 export const useStore = create<Store>(
   () =>
     ({
+      settingsTab: 0,
+      settingsOpen: false,
       filterStr: startupParams.get("filter") || "",
       asyncDialogOpen: false,
       sendScope: 0,
@@ -413,6 +418,10 @@ export const removeRecentButtonId = (id: string) => {
     return { recentButtonIds: updated };
   });
 };
+
+export const setSettingsTab = (settingsTab: number) => useStore.setState({ settingsTab });
+
+export const setSettingsOpen = (settingsOpen: boolean) => useStore.setState({ settingsOpen });
 
 export const setFilterStr = (filterStr: string) => useStore.setState({ filterStr });
 
@@ -843,8 +852,7 @@ window.addEventListener("visibilitychange", () => {
 
 export const setShellIntegrations = (
   update:
-    | Record<string, ShellIntegration>
-    | ((data: Record<string, ShellIntegration>) => Record<string, ShellIntegration>),
+    Record<string, ShellIntegration> | ((data: Record<string, ShellIntegration>) => Record<string, ShellIntegration>),
 ) =>
   useStore.setState((state) => ({
     shellIntegrations: typeof update === "function" ? update(state.shellIntegrations) : update,
@@ -1105,6 +1113,17 @@ export async function openHost(
           return tab.id;
         }
       }
+    }
+  }
+  if (options?.state === "3") {
+    const open = await openBackgroundTerminal(host, options);
+    const hostLabel = removePassFromHost(host);
+    if (open) {
+      notify(`Background terminal "${hostLabel}" opened successfully`, "success");
+      return "_";
+    } else {
+      notify(`Failed to open background terminal "${hostLabel}"`, "error");
+      return "";
     }
   }
   const paneId = options?.id || genPaneId(host);
@@ -1568,7 +1587,7 @@ export async function fetchHosts() {
   }
 }
 
-export function openNewButtonDialog(initial?: Partial<ButtonForm>) {
+export function openAddButtonDialog(initial?: Partial<ButtonForm>) {
   const { activeGroup, buttons } = getStore();
   const maxOrder = buttons.length > 0 ? Math.max(...buttons.map((b) => b.order || 0)) : 0;
   const data: ButtonData = {
@@ -1701,7 +1720,7 @@ export async function saveButton() {
 
 export async function deleteButton(id: string, name: string) {
   setBtnMenuAnchor(null);
-  if (!(await dialogs.confirm(`Delete button "${name}"?`))) {
+  if (!(await dialogs.confirm(`Delete button "${name}" (${id})?`))) {
     return;
   }
   if (moduleCache[id]) {
@@ -1907,7 +1926,7 @@ export function toggleGroupExpanded(path: string, includeChildren = false) {
   setExpandedGroups(next);
 }
 
-export function openAddHostForm(initial?: Partial<HostData>) {
+export function openAddHostDialog(initial?: Partial<HostData>) {
   const data: HostForm = {
     name: "",
     hostname: "",
@@ -2050,7 +2069,7 @@ export function openEditTabHost(target?: TabData | string) {
   if (host.source) {
     openEditHost(host);
   } else {
-    openAddHostForm(host);
+    openAddHostDialog(host);
   }
 }
 

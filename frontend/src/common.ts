@@ -16,6 +16,10 @@ import {
   MIME_JSON,
   TAG_GROUP_PREFIX,
   TAG_ORDER_PREFIX,
+  WS_PROTOCOL_DUMMY,
+  WS_PROTOCOL_IDENTITY_PREFIX,
+  WS_PROTOCOL_QUERY_PREFIX,
+  terminalClientSideParams,
 } from "./constants";
 import type React from "react";
 
@@ -133,7 +137,7 @@ export type CSEventDetailActiveGroupChange = {
 };
 
 export type CSEventDetailTerminalNew = {
-  terminal: Terminal;
+  terminal?: Terminal;
   sessionId: string;
   host: string;
   params: URLSearchParams;
@@ -190,6 +194,13 @@ export type CSEventDetailVars = {
   vars: Record<string, string>;
   localVars: Record<string, string>;
 };
+
+// Use userAgentData if available, fallback to userAgent string
+export const IS_APPLE =
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  !!navigator.userAgentData?.platform?.toLowerCase().includes("mac") ||
+  /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
 
 export const CS_EVENT_TERMINAL_NEW = "cs:terminal-new";
 export const CS_EVENT_TERMINAL_CONNECTED = "cs:terminal-connected";
@@ -273,9 +284,11 @@ export const systemShortcuts = new Set<string>([
   "f11", // fullscreen
   "f12", // DevTools
   "alt+f4", // close window
-  "ctrl+0", // reset zoom level
-  "ctrl+-", // zoom out
-  "ctrl+=", // zoom in
+
+  // we swap meta (command) and alt (option) in Mac
+  IS_APPLE ? "alt+0" : "ctrl+0", // reset zoom level
+  IS_APPLE ? "alt+-" : "ctrl+-", // zoom out
+  IS_APPLE ? "alt+=" : "ctrl+=", // zoom in
 ]);
 
 /**
@@ -408,13 +421,6 @@ const codeKeys: Record<string, [string, string]> = {
   Digit0: ["0", ")"],
 };
 
-// Use userAgentData if available, fallback to userAgent string
-export const IS_APPLE =
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  !!navigator.userAgentData?.platform?.toLowerCase().includes("mac") ||
-  /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
-
 let macModifierKeyRegex: RegExp | undefined;
 
 /**
@@ -447,12 +453,12 @@ function updateMacModifierKeyRegex() {
 
 /**
  * Get a key combination string from a KeyboardEvent
- * @param ev KeyboardEvent
- * @returns key combination string, e.g. "ctrl+alt+shift+meta+a",
  * modifiers are in order, all lowercase.
  * Note for special keys, if shift is hold, the different character will be returned.
  * So if user press "Alt + Shift + 1" it will return "alt+shift+!" since the shift version of "1" is "!".
  * It's a known limitation and may be changed in the future.
+ * @param ev KeyboardEvent
+ * @returns key combination string, e.g. "ctrl+alt+shift+meta+a".
  */
 export function getKeyCombination(ev: KeyboardEvent | React.KeyboardEvent): string {
   let mods = "";
@@ -1638,4 +1644,95 @@ export function hostLabel(host: HostData | HostForm, alwaysIncludeUser = false):
   return `${alwaysIncludeUser || user !== "root" ? user + "@" : ""}${host.hostname}${
     host.port && host.port !== "22" ? `:` + host.port : ""
   }`;
+}
+
+export function sendKeyDown(kc: string, el?: HTMLElement) {
+  const altKey = kc.includes("alt");
+  const ctrlKey = kc.includes("ctrl");
+  const shiftKey = kc.includes("shift");
+  const parts = kc.split("+");
+  const key = parts[parts.length - 1];
+  let code = "";
+  if (key.length === 1) {
+    if (key >= "0" && key <= "9") {
+      code = "Digit" + key;
+    } else {
+      code = "Key" + key.toUpperCase();
+    }
+  }
+  const event = new KeyboardEvent("keydown", {
+    key,
+    code,
+    bubbles: true,
+    cancelable: true,
+    altKey,
+    ctrlKey,
+    shiftKey,
+  });
+  (el || document.activeElement || document.body).dispatchEvent(event);
+}
+
+/**
+ * Opens a new terminal in the background by opening a WebSocket connection to the backend.
+ * @param host Host string in the format of "[user@]hostname[:port]"
+ * @param options Optional record of terminal options
+ * @returns Promise<boolean> Resolves to true if the terminal was opened successfully, false otherwise
+ */
+export async function openBackgroundTerminal(host: string, options?: Record<string, string>): Promise<boolean> {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const token = localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN);
+  const params = new URLSearchParams({
+    host,
+    cols: "80",
+    rows: "24",
+    state: "3",
+  });
+  let identity: string | undefined;
+  if (options) {
+    identity = options.identity;
+    delete options.identity;
+    for (const [key, value] of Object.entries(options)) {
+      if (!terminalClientSideParams.has(key)) {
+        params.set(key, value);
+      }
+    }
+  }
+
+  const promises: PromiseLike<unknown>[] = [];
+  window.dispatchEvent(
+    new CustomEvent(CS_EVENT_TERMINAL_NEW, {
+      detail: {
+        sessionId: "",
+        host,
+        params,
+        promises,
+        is_active_terminal: false,
+      } satisfies CSEventDetailTerminalNew,
+    }),
+  );
+  try {
+    await Promise.all(promises);
+  } catch {
+    return false;
+  }
+
+  const wsUrl = `${protocol}//${location.host}/api/ws`;
+  const websocket_protocols: string[] = [WS_PROTOCOL_DUMMY];
+  if (token) {
+    websocket_protocols.push(token);
+  }
+  websocket_protocols.push(WS_PROTOCOL_QUERY_PREFIX + base64urlEncode(params.toString()));
+  if (identity) {
+    websocket_protocols.push(WS_PROTOCOL_IDENTITY_PREFIX + base64urlEncode(identity.toString()));
+  }
+  return new Promise((resolve) => {
+    const ws = new WebSocket(wsUrl, websocket_protocols);
+    ws.addEventListener("open", () => {
+      ws.close();
+      resolve(true);
+    });
+    ws.addEventListener("error", () => {
+      resolve(false);
+    });
+  });
 }

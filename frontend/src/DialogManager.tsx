@@ -89,7 +89,7 @@ import {
   closeTabOrPane,
   closeTab,
   hideTab,
-  openAddHostForm,
+  openAddHostDialog,
   getHost,
   getPane,
 } from "./store";
@@ -270,6 +270,122 @@ export default function DialogManager({
     setTitleMenuAnchor(null);
   }, []);
 
+  const importFromData = useCallback(
+    async (text: string, filename?: string) => {
+      let isJson = false;
+      let data: unknown = null;
+
+      try {
+        data = JSON.parse(text);
+        if (data && typeof data === "object" && !Array.isArray(data)) {
+          isJson = true;
+        }
+      } catch {
+        /* empty */
+      }
+
+      if (isJson) {
+        const result = ButtonDataSchema.safeParse(data);
+        if (!result.success) {
+          const errorMsg = result.error.issues
+            .map((err) => `${err.path.join(".") || "root"}: ${err.message}`)
+            .join(", ");
+          setImportTip({
+            msg: `Not a valid ButtonData object. Validation errors: ${errorMsg}`,
+            severity: "error",
+          });
+          return;
+        }
+
+        const validatedData = result.data;
+
+        if (validatedData.id && buttons.find((b) => b.id === validatedData.id)) {
+          if (!(await dialogs.confirm(`Button with ID "${validatedData.id}" already exists. Overwrite it?`))) {
+            return;
+          }
+        }
+
+        setButtonFormData({
+          name: validatedData.name,
+          type: validatedData.type,
+          payload: validatedData.payload,
+          group: validatedData.group || getStore().buttonFormData.group || DEFAULT_BUTTON_GROUP,
+          autorun: validatedData.autorun,
+          order: validatedData.order,
+          shortcut: validatedData.shortcut,
+        });
+
+        setImportTip({
+          msg: "Successfully loaded button data from JSON! Review the fields and click 'Save' to confirm.",
+          severity: "success",
+        });
+      } else {
+        // Treat as a direct script/text file URL
+        let buttonName = "";
+        let buttonId = "";
+        let group = "";
+        let autorun = 0;
+        const jsDocMatch = text.match(/^\s*\/\*\*([\s\S]*?)\*\//);
+        if (jsDocMatch) {
+          const content = jsDocMatch[1];
+          const moduleMatch = content.match(/@module\s+([^\r\n]+)/);
+          if (moduleMatch) {
+            buttonName = moduleMatch[1].trim();
+          }
+          const idMatch = content.match(/@id\s+([^\r\n]+)/);
+          if (idMatch) {
+            buttonId = idMatch[1].trim();
+          }
+          const groupMatch = content.match(/@group\s+([^\r\n]+)/);
+          if (groupMatch) {
+            group = groupMatch[1].trim();
+          }
+          const autorunMatch = content.match(/@autorun\s+([^\r\n]+)/);
+          if (autorunMatch && autorunMatch[1].trim() === "1") {
+            autorun = 1;
+          }
+        }
+
+        if (buttonId) {
+          const btn = buttons.find((b) => b.id === buttonId);
+          if (
+            btn &&
+            !(await dialogs.confirm(
+              `Button "${btn.name}" (id: "${buttonId}") already exists in group "${btn.group}". Overwrite it?`,
+            ))
+          ) {
+            return;
+          }
+        }
+
+        if (!buttonName) {
+          if (filename) {
+            const pathParts = filename.split("/");
+            const lastPart = pathParts[pathParts.length - 1] || "";
+            buttonName = lastPart.replace(/\.(ts|tsx|js|jsx|txt)$/i, "");
+          }
+          buttonName = buttonName || "Imported Script";
+        }
+
+        setButtonFormData({
+          name: buttonName,
+          type: "run_script",
+          payload: text,
+          group: group || getStore().buttonFormData.group || DEFAULT_BUTTON_GROUP,
+          autorun,
+          order: getStore().buttonFormData.order || 0,
+          shortcut: "",
+        });
+
+        setImportTip({
+          msg: "Successfully loaded script data! Review the fields and click 'Save' to confirm.",
+          severity: "success",
+        });
+      }
+    },
+    [buttons],
+  );
+
   const importFromUrl = useCallback(
     async (url: string) => {
       setImportTip(null);
@@ -285,138 +401,23 @@ export default function DialogManager({
         return;
       }
 
+      let text: string;
       try {
-        const response = await csFetch(url);
-        if (!response.ok) {
-          setImportTip({
-            msg: `Failed to fetch ${url} : Server responded with status ${response.status}.`,
-            severity: "error",
-          });
-          return;
+        const res = await csFetch(url);
+        if (!res.ok) {
+          throw new Error(`status=${res.status}`);
         }
-
-        const text = await response.text();
-        let isJson = false;
-        let data: unknown = null;
-
-        try {
-          data = JSON.parse(text);
-          if (data && typeof data === "object" && !Array.isArray(data)) {
-            isJson = true;
-          }
-        } catch {
-          /* empty */
-        }
-
-        if (isJson) {
-          const result = ButtonDataSchema.safeParse(data);
-          if (!result.success) {
-            const errorMsg = result.error.issues
-              .map((err) => `${err.path.join(".") || "root"}: ${err.message}`)
-              .join(", ");
-            setImportTip({
-              msg: `Not a valid ButtonData object. Validation errors: ${errorMsg}`,
-              severity: "error",
-            });
-            return;
-          }
-
-          const validatedData = result.data;
-
-          if (validatedData.id && buttons.find((b) => b.id === validatedData.id)) {
-            if (!(await dialogs.confirm(`Button with ID "${validatedData.id}" already exists. Overwrite it?`))) {
-              return;
-            }
-          }
-
-          setButtonFormData({
-            name: validatedData.name,
-            type: validatedData.type,
-            payload: validatedData.payload,
-            group: validatedData.group || getStore().buttonFormData.group || DEFAULT_BUTTON_GROUP,
-            autorun: validatedData.autorun,
-            order: validatedData.order,
-            shortcut: validatedData.shortcut,
-          });
-
-          setImportTip({
-            msg: "Successfully loaded button data from JSON! Review the fields and click 'Save' to confirm.",
-            severity: "success",
-          });
-        } else {
-          // Treat as a direct script/text file URL
-          let buttonName = "";
-          let buttonId = "";
-          let group = "";
-          let autorun = 0;
-          const jsDocMatch = text.match(/^\s*\/\*\*([\s\S]*?)\*\//);
-          if (jsDocMatch) {
-            const content = jsDocMatch[1];
-            const moduleMatch = content.match(/@module\s+([^\r\n]+)/);
-            if (moduleMatch) {
-              buttonName = moduleMatch[1].trim();
-            }
-            const idMatch = content.match(/@id\s+([^\r\n]+)/);
-            if (idMatch) {
-              buttonId = idMatch[1].trim();
-            }
-            const groupMatch = content.match(/@group\s+([^\r\n]+)/);
-            if (groupMatch) {
-              group = groupMatch[1].trim();
-            }
-            const autorunMatch = content.match(/@autorun\s+([^\r\n]+)/);
-            if (autorunMatch && autorunMatch[1].trim() === "1") {
-              autorun = 1;
-            }
-          }
-
-          if (buttonId) {
-            const btn = buttons.find((b) => b.id === buttonId);
-            if (
-              btn &&
-              !(await dialogs.confirm(
-                `Button "${btn.name}" (id: "${buttonId}") already exists in group "${btn.group}". Overwrite it?`,
-              ))
-            ) {
-              return;
-            }
-          }
-
-          if (!buttonName) {
-            try {
-              const urlObj = new URL(url);
-              const pathParts = urlObj.pathname.split("/");
-              const lastPart = pathParts[pathParts.length - 1] || "Imported Script";
-              buttonName = lastPart.replace(/\.(ts|tsx|js|jsx|txt)$/i, "") || "Imported Script";
-            } catch (e) {
-              console.log(e);
-              buttonName = "Imported Script";
-            }
-          }
-
-          setButtonFormData({
-            name: buttonName,
-            type: "run_script",
-            payload: text,
-            group: group || getStore().buttonFormData.group || DEFAULT_BUTTON_GROUP,
-            autorun,
-            order: getStore().buttonFormData.order || 0,
-            shortcut: "",
-          });
-
-          setImportTip({
-            msg: "Successfully loaded script file! Review the fields and click 'Save' to confirm.",
-            severity: "success",
-          });
-        }
-      } catch (error) {
+        text = await res.text();
+      } catch (err) {
         setImportTip({
-          msg: `Network error or failed to load button data: ${error}`,
+          msg: `Network error or failed to load button data: ${err}`,
           severity: "error",
         });
+        return;
       }
+      importFromData(text, url);
     },
-    [buttons],
+    [importFromData],
   );
 
   const handleAddFromUrl = useCallback(async () => {
@@ -434,6 +435,21 @@ export default function DialogManager({
   const buttonFormDirty = useMemo(() => {
     return !!initialBtnFormData && JSON.stringify(buttonFormData) !== JSON.stringify(initialBtnFormData);
   }, [buttonFormData, initialBtnFormData]);
+
+  const buttonFormSubmitDisabled =
+    !buttonFormData.name || !buttonFormData.payload || (!!editButton && !buttonFormDirty);
+
+  const handleEditButtonFormKeyDown = useCallback(
+    (e: KeyboardEvent | React.KeyboardEvent) => {
+      const key = getKeyCombination(e);
+      if (key === "ctrl+enter" && !buttonFormSubmitDisabled) {
+        e.preventDefault();
+        e.stopPropagation();
+        saveButton();
+      }
+    },
+    [buttonFormSubmitDisabled],
+  );
 
   return (
     <>
@@ -824,6 +840,24 @@ export default function DialogManager({
           onClose={handleTitleMenuClose}
         >
           <MenuItem
+            onClick={async () => {
+              handleTitleMenuClose();
+              const btn = { ...buttonFormData, id: editButton?.id || "" } satisfies ButtonData;
+              navigator.clipboard.writeText(JSON.stringify(btn));
+            }}
+          >
+            Copy Button To Clipboard
+          </MenuItem>
+          <MenuItem
+            onClick={async () => {
+              handleTitleMenuClose();
+              const text = await navigator.clipboard.readText();
+              importFromData(text);
+            }}
+          >
+            Paste Button From Clipboard
+          </MenuItem>
+          <MenuItem
             onClick={() => {
               handleTitleMenuClose();
               handleAddFromUrl();
@@ -860,14 +894,17 @@ export default function DialogManager({
               {importTip.msg}
             </Alert>
           )}
-          <Box sx={{ display: "flex", gap: 2, mt: 1 }}>
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mt: 1 }}>
             <TextField
               sx={{ flex: 2 }}
               label="Button Name"
+              autoFocus={!buttonFormData.name}
+              placeholder="Ctrl + Enter to submit"
               size="small"
               required
               value={buttonFormData.name}
               onChange={(e) => setButtonFormData({ ...buttonFormData, name: e.target.value })}
+              onKeyDown={handleEditButtonFormKeyDown}
             />
             <FreeTextField
               sx={{ flex: 1 }}
@@ -877,9 +914,10 @@ export default function DialogManager({
               options={groups}
               value={buttonFormData.group}
               onChange={(newValue) => setButtonFormData({ ...buttonFormData, group: newValue || "" })}
+              onKeyDown={handleEditButtonFormKeyDown}
             />
           </Box>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1 }}>
             <TextField
               select
               label="Button Type"
@@ -899,6 +937,7 @@ export default function DialogManager({
                           : "",
                 })
               }
+              onKeyDown={handleEditButtonFormKeyDown}
               slotProps={{ select: { native: true } }}
               sx={{ flexGrow: 1 }}
             >
@@ -914,11 +953,12 @@ export default function DialogManager({
               size="small"
               value={buttonFormData.order}
               onChange={(e) => setButtonFormData({ ...buttonFormData, order: parseInt(e.target.value) || 0 })}
+              onKeyDown={handleEditButtonFormKeyDown}
               sx={{ width: 100 }}
             />
           </Box>
 
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1 }}>
             <TextField
               label="Shortcut"
               type="search"
@@ -930,7 +970,7 @@ export default function DialogManager({
                 if (e.ctrlKey || e.altKey || e.metaKey || (e.key.length > 1 && e.key !== "Shift")) {
                   e.preventDefault();
                   e.stopPropagation();
-                  setButtonFormData({ ...buttonFormData, shortcut: getKeyCombination(e as unknown as KeyboardEvent) });
+                  setButtonFormData({ ...buttonFormData, shortcut: getKeyCombination(e) });
                 }
               }}
               sx={{ flexGrow: 1 }}
@@ -997,12 +1037,13 @@ export default function DialogManager({
                 >
                   <CodeMirror
                     value={buttonFormData.payload}
-                    placeholder="LiquidJS template"
+                    placeholder="LiquidJS template. Ctrl + Enter to submit"
                     height="200px"
                     theme="light"
                     extensions={[liquid(), EditorView.lineWrapping]}
                     onChange={(value) => setButtonFormData({ ...buttonFormData, payload: value })}
                     style={{ fontSize: "12px" }}
+                    onKeyDown={handleEditButtonFormKeyDown}
                   />
                 </Box>
                 <Typography variant="subtitle2" color="text.secondary">
@@ -1088,7 +1129,8 @@ export default function DialogManager({
                 rows={3}
                 value={buttonFormData.payload}
                 onChange={(e) => setButtonFormData({ ...buttonFormData, payload: e.target.value })}
-                placeholder="String to send to terminal, <ctrl-x> style syntax supported"
+                onKeyDown={handleEditButtonFormKeyDown}
+                placeholder="String to send to terminal, <ctrl-x> style syntax supported. Ctrl + Enter to submit"
               />
             )
           ) : buttonFormData.type === "terminal_function" ? (
@@ -1225,11 +1267,7 @@ export default function DialogManager({
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditButtonDialogOpen(false)}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={saveButton}
-            disabled={!buttonFormData.name || !buttonFormData.payload || (!!editButton && !buttonFormDirty)}
-          >
+          <Button variant="contained" onClick={saveButton} disabled={buttonFormSubmitDisabled}>
             Save
           </Button>
         </DialogActions>
@@ -1262,7 +1300,7 @@ export default function DialogManager({
                 setInputDialogDirty(true);
               }}
               onKeyDown={(e) => {
-                const key = getKeyCombination(e as unknown as KeyboardEvent);
+                const key = getKeyCombination(e);
                 if (key === "ctrl+enter" || key === "ctrl+shift+enter" || key === "ctrl+alt+enter") {
                   if (key === "ctrl+shift+enter") {
                     setSendScope(2);
@@ -1319,7 +1357,7 @@ export default function DialogManager({
                     setInputDialogDirty(true);
                   }}
                   onKeyDown={(e) => {
-                    const key = getKeyCombination(e as unknown as KeyboardEvent);
+                    const key = getKeyCombination(e);
                     if (key === "ctrl+enter" || key === "ctrl+shift+enter" || key === "ctrl+alt+enter") {
                       if (key === "ctrl+shift+enter") {
                         setSendScope(2);
@@ -1419,7 +1457,7 @@ export default function DialogManager({
                           : "Ctrl + Enter to send; +Shift for all tabs"
                       }
                       onKeyDown={(e) => {
-                        const key = getKeyCombination(e as unknown as KeyboardEvent);
+                        const key = getKeyCombination(e);
                         if (key === "ctrl+enter" || key === "ctrl+shift+enter" || key === "ctrl+alt+enter") {
                           if (key === "ctrl+shift+enter") {
                             setSendScope(2);
@@ -1583,7 +1621,7 @@ export default function DialogManager({
               if (parsedHost.source) {
                 openEditHost(parsedHost);
               } else {
-                openAddHostForm(parsedHost);
+                openAddHostDialog(parsedHost);
               }
             }
           } else {

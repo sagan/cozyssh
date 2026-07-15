@@ -17,6 +17,7 @@ import {
   ID_INPUT_DIALOG_INPUT,
   ID_SIDEBAR_FILTER,
   LOCAL_NAME,
+  SETTINGS_TABS,
   VAR_CS_SCROLL_LINES,
 } from "./constants";
 import {
@@ -63,6 +64,7 @@ import {
   setAutoExpanded,
   setTagsExpanded,
   toggleExpandAllGroups,
+  setSettingsTab,
 } from "./store";
 
 export interface KeyboardManagerOptions {
@@ -263,7 +265,11 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         case "alt+h":
         case "alt+shift+h": {
           e.preventDefault();
-          const { tabs, activeTabId, activePaneId } = getStore();
+          const { tabs, activeTabId, activePaneId, settingsOpen, settingsTab } = getStore();
+          if (settingsOpen) {
+            setSettingsTab((settingsTab - 1 + SETTINGS_TABS) % SETTINGS_TABS);
+            return;
+          }
           const idx = tabs.findIndex((t) => t.id === activeTabId);
           if (idx < 0) {
             return;
@@ -291,7 +297,11 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         case "alt+l":
         case "alt+shift+l": {
           e.preventDefault();
-          const { tabs, activeTabId, activePaneId } = getStore();
+          const { tabs, activeTabId, activePaneId, settingsOpen, settingsTab } = getStore();
+          if (settingsOpen) {
+            setSettingsTab((settingsTab + 1) % SETTINGS_TABS);
+            return;
+          }
           const idx = tabs.findIndex((t) => t.id === activeTabId);
           if (idx < 0) {
             return;

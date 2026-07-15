@@ -23,8 +23,8 @@ import (
 	"time"
 
 	"github.com/go-http-utils/headers"
+	"github.com/mxschmitt/playwright-go"
 	"github.com/ory/dockertest/v4"
-	"github.com/playwright-community/playwright-go"
 )
 
 // yescrypt hash of `123456`
