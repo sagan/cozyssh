@@ -1688,7 +1688,10 @@ export async function saveButton() {
   const { editButton, buttonFormData } = getStore();
 
   // Auto-update liquidjs value based on detected user variables
-  const finalButtonFormData: ButtonData = { ...buttonFormData, id: editButton?.id || generatePassword(12) };
+  const finalButtonFormData: ButtonData = {
+    ...buttonFormData,
+    id: buttonFormData.id || editButton?.id || generatePassword(12),
+  };
   if (finalButtonFormData.type === "send_string") {
     if (finalButtonFormData.liquidjs !== undefined && finalButtonFormData.liquidjs !== 0) {
       const varsList = getTemplateVariables(finalButtonFormData.payload);
@@ -2039,7 +2042,7 @@ export async function sshCopyId(target: HostData | HostForm) {
   }
 }
 
-export function openEditHost(target: HostData) {
+export function openEditHostDialog(target: HostData) {
   const isAuto = target.source === "known_hosts";
   const data: HostForm = {
     ...target,
@@ -2052,6 +2055,10 @@ export function openEditHost(target: HostData) {
   setEditHostDialogOpen(true);
 }
 
+/**
+ * Open edit tab's first pane host dialog.
+ * @param target can be a tab or a tab id. Defaults to current active tab.
+ */
 export function openEditTabHost(target?: TabData | string) {
   const { tabs, activeTabId } = getStore();
   target = target || activeTabId;
@@ -2061,13 +2068,18 @@ export function openEditTabHost(target?: TabData | string) {
   if (!target || target.type !== "terminal") {
     return;
   }
-  const host = getHost(target.panes[0].host);
+  const pane = target.panes.find((p) => p.id === target.activePaneId) || target.panes[0];
+  openEditHostByName(pane.host);
+}
+
+export function openEditHostByName(hostname: string) {
+  const host = getHost(hostname);
   if (host.hostname === LOCAL_NAME) {
     dialogs.alert("local shell can't be edited");
     return;
   }
   if (host.source) {
-    openEditHost(host);
+    openEditHostDialog(host);
   } else {
     openAddHostDialog(host);
   }

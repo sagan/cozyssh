@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Box, Tabs, Tab, IconButton, TextField } from "@mui/material";
+import { Box, Tabs, Tab, IconButton } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import AddIcon from "@mui/icons-material/Add";
 import ViewSidebarIcon from "@mui/icons-material/ViewSidebar";
@@ -34,6 +34,7 @@ import {
   closeTab,
 } from "./store";
 import { APP_NAME, ID_TERMINAL_SEARCH_INPUT, LOCAL_NAME } from "./constants";
+import TextFieldWithCopy from "./components/TextFieldWithCopy";
 
 export interface TabBarProps {
   terminalRefs: React.MutableRefObject<TerminalRefMap>;
@@ -266,7 +267,7 @@ export default function TabBar({
                 borderTop: 0,
               }}
             >
-              <TextField
+              <TextFieldWithCopy
                 id={ID_TERMINAL_SEARCH_INPUT}
                 size="small"
                 placeholder="Find"

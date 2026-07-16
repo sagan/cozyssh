@@ -3,7 +3,6 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  TextField,
   List,
   ListItem,
   ListItemButton,
@@ -70,6 +69,7 @@ import {
   fetchSessions,
   getHost,
 } from "./store";
+import TextFieldWithCopy from "./components/TextFieldWithCopy";
 
 interface DialogItem {
   type:
@@ -1151,7 +1151,7 @@ export default function NewTabDialog({
             </Box>
           ))}
         </Box>
-        <TextField
+        <TextFieldWithCopy
           id={ID_NEW_TAB_DIALOG_INPUT}
           autoFocus
           fullWidth

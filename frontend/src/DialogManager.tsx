@@ -17,6 +17,7 @@ import {
   Chip,
   useTheme,
 } from "@mui/material";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import CodeMirror from "@uiw/react-codemirror";
 import { EditorView } from "@codemirror/view";
@@ -84,18 +85,19 @@ import {
   moveButton,
   refreshData,
   openSaveTabToButtonDialog,
-  openEditHost,
-  openEditTabHost,
+  openEditHostDialog,
   closeTabOrPane,
   closeTab,
   hideTab,
   openAddHostDialog,
   getHost,
   getPane,
+  openEditHostByName,
 } from "./store";
 import NewTabDialog from "./NewTabDialog";
 import { dialogs } from "./Dialogs";
 import FreeTextField from "./components/FreeTextField";
+import TextFieldWithCopy from "./components/TextFieldWithCopy";
 
 export interface DialogManagerProps {
   isMobile: boolean;
@@ -299,13 +301,20 @@ export default function DialogManager({
 
         const validatedData = result.data;
 
-        if (validatedData.id && buttons.find((b) => b.id === validatedData.id)) {
-          if (!(await dialogs.confirm(`Button with ID "${validatedData.id}" already exists. Overwrite it?`))) {
+        if (validatedData.id) {
+          const btn = buttons.find((b) => b.id === validatedData.id);
+          if (
+            btn &&
+            !(await dialogs.confirm(
+              `Button "${btn.name}" (id: "${btn.id}") already exists in group "${btn.group}". Overwrite it?`,
+            ))
+          ) {
             return;
           }
         }
 
         setButtonFormData({
+          id: validatedData.id,
           name: validatedData.name,
           type: validatedData.type,
           payload: validatedData.payload,
@@ -351,7 +360,7 @@ export default function DialogManager({
           if (
             btn &&
             !(await dialogs.confirm(
-              `Button "${btn.name}" (id: "${buttonId}") already exists in group "${btn.group}". Overwrite it?`,
+              `Button "${btn.name}" (id: "${btn.id}") already exists in group "${btn.group}". Overwrite it?`,
             ))
           ) {
             return;
@@ -368,6 +377,7 @@ export default function DialogManager({
         }
 
         setButtonFormData({
+          id: buttonId,
           name: buttonName,
           type: "run_script",
           payload: text,
@@ -467,18 +477,27 @@ export default function DialogManager({
             }
             return (
               <>
-                {tab.type !== "scratchpad" && tab.panes.length === 1 && (
+                {tab.type !== "scratchpad" && (
                   <>
-                    {tab.panes[0].host !== LOCAL_NAME && (
+                    {Array.from(
+                      new Set(
+                        tab.panes.map((p) => p.host).filter((h) => h !== LOCAL_NAME && !h.startsWith(LOCAL_NAME + "?")),
+                      ),
+                    ).map((hostname) => (
                       <MenuItem
+                        key={hostname}
                         onClick={() => {
                           handleCloseMenu();
-                          openEditTabHost(tab);
+                          openEditHostByName(hostname);
                         }}
                       >
-                        Edit {tab.panes[0].host}
+                        Edit {hostname}
                       </MenuItem>
-                    )}
+                    ))}
+                  </>
+                )}
+                {tab.type !== "scratchpad" && tab.panes.length === 1 && (
+                  <>
                     {tab.isPinned ? (
                       <MenuItem
                         className="hide-desktop"
@@ -780,6 +799,16 @@ export default function DialogManager({
         <MenuItem
           onClick={() => {
             if (btnMenuAnchor) {
+              navigator.clipboard.writeText(JSON.stringify(btnMenuAnchor.btn));
+              setBtnMenuAnchor(null);
+            }
+          }}
+        >
+          Copy Button Data
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            if (btnMenuAnchor) {
               setBtnMenuAnchor(null);
               moveButton(btnMenuAnchor.btn.id, -1);
             }
@@ -810,8 +839,8 @@ export default function DialogManager({
         disableRestoreFocus
         data-id={editButton?.id || ""}
         open={editButtonDialogOpen}
-        onClose={() => {
-          if (buttonFormDirty) {
+        onClose={(e, reason) => {
+          if (buttonFormDirty && !(reason === "backdropClick" && (e as MouseEvent)?.ctrlKey)) {
             return;
           }
           setEditButtonDialogOpen(false);
@@ -820,7 +849,11 @@ export default function DialogManager({
         maxWidth="lg"
       >
         <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pr: 1.5 }}>
-          <span>{editButton ? "Edit Button " + editButton.id : "Add Button"}</span>
+          <span>
+            {editButton
+              ? "Edit Button " + editButton.id
+              : "Add Button" + (buttonFormData.id ? " (" + buttonFormData.id + ")" : "")}
+          </span>
           <IconButton
             aria-label="more"
             id="edit-button-dialog-title-menu-button"
@@ -885,7 +918,16 @@ export default function DialogManager({
               }
             }}
           >
-            Reset
+            Reset Form
+          </MenuItem>
+          <MenuItem
+            disabled={!!editButton || !buttonFormData.id}
+            onClick={() => {
+              handleTitleMenuClose();
+              setButtonFormData({ ...buttonFormData, id: "" });
+            }}
+          >
+            Clear New Button Id
           </MenuItem>
         </Menu>
         <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
@@ -895,7 +937,7 @@ export default function DialogManager({
             </Alert>
           )}
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mt: 1 }}>
-            <TextField
+            <TextFieldWithCopy
               sx={{ flex: 2 }}
               label="Button Name"
               autoFocus={!buttonFormData.name}
@@ -959,7 +1001,7 @@ export default function DialogManager({
           </Box>
 
           <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1 }}>
-            <TextField
+            <TextFieldWithCopy
               label="Shortcut"
               type="search"
               size="small"
@@ -1120,7 +1162,7 @@ export default function DialogManager({
                 )}
               </Box>
             ) : (
-              <TextField
+              <TextFieldWithCopy
                 fullWidth
                 label="Command / String"
                 size="small"
@@ -1276,12 +1318,19 @@ export default function DialogManager({
       <Dialog
         id="input-dialog"
         open={inputDialogOpen}
-        onClose={() => handleCloseInputDialog(false)}
+        onClose={(e, reason) => handleCloseInputDialog(reason === "backdropClick" && (e as MouseEvent)?.ctrlKey)}
         disableRestoreFocus
         fullWidth
         maxWidth={inputLiquid ? "md" : "sm"}
       >
-        <DialogTitle>Terminal Input</DialogTitle>
+        <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span>Terminal Input</span>
+          {!inputLiquid && (
+            <IconButton disabled={!inputValue} onClick={() => navigator.clipboard.writeText(inputValue)} size="small">
+              <ContentCopyIcon fontSize="small" />
+            </IconButton>
+          )}
+        </DialogTitle>
         <DialogContent sx={{ pt: 1 }}>
           {!inputLiquid ? (
             <TextField
@@ -1438,7 +1487,7 @@ export default function DialogManager({
                   }}
                 >
                   {(varsList.length > 0 ? varsList : [""]).map((vname, i) => (
-                    <TextField
+                    <TextFieldWithCopy
                       key={i}
                       sx={{ display: varsList.length > 0 ? "unset" : "none" }}
                       fullWidth
@@ -1504,14 +1553,9 @@ export default function DialogManager({
                     multiline
                     rows={6}
                     variant="outlined"
-                    slotProps={{
-                      input: {
-                        readOnly: true,
-                        sx: { fontFamily: "monospace", fontSize: "typography.body2.fontSize" },
-                      },
-                    }}
+                    disabled={true}
                     value={renderedPreview}
-                    sx={{ bgcolor: "action.hover" }}
+                    sx={{ bgcolor: "action.hover", fontFamily: "monospace", fontSize: "typography.body2.fontSize" }}
                   />
                 </Box>
               </Box>
@@ -1619,7 +1663,7 @@ export default function DialogManager({
           } else if (alternativeMode === 2) {
             if (parsedHost) {
               if (parsedHost.source) {
-                openEditHost(parsedHost);
+                openEditHostDialog(parsedHost);
               } else {
                 openAddHostDialog(parsedHost);
               }

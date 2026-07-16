@@ -37,6 +37,7 @@ import {
   FormControlLabel,
   Checkbox,
   InputAdornment,
+  type DialogProps,
 } from "@mui/material";
 import ComputerIcon from "@mui/icons-material/Computer";
 import DnsIcon from "@mui/icons-material/Dns";
@@ -143,7 +144,7 @@ import {
   openAddHostDialog,
   toggleExpandAllGroups,
   sshCopyId,
-  openEditHost,
+  openEditHostDialog,
   setSettingsOpen,
   setSettingsTab,
 } from "./store";
@@ -152,6 +153,7 @@ import FreeTextField from "./components/FreeTextField";
 import SSHImportTab from "./SSHImportTab";
 import SSHExportTab from "./SSHExportTab";
 import ChipCopy from "./components/ChipCopy";
+import TextFieldWithCopy from "./components/TextFieldWithCopy";
 
 const drawerWidth = 260;
 
@@ -1167,7 +1169,7 @@ export default function Sidebar({
     }
     const target = contextMenu.target;
     setContextMenuOpen(false);
-    openEditHost(target);
+    openEditHostDialog(target);
   }, [contextMenu]);
 
   const closeMobileSidebar = useCallback(() => {
@@ -1692,12 +1694,15 @@ export default function Sidebar({
     [hostFormSubmitDisabled, handleSaveHost],
   );
 
-  const handleCloseHostDialog = useCallback(() => {
-    if (hostFormDirty) {
-      return;
-    }
-    setEditHostDialogOpen(false);
-  }, [hostFormDirty]);
+  const handleCloseHostDialog: DialogProps["onClose"] = useCallback(
+    (e, reason) => {
+      if (hostFormDirty && !(reason === "backdropClick" && (e as MouseEvent)?.ctrlKey)) {
+        return;
+      }
+      setEditHostDialogOpen(false);
+    },
+    [hostFormDirty],
+  );
 
   const filteredHosts = useMemo(() => {
     const filteredAll = filterHosts(hosts, filterStr);
@@ -2037,7 +2042,7 @@ export default function Sidebar({
               if (isModifier(e, "ctrl")) {
                 openHostInNewWindow(selectedItem.host.name);
               } else if (e.shiftKey) {
-                openEditHost(selectedItem.host);
+                openEditHostDialog(selectedItem.host);
               } else {
                 openHost(selectedItem.host.name, { target: isModifier(e, "alt") ? "_self" : undefined });
               }
@@ -2232,7 +2237,7 @@ export default function Sidebar({
 
       <Box sx={{ px: 2, pb: 1, display: "flex", flexDirection: "column", gap: 1 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <TextField
+          <TextFieldWithCopy
             size="small"
             type="search"
             id="sidebar-filter"
@@ -2672,7 +2677,7 @@ export default function Sidebar({
         )}
         {contextMenu?.target.source === "known_hosts" && (
           <MenuItem onClick={handleDeleteKnownHost} sx={{ color: "error.main" }}>
-            Delete known_host
+            Delete Known Host
           </MenuItem>
         )}
       </Menu>
@@ -3164,16 +3169,15 @@ export default function Sidebar({
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: "bold" }}>
                   WebDAV Server Configuration
                 </Typography>
-                <TextField
+                <TextFieldWithCopy
                   fullWidth
                   label="Current Server URL"
                   size="small"
                   margin="dense"
                   value={currentWebdavUrl || "(Not configured)"}
-                  slotProps={{ input: { readOnly: true } }}
                   disabled
                 />
-                <TextField
+                <TextFieldWithCopy
                   fullWidth
                   label="WebDAV Server URL"
                   size="small"
@@ -3183,7 +3187,7 @@ export default function Sidebar({
                   onChange={(e) => setWebdavUrl(e.target.value)}
                   disabled={isTestingWebdav}
                 />
-                <TextField
+                <TextFieldWithCopy
                   fullWidth
                   label="WebDAV Username"
                   size="small"
@@ -3192,7 +3196,7 @@ export default function Sidebar({
                   onChange={(e) => setWebdavUser(e.target.value)}
                   disabled={isTestingWebdav}
                 />
-                <TextField
+                <TextFieldWithCopy
                   fullWidth
                   label="WebDAV Password"
                   size="small"
@@ -3239,7 +3243,7 @@ export default function Sidebar({
                   sx={{ mt: 1, mb: 1, alignItems: "flex-start" }}
                 />
                 {useEncryption && !!masterKey && (
-                  <TextField
+                  <TextFieldWithCopy
                     fullWidth
                     label="WebDAV Master Key (Base64)"
                     size="small"
@@ -3248,17 +3252,6 @@ export default function Sidebar({
                     onChange={(e) => setMasterKey(e.target.value)}
                     disabled={true}
                     helperText="Save this key. You will need it to setup encrypted sync session on other devices."
-                    slotProps={{
-                      input: {
-                        endAdornment: (
-                          <InputAdornment position="end">
-                            <IconButton disabled={!masterKey} onClick={() => navigator.clipboard.writeText(masterKey)}>
-                              <ContentCopyIcon fontSize="small" />
-                            </IconButton>
-                          </InputAdornment>
-                        ),
-                      },
-                    }}
                   />
                 )}
                 <Typography sx={{ display: "flex", gap: 1 }}>
@@ -3416,6 +3409,8 @@ export default function Sidebar({
                   "Open Terminal" type button to open it in new window / current tab; <b>Ctrl + Mouse Click</b> on a
                   "Send String" type button to open it in "Terminal Input" dialog, <b>Alt + Mouse Click</b> on it to
                   copy contents to clipboard
+                  <br />
+                  <b>Ctrl + Mouse Click</b> on backdrop of modal dialog to force close it
                 </Typography>
                 {__CS_ENV__ === 1 && (
                   <>
@@ -3525,12 +3520,12 @@ export default function Sidebar({
               }
             }}
           >
-            Reset
+            Reset Form
           </MenuItem>
         </Menu>
         <DialogContent>
           <Box sx={{ mt: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-            <TextField
+            <TextFieldWithCopy
               fullWidth
               label="Alias Name"
               size="small"
@@ -3540,7 +3535,7 @@ export default function Sidebar({
               onChange={(e) => setHostFormData({ ...hostFormData, name: e.target.value })}
               placeholder={hostFormData.hostname || "e.g. production-database"}
             />
-            <TextField
+            <TextFieldWithCopy
               fullWidth
               label="HostName (IP / Domain)"
               size="small"
@@ -3551,20 +3546,6 @@ export default function Sidebar({
               onChange={(e) => setHostFormData({ ...hostFormData, hostname: e.target.value })}
               required
               autoFocus={!hostFormData.hostname}
-              slotProps={{
-                input: {
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        disabled={!hostFormData.hostname}
-                        onClick={() => navigator.clipboard.writeText(hostFormData.hostname)}
-                      >
-                        <ContentCopyIcon fontSize="small" />
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                },
-              }}
             />
             <FreeTextField
               fullWidth
@@ -3590,7 +3571,7 @@ export default function Sidebar({
                 setHostFormData({ ...hostFormData, port: newValue || "" });
               }}
             />
-            <TextField
+            <TextFieldWithCopy
               fullWidth
               label="Tags (Optional)"
               size="small"
@@ -3600,7 +3581,7 @@ export default function Sidebar({
               onKeyDown={handleEditHostFormKeyDown}
               placeholder="e.g. production web"
             />
-            <TextField
+            <TextFieldWithCopy
               fullWidth
               label="IdentityFile (Optional)"
               size="small"
@@ -3633,7 +3614,7 @@ export default function Sidebar({
               }}
               placeholder="Optional SSH server password"
             />
-            <TextField
+            <TextFieldWithCopy
               fullWidth
               label="ProxyJump (Optional)"
               size="small"
@@ -3664,6 +3645,20 @@ export default function Sidebar({
               value={hostFormData.userKnownHostsFile || ""}
               onChange={(newValue) => setHostFormData({ ...hostFormData, userKnownHostsFile: newValue || "" })}
               onKeyDown={handleEditHostFormKeyDown}
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        disabled={!hostFormData.userKnownHostsFile}
+                        onClick={() => navigator.clipboard.writeText(hostFormData.userKnownHostsFile!)}
+                      >
+                        <ContentCopyIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                },
+              }}
             />
             <FreeTextField
               fullWidth
@@ -3729,7 +3724,7 @@ export default function Sidebar({
               }}
               onKeyDown={handleEditHostFormKeyDown}
             />
-            <TextField
+            <TextFieldWithCopy
               fullWidth
               label="LocalForward (Optional)"
               size="small"
@@ -3740,7 +3735,7 @@ export default function Sidebar({
               onKeyDown={handleEditHostFormKeyDown}
               placeholder="e.g. 8080 localhost:80&#10;One rule per line"
             />
-            <TextField
+            <TextFieldWithCopy
               fullWidth
               label="RemoteForward (Optional)"
               size="small"
@@ -3751,7 +3746,7 @@ export default function Sidebar({
               onKeyDown={handleEditHostFormKeyDown}
               placeholder="e.g. 8080 localhost:80&#10;One rule per line"
             />
-            <TextField
+            <TextFieldWithCopy
               fullWidth
               label="DynamicForward (Optional)"
               size="small"
@@ -3762,7 +3757,7 @@ export default function Sidebar({
               onKeyDown={handleEditHostFormKeyDown}
               placeholder="e.g. 1080 or 127.0.0.1:1080&#10;One port per line"
             />
-            <TextField
+            <TextFieldWithCopy
               fullWidth
               label="Comment (Optional)"
               size="small"
@@ -3847,7 +3842,7 @@ function HostListItem({
           if (isModifier(e, "ctrl")) {
             openHostInNewWindow(host.name);
           } else if (e.shiftKey) {
-            openEditHost(host);
+            openEditHostDialog(host);
             setMobileOpen(false);
           } else {
             openHost(host.name, { target: isModifier(e, "alt") ? "_self" : undefined });
@@ -4155,7 +4150,7 @@ function TreeServerItem({
           if (isModifier(e, "ctrl")) {
             openHostInNewWindow(host.name);
           } else if (e.shiftKey) {
-            openEditHost(host);
+            openEditHostDialog(host);
             setMobileOpen(false);
           } else {
             openHost(host.name, { target: isModifier(e, "alt") ? "_self" : undefined });
