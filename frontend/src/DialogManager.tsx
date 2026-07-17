@@ -827,7 +827,12 @@ export default function DialogManager({
           Move Button Right
         </MenuItem>
         <MenuItem
-          onClick={() => btnMenuAnchor && deleteButton(btnMenuAnchor.btn.id, btnMenuAnchor.btn.name)}
+          onClick={() => {
+            if (btnMenuAnchor) {
+              setBtnMenuAnchor(null);
+              deleteButton(btnMenuAnchor.btn.id, btnMenuAnchor.btn.name);
+            }
+          }}
           sx={{ color: "error.main" }}
         >
           Delete Button
@@ -919,6 +924,17 @@ export default function DialogManager({
             }}
           >
             Reset Form
+          </MenuItem>
+          <MenuItem
+            sx={{ color: "error.main" }}
+            disabled={!editButton}
+            onClick={() => {
+              handleTitleMenuClose();
+              setEditButtonDialogOpen(false);
+              deleteButton(editButton!.id, editButton!.name);
+            }}
+          >
+            Delete Button
           </MenuItem>
           <MenuItem
             disabled={!!editButton || !buttonFormData.id}

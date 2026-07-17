@@ -1722,7 +1722,6 @@ export async function saveButton() {
 }
 
 export async function deleteButton(id: string, name: string) {
-  setBtnMenuAnchor(null);
   if (!(await dialogs.confirm(`Delete button "${name}" (${id})?`))) {
     return;
   }
@@ -2157,4 +2156,12 @@ export function newTabTitle(baseTitle: string): string {
     title = `${baseTitle} (${num++})`;
   } while (tabNames.has(title));
   return title;
+}
+
+export async function deleteHost(name: string) {
+  if (!(await dialogs.confirm(`Are you certain you want to permanently delete host "${name}"?`))) {
+    return;
+  }
+  await fetch(`/api/hosts/${name}`, { method: METHOD_DELETE, headers: apiReqHeaders() });
+  fetchHosts();
 }

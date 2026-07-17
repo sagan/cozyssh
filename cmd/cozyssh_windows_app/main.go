@@ -519,6 +519,11 @@ func setupSystemTrayAndHook(w webview2.WebView, hwnd uintptr, cfg *config.Config
 	menu.Add("Open SSH Dir", func() {
 		exec.Command("explorer", cfg.AbsSSHDir).Run()
 	})
+	menu.Add("Open App.exe Dir", func() {
+		path, _ := os.Executable()
+		dir := filepath.Dir(path)
+		exec.Command("explorer", dir).Run()
+	})
 	menu.Add("Check update", func() {
 		go checkAppUpdate(hwnd)
 	})

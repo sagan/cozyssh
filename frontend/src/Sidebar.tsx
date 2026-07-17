@@ -147,6 +147,7 @@ import {
   openEditHostDialog,
   setSettingsOpen,
   setSettingsTab,
+  deleteHost,
 } from "./store";
 import { useShallow } from "zustand/react/shallow";
 import FreeTextField from "./components/FreeTextField";
@@ -1182,10 +1183,7 @@ export default function Sidebar({
     }
     const target = contextMenu.target;
     setContextMenuOpen(false);
-    if (await dialogs.confirm(`Are you extremely certain you want to permanently delete "${target.name}"?`)) {
-      await fetch(`/api/hosts/${target.name}`, { method: METHOD_DELETE, headers: apiReqHeaders() });
-      fetchHosts();
-    }
+    deleteHost(target.name);
   }, [contextMenu]);
 
   const handleDeleteKnownHost = useCallback(async () => {
@@ -3510,6 +3508,17 @@ export default function Sidebar({
             Run ssh-copy-id
           </MenuItem>
           <MenuItem onClick={handlePasteSshConfigBlock}>Paste SSH Config Block</MenuItem>
+          <MenuItem
+            sx={{ color: "error.main" }}
+            disabled={!editHostName}
+            onClick={() => {
+              setHostTitleMenuAnchor(null);
+              setEditHostDialogOpen(false);
+              deleteHost(editHostName);
+            }}
+          >
+            Delete Host
+          </MenuItem>
           <MenuItem
             disabled={!hostFormDirty}
             onClick={() => {

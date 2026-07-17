@@ -1159,23 +1159,29 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
         }
       });
 
-      let selectionTimeout: ReturnType<typeof setTimeout>;
-
-      term.onSelectionChange(() => {
+      // Copy-on-select: use mouseup instead of onSelectionChange + setTimeout.
+      //
+      // navigator.clipboard.writeText() requires either a trusted user gesture
+      // ("transient activation") or an actively focused document at the moment
+      // of the call.  A setTimeout-based debounce breaks that guarantee: the
+      // callback runs in a detached task where the browser no longer considers
+      // the original mouse event to be active, causing silent failures with
+      // "Document is not focused" / NotAllowedError - especially when the mouse
+      // leaves the browser window during selection.
+      //
+      // mouseup fires synchronously inside the user gesture, so the clipboard
+      // write is always performed in a trusted context.
+      const handleCopyOnSelect = () => {
         if (isTouch) {
           return;
         }
-
-        clearTimeout(selectionTimeout);
-
-        // Wait 200ms after the selection stops changing to copy
-        selectionTimeout = setTimeout(() => {
-          const selection = term.getSelection();
-          if (selection) {
-            navigator.clipboard.writeText(selection).catch(() => {});
-          }
-        }, 200);
-      });
+        const selection = term.getSelection();
+        if (selection) {
+          navigator.clipboard.writeText(selection).catch((err) => {
+            console.debug("[terminal] copy-on-select failed:", err);
+          });
+        }
+      };
 
       const handleContextMenu = (e: MouseEvent) => {
         if (isTouch) {
@@ -1197,15 +1203,16 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       const container = terminalRef.current;
       if (container) {
         container.addEventListener("contextmenu", handleContextMenu);
+        container.addEventListener("mouseup", handleCopyOnSelect);
       }
 
       return () => {
         isDisposed = true;
         clearTimeout(reconnectTimer);
-        clearTimeout(selectionTimeout);
         resizeObserver.disconnect();
         if (container) {
           container.removeEventListener("contextmenu", handleContextMenu);
+          container.removeEventListener("mouseup", handleCopyOnSelect);
         }
         if (wsRef.current) {
           wsRef.current.close();
