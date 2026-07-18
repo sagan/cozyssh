@@ -511,7 +511,7 @@ export function isModifier(
     case "alt":
       return ev.altKey;
     default:
-      return false;
+      return assertUnreachable(modifier);
   }
 }
 
@@ -1133,14 +1133,22 @@ export const getHostOrder = (host: HostData): number => {
   if (!host.tags) {
     return Infinity;
   }
+  // All frontend state are immutable, so we can safely write derived properties to host
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if ((host as any)._order !== undefined) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (host as any)._order;
+  }
   for (const tag of host.tags) {
     if (tag.startsWith(TAG_ORDER_PREFIX)) {
       const order = parseInt(tag.substring(2));
       if (!isNaN(order)) {
+        Object.defineProperty(host, "_order", { value: order, writable: false, enumerable: false });
         return order;
       }
     }
   }
+  Object.defineProperty(host, "_order", { value: Infinity, writable: false, enumerable: false });
   return Infinity;
 };
 
@@ -1148,13 +1156,44 @@ export const getHostGroupPath = (host: HostData): string | null => {
   if (!host.tags) {
     return null;
   }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if ((host as any)._groupPath !== undefined) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (host as any)._groupPath;
+  }
   for (const tag of host.tags) {
     if (tag.startsWith(TAG_GROUP_PREFIX)) {
-      return tag.slice(TAG_GROUP_PREFIX.length);
+      const groupPath = tag.slice(TAG_GROUP_PREFIX.length);
+      Object.defineProperty(host, "_groupPath", { value: groupPath, writable: false, enumerable: false });
+      return groupPath;
     }
   }
+  Object.defineProperty(host, "_groupPath", { value: null, writable: false, enumerable: false });
   return null;
 };
+
+export function hostSorterGroup(a: HostData, b: HostData): number {
+  const groupA = getHostGroupPath(a);
+  const groupB = getHostGroupPath(b);
+  if (groupA !== groupB) {
+    return (groupA ?? "").localeCompare(groupB ?? "");
+  }
+  const orderA = getHostOrder(a);
+  const orderB = getHostOrder(b);
+  if (orderA !== orderB) {
+    return orderA - orderB;
+  }
+  return a.name.localeCompare(b.name);
+}
+
+export function hostSorter(a: HostData, b: HostData): number {
+  const orderA = getHostOrder(a);
+  const orderB = getHostOrder(b);
+  if (orderA !== orderB) {
+    return orderA - orderB;
+  }
+  return a.name.localeCompare(b.name);
+}
 
 export function getSSHCommand(host: HostData | HostForm, hosts?: HostData[]): string {
   let command = `ssh`;
@@ -1729,4 +1768,13 @@ export async function openBackgroundTerminal(host: string, options?: Record<stri
       resolve(false);
     });
   });
+}
+
+/**
+ * Asserts that a value is unreachable (should never happen in correct code).
+ * @param x The value to assert. TypeScript will infer the type as never.
+ * @throws Error with the value if reached
+ */
+export function assertUnreachable(x: never): never {
+  throw new Error(`Unhandled case: ${JSON.stringify(x)}`);
 }

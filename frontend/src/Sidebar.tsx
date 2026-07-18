@@ -24,6 +24,7 @@ import {
   Tabs,
   Tab,
   Chip,
+  Autocomplete,
   Divider,
   Table,
   TableBody,
@@ -91,6 +92,7 @@ import {
   TOAST_KEY_SYNC,
   LINK_COZYSSH_GITHUB,
   LINK_COZYSSH_DOC_DATA,
+  CLASS_HIDE_DESKTOP,
 } from "./constants";
 import {
   type ServiceWorkerStatus,
@@ -104,6 +106,7 @@ import {
   getSSHConfigBlock,
   getSSHCopyIdCommand,
   hostLabel,
+  hostSorter,
   isModifier,
   isValidHostname,
   localShellHost,
@@ -148,6 +151,7 @@ import {
   setSettingsOpen,
   setSettingsTab,
   deleteHost,
+  reorderFavourites,
 } from "./store";
 import { useShallow } from "zustand/react/shallow";
 import FreeTextField from "./components/FreeTextField";
@@ -651,6 +655,52 @@ export default function Sidebar({
   const [selectedIndex, setSelectedIndex] = useState(-1);
 
   const editHostDialogOpen = useStore((state) => state.editHostDialogOpen);
+  const [tagInput, setTagInput] = useState("");
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTagInput("");
+  }, [editHostDialogOpen]);
+
+  const handleDeleteTag = useCallback(
+    (tagToDelete: string) => {
+      const tagsList = (hostFormData.tags || "")
+        .replace(/,/g, " ")
+        .split(/\s+/)
+        .filter((t) => t.trim() !== "" && t !== tagToDelete);
+      setHostFormData({ ...hostFormData, tags: tagsList.join(" ") });
+    },
+    [hostFormData],
+  );
+
+  const handleAddTag = useCallback(
+    (tagToAdd: string) => {
+      const newTags = tagToAdd
+        .replace(/,/g, " ")
+        .split(/\s+/)
+        .map((t) => t.trim())
+        .filter((t) => t !== "");
+      if (newTags.length === 0) return;
+
+      const currentTags = (hostFormData.tags || "")
+        .replace(/,/g, " ")
+        .split(/\s+/)
+        .filter((t) => t.trim() !== "");
+
+      const tagsToAdd = newTags.filter((t) => !currentTags.includes(t));
+      if (tagsToAdd.length > 0) {
+        setHostFormData({
+          ...hostFormData,
+          tags: [...currentTags, ...tagsToAdd].join(" "),
+        });
+      }
+    },
+    [hostFormData],
+  );
+
+  const parsedTags = useMemo(() => {
+    return (hostFormData.tags || "").split(/\s+/).filter(Boolean);
+  }, [hostFormData.tags]);
   const editHostName = useStore((state) => state.editHostName);
 
   // Context Menu State
@@ -727,9 +777,11 @@ export default function Sidebar({
 
   // Drag and Drop States
   const [draggedItem, setDraggedItem] = useState<
-    { type: "group"; path: string } | { type: "server"; name: string } | null
+    { type: "group"; path: string } | { type: "server"; name: string } | { type: "fav"; name: string } | null
   >(null);
-  const [dragOverTarget, setDragOverTarget] = useState<{ id: string; effect: "before" | "inside" } | null>(null);
+  const [dragOverTarget, setDragOverTarget] = useState<{ id: string; effect: "before" | "inside" | "after" } | null>(
+    null,
+  );
 
   const getGroupOrder = useCallback((path: string): number => {
     const idx = getStore().groups.indexOf(path);
@@ -1706,17 +1758,10 @@ export default function Sidebar({
     const filteredAll = filterHosts(hosts, filterStr);
 
     const favs = filteredAll.filter((h) => h.isFavourite);
-    const nameSorter = (a: HostData, b: HostData) => a.name.localeCompare(b.name);
-    const sortedFavs = favs.sort(nameSorter);
+    const sortedFavs = favs.sort(hostSorter);
 
     const autos = filteredAll.filter((h) => !h.isFavourite && h.isAuto);
-    const hostNameSorter = (a: HostData, b: HostData) => {
-      if (a.hostname === b.hostname) {
-        return a.name.localeCompare(b.name);
-      }
-      return a.hostname.localeCompare(b.hostname);
-    };
-    const sortedAutos = autos.sort(hostNameSorter);
+    const sortedAutos = autos.sort(hostSorter);
 
     const treeHosts = filteredAll.filter((h) => !h.isAuto);
 
@@ -2200,32 +2245,20 @@ export default function Sidebar({
           </MenuItem>
           <MenuItem
             id="logout-menu-item"
-            className="hide-desktop"
-            onClick={async () => {
+            className={CLASS_HIDE_DESKTOP}
+            onClick={() => {
               setAnchorEl(null);
-              if (
-                await dialogs.confirm("Log out of current device?", "All data stored in this browser will be cleared.")
-              ) {
-                logout();
-              }
+              logout(true);
             }}
           >
             Logout
           </MenuItem>
           <MenuItem
             id="logout-all-menu-item"
-            className="hide-desktop"
-            onClick={async () => {
+            className={CLASS_HIDE_DESKTOP}
+            onClick={() => {
               setAnchorEl(null);
-              if (
-                await dialogs.confirm(
-                  "Log out of all browser sessions?",
-                  "This will invalidate all active sessions and require you to sign in again on all devices." +
-                    " All data stored in this browser will be cleared.",
-                )
-              ) {
-                logoutAll();
-              }
+              logoutAll(true);
             }}
           >
             Logout All
@@ -2403,6 +2436,12 @@ export default function Sidebar({
                         host={host}
                         onContextMenu={handleContextMenu}
                         isSelected={selectedIndex === itemIdx}
+                        isMobile={isMobile}
+                        isTouch={isTouch}
+                        draggedItem={draggedItem}
+                        dragOverTarget={dragOverTarget}
+                        setDraggedItem={setDraggedItem}
+                        setDragOverTarget={setDragOverTarget}
                       />
                     );
                   })}
@@ -2578,7 +2617,7 @@ export default function Sidebar({
           Open (In Current Tab)
         </MenuItem>
         <MenuItem
-          className="hide-desktop"
+          className={CLASS_HIDE_DESKTOP}
           onClick={() => {
             if (!contextMenu) {
               return;
@@ -3439,9 +3478,9 @@ export default function Sidebar({
                   CozySSH
                 </Typography>
                 <Typography variant="body1" color="text.secondary" gutterBottom>
-                  Version: <b>{appVersion}</b>
+                  Version: <b>{PACKAGE_JSON_VERSION}</b>
                   <br />
-                  Frontend: <b>{PACKAGE_JSON_VERSION}</b>
+                  Backend: <b>{appVersion}</b>
                 </Typography>
                 <Typography variant="body2" sx={{ mt: 3 }}>
                   <a
@@ -3590,6 +3629,44 @@ export default function Sidebar({
               onKeyDown={handleEditHostFormKeyDown}
               placeholder="e.g. production web"
             />
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
+              {parsedTags.map((tag) => (
+                <Chip key={tag} label={tag} size="small" onDelete={() => handleDeleteTag(tag)} />
+              ))}
+              <Autocomplete
+                freeSolo
+                size="small"
+                options={["fav", ...uniqueTags].filter((t) => !parsedTags.includes(t))}
+                value={tagInput}
+                onChange={(_, newValue) => {
+                  if (newValue) {
+                    handleAddTag(newValue);
+                    setTagInput("");
+                  }
+                }}
+                inputValue={tagInput}
+                onInputChange={(_, newInputValue) => {
+                  setTagInput(newInputValue);
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Add Tag"
+                    placeholder="Select existing tag, or type new tag and press Enter"
+                    size="small"
+                  />
+                )}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleAddTag(tagInput);
+                    setTagInput("");
+                  }
+                }}
+                sx={{ flexGrow: 1 }}
+              />
+            </Box>
             <TextFieldWithCopy
               fullWidth
               label="IdentityFile (Optional)"
@@ -3797,6 +3874,12 @@ function HostListItem({
   host,
   onContextMenu,
   isSelected,
+  isMobile,
+  isTouch,
+  draggedItem,
+  dragOverTarget,
+  setDraggedItem,
+  setDragOverTarget,
 }: {
   id: string;
   section: Section;
@@ -3804,6 +3887,15 @@ function HostListItem({
   host: HostData;
   onContextMenu: (e: React.MouseEvent, host: HostData, section: Section) => void;
   isSelected?: boolean;
+  isMobile?: boolean;
+  isTouch?: boolean;
+  draggedItem?:
+    { type: "group"; path: string } | { type: "server"; name: string } | { type: "fav"; name: string } | null;
+  dragOverTarget?: { id: string; effect: "before" | "inside" | "after" } | null;
+  setDraggedItem?: (
+    item: { type: "group"; path: string } | { type: "server"; name: string } | { type: "fav"; name: string } | null,
+  ) => void;
+  setDragOverTarget?: (item: { id: string; effect: "before" | "inside" | "after" } | null) => void;
 }) {
   const itemRef = useRef<HTMLLIElement>(null);
 
@@ -3824,6 +3916,55 @@ function HostListItem({
       secondaryText += ` // ${matchedComment}`;
     }
   }
+
+  const isDragOver = dragOverTarget?.id === id;
+
+  const dragProps =
+    section === "fav" && !isMobile && !isTouch && setDraggedItem && setDragOverTarget
+      ? {
+          draggable: true,
+          onDragStart: (e: React.DragEvent) => {
+            setDraggedItem({ type: "fav", name: host.name });
+            e.dataTransfer.effectAllowed = "move";
+          },
+          onDragEnd: () => {
+            setDraggedItem(null);
+            setDragOverTarget(null);
+          },
+          onDragOver: (e: React.DragEvent) => {
+            if (!draggedItem || draggedItem.type !== "fav" || draggedItem.name === host.name) {
+              return;
+            }
+            e.preventDefault();
+            e.stopPropagation();
+            e.dataTransfer.dropEffect = "move";
+            const rect = e.currentTarget.getBoundingClientRect();
+            const position = e.clientY > rect.top + rect.height / 2 ? "after" : "before";
+            if (!dragOverTarget || dragOverTarget.id !== id || dragOverTarget.effect !== position) {
+              setDragOverTarget({ id, effect: position });
+            }
+          },
+          onDragLeave: (e: React.DragEvent) => {
+            e.stopPropagation();
+            if (dragOverTarget?.id === id) {
+              setDragOverTarget(null);
+            }
+          },
+          onDrop: async (e: React.DragEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!draggedItem || draggedItem.type !== "fav" || draggedItem.name === host.name) {
+              return;
+            }
+            const rect = e.currentTarget.getBoundingClientRect();
+            const position = e.clientY > rect.top + rect.height / 2 ? "after" : "before";
+            setDragOverTarget(null);
+            setDraggedItem(null);
+            await reorderFavourites(draggedItem.name, host.name, position);
+          },
+        }
+      : {};
+
   return (
     <ListItem
       {...(id ? { id } : {})}
@@ -3833,6 +3974,7 @@ function HostListItem({
       data-name={host.name}
       data-tags={host.tags?.join(" ") ?? ""}
       className="sidebar-host"
+      {...dragProps}
       sx={{
         bgcolor: isSelected ? "action.hover" : isFavourite ? "action.selected" : "transparent",
         "&:hover": {
@@ -3843,6 +3985,13 @@ function HostListItem({
         outlineColor: "primary.main",
         outlineOffset: "-1px",
         borderRadius: 1,
+        borderTop: isDragOver && dragOverTarget?.effect === "before" ? "2px solid" : "none",
+        borderTopColor: "primary.main",
+        borderBottom: isDragOver && dragOverTarget?.effect === "after" ? "2px solid" : "none",
+        borderBottomColor: "primary.main",
+        opacity: draggedItem?.type === "fav" && draggedItem.name === host.name ? 0.4 : 1,
+        transition: "opacity 0.2s, border-color 0.1s",
+        cursor: section === "fav" && !isMobile && !isTouch ? "grab" : "inherit",
       }}
     >
       <ListItemButton
@@ -3946,10 +4095,13 @@ function TreeGroupItem({
   isTouch: boolean;
   expandedGroups: Set<string>;
   groupHostCounts: Record<string, number>;
-  setDraggedItem: (item: { type: "group"; path: string } | { type: "server"; name: string } | null) => void;
-  draggedItem: { type: "group"; path: string } | { type: "server"; name: string } | null;
-  dragOverTarget: { id: string; effect: "before" | "inside" } | null;
-  setDragOverTarget: (item: { id: string; effect: "before" | "inside" } | null) => void;
+  setDraggedItem: (
+    item: { type: "group"; path: string } | { type: "server"; name: string } | { type: "fav"; name: string } | null,
+  ) => void;
+  draggedItem:
+    { type: "group"; path: string } | { type: "server"; name: string } | { type: "fav"; name: string } | null;
+  dragOverTarget: { id: string; effect: "before" | "inside" | "after" } | null;
+  setDragOverTarget: (item: { id: string; effect: "before" | "inside" | "after" } | null) => void;
   setGroupContextMenu: (item: { element: Element; path: string; type: "group" } | null) => void;
   setGroupContextMenuOpen: (open: boolean) => void;
 }) {
@@ -4072,10 +4224,13 @@ function TreeServerItem({
   isMobile: boolean;
   isTouch: boolean;
   filterStr: string;
-  draggedItem: { type: "group"; path: string } | { type: "server"; name: string } | null;
-  dragOverTarget: { id: string; effect: "before" | "inside" } | null;
-  setDraggedItem: (item: { type: "group"; path: string } | { type: "server"; name: string } | null) => void;
-  setDragOverTarget: (item: { id: string; effect: "before" | "inside" } | null) => void;
+  draggedItem:
+    { type: "group"; path: string } | { type: "server"; name: string } | { type: "fav"; name: string } | null;
+  dragOverTarget: { id: string; effect: "before" | "inside" | "after" } | null;
+  setDraggedItem: (
+    item: { type: "group"; path: string } | { type: "server"; name: string } | { type: "fav"; name: string } | null,
+  ) => void;
+  setDragOverTarget: (item: { id: string; effect: "before" | "inside" | "after" } | null) => void;
   handleContextMenu: (e: React.MouseEvent | React.KeyboardEvent, host: HostData, section: Section) => void;
 }) {
   const itemRef = useRef<HTMLLIElement>(null);

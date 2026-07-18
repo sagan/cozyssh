@@ -64,13 +64,7 @@ export const WS_PROTOCOL_QUERY_PREFIX = "query.";
 export const WS_PROTOCOL_IDENTITY_PREFIX = "identity.";
 export const WS_PROTOCOL_DUMMY = "dummy";
 
-type BuiltinButton = {
-  value: string;
-  label: string;
-  shortcut?: string;
-};
-
-export const TERMINAL_FUNCTIONS: BuiltinButton[] = [
+export const TERMINAL_FUNCTIONS = [
   { value: "COPY", label: "COPY (Buffer)" },
   { value: "COPY_VISIBLE", label: "COPY (Visible)" },
   { value: "COPY_SELECTION", label: "COPY (Selection)", shortcut: "ctrl+shift+c" },
@@ -102,9 +96,14 @@ export const TERMINAL_FUNCTIONS: BuiltinButton[] = [
   { value: "ATTACH", label: "Attach (Background Session)" },
   { value: "EDIT_TAB_HOST", label: "Edit (Tab Host)" },
   { value: "SAVE_TAB", label: "Save (Tab)" },
+  { value: "CLEAR_UNREAD_TABS", label: "Clear Unread Tabs" },
+  { value: "CLOSE_OTHER_TABS", label: "Close Other Tabs", shortcut: "ctrl+alt+shift+w" },
+  { value: "CLOSE_RIGHT_TABS", label: "Close Tabs to the Right" },
+  { value: "MOVE_TAB_LEFT", label: "Move Tab Left" },
+  { value: "MOVE_TAB_RIGHT", label: "Move Tab Right" },
 ] as const;
 
-export const MISC_FUNCTIONS: BuiltinButton[] = [
+export const MISC_FUNCTIONS = [
   { value: "RESET_FONT_SIZE", label: "Reset Font Size", shortcut: "ctrl+alt+0" },
   { value: "RESET_TERMINAL_FONT_SIZE", label: "Reset Terminal Font Size" },
   { value: "RESET_GLOBAL_FONT_SIZE", label: "Reset Global Font Size" },
@@ -114,8 +113,6 @@ export const MISC_FUNCTIONS: BuiltinButton[] = [
   { value: "INCREASE_FONT_SIZE", label: "Increase Font Size", shortcut: "alt+shift++" },
   { value: "INCREASE_TERMINAL_FONT_SIZE", label: "Increase Terminal Font Size", shortcut: "alt++" },
   { value: "INCREASE_GLOBAL_FONT_SIZE", label: "Increase Global Font Size" },
-  { value: "CLOSE_OTHER_TABS", label: "Close Other Tabs", shortcut: "ctrl+alt+shift+w" },
-  { value: "CLOSE_RIGHT_TABS", label: "Close Tabs to the Right" },
   { value: "TABS_SCROLL_LEFT", label: "Tabs Scroll Left" },
   { value: "TABS_SCROLL_RIGHT", label: "Tabs Scroll Right" },
   { value: "BUTTONS_SCROLL_LEFT", label: "Buttons Scroll Left" },
@@ -131,7 +128,6 @@ export const MISC_FUNCTIONS: BuiltinButton[] = [
   { value: "OPEN_DASHBOARD_DIALOG", label: "Open Dashboard Dialog" },
   { value: "OPEN_NEW_HOST_DIALOG", label: "Open New Host Dialog" },
   { value: "OPEN_NEW_BUTTON_DIALOG", label: "Open New Button Dialog" },
-  { value: "CLEAR_UNREAD_TABS", label: "Clear Unread Tabs" },
   { value: "REFRESH", label: "Refresh Data" },
   { value: "NONE", label: "None (Do Nothing)" },
 ] as const;
@@ -142,14 +138,14 @@ export const BUILTIN_BUTTONS = [
     name: f.label,
     type: "terminal_function" as const,
     payload: f.value,
-    shortcut: f.shortcut,
+    shortcut: "shortcut" in f ? f.shortcut : undefined,
   })),
   ...MISC_FUNCTIONS.map((f) => ({
     id: `builtin-${f.value}`,
     name: f.label,
     type: "misc" as const,
     payload: f.value,
-    shortcut: f.shortcut,
+    shortcut: "shortcut" in f ? f.shortcut : undefined,
   })),
 ] as const;
 
@@ -213,6 +209,15 @@ export const LINK_COZYSSH_DOC_SCRIPTS = "https://github.com/sagan/cozyssh/blob/m
 export const LINK_COZYSSH_DOC_PLUGINS = "https://github.com/sagan/cozyssh-plugins";
 
 export const SETTINGS_TABS = 9;
+
+/**
+ * Hide element from desktop
+ */
+export const CLASS_HIDE_DESKTOP = "hide-desktop";
+/**
+ * Hide element from web
+ */
+export const CLASS_HIDE_WEB = "hide-web";
 
 /**
  * terminal client side params are only used in frontend and are not sent to the server.

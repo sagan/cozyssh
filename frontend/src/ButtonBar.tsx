@@ -1,9 +1,9 @@
-// import React from 'react';
+import { useState } from "react";
 import { Box, TextField, Tabs, Tab, IconButton } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 
 import type { ButtonData } from "./api";
-import { openAddButtonDialog, setActiveGroup, setBtnMenuAnchor, setLastMenuBtn, useStore } from "./store";
+import { openAddButtonDialog, reorderButtons, setActiveGroup, setBtnMenuAnchor, setLastMenuBtn, useStore } from "./store";
 import { useShallow } from "zustand/react/shallow";
 import { DEFAULT_BUTTON_GROUP } from "./constants";
 import { isModifier } from "./common";
@@ -52,17 +52,22 @@ const getButtonStyle = (btn: Pick<ButtonData, "type" | "liquidjs">) => {
 
 export interface ButtonBarProps {
   groups: string[];
+  isMobile: boolean;
+  isTouch: boolean;
   handleButtonClick: (
     btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">,
     alternativeMode?: number,
   ) => void;
 }
 
-export default function ButtonBar({ groups, handleButtonClick }: ButtonBarProps) {
+export default function ButtonBar({ groups, handleButtonClick, isMobile, isTouch }: ButtonBarProps) {
   const activeGroup = useStore((state) => state.activeGroup);
   const filteredButtons = useStore(
     useShallow((state) => state.buttons.filter((b) => (b.group || DEFAULT_BUTTON_GROUP) === state.activeGroup)),
   );
+
+  const [draggedButtonId, setDraggedButtonId] = useState<string | null>(null);
+  const [dragOverButton, setDragOverButton] = useState<{ id: string; position: "before" | "after" } | null>(null);
 
   return (
     <Box
@@ -155,6 +160,44 @@ export default function ButtonBar({ groups, handleButtonClick }: ButtonBarProps)
                 setBtnMenuAnchor({ anchor: e.currentTarget, btn });
                 setLastMenuBtn(btn);
               }}
+              draggable={!isMobile && !isTouch}
+              onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", btn.id);
+                setDraggedButtonId(btn.id);
+              }}
+              onDragEnd={() => {
+                setDraggedButtonId(null);
+                setDragOverButton(null);
+              }}
+              onDragOver={(e) => {
+                if (!draggedButtonId || draggedButtonId === btn.id) {
+                  return;
+                }
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                const rect = e.currentTarget.getBoundingClientRect();
+                const position = e.clientX > rect.left + rect.width / 2 ? "after" : "before";
+                if (!dragOverButton || dragOverButton.id !== btn.id || dragOverButton.position !== position) {
+                  setDragOverButton({ id: btn.id, position });
+                }
+              }}
+              onDragLeave={() => {
+                if (dragOverButton?.id === btn.id) {
+                  setDragOverButton(null);
+                }
+              }}
+              onDrop={(e) => {
+                if (!draggedButtonId || draggedButtonId === btn.id) {
+                  return;
+                }
+                e.preventDefault();
+                const rect = e.currentTarget.getBoundingClientRect();
+                const position = e.clientX > rect.left + rect.width / 2 ? "after" : "before";
+                reorderButtons(draggedButtonId, btn.id, position);
+                setDraggedButtonId(null);
+                setDragOverButton(null);
+              }}
               sx={{
                 minHeight: 28,
                 minWidth: "auto",
@@ -168,6 +211,11 @@ export default function ButtonBar({ groups, handleButtonClick }: ButtonBarProps)
                 color: "text.primary",
                 margin: "6px 4px",
                 cursor: "pointer",
+                opacity: draggedButtonId === btn.id ? 0.4 : 1,
+                boxShadow: dragOverButton?.id === btn.id
+                  ? (theme) => `inset ${dragOverButton.position === "before" ? "3px" : "-3px"} 0 0 ${theme.palette.primary.main}`
+                  : undefined,
+                transition: "opacity 0.2s, box-shadow 0.1s",
                 "&:hover": {
                   bgcolor: style.hoverBgColor,
                   color: "white",

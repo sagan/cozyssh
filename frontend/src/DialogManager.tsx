@@ -26,6 +26,7 @@ import { liquid } from "@codemirror/lang-liquid";
 
 import type { HostData, ButtonData } from "./api";
 import {
+  CLASS_HIDE_DESKTOP,
   DEFAULT_BUTTON_GROUP,
   ID_INPUT_DIALOG_INPUT,
   LINK_COZYSSH_DOC_SCRIPTS,
@@ -93,6 +94,8 @@ import {
   getHost,
   getPane,
   openEditHostByName,
+  moveTabLeft,
+  moveTabRight,
 } from "./store";
 import NewTabDialog from "./NewTabDialog";
 import { dialogs } from "./Dialogs";
@@ -500,7 +503,7 @@ export default function DialogManager({
                   <>
                     {tab.isPinned ? (
                       <MenuItem
-                        className="hide-desktop"
+                        className={CLASS_HIDE_DESKTOP}
                         onClick={() => {
                           handleCloseMenu();
                           unpinTab(memoTabId);
@@ -511,7 +514,7 @@ export default function DialogManager({
                       </MenuItem>
                     ) : (
                       <MenuItem
-                        className="hide-desktop"
+                        className={CLASS_HIDE_DESKTOP}
                         onClick={() => {
                           handleCloseMenu();
                           pinTab(memoTabId);
@@ -660,15 +663,31 @@ export default function DialogManager({
                 {tab.type === "scratchpad" && (
                   <MenuItem
                     onClick={() => {
+                      handleCloseMenu();
                       fetch("/api/scratchpad/reload", { method: METHOD_POST, headers: apiReqHeaders() }).then(() => {
                         // csNotify("Reloading Scratchpad from disk...");
                       });
-                      handleCloseMenu();
                     }}
                   >
                     Force sync
                   </MenuItem>
                 )}
+                <MenuItem
+                  onClick={() => {
+                    handleCloseMenu();
+                    moveTabLeft(memoTabId);
+                  }}
+                >
+                  Move Tab Left
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    handleCloseMenu();
+                    moveTabRight(memoTabId);
+                  }}
+                >
+                  Move Tab Right
+                </MenuItem>
               </>
             );
           })()}
@@ -771,7 +790,7 @@ export default function DialogManager({
               );
             }
           }}
-          className="hide-desktop"
+          className={CLASS_HIDE_DESKTOP}
           sx={{
             display: lastMenuBtn?.type === "open_terminal" ? "flex" : "none",
           }}

@@ -32,6 +32,7 @@ import {
   useStore,
   setNewTabDialogFilter,
   closeTab,
+  setTabs,
 } from "./store";
 import { APP_NAME, ID_TERMINAL_SEARCH_INPUT, LOCAL_NAME } from "./constants";
 import TextFieldWithCopy from "./components/TextFieldWithCopy";
@@ -39,6 +40,7 @@ import TextFieldWithCopy from "./components/TextFieldWithCopy";
 export interface TabBarProps {
   terminalRefs: React.MutableRefObject<TerminalRefMap>;
   isMobile: boolean;
+  isTouch: boolean;
   hasSidebarApplet: boolean;
   scratchpadSyncState: ScratchpadSyncState;
   handleContextMenu: (e: React.MouseEvent, tabId: string) => void;
@@ -48,6 +50,7 @@ export interface TabBarProps {
 export default function TabBar({
   terminalRefs,
   isMobile,
+  isTouch,
   hasSidebarApplet,
   scratchpadSyncState,
   handleContextMenu,
@@ -62,6 +65,24 @@ export default function TabBar({
   const searchOpen = useStore((state) => state.searchOpen);
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
+  const [dragOverTab, setDragOverTab] = useState<{ id: string; position: "before" | "after" } | null>(null);
+
+  const reorderTabs = (draggedId: string, targetId: string, position: "before" | "after") => {
+    const draggedIndex = tabs.findIndex((t) => t.id === draggedId);
+    const targetIndex = tabs.findIndex((t) => t.id === targetId);
+    if (draggedIndex === -1 || targetIndex === -1) return;
+
+    const newTabs = [...tabs];
+    const [removed] = newTabs.splice(draggedIndex, 1);
+
+    // After removing the dragged tab, we need to find the new index of the target tab
+    const newTargetIndex = newTabs.findIndex((t) => t.id === targetId);
+    const insertIndex = position === "before" ? newTargetIndex : newTargetIndex + 1;
+
+    newTabs.splice(insertIndex, 0, removed);
+    setTabs(newTabs);
+  };
 
   useEffect(() => {
     if (unreadTabIds.has(activeTabId)) {
@@ -150,11 +171,56 @@ export default function TabBar({
                       closeTab(tab.id);
                     }
                   }}
+                  draggable={!isMobile && !isTouch}
+                  onDragStart={(e) => {
+                    e.dataTransfer.effectAllowed = "move";
+                    e.dataTransfer.setData("text/plain", tab.id);
+                    setDraggedTabId(tab.id);
+                  }}
+                  onDragEnd={() => {
+                    setDraggedTabId(null);
+                    setDragOverTab(null);
+                  }}
+                  onDragOver={(e) => {
+                    if (!draggedTabId || draggedTabId === tab.id) {
+                      return;
+                    }
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const position = e.clientX > rect.left + rect.width / 2 ? "after" : "before";
+                    if (!dragOverTab || dragOverTab.id !== tab.id || dragOverTab.position !== position) {
+                      setDragOverTab({ id: tab.id, position });
+                    }
+                  }}
+                  onDragLeave={() => {
+                    if (dragOverTab?.id === tab.id) {
+                      setDragOverTab(null);
+                    }
+                  }}
+                  onDrop={(e) => {
+                    if (!draggedTabId || draggedTabId === tab.id) {
+                      return;
+                    }
+                    e.preventDefault();
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const position = e.clientX > rect.left + rect.width / 2 ? "after" : "before";
+                    reorderTabs(draggedTabId, tab.id, position);
+                    setDraggedTabId(null);
+                    setDragOverTab(null);
+                  }}
                   sx={{
                     minHeight: 40,
                     py: 0,
                     textTransform: "none",
                     minWidth: "auto",
+                    opacity: draggedTabId === tab.id ? 0.4 : 1,
+                    boxShadow:
+                      dragOverTab?.id === tab.id
+                        ? (theme) =>
+                            `inset ${dragOverTab.position === "before" ? "3px" : "-3px"} 0 0 ${theme.palette.primary.main}`
+                        : undefined,
+                    transition: "opacity 0.2s, box-shadow 0.1s",
                     ...(tab.panes[0]?.options?.tabStyle
                       ? (JSON.parse(tab.panes[0].options.tabStyle) as React.CSSProperties)
                       : undefined),

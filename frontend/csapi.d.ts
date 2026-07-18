@@ -1778,7 +1778,7 @@ export type Toast = ToastData & {
 export type HostForm = Omit<HostData, "tags"> & {
 	tags: string;
 };
-export type ButtonForm = Omit<ButtonData, "id" | "mtime">;
+export type ButtonForm = Omit<ButtonData, "id" | "mtime"> & Partial<Pick<ButtonData, "id" | "mtime">>;
 export interface CommandHistoryEntry {
 	commandId: string;
 	command?: string;

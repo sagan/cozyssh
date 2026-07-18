@@ -41,6 +41,7 @@ import {
   LINK_COZYSSH_GITHUB,
   LINK_COZYSSH_DOC_SCRIPTS,
   LINK_COZYSSH_DOC_PLUGINS,
+  CLASS_HIDE_DESKTOP,
 } from "./constants";
 import {
   cutString,
@@ -68,6 +69,8 @@ import {
   getIntVar,
   fetchSessions,
   getHost,
+  logout,
+  logoutAll,
 } from "./store";
 import TextFieldWithCopy from "./components/TextFieldWithCopy";
 
@@ -98,6 +101,7 @@ interface DialogItem {
   isHidden?: boolean;
   btn?: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">;
   tag?: string;
+  className?: string;
   flatIndex: number;
   /** True for items that can be removed from the recents list */
   isDeletable?: boolean;
@@ -208,6 +212,22 @@ const helpLinks: Omit<DialogItem, "flatIndex">[] = [
   },
   {
     type: "action",
+    className: CLASS_HIDE_DESKTOP,
+    label: "Logout",
+    value: "",
+    subtitle: "Logout of current device",
+    action: () => logout(true),
+  },
+  {
+    type: "action",
+    className: CLASS_HIDE_DESKTOP,
+    label: "Logout All",
+    value: "",
+    subtitle: "Logout of all devices",
+    action: () => logoutAll(true),
+  },
+  {
+    type: "action",
     action: forceReload,
     value: "",
     label: "Force Reload",
@@ -251,8 +271,8 @@ export default function NewTabDialog({
       type: "link",
       value: LINK_COZYSSH_GITHUB,
       label: "About (GitHub)",
-      subtitle: `CozySSH ${appVersion} (Frontend: ${PACKAGE_JSON_VERSION})`,
-      tag: appVersion,
+      subtitle: `CozySSH ${PACKAGE_JSON_VERSION} (Backend: ${appVersion})`,
+      tag: PACKAGE_JSON_VERSION,
     } satisfies Omit<DialogItem, "flatIndex">;
   }, [appVersion]);
 
@@ -882,12 +902,12 @@ export default function NewTabDialog({
           break;
         case "link":
           window.open(item.value);
-          inputRef.current?.focus();
+          onClose();
           break;
         case "action":
           if (item.action) {
             item.action();
-            inputRef.current?.focus();
+            onClose();
           }
           break;
         default:
@@ -1192,7 +1212,7 @@ export default function NewTabDialog({
                   title={item.tooltip}
                   data-type={item.type}
                   data-value={item.value}
-                  className="new-tab-dialog-item"
+                  className={`new-tab-dialog-item ${item.className ?? ""}`}
                   sx={{
                     py: 0.5,
                     // Show the delete button when this row is selected or hovered

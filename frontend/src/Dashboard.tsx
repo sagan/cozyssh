@@ -18,7 +18,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import ViewSidebarIcon from "@mui/icons-material/ViewSidebar";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 
-import type { FullData, HostData, ButtonData } from "./api";
+import type { FullData, ButtonData } from "./api";
 import {
   DEFAULT_SCROLL_LINES,
   BROWSER_STORAGE_KEY_TOKEN,
@@ -36,6 +36,8 @@ import {
   TOAST_KEY_API_FULLDATA,
   VAR_CS_NO_SANITIZE_HASH,
   TOAST_KEY_COPY,
+  TERMINAL_FUNCTIONS,
+  MISC_FUNCTIONS,
 } from "./constants";
 import {
   type ContextMenu,
@@ -48,6 +50,8 @@ import {
   apiReqHeaders,
   cutString,
   openHostInNewWindow,
+  hostSorter,
+  assertUnreachable,
 } from "./common";
 import {
   type TabData,
@@ -102,6 +106,8 @@ import {
   setUnreadTabIds,
   openAddHostDialog,
   setSettingsOpen,
+  moveTabLeft,
+  moveTabRight,
 } from "./store";
 import { setupPluginAPI, runScript } from "./pluginAPI";
 import { useKeyboardManager } from "./useKeyboardManager";
@@ -466,7 +472,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
         }
 
         case "terminal_function": {
-          if (btn.payload === "ATTACH") {
+          const payload = btn.payload as (typeof TERMINAL_FUNCTIONS)[number]["value"];
+          if (payload === "ATTACH") {
             (async () => {
               const sessions = await fetchSessions(true);
               const session = sessions.find((s) => !s.isHidden);
@@ -480,7 +487,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
           if (!term || !("getXterm" in term)) {
             return;
           }
-          switch (btn.payload) {
+          switch (payload) {
             case "COPY": {
               const xterm = term.getXterm();
               if (!xterm) {
@@ -688,8 +695,27 @@ export default function Dashboard({ initialData }: DashboardProps) {
               break;
             }
 
-            default:
+            case "CLEAR_UNREAD_TABS": {
+              setUnreadTabIds(new Set());
               break;
+            }
+            case "MOVE_TAB_LEFT": {
+              moveTabLeft();
+              break;
+            }
+            case "MOVE_TAB_RIGHT": {
+              moveTabRight();
+              break;
+            }
+            case "CLOSE_OTHER_TABS":
+              closeOtherTabs();
+              break;
+            case "CLOSE_RIGHT_TABS":
+              closeRightTabs();
+              break;
+            default: {
+              return assertUnreachable(payload);
+            }
           }
           if (!noFocus) {
             triggerFocus();
@@ -697,8 +723,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
           break;
         }
 
-        case "misc":
-          switch (btn.payload) {
+        case "misc": {
+          const payload = btn.payload as (typeof MISC_FUNCTIONS)[number]["value"];
+          switch (payload) {
             case "RESET_FONT_SIZE":
               resetFontSize(true, true);
               break;
@@ -725,12 +752,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
               break;
             case "INCREASE_GLOBAL_FONT_SIZE":
               increaseFontSize(false, true);
-              break;
-            case "CLOSE_OTHER_TABS":
-              closeOtherTabs();
-              break;
-            case "CLOSE_RIGHT_TABS":
-              closeRightTabs();
               break;
             case "TABS_SCROLL_LEFT":
               (document.querySelector("#tab-bar .MuiTabScrollButton-root:first-of-type") as HTMLElement)?.click();
@@ -787,25 +808,23 @@ export default function Dashboard({ initialData }: DashboardProps) {
             case "REFRESH":
               refreshData({ sync: 2 });
               break;
-            case "CLEAR_UNREAD_TABS":
-              setUnreadTabIds(new Set());
-              break;
             case "NONE":
               break;
-            default:
-              break;
+            default: {
+              return assertUnreachable(payload);
+            }
           }
           if (!noFocus) {
             triggerFocus();
           }
           break;
-
+        }
         case "run_script":
           await runScript({ button: btn, alternativeMode });
           break;
 
         default:
-          break;
+          return assertUnreachable(btn.type);
       }
     },
     [sendParsedString],
@@ -910,17 +929,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
           const tag = hash.substring(1);
           const filtered = hostsData.filter((h) => h.tags && h.tags.includes(tag));
 
-          const nameSorter = (a: HostData, b: HostData) => a.name.localeCompare(b.name);
-          const hostNameSorter = (a: HostData, b: HostData) => {
-            if (a.hostname === b.hostname) {
-              return a.name.localeCompare(b.name);
-            }
-            return a.hostname.localeCompare(b.hostname);
-          };
-
-          const favs = filtered.filter((h) => h.tags?.includes(TAG_FAV)).sort(nameSorter);
-          const normals = filtered.filter((h) => !h.tags?.includes(TAG_FAV) && !h.isAuto).sort(nameSorter);
-          const autos = filtered.filter((h) => !h.tags?.includes(TAG_FAV) && h.isAuto).sort(hostNameSorter);
+          const favs = filtered.filter((h) => h.tags?.includes(TAG_FAV)).sort(hostSorter);
+          const normals = filtered.filter((h) => !h.tags?.includes(TAG_FAV) && !h.isAuto).sort(hostSorter);
+          const autos = filtered.filter((h) => !h.tags?.includes(TAG_FAV) && h.isAuto).sort(hostSorter);
 
           const targets = [...favs, ...normals, ...autos].slice(0, 4);
           if (targets.length > 0) {
@@ -1177,6 +1188,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
           <TabBar
             terminalRefs={terminalRefs}
             isMobile={isMobile}
+            isTouch={isTouch}
             hasSidebarApplet={hasSidebarApplet}
             scratchpadSyncState={scratchpadSyncState}
             handleContextMenu={handleContextMenu}
@@ -1200,7 +1212,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             onExtraKeysOpenChange={setExtraKeysOpen}
             keyboardHeight={keyboardHeight}
           />
-          <ButtonBar groups={groups} handleButtonClick={handleButtonClick} />
+          <ButtonBar groups={groups} handleButtonClick={handleButtonClick} isMobile={isMobile} isTouch={isTouch} />
           <Box
             id="mobile-keyboard-spacer"
             sx={{

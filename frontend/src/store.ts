@@ -50,6 +50,7 @@ import {
   getHostOrder,
   getTemplateVariables,
   hostTitle,
+  hostSorter,
   isMuiModalOpen,
   nextTerminalFontSize,
   openBackgroundTerminal,
@@ -57,6 +58,7 @@ import {
   prevTerminalFontSize,
   removeNameNumSuffix,
   removePassFromHost,
+  assertUnreachable,
 } from "./common";
 import type { TerminalHandle } from "./Terminal";
 import type { ScratchpadHandle } from "./Scratchpad";
@@ -233,7 +235,7 @@ channel.onmessage = (event) => {
       location.reload();
       break;
     default:
-      break;
+      return assertUnreachable(msg.type);
   }
 };
 
@@ -1195,7 +1197,13 @@ export async function openHost(
   return tabId;
 }
 
-export async function logout() {
+export async function logout(needConfirm: boolean = false) {
+  if (
+    needConfirm &&
+    !(await dialogs.confirm("Log out of current device?", "All data stored in this browser will be cleared."))
+  ) {
+    return;
+  }
   const syncState = localStorage.getItem(BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE);
   if (syncState && syncState !== "synced") {
     if (
@@ -1215,7 +1223,17 @@ export async function logout() {
   safeLogout();
 }
 
-export async function logoutAll() {
+export async function logoutAll(needConfirm = false) {
+  if (
+    needConfirm &&
+    !(await dialogs.confirm(
+      "Log out of all browser sessions?",
+      "This will invalidate all active sessions and require you to sign in again on all devices." +
+        " All data stored in this browser will be cleared.",
+    ))
+  ) {
+    return;
+  }
   const syncState = localStorage.getItem(BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE);
   if (syncState && syncState !== "synced") {
     if (
@@ -1748,6 +1766,53 @@ export async function moveButton(id: string, direction: number) {
   setButtons(data || []);
 }
 
+export async function reorderButtons(draggedId: string, targetId: string, position: "before" | "after") {
+  const { buttons, activeGroup } = getStore();
+  const groupButtons = buttons.filter((b) => (b.group || DEFAULT_BUTTON_GROUP) === activeGroup);
+  const otherButtons = buttons.filter((b) => (b.group || DEFAULT_BUTTON_GROUP) !== activeGroup);
+
+  const draggedIdx = groupButtons.findIndex((b) => b.id === draggedId);
+  const targetIdx = groupButtons.findIndex((b) => b.id === targetId);
+  if (draggedIdx === -1 || targetIdx === -1) return;
+
+  const newGroupButtons = [...groupButtons];
+  const [removed] = newGroupButtons.splice(draggedIdx, 1);
+  const newTargetIdx = newGroupButtons.findIndex((b) => b.id === targetId);
+  const insertIdx = position === "before" ? newTargetIdx : newTargetIdx + 1;
+  newGroupButtons.splice(insertIdx, 0, removed);
+
+  const now = Date.now();
+  const updatedGroupButtons = newGroupButtons.map((b, i) => ({
+    ...b,
+    order: (i + 1) * 10,
+    mtime: now,
+  }));
+
+  const allButtons = [...otherButtons, ...updatedGroupButtons];
+  // Sort them as backend would
+  allButtons.sort((a, b) => {
+    if (a.order !== b.order) return a.order - b.order;
+    return a.name.localeCompare(b.name);
+  });
+
+  // Optimistic update
+  setButtons(allButtons);
+
+  // Persist to backend
+  try {
+    const res = await fetch("/api/buttons?force=1", {
+      method: METHOD_POST,
+      headers: apiReqHeaders(),
+      body: JSON.stringify(updatedGroupButtons),
+    });
+    if (!res.ok) {
+      console.error("Failed to save reordered buttons:", await res.text());
+    }
+  } catch (e) {
+    console.error("Failed to save reordered buttons:", e);
+  }
+}
+
 /**
  * Return effective value for a variable:
  * 1. Lookup in localVars (with "local_" prefix)
@@ -1868,6 +1933,76 @@ export async function moveServer(serverName: string, destGroupPath: string | nul
   });
 
   fetchHosts();
+}
+
+export async function reorderFavourites(draggedName: string, targetName: string, position: "before" | "after") {
+  const hosts = getStore().hosts;
+
+  // Find all favourites
+  const favs = hosts.filter((h) => h.isFavourite);
+  // Sort them using hostSorter
+  favs.sort(hostSorter);
+
+  const draggedIdx = favs.findIndex((h) => h.name === draggedName);
+  const targetIdx = favs.findIndex((h) => h.name === targetName);
+  if (draggedIdx === -1 || targetIdx === -1) return;
+
+  const newFavs = [...favs];
+  const [removed] = newFavs.splice(draggedIdx, 1);
+  const newTargetIdx = newFavs.findIndex((h) => h.name === targetName);
+  const insertIdx = position === "before" ? newTargetIdx : newTargetIdx + 1;
+  newFavs.splice(insertIdx, 0, removed);
+
+  const updatedHosts: HostData[] = [];
+  for (let i = 0; i < newFavs.length; i++) {
+    const h = newFavs[i];
+    const newOrder = (i + 1) * 10;
+
+    // We clean existing o- tags
+    const newTags = h.tags ? h.tags.filter((t) => !t.startsWith(TAG_ORDER_PREFIX)) : [];
+    newTags.push(`o-${newOrder}`);
+
+    // Compare with old order to only update if changed or if it is the dragged host
+    const oldOrder = getHostOrder(h);
+    if (oldOrder !== newOrder || h.name === draggedName) {
+      const updatedHost = {
+        ...h,
+        tags: newTags,
+      };
+      updatedHosts.push(updatedHost);
+    }
+  }
+
+  if (updatedHosts.length === 0) return;
+
+  // Optimistic update to keep the UI snappy
+  const updatedHostsMap = new Map(updatedHosts.map((h) => [h.name, h]));
+  const optimisticHosts = hosts.map((h) => {
+    if (updatedHostsMap.has(h.name)) {
+      const updated = updatedHostsMap.get(h.name)!;
+      return updated;
+    }
+    return h;
+  });
+  setHosts(optimisticHosts);
+
+  // Send request to backend
+  try {
+    const res = await fetch("/api/hosts", {
+      method: METHOD_PUT,
+      headers: apiReqHeaders(),
+      body: JSON.stringify(updatedHosts),
+    });
+    if (!res.ok) {
+      console.error("Failed to reorder favourites:", await res.text());
+      fetchHosts();
+    } else {
+      fetchHosts();
+    }
+  } catch (err) {
+    console.error("Failed to reorder favourites:", err);
+    fetchHosts();
+  }
 }
 
 export async function moveGroup(srcPath: string, beforeSiblingPath: string) {
@@ -2164,4 +2299,30 @@ export async function deleteHost(name: string) {
   }
   await fetch(`/api/hosts/${name}`, { method: METHOD_DELETE, headers: apiReqHeaders() });
   fetchHosts();
+}
+
+export function moveTabLeft(tabId?: string) {
+  const { tabs, activeTabId } = getStore();
+  tabId = tabId || activeTabId;
+  const i = tabs.findIndex((t) => t.id === tabId);
+  if (i <= 0) {
+    return;
+  }
+  const newTabs = tabs.slice();
+  newTabs[i - 1] = tabs[i];
+  newTabs[i] = tabs[i - 1];
+  setTabs(newTabs);
+}
+
+export function moveTabRight(tabId?: string) {
+  const { tabs, activeTabId } = getStore();
+  tabId = tabId || activeTabId;
+  const i = tabs.findIndex((t) => t.id === tabId);
+  if (i < 0 || i === tabs.length - 1) {
+    return;
+  }
+  const newTabs = tabs.slice();
+  newTabs[i + 1] = tabs[i];
+  newTabs[i] = tabs[i + 1];
+  setTabs(newTabs);
 }
