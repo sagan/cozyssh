@@ -19,7 +19,6 @@ import {
   WS_PROTOCOL_DUMMY,
   WS_PROTOCOL_IDENTITY_PREFIX,
   WS_PROTOCOL_QUERY_PREFIX,
-  terminalClientSideParams,
 } from "./constants";
 import type React from "react";
 
@@ -195,6 +194,18 @@ export const IS_APPLE =
   // @ts-ignore
   !!navigator.userAgentData?.platform?.toLowerCase().includes("mac") ||
   /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+
+/**
+ * terminal client side params are only used in frontend and are not sent to the server.
+ * Includes "title" and some style parameters. e.g. tabStyle, terminalStyle.
+ */
+export const terminalClientSideParams = new Set<string>([
+  "title",
+  "tabStyle",
+  "terminalStyle",
+  "tabClass",
+  "terminalClass",
+]);
 
 export const CS_EVENT_TERMINAL_NEW = "cs:terminal-new";
 export const CS_EVENT_TERMINAL_CONNECTED = "cs:terminal-connected";
@@ -1777,4 +1788,26 @@ export async function openBackgroundTerminal(host: string, options?: Record<stri
  */
 export function assertUnreachable(x: never): never {
   throw new Error(`Unhandled case: ${JSON.stringify(x)}`);
+}
+
+/**
+ * Get the source of an event
+ * @param e The event. Currently it only supports PointerEvent (typically from "contextmenu" event)
+ * @returns The event source, or empty string if unknown
+ */
+export function getEventSource(e: PointerEvent): "mouse" | "pen" | "touch" | "keyboard" | "" {
+  let source: "mouse" | "pen" | "touch" | "keyboard" | "" = "";
+  // Method 1: Check the modern pointerType property
+  if (e.pointerType) {
+    source = e.pointerType as "mouse" | "pen" | "touch";
+  }
+  // Method 2: Fallback for keyboard/virtual triggers
+  else if (e.clientX === 0 && e.clientY === 0 && e.button === 0) {
+    source = "keyboard";
+  }
+  // Method 3: Standard legacy pointer mapping
+  else if (e.button === 2) {
+    source = "mouse";
+  }
+  return source;
 }

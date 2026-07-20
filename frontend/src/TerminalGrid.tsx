@@ -32,7 +32,6 @@ export interface TerminalGridProps {
   onTerminalBlur: () => void;
   scratchpadSyncState: ScratchpadSyncState;
   setScratchpadSyncState: (v: ScratchpadSyncState) => void;
-  isTouch: boolean;
   isMobile: boolean;
   hasSidebarApplet: boolean;
   handleTouchStart: (e: React.TouchEvent) => void;
@@ -50,7 +49,6 @@ export default function TerminalGrid({
   setScratchpadSyncState,
   onTerminalFocus,
   onTerminalBlur,
-  isTouch,
   isMobile,
   hasSidebarApplet,
   handleTouchStart,
@@ -198,7 +196,9 @@ export default function TerminalGrid({
               {(() => {
                 const renderPaneInner = (pane: PaneData) => (
                   <Box
-                    className={`terminal-pane-wrap ${pane.id === activePaneId ? "active" : ""}`}
+                    className={`terminal-pane-wrap ${pane.id === activePaneId ? "active" : ""} ${
+                      pane.options?.terminalClass || ""
+                    }`}
                     data-id={pane.id}
                     data-session-id={pane.sessionId || ""}
                     data-name={pane.host}
@@ -303,7 +303,6 @@ export default function TerminalGrid({
                             setActivePaneId(newPaneId);
                           }
                         }}
-                        isTouch={isTouch}
                       />
                     )}
                   </Box>

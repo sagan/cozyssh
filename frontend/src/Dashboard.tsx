@@ -1200,7 +1200,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
             onTerminalFocus={onTerminalFocus}
             scratchpadSyncState={scratchpadSyncState}
             setScratchpadSyncState={setScratchpadSyncState}
-            isTouch={isTouch}
             isMobile={isMobile}
             hasSidebarApplet={hasSidebarApplet}
             handleTouchStart={handleTouchStart}

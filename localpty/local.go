@@ -91,7 +91,7 @@ func GetShells() []*LocalShell {
 	return shells.Load().([]*LocalShell)
 }
 
-func Start(initialCmd string, execFlag bool) (*LocalSession, error) {
+func Start(initialCmd string, execFlag bool, env []string) (*LocalSession, error) {
 	var program string
 	var args []string
 
@@ -126,6 +126,7 @@ func Start(initialCmd string, execFlag bool) (*LocalSession, error) {
 
 	// Set standard xterm env
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+	cmd.Env = append(cmd.Env, env...)
 
 	// Force explicitly working out of home dir
 	if home, err := os.UserHomeDir(); err == nil {

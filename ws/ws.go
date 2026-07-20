@@ -183,7 +183,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	s := session.GlobalManager.Get(sessionID)
 	if s == nil {
 		if host == "" || host == constants.LOCAL_NAME {
-			ls, err := localpty.Start(sessionRemoteCommand, execFlag)
+			ls, err := localpty.Start(sessionRemoteCommand, execFlag, env)
 			if err != nil {
 				return
 			}

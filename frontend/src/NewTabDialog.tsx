@@ -214,7 +214,7 @@ const helpLinks: Omit<DialogItem, "flatIndex">[] = [
     type: "action",
     className: CLASS_HIDE_DESKTOP,
     label: "Logout",
-    value: "",
+    value: "logout",
     subtitle: "Logout of current device",
     action: () => logout(true),
   },
@@ -222,14 +222,14 @@ const helpLinks: Omit<DialogItem, "flatIndex">[] = [
     type: "action",
     className: CLASS_HIDE_DESKTOP,
     label: "Logout All",
-    value: "",
+    value: "logout_all",
     subtitle: "Logout of all devices",
     action: () => logoutAll(true),
   },
   {
     type: "action",
     action: forceReload,
-    value: "",
+    value: "force_reload",
     label: "Force Reload",
     subtitle: "Unregister the Service Worker, clear all caches and reload",
     tag: "ctrl+alt+shift+r",
@@ -1211,6 +1211,7 @@ export default function NewTabDialog({
                   }
                   title={item.tooltip}
                   data-type={item.type}
+                  data-label={item.label}
                   data-value={item.value}
                   className={`new-tab-dialog-item ${item.className ?? ""}`}
                   sx={{

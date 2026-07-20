@@ -16,10 +16,11 @@ import {
   VAR_CS_NOMODTEXTAREA,
   VAR_CS_NOWEBGL,
   VAR_CS_NOWEBLINKS,
+  VAR_CS_NO_PASTE_ON_CONTEXTMENU,
+  VAR_CS_NO_SELECT_TO_COPY,
   WS_PROTOCOL_DUMMY,
   WS_PROTOCOL_IDENTITY_PREFIX,
   WS_PROTOCOL_QUERY_PREFIX,
-  terminalClientSideParams,
 } from "./constants";
 import {
   type CommandHistoryEntry,
@@ -45,6 +46,7 @@ import {
   systemShortcuts,
   disableShortcuts,
   blackholeShortcuts,
+  terminalClientSideParams,
 } from "./common";
 import { type PaneData, notify, getIntVar } from "./store";
 
@@ -98,7 +100,6 @@ interface TerminalProps {
   onShellIntegrationChange: (info: ShellIntegration) => void;
   onDataReceived: () => void;
   cloneFrom?: string;
-  isTouch: boolean;
 }
 
 const RECENT_COMMANDS_NUM = 10;
@@ -121,7 +122,6 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       onShellIntegrationChange,
       onDataReceived,
       cloneFrom,
-      isTouch,
       onTerminalBlur,
       onTerminalFocus,
     },
@@ -1172,7 +1172,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       // mouseup fires synchronously inside the user gesture, so the clipboard
       // write is always performed in a trusted context.
       const handleCopyOnSelect = () => {
-        if (isTouch) {
+        if (getIntVar(VAR_CS_NO_SELECT_TO_COPY) === 1) {
           return;
         }
         const selection = term.getSelection();
@@ -1183,8 +1183,8 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
         }
       };
 
-      const handleContextMenu = (e: MouseEvent) => {
-        if (isTouch) {
+      const handleContextMenu = (e: PointerEvent) => {
+        if (getIntVar(VAR_CS_NO_PASTE_ON_CONTEXTMENU) === 1) {
           return;
         }
         e.preventDefault();

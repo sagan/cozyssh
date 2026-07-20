@@ -44,6 +44,8 @@ export const VAR_CS_NOIMAGE = "cs_noimage";
 export const VAR_CS_NOWEBLINKS = "cs_noweblinks";
 export const VAR_CS_NOWEBGL = "cs_nowebgl";
 export const VAR_CS_NO_SANITIZE_HASH = "cs_no_sanitize_hash";
+export const VAR_CS_NO_SELECT_TO_COPY = "cs_no_select_to_copy";
+export const VAR_CS_NO_PASTE_ON_CONTEXTMENU = "cs_no_paste_on_contextmenu";
 /**
  * Flag to disable terminal ctrl+l (let browser handle it) and remap ctrl+shift+l & ctrl+alt+l to ctrl+l in terminal.
  */
@@ -218,9 +220,3 @@ export const CLASS_HIDE_DESKTOP = "hide-desktop";
  * Hide element from web
  */
 export const CLASS_HIDE_WEB = "hide-web";
-
-/**
- * terminal client side params are only used in frontend and are not sent to the server.
- * Includes "title" and some style parameters. e.g. tabStyle, terminalStyle.
- */
-export const terminalClientSideParams = new Set<string>(["title", "tabStyle", "terminalStyle"]);

@@ -33,6 +33,7 @@ import {
   setNewTabDialogFilter,
   closeTab,
   setTabs,
+  activatePane,
 } from "./store";
 import { APP_NAME, ID_TERMINAL_SEARCH_INPUT, LOCAL_NAME } from "./constants";
 import TextFieldWithCopy from "./components/TextFieldWithCopy";
@@ -158,8 +159,13 @@ export default function TabBar({
             >
               {tabs.map((tab) => (
                 <Tab
-                  className="tab"
+                  className={`tab ${tab.id === activeTabId ? "active" : ""} ${
+                    unreadTabIds.has(tab.id) ? "unread" : ""
+                  } ${tab.panes[0]?.options?.tabClass || ""} ${tab.id === draggedTabId ? "dragging" : ""}`}
                   data-id={tab.id}
+                  data-type={tab.type}
+                  data-is-pinned={tab.isPinned ? "1" : "0"}
+                  data-is-locked={tab.isLocked ? "1" : "0"}
                   key={tab.id}
                   value={tab.id}
                   title={tab.type === "terminal" ? `Hosts: ${tab.panes.map((p) => p.host).join(", ")}` : "Scratchpad"}
@@ -173,6 +179,7 @@ export default function TabBar({
                   }}
                   draggable={!isMobile && !isTouch}
                   onDragStart={(e) => {
+                    activatePane(tab.activePaneId, tab.id);
                     e.dataTransfer.effectAllowed = "move";
                     e.dataTransfer.setData("text/plain", tab.id);
                     setDraggedTabId(tab.id);
@@ -221,6 +228,14 @@ export default function TabBar({
                             `inset ${dragOverTab.position === "before" ? "3px" : "-3px"} 0 0 ${theme.palette.primary.main}`
                         : undefined,
                     transition: "opacity 0.2s, box-shadow 0.1s",
+                    // ...(tab.id !== activeTabId
+                    //   ? {
+                    //       "&:hover": {
+                    //         bgcolor: "primary.light",
+                    //         color: "white",
+                    //       },
+                    //     }
+                    //   : undefined),
                     ...(tab.panes[0]?.options?.tabStyle
                       ? (JSON.parse(tab.panes[0].options.tabStyle) as React.CSSProperties)
                       : undefined),

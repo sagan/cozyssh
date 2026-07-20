@@ -480,7 +480,7 @@ export default function DialogManager({
             }
             return (
               <>
-                {tab.type !== "scratchpad" && (
+                {tab.type === "terminal" && (
                   <>
                     {Array.from(
                       new Set(
@@ -499,7 +499,7 @@ export default function DialogManager({
                     ))}
                   </>
                 )}
-                {tab.type !== "scratchpad" && tab.panes.length === 1 && (
+                {tab.type === "terminal" && tab.panes.length === 1 && (
                   <>
                     {tab.isPinned ? (
                       <MenuItem
@@ -556,20 +556,37 @@ export default function DialogManager({
                     </MenuItem>
                   </>
                 )}
-                <MenuItem
-                  onClick={() => {
-                    handleCloseMenu();
-                    setSearchOpen(true);
-                    if (getStore().activeTabId === tab.id) {
-                      triggerFocusSearchInput();
-                    } else {
-                      activatePane(tab.activePaneId, tab.id);
-                      setTimeout(() => triggerFocusSearchInput(), 200);
-                    }
-                  }}
-                >
-                  Find
-                </MenuItem>
+                {tab.type === "terminal" && (
+                  <>
+                    <MenuItem
+                      onClick={() => {
+                        handleCloseMenu();
+                        setSearchOpen(true);
+                        if (getStore().activeTabId === tab.id) {
+                          triggerFocusSearchInput();
+                        } else {
+                          activatePane(tab.activePaneId, tab.id);
+                          setTimeout(() => triggerFocusSearchInput(), 200);
+                        }
+                      }}
+                    >
+                      Find
+                    </MenuItem>
+                    <MenuItem
+                      onClick={() => {
+                        handleCloseMenu();
+                        if (getStore().activeTabId == tab.id) {
+                          openInputDialog();
+                        } else {
+                          activatePane(tab.activePaneId, tab.id);
+                          setTimeout(() => openInputDialog(), 200);
+                        }
+                      }}
+                    >
+                      Send Input
+                    </MenuItem>
+                  </>
+                )}
                 {tab.panes.length > 1 && (
                   <MenuItem
                     onClick={() => {
@@ -717,7 +734,7 @@ export default function DialogManager({
             setEditButtonDialogOpen(true);
           }}
         >
-          Edit {lastMenuBtn ? `"${lastMenuBtn.name}"` : "Button"}
+          Edit {lastMenuBtn ? `${lastMenuBtn.name} (${lastMenuBtn.type})` : "Button"}
         </MenuItem>
         <MenuItem
           onClick={() => {
@@ -849,7 +866,7 @@ export default function DialogManager({
           onClick={() => {
             if (btnMenuAnchor) {
               setBtnMenuAnchor(null);
-              deleteButton(btnMenuAnchor.btn.id, btnMenuAnchor.btn.name);
+              deleteButton(btnMenuAnchor.btn);
             }
           }}
           sx={{ color: "error.main" }}
@@ -897,6 +914,7 @@ export default function DialogManager({
           onClose={handleTitleMenuClose}
         >
           <MenuItem
+            disabled={!buttonFormData.name}
             onClick={async () => {
               handleTitleMenuClose();
               const btn = { ...buttonFormData, id: editButton?.id || "" } satisfies ButtonData;
@@ -950,7 +968,7 @@ export default function DialogManager({
             onClick={() => {
               handleTitleMenuClose();
               setEditButtonDialogOpen(false);
-              deleteButton(editButton!.id, editButton!.name);
+              deleteButton(editButton!);
             }}
           >
             Delete Button
@@ -975,7 +993,7 @@ export default function DialogManager({
             <TextFieldWithCopy
               sx={{ flex: 2 }}
               label="Button Name"
-              autoFocus={!buttonFormData.name}
+              autoFocus={!editButton}
               placeholder="Ctrl + Enter to submit"
               size="small"
               required
@@ -1024,14 +1042,14 @@ export default function DialogManager({
                 </option>
               ))}
             </TextField>
-            <TextField
+            <TextFieldWithCopy
               label="Order"
               type="number"
               size="small"
               value={buttonFormData.order}
               onChange={(e) => setButtonFormData({ ...buttonFormData, order: parseInt(e.target.value) || 0 })}
               onKeyDown={handleEditButtonFormKeyDown}
-              sx={{ width: 100 }}
+              sx={{ width: 150 }}
             />
           </Box>
 
@@ -1282,7 +1300,7 @@ export default function DialogManager({
                 <br />- <b>localForward</b> & <b>remoteForward</b> & <b>dynamicForward</b> : OpenSSH syntax SSH tunnel
                 rules. Use&nbsp;
                 <code>%0A</code> (\n) to seperate multiple rules.
-                <br />- <b>env</b>: Environment variables to send to SSH server. Format: <code>name=value</code>.&nbsp;
+                <br />- <b>env</b>: Environment variables to send to SSH server. Format: <code>NAME=value</code>.&nbsp;
                 Use&nbsp;
                 <code>%0A</code> (\n) to seperate multiple variables.
                 <br />- <b>state</b>: Set the initial state of the opened terminal session: 0=normal, 1=pinned,
@@ -1290,6 +1308,8 @@ export default function DialogManager({
                 <br />- <b>tabStyle</b> : JSON Object. Set the terminal tab bar tab CSS style. E.g.&nbsp;
                 <code>{`{"background":"red"}`}</code>.
                 <br />- <b>terminalStyle</b> : JSON Object. Set the terminal area CSS Style.
+                <br />- <b>tabClass</b> : The class name to add to the terminal tab.
+                <br />- <b>terminalClass</b> : The class name to add to the terminal wrap element.
                 <br /> It's possible to set multiple (up to 4) comma-separated servers to open them in split screen.
                 <br /> E.b. <b>local?title=Local</b> . More examples:
                 <br />- <b>local?id=local-abc&title=Local&remoteCommand=tmux attach || tmux new</b>

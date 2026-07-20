@@ -3,7 +3,14 @@ import { Box, TextField, Tabs, Tab, IconButton } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 
 import type { ButtonData } from "./api";
-import { openAddButtonDialog, reorderButtons, setActiveGroup, setBtnMenuAnchor, setLastMenuBtn, useStore } from "./store";
+import {
+  openAddButtonDialog,
+  reorderButtons,
+  setActiveGroup,
+  setBtnMenuAnchor,
+  setLastMenuBtn,
+  useStore,
+} from "./store";
 import { useShallow } from "zustand/react/shallow";
 import { DEFAULT_BUTTON_GROUP } from "./constants";
 import { isModifier } from "./common";
@@ -143,7 +150,7 @@ export default function ButtonBar({ groups, handleButtonClick, isMobile, isTouch
               id={`button-${btn.id}`}
               key={btn.id}
               label={btn.name}
-              className="button"
+              className={`button ${btn.id === draggedButtonId ? "dragging" : ""}`}
               data-name={btn.name}
               data-id={btn.id}
               title={`${btn.type}${
@@ -212,9 +219,11 @@ export default function ButtonBar({ groups, handleButtonClick, isMobile, isTouch
                 margin: "6px 4px",
                 cursor: "pointer",
                 opacity: draggedButtonId === btn.id ? 0.4 : 1,
-                boxShadow: dragOverButton?.id === btn.id
-                  ? (theme) => `inset ${dragOverButton.position === "before" ? "3px" : "-3px"} 0 0 ${theme.palette.primary.main}`
-                  : undefined,
+                boxShadow:
+                  dragOverButton?.id === btn.id
+                    ? (theme) =>
+                        `inset ${dragOverButton.position === "before" ? "3px" : "-3px"} 0 0 ${theme.palette.primary.main}`
+                    : undefined,
                 transition: "opacity 0.2s, box-shadow 0.1s",
                 "&:hover": {
                   bgcolor: style.hoverBgColor,

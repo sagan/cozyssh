@@ -3652,7 +3652,7 @@ export default function Sidebar({
                   <TextField
                     {...params}
                     label="Add Tag"
-                    placeholder="Select existing tag, or type new tag and press Enter"
+                    placeholder="Select tag or type new one and press Enter"
                     size="small"
                   />
                 )}
@@ -3968,12 +3968,12 @@ function HostListItem({
   return (
     <ListItem
       {...(id ? { id } : {})}
+      className={`sidebar-host ${draggedItem?.type === "fav" && host.name === draggedItem.name ? "dragging" : ""}`}
       ref={itemRef}
       disablePadding
       onContextMenu={(e) => onContextMenu(e, host, section)}
       data-name={host.name}
       data-tags={host.tags?.join(" ") ?? ""}
-      className="sidebar-host"
       {...dragProps}
       sx={{
         bgcolor: isSelected ? "action.hover" : isFavourite ? "action.selected" : "transparent",
@@ -4122,6 +4122,7 @@ function TreeGroupItem({
     <ListItem
       ref={itemRef}
       id={`sidebar-tree-group-${node.path}`}
+      className={`sidebar-group ${draggedItem?.type === "group" && node.path === draggedItem.path ? "dragging" : ""}`}
       disablePadding
       draggable={!isMobile && !isTouch}
       onDragStart={(e) => {
@@ -4258,6 +4259,7 @@ function TreeServerItem({
     <ListItem
       ref={itemRef}
       id={`sidebar-tree-server-${host.name}`}
+      className={`sidebar-host ${draggedItem?.type === "server" && host.name === draggedItem.name ? "dragging" : ""}`}
       disablePadding
       draggable={!isMobile && !isTouch}
       onDragStart={(e) => {
@@ -4291,7 +4293,6 @@ function TreeServerItem({
       }}
       onContextMenu={(e) => handleContextMenu(e, host, "tree")}
       data-name={host.name}
-      className="sidebar-host"
       sx={{
         pl: level * 2.5 + 2,
         bgcolor: isSelected ? "action.hover" : isFavourite ? "action.selected" : "transparent",

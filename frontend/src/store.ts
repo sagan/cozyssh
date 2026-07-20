@@ -1739,17 +1739,17 @@ export async function saveButton() {
   setActiveGroup(getStore().buttonFormData.group || DEFAULT_BUTTON_GROUP);
 }
 
-export async function deleteButton(id: string, name: string) {
-  if (!(await dialogs.confirm(`Delete button "${name}" (${id})?`))) {
+export async function deleteButton(btn: ButtonData) {
+  if (!(await dialogs.confirm(`Delete ${btn.type} button "${btn.name}" (${btn.id})?`))) {
     return;
   }
-  if (moduleCache[id]) {
-    if (moduleCache[id].default?.unload) {
-      moduleCache[id].default.unload();
+  if (moduleCache[btn.id]) {
+    if (moduleCache[btn.id].default?.unload) {
+      moduleCache[btn.id].default!.unload!();
     }
-    delete moduleCache[id];
+    delete moduleCache[btn.id];
   }
-  await fetch(`/api/buttons/${id}`, { method: METHOD_DELETE, headers: apiReqHeaders() });
+  await fetch(`/api/buttons/${btn.id}`, { method: METHOD_DELETE, headers: apiReqHeaders() });
   const res = await fetch("/api/buttons", { headers: apiReqHeaders() });
   const data: ButtonData[] = await res.json();
   setButtons(data || []);

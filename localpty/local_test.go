@@ -7,7 +7,7 @@ import (
 
 func TestLocalSession_CloseKillsProcess(t *testing.T) {
 	Load(nil)
-	ls, err := Start("", false)
+	ls, err := Start("", false, nil)
 	if err != nil {
 		t.Fatalf("failed to start local session: %v", err)
 	}
