@@ -32,6 +32,7 @@ import (
 	"cozyssh/constants"
 	"cozyssh/datasync"
 	"cozyssh/fsapi"
+	"cozyssh/keyring"
 	"cozyssh/localpty"
 	"cozyssh/models"
 	"cozyssh/passstore"
@@ -196,6 +197,17 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 	log.Printf("CozySSH %s; Config file: %s", Version, cfg.ConfigPath)
 
 	passstore.Init(cfg.ConfigDir, cfg.AppPasswordHash)
+	if cfg.UseKeyring {
+		if appPassword, err := keyring.GetAppPassword(cfg.ConfigDir); err == nil {
+			if passstore.SetEncryptionKey(appPassword) {
+				log.Printf("Passstore unlocked using system keyring stored app password")
+			} else {
+				log.Printf("Can't unlock passstore using system keyring stored password")
+			}
+		} else {
+			log.Printf("Can't get app password from system keyring: %v", err)
+		}
+	}
 	auth.Init(cfg)
 	ws.SetConfig(cfg)
 	sshmanager.SetConfig(cfg)
@@ -234,6 +246,7 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				InsecureAllowed:          flags.AllowInsecure,
 				IsSecure:                 isSecureRequest(r),
 				SavePassword:             cfg.SavePassword,
+				UseKeyring:               cfg.UseKeyring,
 				ConfigDir:                cfg.ConfigDir,
 				SSHDir:                   cfg.AbsSSHDir,
 				DefaultIdentityPath:      identityPath,
@@ -272,7 +285,9 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 				return
 			}
-			passstore.ClearEncryptionKey()
+			if !cfg.UseKeyring || !cfg.IsKeyringPasswordOk() {
+				passstore.ClearEncryptionKey()
+			}
 
 			session.GlobalManager.DisconnectAllWebsockets()
 			scratchpad.DisconnectAll()
@@ -515,7 +530,11 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				return
 			}
 			passstore.SetAppPasswordHash(cfg.AppPasswordHash)
-
+			if cfg.UseKeyring {
+				err := keyring.SetAppPassword(cfg.ConfigDir, req.NewPassword)
+				ok := passstore.SetEncryptionKey(req.NewPassword)
+				log.Printf("Update keyring app password: err=%v, ok=%t", err, ok)
+			}
 			session.GlobalManager.DisconnectAllWebsockets()
 			scratchpad.DisconnectAll()
 
@@ -548,7 +567,9 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 				return
 			}
-			passstore.ClearEncryptionKey()
+			if !cfg.UseKeyring || !cfg.IsKeyringPasswordOk() {
+				passstore.ClearEncryptionKey()
+			}
 			w.WriteHeader(http.StatusNoContent)
 		}))))
 
@@ -585,8 +606,12 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				http.Error(w, "Bad Request", http.StatusBadRequest)
 				return
 			}
-			if !passstore.HasEncryptionKey() {
-				http.Error(w, "Password store is locked", http.StatusForbidden)
+			if !cfg.UseKeyring && !cfg.VerifyPassword(req.AppPassword) {
+				http.Error(w, "invalid app password", http.StatusBadRequest)
+				return
+			}
+			if !passstore.HasEncryptionKey() && !passstore.SetEncryptionKey(req.AppPassword) {
+				http.Error(w, "Can't unlok passstore", http.StatusInternalServerError)
 				return
 			}
 			pwd, err := passstore.Get(req.Key)
@@ -612,13 +637,20 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				http.Error(w, "Bad Request", http.StatusBadRequest)
 				return
 			}
-			if !passstore.HasEncryptionKey() {
-				http.Error(w, "Password store is locked", http.StatusForbidden)
+			if !cfg.UseKeyring && !cfg.VerifyPassword(req.AppPassword) {
+				http.Error(w, "invalid app password", http.StatusBadRequest)
+				return
+			}
+			if !passstore.HasEncryptionKey() && !passstore.SetEncryptionKey(req.AppPassword) {
+				http.Error(w, "Can't unlok passstore", http.StatusInternalServerError)
 				return
 			}
 			if err := passstore.Set(req.Key, req.Password); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
+			}
+			if cfg.UseKeyring {
+				keyring.SetAppPassword(cfg.ConfigDir, req.Password)
 			}
 			w.WriteHeader(http.StatusNoContent)
 		}))))
@@ -639,6 +671,25 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				return
 			}
 			w.WriteHeader(http.StatusNoContent)
+		}))))
+
+	mux.Handle("/api/settings/reveal_app_password", securityMiddleware(auth.Middleware(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			if !cfg.UseKeyring {
+				http.Error(w, "useKeyring is not enabled", http.StatusInternalServerError)
+				return
+			}
+			password, err := keyring.GetAppPassword(cfg.ConfigDir)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(&models.RevealAppPasswordResponse{AppPassword: password})
 		}))))
 
 	mux.Handle("/api/settings/config", securityMiddleware(auth.Middleware(http.HandlerFunc(

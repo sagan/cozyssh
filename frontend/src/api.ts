@@ -40,6 +40,7 @@ export interface Sysinfo {
     savePassword: "ask" | "always" | "never";
     configDir: string;
     sshDir: string;
+    useKeyring?: boolean;
     defaultIdentityPath: string;
     defaultIdentityPublicKey: string;
 }
@@ -215,6 +216,7 @@ export interface FullData {
 }
 export interface LoginRequest {
     password: string;
+    token?: string;
 }
 export interface LoginResponse {
     fulldata?: FullData;
@@ -304,10 +306,11 @@ export interface PasswordsResponse {
     keys: string[];
 }
 export interface PasswordsUnlockRequest {
-    app_password: string;
+    appPassword: string;
 }
 export interface PasswordsRevealRequest {
     key: string;
+    appPassword: string;
 }
 export interface PasswordsRevealResponse {
     password: string;
@@ -315,6 +318,7 @@ export interface PasswordsRevealResponse {
 export interface PasswordsChangeRequest {
     key: string;
     password: string;
+    appPassword: string;
 }
 export interface PasswordsDeleteRequest {
     key: string;
@@ -322,6 +326,15 @@ export interface PasswordsDeleteRequest {
 export interface ConfigRequest {
     sitename?: string;
     savePassword?: "ask" | "always" | "never";
+    useKeyring?: boolean;
+    appPassword?: string;
+}
+export interface RevealAppPasswordResponse {
+    appPassword: string;
+}
+export interface AppAuthResponse {
+    token: string;
+    useKeyring: boolean;
 }
 export interface ActiveTunnel {
     type: "local" | "remote" | "dynamic";

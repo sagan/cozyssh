@@ -17,20 +17,12 @@ import (
 
 	"cozyssh/common"
 	"cozyssh/constants"
+	"cozyssh/keyring"
 	"cozyssh/models"
+	"cozyssh/passstore"
 	"cozyssh/yescrypt"
 	"crypto/rand"
 )
-
-// writePasswordToFile controls whether the initial generated password is
-// written to <configDir>/initial_password.txt instead of stderr.
-// Desktop (windowsgui) builds have no terminal, so they set this to true.
-var writePasswordToFile bool
-
-// SetWritePasswordToFile must be called before LoadConfig. When v is true,
-// the first-run generated app password is saved to initial_password.txt in
-// the config directory rather than being printed to stderr.
-func SetWritePasswordToFile(v bool) { writePasswordToFile = v }
 
 var (
 	OnButtonDelete func(id string, timestamp int64)
@@ -44,8 +36,8 @@ type Config struct {
 	AppPasswordHash       string               `json:"app_password_hash,omitempty"`
 	SSHDir                string               `json:"sshdir,omitempty"` // openssh config dir, defaults to ~/.ssh
 	Buttons               []*models.ButtonData `json:"-,omitempty"`      // Moved to buttons.json
-	ConfigPath            string               `json:"-,omitempty"`      // internal use
-	ConfigDir             string               `json:"-,omitempty"`      // internal use
+	ConfigPath            string               `json:"-,omitempty"`      // internal use. The absolute path of <config-dir>/config.json
+	ConfigDir             string               `json:"-,omitempty"`      // internal use. The absolute path of config dir
 	Vars                  map[string]string    `json:"-,omitempty"`      // Moved to vars.json
 	VarsMtime             map[string]int64     `json:"-,omitempty"`      // Last modified timestamp of vars
 	InsecureIgnoreHostKey bool                 `json:"insecure_ignore_host_key,omitempty"`
@@ -64,6 +56,7 @@ type Config struct {
 	WebdavEncryptionEnabled bool   `json:"webdav_encryption_enabled,omitempty"`
 	WebdavMasterKey         string `json:"webdav_master_key,omitempty"`
 	WebdavUploadSSHData     bool   `json:"webdav_upload_ssh_data,omitempty"`
+	UseKeyring              bool   `json:"use_keyring,omitempty"`
 	AbsSSHDir               string `json:"-,omitempty"`
 	mu                      sync.Mutex
 }
@@ -77,7 +70,7 @@ func LoadConfig(configDir string) (*Config, error) {
 		if os.IsNotExist(err) {
 			// Generate new config
 			log.Println("No config found, generating initial app password...")
-			cfgPtr, err := generateAndSaveConfig(configPath)
+			cfgPtr, err := generateAndSaveConfig(configDir, configPath)
 			if err != nil {
 				return nil, err
 			}
@@ -178,7 +171,7 @@ outer:
 	return sb.String()
 }
 
-func generateAndSaveConfig(path string) (*Config, error) {
+func generateAndSaveConfig(configDir, configPath string) (*Config, error) {
 	password := RandString(constants.DEFAULT_PASSWORD_LENGTH, false)
 
 	// Hash the password
@@ -190,12 +183,23 @@ func generateAndSaveConfig(path string) (*Config, error) {
 	cfg := &Config{
 		Addr:            "127.0.0.1:8022",
 		AppPasswordHash: string(hash),
-		ConfigPath:      path,
+		ConfigDir:       configDir,
+		ConfigPath:      configPath,
 		SavePassword:    "ask",
 		SessionSecret:   RandString(32, false),
 	}
 
-	err = common.AtomicWriteFile(path, func(writer io.Writer) error {
+	if common.IsApp {
+		err = keyring.SetAppPassword(configDir, password)
+		if err == nil {
+			fmt.Fprintf(os.Stderr, "The initial app password has been saved in system keyring\n")
+			cfg.UseKeyring = true
+		} else {
+			fmt.Fprintf(os.Stderr, "Can't save app password to system keyring: %v\n", err)
+		}
+	}
+
+	err = common.AtomicWriteFile(configPath, func(writer io.Writer) error {
 		enc := json.NewEncoder(writer)
 		enc.SetIndent("", "  ")
 		return enc.Encode(cfg)
@@ -204,23 +208,31 @@ func generateAndSaveConfig(path string) (*Config, error) {
 		return nil, err
 	}
 
-	if writePasswordToFile {
-		// Desktop (windowsgui) mode: no terminal available, write to a file.
-		pwdFile := filepath.Join(filepath.Dir(path), constants.INITIAL_PASSWORD_FILE)
-		if err := common.AtomicWriteFileContents(pwdFile, []byte(password)); err != nil {
-			log.Printf("WARNING: could not write %s: %v", constants.INITIAL_PASSWORD_FILE, err)
+	if !cfg.UseKeyring {
+		if common.IsApp {
+			// Desktop (windowsgui) mode: no terminal available, write to a file.
+			pwdFile := filepath.Join(filepath.Dir(configPath), constants.INITIAL_PASSWORD_FILE)
+			if err := common.AtomicWriteFileContents(pwdFile, []byte(password)); err != nil {
+				log.Printf("WARNING: could not write %s: %v", constants.INITIAL_PASSWORD_FILE, err)
+			}
+		} else {
+			// CLI mode: print to stderr as usual.
+			fmt.Fprintf(os.Stderr, "\n=====================================================\n")
+			fmt.Fprintf(os.Stderr, "  Welcome to CozySSH!                                \n")
+			fmt.Fprintf(os.Stderr, "  A new app password has been generated for you:     \n")
+			fmt.Fprintf(os.Stderr, "  ->  %s  <-                                     \n", password)
+			fmt.Fprintf(os.Stderr, "  Store this safely. If you forget the password, you can reset it by running cozyssh with -do-reset-password flag.\n")
+			fmt.Fprintf(os.Stderr, "=====================================================\n")
 		}
-	} else {
-		// CLI mode: print to stderr as usual.
-		fmt.Fprintf(os.Stderr, "\n=====================================================\n")
-		fmt.Fprintf(os.Stderr, "  Welcome to CozySSH!                                \n")
-		fmt.Fprintf(os.Stderr, "  A new app password has been generated for you:     \n")
-		fmt.Fprintf(os.Stderr, "  ->  %s  <-                                     \n", password)
-		fmt.Fprintf(os.Stderr, "  Store this safely. If you forget the password, you can reset it by running cozyssh with -do-reset-password flag.\n")
-		fmt.Fprintf(os.Stderr, "=====================================================\n")
 	}
 
 	return cfg, nil
+}
+
+// Check if system keyring currently stores the correct app password
+func (c *Config) IsKeyringPasswordOk() bool {
+	password, _ := keyring.GetAppPassword(c.ConfigDir)
+	return c.VerifyPassword(password)
 }
 
 func (c *Config) VerifyPassword(password string) bool {
@@ -740,7 +752,7 @@ func (c *Config) UpdateVars(updates map[string]*string) error {
 	return nil
 }
 
-func (c *Config) UpdateConfig(req *models.ConfigRequest) error {
+func (c *Config) UpdateConfig(req *models.ConfigRequest) (err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if req.SavePassword != "" {
@@ -751,6 +763,20 @@ func (c *Config) UpdateConfig(req *models.ConfigRequest) error {
 	}
 	if req.Sitename != "" {
 		c.Sitename = req.Sitename
+	}
+	if req.UseKeyring != nil && c.UseKeyring != *req.UseKeyring {
+		if !c.VerifyPassword(req.AppPassword) {
+			err = fmt.Errorf("app password is incorrect")
+		} else if *req.UseKeyring {
+			err = keyring.SetAppPassword(c.ConfigDir, req.AppPassword)
+		} else {
+			err = keyring.SetAppPassword(c.ConfigDir, "")
+			passstore.ClearEncryptionKey()
+		}
+		if err != nil {
+			return fmt.Errorf("failed to update useKeyring to %t: %w", *req.UseKeyring, err)
+		}
+		c.UseKeyring = *req.UseKeyring
 	}
 	return c.save()
 }

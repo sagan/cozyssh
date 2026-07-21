@@ -28,6 +28,7 @@ import (
 	"cozyssh/common"
 	"cozyssh/config"
 	"cozyssh/constants"
+	"cozyssh/models"
 )
 
 // AppConfig holds desktop-specific window settings, saved to app-config.json.
@@ -220,6 +221,8 @@ func saveAppConfig(cfgDir string, ac *AppConfig) {
 // ---- Main -----------------------------------------------------------------
 
 func main() {
+	common.IsApp = true
+
 	flags := cozyssh.ParseFlags(os.Args[1:])
 	if flags.DoResetPassword || flags.Err == flag.ErrHelp {
 		// CLI mode
@@ -236,8 +239,6 @@ func main() {
 			os.Exit(0)
 		}
 	}
-
-	config.SetWritePasswordToFile(true)
 
 	flags.InitConfigDir()
 	cfg, err := config.LoadConfig(flags.ConfigDir)
@@ -399,9 +400,12 @@ func bindAppFunctions(w webview2.WebView, hwnd uintptr, cfg *config.Config) {
 		windows.ShellExecute(0, nil, windows.StringToUTF16Ptr(u), nil, nil, windows.SW_SHOWNORMAL)
 	})
 
-	w.Bind("appAuth", func() (string, error) {
+	w.Bind("appAuth", func() (*models.AppAuthResponse, error) {
 		token := auth.GenerateToken()
-		return token, nil
+		return &models.AppAuthResponse{
+			Token:      token,
+			UseKeyring: cfg.UseKeyring,
+		}, nil
 	})
 
 	w.Bind("appToggleFullscreen", func() {

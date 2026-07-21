@@ -14,6 +14,7 @@ import (
 
 	"cozyssh/config"
 	"cozyssh/constants"
+	"cozyssh/keyring"
 	"cozyssh/models"
 	"cozyssh/passstore"
 
@@ -40,12 +41,21 @@ func AddAuthRoutes(mux *http.ServeMux, getFullData func(r *http.Request) *models
 			return
 		}
 
-		if !globalConfig.VerifyPassword(req.Password) {
+		if req.Token != "" {
+			if !isValidToken(req.Token) {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+		} else if !globalConfig.VerifyPassword(req.Password) {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
-		passstore.SetEncryptionKey(req.Password)
+		password := req.Password
+		if password == "" && globalConfig.UseKeyring {
+			password, _ = keyring.GetAppPassword(globalConfig.ConfigDir)
+		}
+		passstore.SetEncryptionKey(password)
 
 		res := &models.LoginResponse{
 			Token:    GenerateToken(),
@@ -60,7 +70,9 @@ func AddAuthRoutes(mux *http.ServeMux, getFullData func(r *http.Request) *models
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		passstore.ClearEncryptionKey()
+		if !globalConfig.UseKeyring || !globalConfig.IsKeyringPasswordOk() {
+			passstore.ClearEncryptionKey()
+		}
 		// Stateless approach relies completely on the frontend purging its LocalStorage token
 		w.Header().Set(headers.ContentType, constants.MIME_JSON)
 		w.WriteHeader(http.StatusNoContent)

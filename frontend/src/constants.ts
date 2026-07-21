@@ -212,6 +212,16 @@ export const LINK_COZYSSH_DOC_PLUGINS = "https://github.com/sagan/cozyssh-plugin
 
 export const SETTINGS_TABS = 9;
 
+export const SETTINGS_TAB_IDX_SESSIONS = 0;
+export const SETTINGS_TAB_IDX_TUNNELS = 1;
+export const SETTINGS_TAB_IDX_PASSWORDS = 2;
+export const SETTINGS_TAB_IDX_SETTINGS = 3;
+export const SETTINGS_TAB_IDX_SYNC = 4;
+export const SETTINGS_TAB_IDX_IMPORT = 5;
+export const SETTINGS_TAB_IDX_EXPORT = 6;
+export const SETTINGS_TAB_IDX_SHORTCUTS = 7;
+export const SETTINGS_TAB_IDX_ABOUT = 8;
+
 /**
  * Hide element from desktop
  */

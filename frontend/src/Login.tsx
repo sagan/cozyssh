@@ -96,10 +96,28 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess: (data?: Full
       if (!window.appAuth) {
         return;
       }
-      const token = await window.appAuth();
+      const authResponse = await window.appAuth();
+      let data: LoginResponse | undefined;
+      (async () => {
+        const res = await fetch("/api/login", {
+          method: METHOD_POST,
+          headers: {
+            [HEADER_CONTENT_TYPE]: MIME_JSON,
+          },
+          body: JSON.stringify({ token: authResponse.token, password: "" } satisfies LoginRequest),
+        });
+        if (!res.ok) {
+          return;
+        }
+        data = await res.json();
+      })();
       await dialogs.alert(
         `Welcome to CozySSH Desktop App`,
-        `Please check the initial app password in "initial_password.txt" file of CozySSH data directory.
+        authResponse.useKeyring
+          ? `The app password is automatically generated on first run and loaded from system keyring.` +
+              ` Your saved SSH passwords are encrypted with it.` +
+              ` You can change the app password or disable keyring usage from Dashboard menu - Settings.`
+          : `Please check the initial app password in "initial_password.txt" file of CozySSH data directory.
 
 The default data dir path:
 
@@ -110,8 +128,8 @@ The app password can be changed from Dashboard menu - Settings. You can safely d
 
 Please remember the app password. You will need it to access your saved SSH passwords.`,
       );
-      localStorage.setItem(BROWSER_STORAGE_KEY_TOKEN, token);
-      onLoginSuccess();
+      localStorage.setItem(BROWSER_STORAGE_KEY_TOKEN, authResponse.token);
+      onLoginSuccess(data?.fulldata);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

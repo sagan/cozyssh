@@ -1689,6 +1689,7 @@ export interface Sysinfo {
 	savePassword: "ask" | "always" | "never";
 	configDir: string;
 	sshDir: string;
+	useKeyring?: boolean;
 	defaultIdentityPath: string;
 	defaultIdentityPublicKey: string;
 }
@@ -1757,6 +1758,10 @@ export interface WsTerminalMessage {
 	isPinned: boolean;
 	isLocked: boolean;
 	isHidden: boolean;
+}
+export interface AppAuthResponse {
+	token: string;
+	useKeyring: boolean;
 }
 export interface ActiveTunnel {
 	type: "local" | "remote" | "dynamic";
@@ -2492,7 +2497,7 @@ declare global {
 	/**
 	 * Get auth token (only valid for desktop app).
 	 */
-	var appAuth: (() => Promise<string>) | undefined;
+	var appAuth: (() => Promise<AppAuthResponse>) | undefined;
 	/**
 	 * Open url in system default browser (only valid for desktop app).
 	 */

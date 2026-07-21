@@ -41,7 +41,6 @@ import {
   LINK_COZYSSH_GITHUB,
   LINK_COZYSSH_DOC_SCRIPTS,
   LINK_COZYSSH_DOC_PLUGINS,
-  CLASS_HIDE_DESKTOP,
 } from "./constants";
 import {
   cutString,
@@ -210,22 +209,24 @@ const helpLinks: Omit<DialogItem, "flatIndex">[] = [
     label: "Plugin",
     subtitle: "CozySSH official plugins repository",
   },
-  {
-    type: "action",
-    className: CLASS_HIDE_DESKTOP,
-    label: "Logout",
-    value: "logout",
-    subtitle: "Logout of current device",
-    action: () => logout(true),
-  },
-  {
-    type: "action",
-    className: CLASS_HIDE_DESKTOP,
-    label: "Logout All",
-    value: "logout_all",
-    subtitle: "Logout of all devices",
-    action: () => logoutAll(true),
-  },
+  ...(__CS_ENV__ === 0
+    ? ([
+        {
+          type: "action",
+          label: "Logout",
+          value: "logout",
+          subtitle: "Logout of current device",
+          action: () => logout(true),
+        },
+        {
+          type: "action",
+          label: "Logout All",
+          value: "logout_all",
+          subtitle: "Logout of all devices",
+          action: () => logoutAll(true),
+        },
+      ] as const)
+    : []),
   {
     type: "action",
     action: forceReload,

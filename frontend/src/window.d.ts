@@ -1,6 +1,6 @@
 import type { ITerminalOptions, Terminal } from "@xterm/xterm";
 
-import type { ButtonData, HostData, Session, ActiveTunnel } from "./api";
+import type { ButtonData, HostData, Session, ActiveTunnel, AppAuthResponse } from "./api";
 import type {
   CS_EVENT_SHELL_INTEGRATION,
   CS_EVENT_TERMINAL_CHANGE,
@@ -443,7 +443,7 @@ declare global {
   /**
    * Get auth token (only valid for desktop app).
    */
-  var appAuth: (() => Promise<string>) | undefined;
+  var appAuth: (() => Promise<AppAuthResponse>) | undefined;
   /**
    * Open url in system default browser (only valid for desktop app).
    */

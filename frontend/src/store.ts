@@ -1198,20 +1198,19 @@ export async function openHost(
 }
 
 export async function logout(needConfirm: boolean = false) {
-  if (
-    needConfirm &&
-    !(await dialogs.confirm("Log out of current device?", "All data stored in this browser will be cleared."))
-  ) {
-    return;
-  }
-  const syncState = localStorage.getItem(BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE);
-  if (syncState && syncState !== "synced") {
-    if (
-      !(await dialogs.confirm(
-        "Scratchpad data is not fully synced to the server. Are you sure you want to log out and clear the local cache?",
-      ))
-    ) {
+  if (needConfirm) {
+    if (!(await dialogs.confirm("Log out of current device?", "All data stored in this browser will be cleared."))) {
       return;
+    }
+    const syncState = localStorage.getItem(BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE);
+    if (syncState && syncState !== "synced") {
+      if (
+        !(await dialogs.confirm(
+          "Scratchpad data is not fully synced to the server. Are you sure you want to log out and clear the local cache?",
+        ))
+      ) {
+        return;
+      }
     }
   }
   if (localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN)) {
@@ -2040,7 +2039,12 @@ export async function updateConfig(config: ConfigRequest) {
     if (!res.ok) {
       throw new Error(`status=${res.status}, msg=${await res.text()}`);
     }
-    setSysinfo(config satisfies Partial<Sysinfo>);
+    const sysinfo: Partial<Sysinfo> = {
+      sitename: config.sitename,
+      savePassword: config.savePassword,
+      useKeyring: config.useKeyring,
+    };
+    setSysinfo(sysinfo);
     notify("Settings saved", "success", TOAST_KEY_API_SETTINGS);
   } catch (e) {
     notify(`Failed to save setting: ${e}`, "error", TOAST_KEY_API_SETTINGS);

@@ -36,4 +36,5 @@ const (
 	TAG_GROUP_PREFIX                        = "g-"
 	TAG_ORDER_PREFIX                        = "o-"
 	TAG_FAV                                 = "fav"
+	KEYRING_APP_PASSWORD_USER_PREFIX        = "app-password."
 )

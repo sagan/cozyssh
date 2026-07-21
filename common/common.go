@@ -28,6 +28,8 @@ var (
 		}
 		return u.Username
 	})()
+
+	IsApp = false // whether running as windows desktop app
 )
 
 // Works similar to shell's expansion.

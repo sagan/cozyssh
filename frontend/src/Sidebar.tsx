@@ -63,7 +63,6 @@ import type {
   PasswordUpdateRequest,
   Session,
   PasswordsResponse,
-  PasswordsUnlockRequest,
   PasswordsRevealRequest,
   PasswordsRevealResponse,
   PasswordsChangeRequest,
@@ -72,6 +71,7 @@ import type {
   SyncDetectionResult,
   WebdavStatus,
   LoginResponse,
+  RevealAppPasswordResponse,
 } from "./api";
 import {
   METHOD_PUT,
@@ -93,6 +93,15 @@ import {
   LINK_COZYSSH_GITHUB,
   LINK_COZYSSH_DOC_DATA,
   CLASS_HIDE_DESKTOP,
+  SETTINGS_TAB_IDX_SETTINGS,
+  SETTINGS_TAB_IDX_PASSWORDS,
+  SETTINGS_TAB_IDX_SESSIONS,
+  SETTINGS_TAB_IDX_TUNNELS,
+  SETTINGS_TAB_IDX_SYNC,
+  SETTINGS_TAB_IDX_IMPORT,
+  SETTINGS_TAB_IDX_EXPORT,
+  SETTINGS_TAB_IDX_SHORTCUTS,
+  SETTINGS_TAB_IDX_ABOUT,
 } from "./constants";
 import {
   type ServiceWorkerStatus,
@@ -214,6 +223,7 @@ export default function Sidebar({
 }) {
   const appVersion = useStore((state) => state.sysinfo.version);
   const savePassword = useStore((state) => state.sysinfo.savePassword);
+  const useKeyring = useStore((state) => state.sysinfo.useKeyring);
   const sysUsername = useStore((state) => state.sysinfo.username);
   const sysSitename = useStore((state) => state.sysinfo.sitename);
   const sysConfigDir = useStore((state) => state.sysinfo.configDir);
@@ -241,7 +251,7 @@ export default function Sidebar({
   const [newPwd, setNewPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
   const [pinnedSessions, setPinnedSessions] = useState<Session[]>([]);
-  const [dialogAppPassword, setDialogAppPassword] = useState<string | null>(null);
+  const [dialogAppPassword, setDialogAppPassword] = useState<string>("");
   const [passwordsState, setPasswordsState] = useState<PasswordsResponse>({ locked: true, keys: [] });
   const [revealedPasswords, setRevealedPasswords] = useState<{ [key: string]: string }>({});
   const activeTunnels = useStore((state) => state.activeTunnels);
@@ -255,7 +265,7 @@ export default function Sidebar({
   const [swStatus, setSwStatus] = useState<ServiceWorkerStatus>("unknown");
 
   useEffect(() => {
-    if (settingsOpen && settingsTab === 1) {
+    if (settingsOpen && settingsTab === SETTINGS_TAB_IDX_TUNNELS) {
       fetchActiveTunnels();
       const interval = setInterval(fetchActiveTunnels, 3000);
       return () => clearInterval(interval);
@@ -263,7 +273,7 @@ export default function Sidebar({
   }, [settingsOpen, settingsTab]);
 
   useEffect(() => {
-    if (settingsOpen && settingsTab === 2) {
+    if (settingsOpen && settingsTab === SETTINGS_TAB_IDX_SETTINGS) {
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker
           .getRegistration()
@@ -352,7 +362,7 @@ export default function Sidebar({
   }, [settingsOpen, fetchWebdavStatus]);
 
   useEffect(() => {
-    if (settingsOpen && settingsTab === 4) {
+    if (settingsOpen && settingsTab === SETTINGS_TAB_IDX_SYNC) {
       const interval = setInterval(() => fetchWebdavStatus(true), 3000);
       return () => clearInterval(interval);
     }
@@ -375,15 +385,12 @@ export default function Sidebar({
           uploadSSHData: uploadSSHData,
         }),
       });
-
-      if (res.ok) {
-        notify(nextEnabled ? "Sync enabled" : "Sync disabled", "success", TOAST_KEY_SYNC);
-        setWebdavEnabled(nextEnabled);
-        fetchWebdavStatus(false);
-      } else {
-        const t = await res.text();
-        notify("Failed to toggle sync: " + t, "error", TOAST_KEY_SYNC);
+      if (!res.ok) {
+        throw new Error(`status=${res.status}, msg=${await res.text()}`);
       }
+      notify(nextEnabled ? "Sync enabled" : "Sync disabled", "success", TOAST_KEY_SYNC);
+      setWebdavEnabled(nextEnabled);
+      fetchWebdavStatus(false);
     } catch (e: unknown) {
       notify(`Failed to toggle sync: ${e}`, "error", TOAST_KEY_SYNC);
     }
@@ -410,23 +417,21 @@ export default function Sidebar({
           } satisfies SaveWebdavSettingsRequest),
         });
 
-        if (res.ok) {
-          notify("WebDAV settings cleared successfully", "success", TOAST_KEY_SYNC);
-          setWebdavUrl("");
-          setCurrentWebdavUrl("");
-          setWebdavUser("");
-          setCurrentWebdavUser("");
-          setWebdavPassword("");
-          setCurrentWebdavPassword("");
-          setWebdavEnabled(false);
-          setUseEncryption(false);
-          setMasterKey("");
-          setCurrentMasterKey("");
-          fetchWebdavStatus(false);
-        } else {
-          const text = await res.text();
-          notify("Failed to clear WebDAV settings: " + text, "error", TOAST_KEY_SYNC);
+        if (!res.ok) {
+          throw new Error(`status=${res.status}, msg=${await res.text()}`);
         }
+        notify("WebDAV settings cleared successfully", "success", TOAST_KEY_SYNC);
+        setWebdavUrl("");
+        setCurrentWebdavUrl("");
+        setWebdavUser("");
+        setCurrentWebdavUser("");
+        setWebdavPassword("");
+        setCurrentWebdavPassword("");
+        setWebdavEnabled(false);
+        setUseEncryption(false);
+        setMasterKey("");
+        setCurrentMasterKey("");
+        fetchWebdavStatus(false);
         return;
       }
 
@@ -454,8 +459,9 @@ export default function Sidebar({
         });
 
         if (!detectRes.ok) {
-          const text = await detectRes.text();
-          throw new Error(text || "Failed to verify WebDAV connection");
+          throw new Error(
+            `Failed to verify WebDAV connection: status=${detectRes.status}, msg=${await detectRes.text()}`,
+          );
         }
 
         let data = (await detectRes.json()) as SyncDetectionResult;
@@ -487,8 +493,10 @@ export default function Sidebar({
           });
 
           if (!retryRes.ok) {
-            const text = await retryRes.text();
-            throw new Error(text || "Failed to verify WebDAV connection with the provided key");
+            throw new Error(
+              `Failed to verify WebDAV connection with the provided key: ` +
+                `status=${retryRes.status}, msg=${await retryRes.text()}`,
+            );
           }
 
           const retryData = (await retryRes.json()) as SyncDetectionResult;
@@ -544,19 +552,16 @@ export default function Sidebar({
           uploadSSHData: uploadSSHData,
         } satisfies SaveWebdavSettingsRequest),
       });
-
-      if (saveRes.ok) {
-        notify("WebDAV settings saved successfully", "success", TOAST_KEY_SYNC);
-        setCurrentWebdavUrl(webdavUrl.trim());
-        setCurrentWebdavUser(webdavUser);
-        setCurrentWebdavPassword(webdavPassword);
-        fetchWebdavStatus(false);
-      } else {
-        const text = await saveRes.text();
-        notify("Failed to save WebDAV settings: " + text, "error", TOAST_KEY_SYNC);
+      if (!saveRes.ok) {
+        throw new Error(`status=${saveRes.status}, msg=${await saveRes.text()}`);
       }
+      notify("WebDAV settings saved successfully", "success", TOAST_KEY_SYNC);
+      setCurrentWebdavUrl(webdavUrl.trim());
+      setCurrentWebdavUser(webdavUser);
+      setCurrentWebdavPassword(webdavPassword);
+      fetchWebdavStatus(false);
     } catch (e: unknown) {
-      notify(`WebDAV verification failed: ${e}`, "error", TOAST_KEY_SYNC);
+      notify(`Failed to save WebDAV settings: ${e}`, "error", TOAST_KEY_SYNC);
     } finally {
       setIsTestingWebdav(false);
     }
@@ -607,26 +612,24 @@ export default function Sidebar({
         } satisfies SaveWebdavSettingsRequest),
       });
 
-      if (res.ok) {
-        notify("WebDAV settings cleared successfully", "success", TOAST_KEY_SYNC);
-        setWebdavUrl("");
-        setCurrentWebdavUrl("");
-        setWebdavUser("");
-        setCurrentWebdavUser("");
-        setWebdavPassword("");
-        setCurrentWebdavPassword("");
-        setWebdavEnabled(false);
-        setUseEncryption(false);
-        setMasterKey("");
-        setCurrentMasterKey("");
-        fetchWebdavStatus(false);
-      } else {
-        const text = await res.text();
-        notify("Failed to clear WebDAV settings: " + text, "error", TOAST_KEY_SYNC);
+      if (!res.ok) {
+        throw new Error(`status=${res.status}, msg=${await res.text()}`);
       }
+      notify("WebDAV settings cleared successfully", "success", TOAST_KEY_SYNC);
+      setWebdavUrl("");
+      setCurrentWebdavUrl("");
+      setWebdavUser("");
+      setCurrentWebdavUser("");
+      setWebdavPassword("");
+      setCurrentWebdavPassword("");
+      setWebdavEnabled(false);
+      setUseEncryption(false);
+      setMasterKey("");
+      setCurrentMasterKey("");
+      fetchWebdavStatus(false);
       return;
     } catch (e: unknown) {
-      notify(`WebDAV settings saving failed: ${e}`, "error", TOAST_KEY_SYNC);
+      notify(`Failed to clear WebDAV settings: ${e}`, "error", TOAST_KEY_SYNC);
     } finally {
       setIsTestingWebdav(false);
     }
@@ -634,16 +637,13 @@ export default function Sidebar({
 
   const handleSyncNow = useCallback(async () => {
     setSyncStatus("syncing");
-
     try {
       const res = await fetch("/api/settings/webdav/sync", { method: METHOD_POST, headers: apiReqHeaders() });
-
-      if (res.ok) {
-        notify("Sync triggered", "success", TOAST_KEY_SYNC);
-        setTimeout(() => fetchWebdavStatus(true), 500, TOAST_KEY_SYNC);
-      } else {
-        notify("Failed to trigger sync", "error", TOAST_KEY_SYNC);
+      if (!res.ok) {
+        throw new Error(`status=${res.status}`);
       }
+      notify("Sync triggered", "success", TOAST_KEY_SYNC);
+      setTimeout(() => fetchWebdavStatus(true), 500, TOAST_KEY_SYNC);
     } catch (e: unknown) {
       notify(`Failed to trigger sync: ${e}`, "error");
     }
@@ -798,33 +798,32 @@ export default function Sidebar({
   const fetchPasswords = useCallback(async () => {
     try {
       const res = await fetch("/api/passwords", { headers: apiReqHeaders() });
-      if (res.ok) {
-        const data = (await res.json()) as PasswordsResponse;
-        setPasswordsState(data);
+      if (!res.ok) {
+        throw new Error(`status=${res.status}`);
       }
-    } catch (e) {
-      console.error("Failed to fetch passwords:", e);
+      const data = (await res.json()) as PasswordsResponse;
+      setPasswordsState(data);
+    } catch (e: unknown) {
+      console.error("Failed to fetch passwords", e);
     }
   }, []);
 
   const handleLock = useCallback(async () => {
-    setDialogAppPassword(null);
+    setDialogAppPassword("");
+    setRevealedPasswords({});
     try {
       const res = await fetch("/api/passwords/lock", { method: METHOD_POST, headers: apiReqHeaders() });
-      if (res.ok) {
-        setRevealedPasswords({});
-        fetchPasswords();
-      } else {
-        dialogs.alert("Failed to lock password store");
+      if (!res.ok) {
+        throw new Error(`status=${res.status}`);
       }
-    } catch (e) {
-      console.error(e);
-      dialogs.alert("Failed to lock password store");
+      fetchPasswords();
+    } catch (e: unknown) {
+      dialogs.alert(`Failed to lock password store: ${e}`);
     }
   }, [fetchPasswords]);
 
   useEffect(() => {
-    if (settingsOpen && settingsTab === 1) {
+    if (settingsOpen && settingsTab === SETTINGS_TAB_IDX_PASSWORDS) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchPasswords();
     }
@@ -833,105 +832,74 @@ export default function Sidebar({
   useEffect(() => {
     if (!settingsOpen) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setDialogAppPassword(null);
+      setDialogAppPassword("");
       setRevealedPasswords({});
     }
   }, [settingsOpen]);
 
   const handleReveal = useCallback(
     async (key: string) => {
-      let pwd = dialogAppPassword;
-      if (!pwd) {
+      const useKeyring = getStore().sysinfo.useKeyring;
+      let appPassword = dialogAppPassword;
+      if (!useKeyring && !appPassword) {
         const entered = await dialogs.promptPassword("Enter App Password to confirm:");
-        if (entered === null) {
+        if (!entered) {
           return;
         }
-        try {
-          const verifyRes = await fetch("/api/passwords/unlock", {
-            method: METHOD_POST,
-            headers: apiReqHeaders(),
-            body: JSON.stringify({ app_password: entered } satisfies PasswordsUnlockRequest),
-          });
-          if (!verifyRes.ok) {
-            dialogs.alert("Incorrect app password");
-            return;
-          }
-          pwd = entered;
-          setDialogAppPassword(entered);
-          setPasswordsState((prev) => ({ ...prev, locked: false }));
-        } catch (e) {
-          console.error(e);
-          dialogs.alert("Verification failed");
-          return;
-        }
+        appPassword = entered;
       }
-
       try {
         const res = await fetch("/api/passwords/reveal", {
           method: METHOD_POST,
           headers: apiReqHeaders(),
-          body: JSON.stringify({ key } satisfies PasswordsRevealRequest),
+          body: JSON.stringify({ key, appPassword } satisfies PasswordsRevealRequest),
         });
-        if (res.ok) {
-          const data = (await res.json()) as PasswordsRevealResponse;
-          setRevealedPasswords((prev) => ({ ...prev, [key]: data.password }));
-        } else {
-          dialogs.alert("Failed to reveal password");
+        if (!res.ok) {
+          throw new Error(`status=${res.status}, msg=${await res.text()}`);
         }
-      } catch (e) {
-        console.error(e);
-        dialogs.alert("Failed to reveal password");
+        const data = (await res.json()) as PasswordsRevealResponse;
+        setRevealedPasswords((prev) => ({ ...prev, [key]: data.password }));
+        setPasswordsState({ ...passwordsState, locked: false });
+        if (!useKeyring) {
+          setDialogAppPassword(appPassword);
+        }
+      } catch (e: unknown) {
+        dialogs.alert(`Failed to reveal password: ${e}`);
       }
     },
-    [dialogAppPassword],
+    [dialogAppPassword, passwordsState],
   );
 
   const handleCopyPassword = useCallback(
     async (key: string) => {
+      const useKeyring = getStore().sysinfo.useKeyring;
       let pwd = revealedPasswords[key];
       if (!pwd) {
-        let appPwd = dialogAppPassword;
-        if (!appPwd) {
+        let appPassword = dialogAppPassword;
+        if (!useKeyring && !appPassword) {
           const entered = await dialogs.promptPassword("Enter App Password to confirm:");
-          if (entered === null) {
+          if (!entered) {
             return;
           }
-          try {
-            const verifyRes = await fetch("/api/passwords/unlock", {
-              method: METHOD_POST,
-              headers: apiReqHeaders(),
-              body: JSON.stringify({ app_password: entered } satisfies PasswordsUnlockRequest),
-            });
-            if (!verifyRes.ok) {
-              dialogs.alert("Incorrect app password");
-              return;
-            }
-            appPwd = entered;
-            setDialogAppPassword(entered);
-            setPasswordsState((prev) => ({ ...prev, locked: false }));
-          } catch (e) {
-            console.error(e);
-            dialogs.alert("Verification failed");
-            return;
-          }
+          appPassword = entered;
         }
-
         try {
           const res = await fetch("/api/passwords/reveal", {
             method: METHOD_POST,
             headers: apiReqHeaders(),
-            body: JSON.stringify({ key } satisfies PasswordsRevealRequest),
+            body: JSON.stringify({ key, appPassword } satisfies PasswordsRevealRequest),
           });
-          if (res.ok) {
-            const data = (await res.json()) as PasswordsRevealResponse;
-            pwd = data.password;
-          } else {
-            dialogs.alert("Failed to retrieve password");
-            return;
+          if (!res.ok) {
+            throw new Error(`status=${res.status}`);
           }
-        } catch (e) {
-          console.error(e);
-          dialogs.alert("Failed to retrieve password");
+          const data = (await res.json()) as PasswordsRevealResponse;
+          pwd = data.password;
+          if (!useKeyring) {
+            setDialogAppPassword(appPassword);
+          }
+          setPasswordsState({ ...passwordsState, locked: false });
+        } catch (e: unknown) {
+          dialogs.alert(`Failed to retrieve password: ${e}`);
           return;
         }
       }
@@ -944,64 +912,47 @@ export default function Sidebar({
         }
       }
     },
-    [dialogAppPassword, revealedPasswords],
+    [dialogAppPassword, revealedPasswords, passwordsState],
   );
 
   const handleChangePassword = useCallback(
     async (key: string) => {
-      const isLocked = passwordsState.locked && !dialogAppPassword;
-      if (isLocked) {
+      const useKeyring = getStore().sysinfo.useKeyring;
+      let appPassword = dialogAppPassword;
+      if (!useKeyring && !appPassword) {
         const entered = await dialogs.promptPassword("Enter App Password to confirm:");
-        if (entered === null) {
+        if (!entered) {
           return;
         }
-        try {
-          const verifyRes = await fetch("/api/passwords/unlock", {
-            method: METHOD_POST,
-            headers: apiReqHeaders(),
-            body: JSON.stringify({ app_password: entered } satisfies PasswordsUnlockRequest),
-          });
-          if (!verifyRes.ok) {
-            dialogs.alert("Incorrect app password");
-            return;
-          }
-          setDialogAppPassword(entered);
-          setPasswordsState((prev) => ({ ...prev, locked: false }));
-        } catch (e) {
-          console.error(e);
-          dialogs.alert("Verification failed");
-          return;
-        }
+        appPassword = entered;
       }
-
       const newPwd = await dialogs.promptPassword(`Enter new password for ${key}:`);
       if (newPwd === null) {
         return;
       }
-
       try {
         const res = await fetch("/api/passwords/change", {
           method: METHOD_POST,
           headers: apiReqHeaders(),
-          body: JSON.stringify({ key, password: newPwd } satisfies PasswordsChangeRequest),
+          body: JSON.stringify({ key, appPassword, password: newPwd } satisfies PasswordsChangeRequest),
         });
-        if (res.ok) {
-          setRevealedPasswords((prev) => {
-            if (key in prev) {
-              return { ...prev, [key]: newPwd };
-            }
-            return prev;
-          });
-          dialogs.alert("Password updated successfully");
-        } else {
-          dialogs.alert("Failed to update password");
+        if (!res.ok) {
+          throw new Error(`status=${res.status}`);
         }
-      } catch (e) {
-        console.error(e);
-        dialogs.alert("Failed to update password");
+        setRevealedPasswords((prev) => {
+          if (key in prev) {
+            return { ...prev, [key]: newPwd };
+          }
+          return prev;
+        });
+        if (!useKeyring) {
+          setDialogAppPassword(appPassword);
+        }
+      } catch (e: unknown) {
+        dialogs.alert(`Failed to update password: ${e}`);
       }
     },
-    [passwordsState.locked, dialogAppPassword],
+    [dialogAppPassword],
   );
 
   const handleDeletePassword = useCallback(
@@ -1015,19 +966,17 @@ export default function Sidebar({
           headers: apiReqHeaders(),
           body: JSON.stringify({ key } satisfies PasswordsDeleteRequest),
         });
-        if (res.ok) {
-          fetchPasswords();
-          setRevealedPasswords((prev) => {
-            const next = { ...prev };
-            delete next[key];
-            return next;
-          });
-        } else {
-          dialogs.alert("Failed to delete password");
+        if (!res.ok) {
+          throw new Error(`status=${res.status}`);
         }
-      } catch (e) {
-        console.error(e);
-        dialogs.alert("Failed to delete password");
+        fetchPasswords();
+        setRevealedPasswords((prev) => {
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+      } catch (e: unknown) {
+        dialogs.alert(`Failed to delete password: ${e}`);
       }
     },
     [fetchPasswords],
@@ -2786,7 +2735,7 @@ export default function Sidebar({
         </Box>
         <DialogContent sx={{ p: 0 }}>
           <Box sx={{ p: 3, pt: 1, minWidth: 0 }}>
-            {settingsTab === 0 && (
+            {settingsTab === SETTINGS_TAB_IDX_SESSIONS && (
               <List dense sx={{ border: "1px solid #ddd", borderRadius: 1 }}>
                 {pinnedSessions.map((ps) => {
                   const canAttach = !activeSessionIds.includes(ps.id);
@@ -2824,7 +2773,7 @@ export default function Sidebar({
               </List>
             )}
 
-            {settingsTab === 1 && (
+            {settingsTab === SETTINGS_TAB_IDX_TUNNELS && (
               <>
                 <Typography
                   variant="subtitle2"
@@ -2887,14 +2836,14 @@ export default function Sidebar({
               </>
             )}
 
-            {settingsTab === 2 && (
+            {settingsTab === SETTINGS_TAB_IDX_PASSWORDS && (
               <>
                 <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
                   <Typography variant="subtitle2" sx={{ fontSize: "typography.body1.fontSize", fontWeight: "bold" }}>
                     Saved Passwords
                   </Typography>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    {!passwordsState.locked && (
+                    {!passwordsState.locked && !useKeyring && (
                       <Button
                         size="small"
                         variant="outlined"
@@ -2914,7 +2863,7 @@ export default function Sidebar({
                     )}
                     <Chip
                       icon={passwordsState.locked ? <LockIcon fontSize="small" /> : <LockOpenIcon fontSize="small" />}
-                      label={passwordsState.locked ? "Locked" : "Unlocked"}
+                      label={passwordsState.locked ? "Locked" : useKeyring ? "Unlocked (Keyring)" : "Unlocked"}
                       color={passwordsState.locked ? "warning" : "success"}
                       size="small"
                       variant="outlined"
@@ -3005,7 +2954,7 @@ export default function Sidebar({
               </>
             )}
 
-            {settingsTab === 3 && (
+            {settingsTab === SETTINGS_TAB_IDX_SETTINGS && (
               <>
                 <Typography variant="subtitle2" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }} gutterBottom>
                   <code>Service Worker:</code>
@@ -3073,6 +3022,51 @@ export default function Sidebar({
                   </Button>
                 </ButtonGroup>
                 <Divider sx={{ my: 1 }} />
+                <Typography variant="subtitle2" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }} gutterBottom>
+                  <code title="Use system keyring to save app password">Use System Keyring:</code>
+                  <Chip color={useKeyring ? "success" : "default"} label={useKeyring ? "Enabled" : "Disabled"} />
+                  <Button
+                    variant="text"
+                    size="small"
+                    onClick={async () => {
+                      let appPassword: string;
+                      if (useKeyring) {
+                        const res = await fetch("/api/settings/reveal_app_password", {
+                          method: METHOD_POST,
+                          headers: apiReqHeaders(),
+                        });
+                        if (!res.ok) {
+                          throw new Error(`Can't get app password, status=${res.status}`);
+                        }
+                        appPassword = ((await res.json()) as RevealAppPasswordResponse).appPassword;
+                        if (
+                          !(await dialogs.confirm(
+                            `Disable system keyring`,
+                            `It will remove the saved app password "${appPassword}" from system keyring.` +
+                              ` You MUST save this app password manually before proceeding,` +
+                              ` otherwise all your saved SSH passwords will be lost.` +
+                              ` To continue, enter the above app password below:`,
+                            appPassword,
+                          ))
+                        ) {
+                          return;
+                        }
+                      } else {
+                        const pass = await dialogs.promptPassword(
+                          "It will enable system keyring and stores the app password in it." +
+                            " Enter current app password to continue",
+                        );
+                        if (!pass) {
+                          return;
+                        }
+                        appPassword = pass;
+                      }
+                      updateConfig({ appPassword, useKeyring: !useKeyring });
+                    }}
+                  >
+                    {useKeyring ? "Toggle Off" : "Toggle On"}
+                  </Button>
+                </Typography>
                 <Typography variant="subtitle2" gutterBottom>
                   Change App Password
                 </Typography>
@@ -3106,7 +3100,7 @@ export default function Sidebar({
               </>
             )}
 
-            {settingsTab === 4 && (
+            {settingsTab === SETTINGS_TAB_IDX_SYNC && (
               <>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1, mt: -1 }}>
                   <b>WebDAV Synchronization</b>: Sync CozySSH data (buttons, vars, scratchpad) with a custom WebDAV
@@ -3326,11 +3320,11 @@ export default function Sidebar({
               </>
             )}
 
-            {settingsTab === 5 && <SSHImportTab />}
+            {settingsTab === SETTINGS_TAB_IDX_IMPORT && <SSHImportTab />}
 
-            {settingsTab === 6 && <SSHExportTab />}
+            {settingsTab === SETTINGS_TAB_IDX_EXPORT && <SSHExportTab />}
 
-            {settingsTab === 7 && (
+            {settingsTab === SETTINGS_TAB_IDX_SHORTCUTS && (
               <>
                 <Typography variant="subtitle2" gutterBottom>
                   Keyboard Shortcuts (Note: in Mac, by default <b>Command</b> key (JavaScript KeyboardEvent&nbsp;
@@ -3472,7 +3466,7 @@ export default function Sidebar({
               </>
             )}
 
-            {settingsTab === 8 && (
+            {settingsTab === SETTINGS_TAB_IDX_ABOUT && (
               <Box sx={{ textAlign: "center", mt: 4 }}>
                 <Typography variant="h5" gutterBottom sx={{ fontWeight: "bold" }}>
                   CozySSH

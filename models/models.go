@@ -55,6 +55,7 @@ type Sysinfo struct {
 	SavePassword             string `json:"savePassword" ts_type:"\"ask\" | \"always\" | \"never\""`
 	ConfigDir                string `json:"configDir"`
 	SSHDir                   string `json:"sshDir"`
+	UseKeyring               bool   `json:"useKeyring,omitempty"`
 	DefaultIdentityPath      string `json:"defaultIdentityPath"`
 	DefaultIdentityPublicKey string `json:"defaultIdentityPublicKey"`
 }
@@ -283,6 +284,7 @@ type FullData struct {
 
 type LoginRequest struct {
 	Password string `json:"password"`
+	Token    string `json:"token,omitempty"`
 }
 
 type LoginResponse struct {
@@ -408,11 +410,13 @@ type PasswordsResponse struct {
 }
 
 type PasswordsUnlockRequest struct {
-	AppPassword string `json:"app_password"`
+	AppPassword string `json:"appPassword"`
 }
 
 type PasswordsRevealRequest struct {
 	Key string `json:"key"`
+	// Required for verification (only if useKeyring is disabled).
+	AppPassword string `json:"appPassword"`
 }
 
 type PasswordsRevealResponse struct {
@@ -420,8 +424,9 @@ type PasswordsRevealResponse struct {
 }
 
 type PasswordsChangeRequest struct {
-	Key      string `json:"key"`
-	Password string `json:"password"`
+	Key         string `json:"key"`
+	Password    string `json:"password"`
+	AppPassword string `json:"appPassword"`
 }
 
 type PasswordsDeleteRequest struct {
@@ -432,6 +437,17 @@ type PasswordsDeleteRequest struct {
 type ConfigRequest struct {
 	Sitename     string `json:"sitename,omitempty"`
 	SavePassword string `json:"savePassword,omitempty" ts_type:"\"ask\" | \"always\" | \"never\""`
+	UseKeyring   *bool  `json:"useKeyring,omitempty"`
+	AppPassword  string `json:"appPassword,omitempty"`
+}
+
+type RevealAppPasswordResponse struct {
+	AppPassword string `json:"appPassword"`
+}
+
+type AppAuthResponse struct {
+	Token      string `json:"token"`
+	UseKeyring bool   `json:"useKeyring"`
 }
 
 // TunnelType indicates the direction of the tunnel.
