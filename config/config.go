@@ -6,7 +6,6 @@ import (
 	"io"
 	"log"
 	"maps"
-	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -21,7 +20,6 @@ import (
 	"cozyssh/models"
 	"cozyssh/passstore"
 	"cozyssh/yescrypt"
-	"crypto/rand"
 )
 
 var (
@@ -127,7 +125,7 @@ func LoadConfig(configDir string) (*Config, error) {
 	}
 
 	if cfg.SessionSecret == "" {
-		cfg.SessionSecret = RandString(32, false)
+		cfg.SessionSecret = common.RandString(32, false)
 		if err := cfg.save(); err != nil {
 			return nil, fmt.Errorf("failed to save config: %w", err)
 		}
@@ -136,43 +134,8 @@ func LoadConfig(configDir string) (*Config, error) {
 	return &cfg, nil
 }
 
-// Return a cryptographically secure random string of format /[a-zA-Z0-9]{length}/ .
-// If digigOnly is true, return  /[0-9]{length}/
-func RandString(length int, digitOnly bool) string {
-	if length <= 0 {
-		return ""
-	}
-	var rand_chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	if digitOnly {
-		rand_chars = "0123456789"
-	}
-	var sb strings.Builder
-	// (math.MaxUint8 / len(rand_chars)) results in an integer, e.g., 4
-	// The result is directly cast to float64, e.g., 4.0
-	// This is multiplied by float64(len(rand_chars))
-	var max byte = byte(float64(math.MaxUint8/len(rand_chars)) * float64(len(rand_chars)))
-	buf := make([]byte, length)
-outer:
-	for {
-		if _, err := rand.Read(buf); err != nil {
-			panic("rand.Read() failed")
-		}
-		for _, byte := range buf {
-			// By taking only the numbers up to a multiple of char space size and discarding others,
-			// we expect a uniform distribution of all possible chars.
-			if byte < max {
-				sb.WriteByte(rand_chars[int(byte)%len(rand_chars)])
-			}
-			if sb.Len() >= length {
-				break outer
-			}
-		}
-	}
-	return sb.String()
-}
-
 func generateAndSaveConfig(configDir, configPath string) (*Config, error) {
-	password := RandString(constants.DEFAULT_PASSWORD_LENGTH, false)
+	password := common.RandString(constants.DEFAULT_PASSWORD_LENGTH, false)
 
 	// Hash the password
 	hash, err := yescrypt.GenerateFromPassword([]byte(password))
@@ -186,7 +149,7 @@ func generateAndSaveConfig(configDir, configPath string) (*Config, error) {
 		ConfigDir:       configDir,
 		ConfigPath:      configPath,
 		SavePassword:    "ask",
-		SessionSecret:   RandString(32, false),
+		SessionSecret:   common.RandString(32, false),
 	}
 
 	if common.IsApp {
@@ -395,7 +358,7 @@ func (c *Config) ResetSessionSecret() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.SessionSecret = RandString(32, false)
+	c.SessionSecret = common.RandString(32, false)
 	return c.save()
 }
 
@@ -403,7 +366,7 @@ func (c *Config) ResetAppPassword() (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	password := RandString(constants.DEFAULT_PASSWORD_LENGTH, false)
+	password := common.RandString(constants.DEFAULT_PASSWORD_LENGTH, false)
 	hash, err := yescrypt.GenerateFromPassword([]byte(password))
 	if err != nil {
 		return "", err
@@ -456,7 +419,7 @@ main:
 			continue
 		}
 		if btn.Id == "" {
-			btn.Id = RandString(12, false)
+			btn.Id = common.RandString(12, false)
 		}
 		if btn.Group == "" {
 			btn.Group = constants.DEFAULT_BUTTON_GROUP
@@ -504,7 +467,7 @@ func (c *Config) UpsertButton(btn *models.ButtonData) error {
 	defer c.mu.Unlock()
 
 	if btn.Id == "" {
-		btn.Id = RandString(12, false)
+		btn.Id = common.RandString(12, false)
 	}
 	if btn.Group == "" {
 		btn.Group = constants.DEFAULT_BUTTON_GROUP
@@ -765,16 +728,27 @@ func (c *Config) UpdateConfig(req *models.ConfigRequest) (err error) {
 		c.Sitename = req.Sitename
 	}
 	if req.UseKeyring != nil && c.UseKeyring != *req.UseKeyring {
-		if !c.VerifyPassword(req.AppPassword) {
+		if req.AppPassword != "" && !c.VerifyPassword(req.AppPassword) {
 			err = fmt.Errorf("app password is incorrect")
 		} else if *req.UseKeyring {
-			err = keyring.SetAppPassword(c.ConfigDir, req.AppPassword)
+			// checking if keyring already saves the app password
+			password, _ := keyring.GetAppPassword(c.ConfigDir)
+			if !c.VerifyPassword(password) {
+				if req.AppPassword == "" {
+					err = fmt.Errorf("app password is required to enable keyring")
+				} else {
+					err = keyring.SetAppPassword(c.ConfigDir, req.AppPassword)
+				}
+			}
 		} else {
 			err = keyring.SetAppPassword(c.ConfigDir, "")
-			passstore.ClearEncryptionKey()
+			if req.AppPassword != "" {
+				passstore.ClearEncryptionKey()
+			}
 		}
 		if err != nil {
-			return fmt.Errorf("failed to update useKeyring to %t: %w", *req.UseKeyring, err)
+			return fmt.Errorf("failed to update useKeyring to %t: %w (app password provided: %t)",
+				*req.UseKeyring, err, req.AppPassword != "")
 		}
 		c.UseKeyring = *req.UseKeyring
 	}

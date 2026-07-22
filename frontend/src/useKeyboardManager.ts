@@ -18,6 +18,7 @@ import {
   ID_SIDEBAR_FILTER,
   LOCAL_NAME,
   SETTINGS_TABS,
+  TOAST_KEY_REFRESH,
   VAR_CS_SCROLL_LINES,
 } from "./constants";
 import {
@@ -65,6 +66,8 @@ import {
   setTagsExpanded,
   toggleExpandAllGroups,
   setSettingsTab,
+  refreshData,
+  notify,
 } from "./store";
 
 export interface KeyboardManagerOptions {
@@ -132,6 +135,17 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
             document.getElementById("main-content")?.requestFullscreen();
             triggerFocus();
           }
+          return;
+        }
+        case "ctrl+alt+r": {
+          e.preventDefault();
+          refreshData({ sync: 2 })
+            .then(() => {
+              notify(`Data refreshed`, "success", TOAST_KEY_REFRESH);
+            })
+            .catch((err: unknown) => {
+              notify(`Data refresh failure: ${err}`, "error", TOAST_KEY_REFRESH);
+            });
           return;
         }
         case "ctrl+alt+shift+r": {

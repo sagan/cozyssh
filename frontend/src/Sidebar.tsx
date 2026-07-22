@@ -102,6 +102,8 @@ import {
   SETTINGS_TAB_IDX_EXPORT,
   SETTINGS_TAB_IDX_SHORTCUTS,
   SETTINGS_TAB_IDX_ABOUT,
+  ID_SIDEBAR,
+  ID_SIDEBAR_MAIN,
 } from "./constants";
 import {
   type ServiceWorkerStatus,
@@ -168,6 +170,7 @@ import SSHImportTab from "./SSHImportTab";
 import SSHExportTab from "./SSHExportTab";
 import ChipCopy from "./components/ChipCopy";
 import TextFieldWithCopy from "./components/TextFieldWithCopy";
+import ExtraMenu from "./components/ExtraMenu";
 
 const drawerWidth = 260;
 
@@ -218,7 +221,7 @@ export default function Sidebar({
   isMobile: boolean;
   isTouch: boolean;
   onOpenScratchpad: () => void;
-  onAttach: (id: string, host: string, title: string, isLocked: boolean) => void;
+  onAttach: (s: Session) => void;
   onRefresh: () => void;
 }) {
   const appVersion = useStore((state) => state.sysinfo.version);
@@ -243,6 +246,7 @@ export default function Sidebar({
   const tagsExpanded = useStore((state) => state.tagsExpanded);
   const settingsOpen = useStore((state) => state.settingsOpen);
   const settingsTab = useStore((state) => state.settingsTab);
+  const extraHostMenu = useStore((state) => state.extraHostMenu);
 
   const theme = useTheme();
   const [loading, setLoading] = useState(false);
@@ -1034,7 +1038,7 @@ export default function Sidebar({
 
             if (retryRes.ok) {
               await dialogs.alert("Password updated! You will be logged out.");
-              logout();
+              logout(false, true);
               return;
             } else {
               const retryErr = await retryRes.text();
@@ -1058,7 +1062,7 @@ export default function Sidebar({
 
             if (forceRes.ok) {
               dialogs.alert("App password updated and saved passwords wiped! You will be logged out.");
-              logout();
+              logout(false, true);
               return;
             } else {
               const forceErr = await forceRes.text();
@@ -1073,7 +1077,7 @@ export default function Sidebar({
 
     if (res.ok) {
       await dialogs.alert("Password updated! You will be logged out.");
-      logout();
+      logout(false, true);
     } else {
       const errText = await res.text();
       dialogs.alert("Failed to update password: " + (errText || res.statusText));
@@ -2142,7 +2146,7 @@ export default function Sidebar({
 
   return (
     <Drawer
-      id="sidebar"
+      id={ID_SIDEBAR}
       variant={isMobile ? "temporary" : "permanent"}
       open={isMobile ? mobileOpen : true}
       onClose={closeMobileSidebar}
@@ -2307,7 +2311,7 @@ export default function Sidebar({
         )}
       </Box>
 
-      <Box sx={{ overflow: "auto", display: "flex", flexDirection: "column" }}>
+      <Box id={ID_SIDEBAR_MAIN} sx={{ overflow: "auto", display: "flex", flexDirection: "column" }}>
         {loading ? (
           <Box sx={{ p: 2, alignSelf: "center" }}>
             <CircularProgress size={24} />
@@ -2381,6 +2385,7 @@ export default function Sidebar({
                         section="fav"
                         key={`fav-${host.name}`}
                         id={`sidebar-fav-${host.name}`}
+                        itemIdx={itemIdx}
                         filter={filterStr}
                         host={host}
                         onContextMenu={handleContextMenu}
@@ -2492,7 +2497,7 @@ export default function Sidebar({
                   variant="caption"
                   sx={{ fontWeight: 700, color: "text.secondary", letterSpacing: "0.08em" }}
                 >
-                  KNOWN HOSTS{filteredHosts.auto.length > 0 && ` (${filteredHosts.auto.length})`}
+                  AUTO{filteredHosts.auto.length > 0 && ` (${filteredHosts.auto.length})`}
                 </Typography>
               </Box>
               <Collapse in={!!autoExpanded} timeout={0} unmountOnExit>
@@ -2504,6 +2509,7 @@ export default function Sidebar({
                         section="auto"
                         key={`auto-${host.name}`}
                         id={`sidebar-auto-${host.name}`}
+                        itemIdx={itemIdx}
                         filter={filterStr}
                         host={host}
                         onContextMenu={handleContextMenu}
@@ -2656,6 +2662,9 @@ export default function Sidebar({
             Move to Group
           </MenuItem>
         )}
+        {contextMenu?.target && (
+          <ExtraMenu extraMenu={extraHostMenu} target={contextMenu.target} before={() => setContextMenuOpen(false)} />
+        )}
         {contextMenu?.target.source === "config" && (
           <MenuItem onClick={handleDelete} sx={{ color: "error.main" }}>
             Delete Host
@@ -2754,11 +2763,7 @@ export default function Sidebar({
                       </ListItemIcon>
                       <ListItemText primary={ps.title} secondary={`${ps.host} (Listeners: ${ps.listenerCount})`} />
                       {canAttach && (
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          onClick={() => onAttach(ps.id, ps.host, ps.title, ps.isLocked)}
-                        >
+                        <Button size="small" variant="outlined" onClick={() => onAttach(ps)}>
                           Attach
                         </Button>
                       )}
@@ -3052,6 +3057,12 @@ export default function Sidebar({
                           return;
                         }
                       } else {
+                        // current app password may already exists in keyring
+                        // in which case we don't need to ask user to provide it.
+                        const ok = await updateConfig({ useKeyring: true });
+                        if (ok) {
+                          return;
+                        }
                         const pass = await dialogs.promptPassword(
                           "It will enable system keyring and stores the app password in it." +
                             " Enter current app password to continue",
@@ -3207,6 +3218,7 @@ export default function Sidebar({
                   margin="dense"
                   value={currentWebdavUrl || "(Not configured)"}
                   disabled
+                  copyDisabled={!currentWebdavUrl}
                 />
                 <TextFieldWithCopy
                   fullWidth
@@ -3425,6 +3437,8 @@ export default function Sidebar({
                   <b>Ctrl + Shift + C</b> : Copy selected text in terminal
                   <br />
                   <b>Ctrl + Shift + V (Windows) / Cmd + V (Mac)</b> : Paste into terminal
+                  <br />
+                  <b>Ctrl + Alt + R</b> : Refresh data from backend
                   <br />
                   <b>Ctrl + Alt + Shift + R</b> : Force clear service worker, cache and reload
                   <br />
@@ -3863,6 +3877,7 @@ export default function Sidebar({
 
 function HostListItem({
   id,
+  itemIdx,
   section,
   filter,
   host,
@@ -3876,6 +3891,7 @@ function HostListItem({
   setDragOverTarget,
 }: {
   id: string;
+  itemIdx: number;
   section: Section;
   filter: string;
   host: HostData;
@@ -3894,12 +3910,23 @@ function HostListItem({
   const itemRef = useRef<HTMLLIElement>(null);
 
   useEffect(() => {
-    if (isSelected && itemRef.current) {
+    if (!isSelected) {
+      return;
+    }
+    if (itemIdx === 0) {
+      const el = document.getElementById(ID_SIDEBAR_MAIN);
+      if (el) {
+        el.scrollTop = 0;
+        return;
+      }
+    }
+    if (itemRef.current) {
       itemRef.current.scrollIntoView({
         behavior: "auto",
         block: "nearest",
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSelected]);
 
   const isFavourite = host.isFavourite;

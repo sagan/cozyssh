@@ -7,8 +7,8 @@ import {
   openAddButtonDialog,
   reorderButtons,
   setActiveGroup,
-  setBtnMenuAnchor,
-  setLastMenuBtn,
+  setBtnContextMenu,
+  setBtnContextMenuOpen,
   useStore,
 } from "./store";
 import { useShallow } from "zustand/react/shallow";
@@ -164,8 +164,8 @@ export default function ButtonBar({ groups, handleButtonClick, isMobile, isTouch
               }
               onContextMenu={(e) => {
                 e.preventDefault();
-                setBtnMenuAnchor({ anchor: e.currentTarget, btn });
-                setLastMenuBtn(btn);
+                setBtnContextMenu({ element: e.currentTarget, btn });
+                setBtnContextMenuOpen(true);
               }}
               draggable={!isMobile && !isTouch}
               onDragStart={(e) => {

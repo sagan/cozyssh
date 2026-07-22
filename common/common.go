@@ -2,8 +2,10 @@ package common
 
 import (
 	"bytes"
+	"crypto/rand"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"os/user"
@@ -85,4 +87,39 @@ func ReadStdinLine() string {
 func FileExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
+}
+
+// Return a cryptographically secure random string of format /[a-zA-Z0-9]{length}/ .
+// If digigOnly is true, return  /[0-9]{length}/
+func RandString(length int, digitOnly bool) string {
+	if length <= 0 {
+		return ""
+	}
+	var rand_chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	if digitOnly {
+		rand_chars = "0123456789"
+	}
+	var sb strings.Builder
+	// (math.MaxUint8 / len(rand_chars)) results in an integer, e.g., 4
+	// The result is directly cast to float64, e.g., 4.0
+	// This is multiplied by float64(len(rand_chars))
+	var max byte = byte(float64(math.MaxUint8/len(rand_chars)) * float64(len(rand_chars)))
+	buf := make([]byte, length)
+outer:
+	for {
+		if _, err := rand.Read(buf); err != nil {
+			panic("rand.Read() failed")
+		}
+		for _, byte := range buf {
+			// By taking only the numbers up to a multiple of char space size and discarding others,
+			// we expect a uniform distribution of all possible chars.
+			if byte < max {
+				sb.WriteByte(rand_chars[int(byte)%len(rand_chars)])
+			}
+			if sb.Len() >= length {
+				break outer
+			}
+		}
+	}
+	return sb.String()
 }

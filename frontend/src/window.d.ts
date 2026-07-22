@@ -21,7 +21,7 @@ import type {
   Severity,
 } from "./common";
 import type { CsExecResult } from "./pluginAPI";
-import type { TerminalRefMap, TabData, UseStore, CsScriptModule } from "./store";
+import type { TerminalRefMap, TabData, UseStore, CsScriptModule, CustomMenu } from "./store";
 import type { AppletData } from "./AppletWrapper";
 import type { ShellIntegration, TerminalHandle } from "./Terminal";
 import type { Liquid } from "liquidjs";
@@ -130,7 +130,7 @@ declare global {
    * Note script is executed in async manner. If multiple scripts are executed at the same time,
    * this variable can hold any of them or undefined. It's guaranteed that it will be set to
    * undefined when no script is running.
-   * It's recommended to use the `selfBtn` argument of `run(selfBtn)` in the plugin API instead.
+   * It's recommended to use the `payload.button` argument of `run(payload)` in the plugin API instead.
    */
   var __CS_RUNNING_SCRIPT__: Pick<ButtonData, "id" | "name" | "type" | "payload"> | undefined;
   /**
@@ -143,6 +143,18 @@ declare global {
    * It uses Object.defineProperty so the modification takes effect immediately.
    */
   var __CS_FONT_SIZE__: number;
+  /**
+   * Extra host context menu. It uses Object.defineProperty so any modification takes effect immediately.
+   */
+  var __CS_EXTRA_HOST_MENU__: CustomMenu<HostData>[] | undefined;
+  /**
+   * Extra tab context menu. It uses Object.defineProperty so any modification takes effect immediately.
+   */
+  var __CS_EXTRA_TAB_MENU__: CustomMenu<TabData>[] | undefined;
+  /**
+   * Extra button context menu. It uses Object.defineProperty so any modification takes effect immediately.
+   */
+  var __CS_EXTRA_BUTTON_MENU__: CustomMenu<ButtonData>[] | undefined;
   /**
    * Global shortcut button map.
    */
@@ -383,6 +395,7 @@ declare global {
    * @returns Returns the opened tab id
    */
   function csAttach(id: string, host: string, title: string, isLocked?: boolean): Promise<string>;
+  function csAttach(s: Session): Promise<string>;
   /**
    * Display an async alert dialog.
    * The behavior is the same as `window.alert` except it's non-blocking.

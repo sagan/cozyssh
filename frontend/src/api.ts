@@ -161,9 +161,6 @@ export interface Session {
     isHidden: boolean;
     listenerCount: number;
 }
-export interface SessionsAttachRequest {
-    id: string;
-}
 export interface SessionsCloseRequest {
     id: string;
 }
@@ -194,9 +191,6 @@ export interface SessionsHideRequest {
 export interface Recent {
     host: string;
     last_used: number;
-}
-export interface RecentUpdateRequest {
-    host: string;
 }
 export interface LocalShell {
     name: string;

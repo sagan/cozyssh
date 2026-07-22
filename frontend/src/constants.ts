@@ -130,7 +130,7 @@ export const MISC_FUNCTIONS = [
   { value: "OPEN_DASHBOARD_DIALOG", label: "Open Dashboard Dialog" },
   { value: "OPEN_NEW_HOST_DIALOG", label: "Open New Host Dialog" },
   { value: "OPEN_NEW_BUTTON_DIALOG", label: "Open New Button Dialog" },
-  { value: "REFRESH", label: "Refresh Data" },
+  { value: "REFRESH", label: "Refresh Data", shortcut: "ctrl+alt+r" },
   { value: "NONE", label: "None (Do Nothing)" },
 ] as const;
 
@@ -174,6 +174,7 @@ export const TOAST_KEY_API_FULLDATA = "cs-api-fulldata";
 export const TOAST_KEY_COPY_TUNNEL_ENTRYPOINT = "cs-copy-tunnel-entrypoint";
 export const TOAST_KEY_COPY = "cs-copy";
 export const TOAST_KEY_HOST_NOT_FOUND = "cs-host-not-found";
+export const TOAST_KEY_REFRESH = "cs-refresh";
 
 /**
  * Used as a special flag in url hash to indicate the mobile input panel is currently open.
@@ -189,7 +190,15 @@ export const ID_SIDEBAR_FILTER = "sidebar-filter";
 
 export const ID_NEW_TAB_DIALOG_INPUT = "new-tab-dialog-input";
 
+export const ID_NEW_TAB_DIALOG_CONTENT = "new-tab-dialog-content";
+
+export const ID_NEW_TAB_DIALOG_LIST = "new-tab-dialog-list";
+
 export const ID_INPUT_DIALOG_INPUT = "input-dialog-input";
+
+export const ID_SIDEBAR = "sidebar";
+
+export const ID_SIDEBAR_MAIN = "sidebar-main";
 
 export const CACHE_API_DATA = "api-data-cache";
 

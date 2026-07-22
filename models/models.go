@@ -219,11 +219,6 @@ type Session struct {
 	ListenerCount int    `json:"listenerCount"`
 }
 
-// POST /api/sessions/attach payload
-type SessionsAttachRequest struct {
-	Id string `json:"id"`
-}
-
 // POST /api/sessions/close payload
 type SessionsCloseRequest struct {
 	Id string `json:"id"`
@@ -264,11 +259,6 @@ type SessionsHideRequest struct {
 type Recent struct {
 	Host     string `json:"host"`
 	LastUsed int64  `json:"last_used"` // unix timestamp in seconds
-}
-
-// POST /api/recents payload
-type RecentUpdateRequest struct {
-	Host string `json:"host"`
 }
 
 type FullData struct {

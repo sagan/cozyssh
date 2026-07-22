@@ -580,6 +580,7 @@ func ListHosts() ([]*models.HostData, error) {
 					PasswordExists:        passstore.HasPassword(canonical),
 				})
 				seenHosts[name] = true
+				seenHosts[hostname] = true
 				break // only one name rep per block needed for sidebar
 			}
 		}

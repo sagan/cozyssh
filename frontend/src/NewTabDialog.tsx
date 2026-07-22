@@ -41,6 +41,8 @@ import {
   LINK_COZYSSH_GITHUB,
   LINK_COZYSSH_DOC_SCRIPTS,
   LINK_COZYSSH_DOC_PLUGINS,
+  ID_NEW_TAB_DIALOG_LIST,
+  ID_NEW_TAB_DIALOG_CONTENT,
 } from "./constants";
 import {
   cutString,
@@ -95,9 +97,7 @@ interface DialogItem {
   tooltip?: string;
   isFav?: boolean;
   id?: string;
-  host?: string;
-  isLocked?: boolean;
-  isHidden?: boolean;
+  session?: Session;
   btn?: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">;
   tag?: string;
   className?: string;
@@ -119,7 +119,7 @@ interface NewTabDialogProps {
   onClose: () => void;
   onSelect: (host: string, alternativeMode?: number) => void;
   onSelectTab: (tabId: string) => void;
-  onAttachPinned: (id: string, host: string, title: string, isLocked: boolean) => void;
+  onAttachPinned: (session: Session, alternativeMode?: number) => void;
   onExecuteButton: (
     btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">,
     alternativeMode?: number,
@@ -665,13 +665,10 @@ export default function NewTabDialog({
 
       const pinnedTabsItems: Omit<DialogItem, "flatIndex">[] = attachablePinnedTabs.map((p) => ({
         type: "pinned_tab",
-        id: p.id,
         value: p.id,
-        host: p.host,
         label: p.title || p.host,
         subtitle: "Terminal: " + p.host,
-        isLocked: p.isLocked,
-        isHidden: p.isHidden,
+        session: p,
       }));
       addSection("Attachable Pinned Tabs", pinnedTabsItems);
     } else if (viewMode === "buttons") {
@@ -834,6 +831,13 @@ export default function NewTabDialog({
   ]);
 
   useEffect(() => {
+    if (selectedIndex === 0) {
+      const el = document.getElementById(ID_NEW_TAB_DIALOG_CONTENT);
+      if (el) {
+        el.scrollTop = 0;
+        return;
+      }
+    }
     if (selectedItemRef.current) {
       selectedItemRef.current.scrollIntoView({
         behavior: "auto",
@@ -866,7 +870,7 @@ export default function NewTabDialog({
           onClose();
           break;
         case "pinned_tab":
-          onAttachPinned(item.id!, item.host!, item.label, !!item.isLocked);
+          onAttachPinned(item.session!, alternativeMode);
           onClose();
           break;
         case "button":
@@ -1056,9 +1060,9 @@ export default function NewTabDialog({
       case "tab":
         return <TabIcon {...activeProps} />;
       case "pinned_tab":
-        return item.isHidden ? (
+        return item.session!.isHidden ? (
           <VisibilityOffIcon {...activeProps} />
-        ) : item.isLocked ? (
+        ) : item.session!.isLocked ? (
           <LockIcon {...activeProps} />
         ) : (
           <PushPinIcon {...activeProps} />
@@ -1191,8 +1195,14 @@ export default function NewTabDialog({
           sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
         />
       </DialogTitle>
-      <DialogContent sx={{ p: 0 }} dividers onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-        <List sx={{ pt: 0, pb: 0 }}>
+      <DialogContent
+        sx={{ p: 0 }}
+        id={ID_NEW_TAB_DIALOG_CONTENT}
+        dividers
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        <List sx={{ pt: 0, pb: 0 }} id={ID_NEW_TAB_DIALOG_LIST}>
           {sections.map((section) => (
             <React.Fragment key={section.title}>
               {section.title && (

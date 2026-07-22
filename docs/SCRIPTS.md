@@ -98,6 +98,12 @@ CozySSH sets some global variables in the browser's window object.
 - `window.__CS_USE_STORE__` : `typeof useStore` - The [zustand][] store hook function that CozySSH uses to manage state.
 - `window.__CS_TERMINAL_OPTIONS__` : `ITerminalOptions` - Used to set additional xterm.js terminal options. These options are merged with the default options. It uses Proxy so any modification takes effect to all terminals immediately. See xterm.js [ITerminalOptions](https://xtermjs.org/docs/api/terminal/interfaces/iterminaloptions/) for details. The default options can be found in `frontend/src/Terminal.tsx`.
 - `window.__CS_FONT_SIZE__`: `number` - Global font size. Default is `14` (MUI default). It uses Object.defineProperty so the modification takes effect immediately.
+- `window.__CS_EXTRA_HOST_MENU__`: `CustomMenu<HostData>[]` | `undefined`, `window.__CS_EXTRA_TAB_MENU__`: `CustomMenu<SessionData>[]` | `undefined`, `window.__CS_EXTRA_BUTTON_MENU__`: `CustomMenu<ButtonData>[]` | `undefined` - The extra menu items to be added to the host, tab, and button context menus respectively. It uses Object.defineProperty so any modification takes effect immediately. The default value is `undefined`. Example:
+  ```js
+  __CS_EXTRA_HOST_MENU__ = [{ name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }];
+  __CS_EXTRA_TAB_MENU__ = [{ name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }];
+  __CS_EXTRA_BUTTON_MENU__ = [{ name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }];
+  ```
 - `window.__CS_TOAST_KEY_MUTE_SET__`: `Set<string>` - The list of toast keys that should be muted. The element is a toast key string. If a key ends with `-`, it's treated as a prefix, and it will mute all toasts whose keys start with this prefix.
 - `window.__CS_LIQUID_ENGINE__` : `Liquid` - The LiquidJs Engine instannce that CozySSH uses for send_string buttons & Terminal Input dialog.
 - `window.__CS_ENV__` : `number` - `0` - CozySSH is running as web app; `1` - CozySSH is running as Windows Desktop app (webview2). This variable is also available in `<html data-cs-env>`.

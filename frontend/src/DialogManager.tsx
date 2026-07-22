@@ -52,7 +52,6 @@ import {
   getStore,
   setActivePaneId,
   setActiveTabId,
-  setBtnMenuAnchor,
   setButtonFormData,
   setEditButton,
   setEditButtonDialogOpen,
@@ -96,11 +95,13 @@ import {
   openEditHostByName,
   moveTabLeft,
   moveTabRight,
+  setBtnContextMenuOpen,
 } from "./store";
 import NewTabDialog from "./NewTabDialog";
 import { dialogs } from "./Dialogs";
 import FreeTextField from "./components/FreeTextField";
 import TextFieldWithCopy from "./components/TextFieldWithCopy";
+import ExtraMenu from "./components/ExtraMenu";
 
 export interface DialogManagerProps {
   isMobile: boolean;
@@ -145,9 +146,7 @@ export default function DialogManager({
   sendParsedString,
 }: DialogManagerProps) {
   const hosts = useStore((state) => state.hosts);
-  const lastMenuBtn = useStore((state) => state.lastMenuBtn);
   const editButton = useStore((state) => state.editButton);
-  const btnMenuAnchor = useStore((state) => state.btnMenuAnchor);
   const toasts = useStore((state) => state.toasts);
   const buttonFormData = useStore((state) => state.buttonFormData);
   const initialBtnFormData = useStore((state) => state.initialBtnFormData);
@@ -163,6 +162,10 @@ export default function DialogManager({
   const activePaneId = useStore((state) => state.activePaneId);
   const shellIntegrations = useStore((state) => state.shellIntegrations);
   const appendNewLine = useStore((state) => state.appendNewLine);
+  const extraTabMenu = useStore((state) => state.extraTabMenu);
+  const extraButtonMenu = useStore((state) => state.extraButtonMenu);
+  const btnContextMenuOpen = useStore((state) => state.btnContextMenuOpen);
+  const btnContextMenu = useStore((state) => state.btnContextMenu);
 
   const [titleMenuAnchor, setTitleMenuAnchor] = useState<null | HTMLElement>(null);
   const [importTip, setImportTip] = useState<ToastData | null>(null);
@@ -689,6 +692,7 @@ export default function DialogManager({
                     Force sync
                   </MenuItem>
                 )}
+                <ExtraMenu extraMenu={extraTabMenu} target={tab} before={handleCloseMenu} />
                 <MenuItem
                   onClick={() => {
                     handleCloseMenu();
@@ -710,122 +714,127 @@ export default function DialogManager({
           })()}
       </Menu>
 
-      <Menu anchorEl={btnMenuAnchor?.anchor} open={Boolean(btnMenuAnchor)} onClose={() => setBtnMenuAnchor(null)}>
+      <Menu anchorEl={btnContextMenu?.element} open={btnContextMenuOpen} onClose={() => setBtnContextMenuOpen(false)}>
         <MenuItem
           onClick={() => {
-            if (!btnMenuAnchor) {
+            if (!btnContextMenu) {
               return;
             }
+            setBtnContextMenuOpen(false);
             const data = {
               id: "",
-              name: btnMenuAnchor.btn.name,
-              type: btnMenuAnchor.btn.type,
-              payload: btnMenuAnchor.btn.payload,
-              group: btnMenuAnchor.btn.group || DEFAULT_BUTTON_GROUP,
-              autorun: btnMenuAnchor.btn.autorun || 0,
-              order: btnMenuAnchor.btn.order || 0,
-              shortcut: btnMenuAnchor.btn.shortcut || "",
-              liquidjs: btnMenuAnchor.btn.liquidjs || 0,
+              name: btnContextMenu.btn.name,
+              type: btnContextMenu.btn.type,
+              payload: btnContextMenu.btn.payload,
+              group: btnContextMenu.btn.group || DEFAULT_BUTTON_GROUP,
+              autorun: btnContextMenu.btn.autorun || 0,
+              order: btnContextMenu.btn.order || 0,
+              shortcut: btnContextMenu.btn.shortcut || "",
+              liquidjs: btnContextMenu.btn.liquidjs || 0,
             };
-            setEditButton(btnMenuAnchor.btn);
+            setEditButton(btnContextMenu.btn);
             setButtonFormData(data);
             setInitialBtnFormData(data);
-            setBtnMenuAnchor(null);
             setEditButtonDialogOpen(true);
           }}
         >
-          Edit {lastMenuBtn ? `${lastMenuBtn.name} (${lastMenuBtn.type})` : "Button"}
+          Edit {btnContextMenu?.btn ? `${btnContextMenu.btn.name} (${btnContextMenu.btn.type})` : "Button"}
         </MenuItem>
         <MenuItem
           onClick={() => {
-            if (btnMenuAnchor) {
-              setBtnMenuAnchor(null);
-              openInputDialog({
-                inputValue: btnMenuAnchor.btn.payload,
-                inputLiquid: btnMenuAnchor.btn.liquidjs === 1 || btnMenuAnchor.btn.liquidjs === 2,
-                sendScope: 0,
-                appendNewLine: false,
-              });
+            if (!btnContextMenu) {
+              return;
             }
+            setBtnContextMenuOpen(false);
+            openInputDialog({
+              inputValue: btnContextMenu.btn.payload,
+              inputLiquid: btnContextMenu.btn.liquidjs === 1 || btnContextMenu.btn.liquidjs === 2,
+              sendScope: 0,
+              appendNewLine: false,
+            });
           }}
-          sx={{ display: lastMenuBtn?.type === "send_string" ? "flex" : "none" }}
+          sx={{ display: btnContextMenu?.btn.type === "send_string" ? "flex" : "none" }}
         >
           Send
         </MenuItem>
         <MenuItem
           onClick={() => {
-            if (btnMenuAnchor) {
-              setBtnMenuAnchor(null);
-              openInputDialog({
-                inputValue: btnMenuAnchor.btn.payload,
-                inputLiquid: btnMenuAnchor.btn.liquidjs === 1 || btnMenuAnchor.btn.liquidjs === 2,
-                sendScope: 2,
-                appendNewLine: false,
-              });
+            if (!btnContextMenu) {
+              return;
             }
+            setBtnContextMenuOpen(false);
+            openInputDialog({
+              inputValue: btnContextMenu.btn.payload,
+              inputLiquid: btnContextMenu.btn.liquidjs === 1 || btnContextMenu.btn.liquidjs === 2,
+              sendScope: 2,
+              appendNewLine: false,
+            });
           }}
-          sx={{ display: lastMenuBtn?.type === "send_string" ? "flex" : "none" }}
+          sx={{ display: btnContextMenu?.btn.type === "send_string" ? "flex" : "none" }}
         >
           Send To All
         </MenuItem>
         <MenuItem
           onClick={() => {
-            if (btnMenuAnchor) {
-              const host = btnMenuAnchor.btn.payload;
-              setBtnMenuAnchor(null);
-              openHostInNewWindow(host);
+            if (!btnContextMenu) {
+              return;
             }
+            setBtnContextMenuOpen(false);
+            openHostInNewWindow(btnContextMenu.btn.payload);
           }}
           sx={{
-            display: lastMenuBtn?.type === "open_terminal" ? "flex" : "none",
+            display: btnContextMenu?.btn.type === "open_terminal" ? "flex" : "none",
           }}
         >
           Open (New Window)
         </MenuItem>
         <MenuItem
           onClick={() => {
-            if (btnMenuAnchor) {
-              const hosts = btnMenuAnchor.btn.payload.split(/\s*,\s*/);
-              setBtnMenuAnchor(null);
-              for (const host of hosts) {
-                openHost(host, { target: "_self" });
-              }
+            if (!btnContextMenu) {
+              return;
+            }
+            setBtnContextMenuOpen(false);
+            const hosts = btnContextMenu.btn.payload.split(/\s*,\s*/);
+            for (const host of hosts) {
+              openHost(host, { target: "_self" });
             }
           }}
           sx={{
-            display: lastMenuBtn?.type === "open_terminal" ? "flex" : "none",
+            display: btnContextMenu?.btn.type === "open_terminal" ? "flex" : "none",
           }}
         >
           Open (In Current Tab)
         </MenuItem>
         <MenuItem
           onClick={() => {
-            if (btnMenuAnchor) {
-              setBtnMenuAnchor(null);
-              navigator.clipboard.writeText(
-                `${window.location.origin}/#${encodeURIComponent(btnMenuAnchor.btn.payload)}`,
-              );
+            if (!btnContextMenu) {
+              return;
             }
+            setBtnContextMenuOpen(false);
+            navigator.clipboard.writeText(
+              `${window.location.origin}/#${encodeURIComponent(btnContextMenu.btn.payload)}`,
+            );
           }}
           className={CLASS_HIDE_DESKTOP}
           sx={{
-            display: lastMenuBtn?.type === "open_terminal" ? "flex" : "none",
+            display: btnContextMenu?.btn.type === "open_terminal" ? "flex" : "none",
           }}
         >
           Copy URL
         </MenuItem>
         <MenuItem
           onClick={() => {
-            if (btnMenuAnchor) {
-              navigator.clipboard.writeText(btnMenuAnchor.btn.payload);
-              setBtnMenuAnchor(null);
+            if (!btnContextMenu) {
+              return;
             }
+            setBtnContextMenuOpen(false);
+            navigator.clipboard.writeText(btnContextMenu.btn.payload);
           }}
           sx={{
             display:
-              lastMenuBtn?.type === "send_string" ||
-              lastMenuBtn?.type === "run_script" ||
-              lastMenuBtn?.type === "open_terminal"
+              btnContextMenu?.btn.type === "send_string" ||
+              btnContextMenu?.btn.type === "run_script" ||
+              btnContextMenu?.btn.type === "open_terminal"
                 ? "flex"
                 : "none",
           }}
@@ -834,40 +843,51 @@ export default function DialogManager({
         </MenuItem>
         <MenuItem
           onClick={() => {
-            if (btnMenuAnchor) {
-              navigator.clipboard.writeText(JSON.stringify(btnMenuAnchor.btn));
-              setBtnMenuAnchor(null);
+            if (!btnContextMenu) {
+              return;
             }
+            setBtnContextMenuOpen(false);
+            navigator.clipboard.writeText(JSON.stringify(btnContextMenu.btn));
           }}
         >
           Copy Button Data
         </MenuItem>
+        {btnContextMenu && (
+          <ExtraMenu
+            extraMenu={extraButtonMenu}
+            target={btnContextMenu.btn}
+            before={() => setBtnContextMenuOpen(false)}
+          />
+        )}
         <MenuItem
           onClick={() => {
-            if (btnMenuAnchor) {
-              setBtnMenuAnchor(null);
-              moveButton(btnMenuAnchor.btn.id, -1);
+            if (!btnContextMenu) {
+              return;
             }
+            setBtnContextMenuOpen(false);
+            moveButton(btnContextMenu.btn.id, -1);
           }}
         >
           Move Button Left
         </MenuItem>
         <MenuItem
           onClick={() => {
-            if (btnMenuAnchor) {
-              setBtnMenuAnchor(null);
-              moveButton(btnMenuAnchor.btn.id, 1);
+            if (!btnContextMenu) {
+              return;
             }
+            setBtnContextMenuOpen(false);
+            moveButton(btnContextMenu.btn.id, 1);
           }}
         >
           Move Button Right
         </MenuItem>
         <MenuItem
           onClick={() => {
-            if (btnMenuAnchor) {
-              setBtnMenuAnchor(null);
-              deleteButton(btnMenuAnchor.btn);
+            if (!btnContextMenu) {
+              return;
             }
+            setBtnContextMenuOpen(false);
+            deleteButton(btnContextMenu.btn);
           }}
           sx={{ color: "error.main" }}
         >
@@ -1685,8 +1705,8 @@ export default function DialogManager({
             triggerFocus();
           }
         }}
-        onAttachPinned={(id, host, title, isLocked) => {
-          attachSession(id, host, title, isLocked);
+        onAttachPinned={(session) => {
+          attachSession(session);
           closeNewTabDialog();
         }}
         onSelect={async (host, alternativeMode = 0) => {

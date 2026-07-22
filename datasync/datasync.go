@@ -1319,7 +1319,7 @@ func ReadDeviceKnownHosts(deviceName string) ([]*models.RemoteKnownHostEntry, er
 	localKH := map[string]map[string]string{}
 	localPath := filepath.Join(gCfg.AbsSSHDir, "known_hosts")
 	if localData, err := os.ReadFile(localPath); err == nil {
-		for _, line := range strings.Split(string(localData), "\n") {
+		for line := range strings.SplitSeq(string(localData), "\n") {
 			line = strings.TrimSpace(line)
 			if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "|") {
 				continue
@@ -1328,7 +1328,7 @@ func ReadDeviceKnownHosts(deviceName string) ([]*models.RemoteKnownHostEntry, er
 			if len(fields) < 3 {
 				continue
 			}
-			for _, pat := range strings.Split(fields[0], ",") {
+			for pat := range strings.SplitSeq(fields[0], ",") {
 				pat = strings.TrimSpace(pat)
 				if localKH[pat] == nil {
 					localKH[pat] = map[string]string{}
@@ -1339,7 +1339,7 @@ func ReadDeviceKnownHosts(deviceName string) ([]*models.RemoteKnownHostEntry, er
 	}
 
 	var entries []*models.RemoteKnownHostEntry
-	for _, line := range strings.Split(string(remoteData), "\n") {
+	for line := range strings.SplitSeq(string(remoteData), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "|") {
 			continue
@@ -1366,7 +1366,7 @@ func ReadDeviceKnownHosts(deviceName string) ([]*models.RemoteKnownHostEntry, er
 
 		// Check against local
 		isNew := true
-		for _, pat := range strings.Split(patterns, ",") {
+		for pat := range strings.SplitSeq(patterns, ",") {
 			pat = strings.TrimSpace(pat)
 			if typeMap, ok := localKH[pat]; ok {
 				if localKeyData, hasSameType := typeMap[keyType]; hasSameType {
@@ -1505,7 +1505,7 @@ func ImportKnownHostsLines(deviceName string, lines []string, force bool) error 
 		if len(fields) < 3 {
 			continue
 		}
-		for _, pat := range strings.Split(fields[0], ",") {
+		for pat := range strings.SplitSeq(fields[0], ",") {
 			pat = strings.TrimSpace(pat)
 			if localKH[pat] == nil {
 				localKH[pat] = map[string]int{}
@@ -1528,7 +1528,7 @@ func ImportKnownHostsLines(deviceName string, lines []string, force bool) error 
 		importKeyData := fields[2]
 		isConflict := false
 		hasSame := false
-		for _, pat := range strings.Split(fields[0], ",") {
+		for pat := range strings.SplitSeq(fields[0], ",") {
 			pat = strings.TrimSpace(pat)
 			if typeMap, ok := localKH[pat]; ok {
 				if idx, hasSameType := typeMap[importKeyType]; hasSameType {

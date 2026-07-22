@@ -72,6 +72,9 @@ import {
   fetchSessions,
   setFilterStr,
   fetchActiveTunnels,
+  setExtraHostMenu,
+  setExtraTabMenu,
+  setExtraButtonMenu,
 } from "./store";
 import { dialogs } from "./Dialogs";
 import type { AppletData } from "./AppletWrapper";
@@ -231,6 +234,27 @@ Object.defineProperty(window, "__CS_FONT_SIZE__", {
   },
   configurable: true,
   enumerable: true,
+});
+
+Object.defineProperty(window, "__CS_EXTRA_HOST_MENU__", {
+  get() {
+    return getStore().extraHostMenu;
+  },
+  set: setExtraHostMenu,
+});
+
+Object.defineProperty(window, "__CS_EXTRA_TAB_MENU__", {
+  get() {
+    return getStore().extraTabMenu;
+  },
+  set: setExtraTabMenu,
+});
+
+Object.defineProperty(window, "__CS_EXTRA_BUTTON_MENU__", {
+  get() {
+    return getStore().extraButtonMenu;
+  },
+  set: setExtraButtonMenu,
 });
 
 window.csAlert = dialogs.alert;

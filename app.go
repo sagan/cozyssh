@@ -198,14 +198,19 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 
 	passstore.Init(cfg.ConfigDir, cfg.AppPasswordHash)
 	if cfg.UseKeyring {
+		ok := false
 		if appPassword, err := keyring.GetAppPassword(cfg.ConfigDir); err == nil {
 			if passstore.SetEncryptionKey(appPassword) {
+				ok = true
 				log.Printf("Passstore unlocked using system keyring stored app password")
 			} else {
 				log.Printf("Can't unlock passstore using system keyring stored password")
 			}
 		} else {
 			log.Printf("Can't get app password from system keyring: %v", err)
+		}
+		if !ok {
+			cfg.UpdateConfig(&models.ConfigRequest{UseKeyring: new(bool)})
 		}
 	}
 	auth.Init(cfg)
@@ -338,17 +343,13 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 
 	mux.Handle("/api/recents", securityMiddleware(auth.Middleware(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost {
+			switch r.Method {
+			case http.MethodGet:
+				w.Header().Set(headers.ContentType, constants.MIME_JSON)
+				json.NewEncoder(w).Encode(recents.Get())
+			default:
 				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-				return
 			}
-			var req models.RecentUpdateRequest
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				http.Error(w, "Bad Request", http.StatusBadRequest)
-				return
-			}
-			recents.Add(req.Host)
-			w.WriteHeader(http.StatusNoContent)
 		}))))
 
 	// DELETE /api/recents/{host} — remove a specific host from the recents list
@@ -1161,27 +1162,6 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 			json.NewEncoder(w).Encode(tunnels)
 		}))))
 
-	mux.Handle("/api/sessions/attach", securityMiddleware(auth.Middleware(http.HandlerFunc(
-		func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost {
-				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			var req models.SessionsAttachRequest
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				http.Error(w, "Bad Request", http.StatusBadRequest)
-				return
-			}
-			if s := session.GlobalManager.Get(req.Id); s != nil {
-				_, _, isHidden := s.GetState()
-				if isHidden {
-					s.SetState(2)
-				}
-				s.Steal()
-			}
-			w.WriteHeader(http.StatusNoContent)
-		}))))
-
 	mux.Handle("/api/sessions/close", securityMiddleware(auth.Middleware(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
@@ -1517,6 +1497,13 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 	})
 
 	addr := cfg.Addr
+	if common.IsApp {
+		host, port, err := net.SplitHostPort(addr)
+		if err == nil && host != "127.0.0.1" && host != "::1" {
+			addr = "127.0.0.1:" + port
+			log.Printf("CozySSH is running in desktop app mode, force listen local addr %s", addr)
+		}
+	}
 	server := &http.Server{
 		Addr:         addr,
 		Handler:      mux,

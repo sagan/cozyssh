@@ -303,6 +303,7 @@ export const appShortcuts = new Set([
   "alt+`",
   "alt+shift+~",
   "alt+enter",
+  "ctrl+alt+r",
   "ctrl+alt+shift+r",
   "ctrl+alt+0",
   "ctrl+alt+1",

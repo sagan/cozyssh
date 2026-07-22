@@ -286,8 +286,8 @@ func TestAttachStealsSession(t *testing.T) {
 	login(t, pageB, url, "123456")
 
 	// Use the attach scripting API (same as clicking the "Attach" entry in the Dashboard).
-	// csAttach calls attachSession: it posts to /api/sessions/attach then opens a UI tab
-	// with pane.sessionId = id so the WS reconnects to the existing backend session.
+	// csAttach calls attachSession: it opens a UI tab with pane.sessionId = id
+	// so the WS reconnects to the existing backend session.
 	_, err = pageB.Evaluate(fmt.Sprintf(`() => csAttach(%q, 'local', 'STOLEN_VIEW', false)`, sessionId))
 	if err != nil {
 		t.Fatalf("csAttach: %v", err)

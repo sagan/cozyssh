@@ -162,6 +162,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - `Ctrl + Shift + R` : Reconnect current terminal
   - `Ctrl + Shift + C` : Copy selected text in terminal
   - `Ctrl + Shift + V (Windows) / Cmd + V (Mac)` : Paste into terminal
+  - `Ctrl + Alt + R` : Refresh data from backend
   - `Ctrl + Alt + Shift + R` : Force clear service worker, cache and reload
   - `Mouse Select` in terminal to copy
   - `Mouse Right Click` in terminal to paste

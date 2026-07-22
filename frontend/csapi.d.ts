@@ -2001,7 +2001,22 @@ export interface TabData {
 	type: "terminal" | "scratchpad";
 }
 export type TerminalRefMap = Record<string, TerminalHandle | ScratchpadHandle | null>;
+export interface CustomMenu<T> {
+	key?: string;
+	name: string | ((item: T) => string);
+	action: (e: React.MouseEvent, item: T) => void | Promise<void>;
+	hidden?: (item: T) => boolean;
+	disabled?: (item: T) => boolean;
+}
 export interface Store {
+	btnContextMenuOpen: boolean;
+	btnContextMenu: {
+		element: Element;
+		btn: ButtonData;
+	} | null;
+	extraHostMenu?: CustomMenu<HostData>[];
+	extraTabMenu?: CustomMenu<TabData>[];
+	extraButtonMenu?: CustomMenu<ButtonData>[];
 	settingsTab: number;
 	settingsOpen: boolean;
 	filterStr: string;
@@ -2022,11 +2037,6 @@ export interface Store {
 	 * Current editing button
 	 */
 	editButton: ButtonData | null;
-	lastMenuBtn: ButtonData | null;
-	btnMenuAnchor: {
-		anchor: HTMLElement;
-		btn: ButtonData;
-	} | null;
 	hostFormData: HostForm;
 	initialHostFormData: HostForm | null;
 	buttonFormData: ButtonForm;
@@ -2188,7 +2198,7 @@ declare global {
 	 * Note script is executed in async manner. If multiple scripts are executed at the same time,
 	 * this variable can hold any of them or undefined. It's guaranteed that it will be set to
 	 * undefined when no script is running.
-	 * It's recommended to use the `selfBtn` argument of `run(selfBtn)` in the plugin API instead.
+	 * It's recommended to use the `payload.button` argument of `run(payload)` in the plugin API instead.
 	 */
 	var __CS_RUNNING_SCRIPT__: Pick<ButtonData, "id" | "name" | "type" | "payload"> | undefined;
 	/**
@@ -2201,6 +2211,18 @@ declare global {
 	 * It uses Object.defineProperty so the modification takes effect immediately.
 	 */
 	var __CS_FONT_SIZE__: number;
+	/**
+	 * Extra host context menu. It uses Object.defineProperty so any modification takes effect immediately.
+	 */
+	var __CS_EXTRA_HOST_MENU__: CustomMenu<HostData>[] | undefined;
+	/**
+	 * Extra tab context menu. It uses Object.defineProperty so any modification takes effect immediately.
+	 */
+	var __CS_EXTRA_TAB_MENU__: CustomMenu<TabData>[] | undefined;
+	/**
+	 * Extra button context menu. It uses Object.defineProperty so any modification takes effect immediately.
+	 */
+	var __CS_EXTRA_BUTTON_MENU__: CustomMenu<ButtonData>[] | undefined;
 	/**
 	 * Global shortcut button map.
 	 */
@@ -2442,6 +2464,7 @@ declare global {
 	 * @returns Returns the opened tab id
 	 */
 	function csAttach(id: string, host: string, title: string, isLocked?: boolean): Promise<string>;
+	function csAttach(s: Session): Promise<string>;
 	/**
 	 * Display an async alert dialog.
 	 * The behavior is the same as `window.alert` except it's non-blocking.

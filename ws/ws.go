@@ -21,6 +21,7 @@ import (
 	"cozyssh/constants"
 	"cozyssh/localpty"
 	"cozyssh/models"
+	"cozyssh/recents"
 	"cozyssh/session"
 	"cozyssh/sshmanager"
 )
@@ -160,17 +161,20 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := common.User
-	// sessionID fallbacks to hostname if no unique ID provided
+	hostWithoutPass := host
 	if i := strings.LastIndex(host, "@"); i != -1 {
-		if sessionID == "" {
-			sessionID = host[i+1:]
-		}
 		user, _, _ = strings.Cut(host[0:i], ":")
 		if _u, err := url.PathUnescape(user); err == nil {
 			user = _u
 		}
-	} else if sessionID == "" {
-		sessionID = host
+		hostWithoutPass = user + "@" + host[i+1:]
+	}
+	if sessionID == "" {
+		sessionID = "s-" + common.RandString(12, false)
+	}
+
+	if query.Get("_updateRecent") == "1" {
+		recents.Add(hostWithoutPass)
 	}
 
 	if reconnect {
@@ -333,6 +337,11 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	if query.Has("state") {
 		state, _ := strconv.Atoi(query.Get("state"))
 		s.SetState(state)
+	} else {
+		_, _, isHidden := s.GetState()
+		if isHidden {
+			s.SetState(2)
+		}
 	}
 
 	session.GlobalManager.CancelDisconnectTimer(sessionID)

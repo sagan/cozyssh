@@ -38,6 +38,7 @@ import {
   TOAST_KEY_COPY,
   TERMINAL_FUNCTIONS,
   MISC_FUNCTIONS,
+  TOAST_KEY_REFRESH,
 } from "./constants";
 import {
   type ContextMenu,
@@ -478,7 +479,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               const sessions = await fetchSessions(true);
               const session = sessions.find((s) => !s.isHidden);
               if (session) {
-                attachSession(session.id, session.host, session.title, session.isLocked);
+                attachSession(session);
               }
             })();
             return;
@@ -806,7 +807,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
               openAddButtonDialog();
               break;
             case "REFRESH":
-              refreshData({ sync: 2 });
+              try {
+                await refreshData({ sync: 2 });
+                notify(`Data refreshed`, "success", TOAST_KEY_REFRESH);
+              } catch (err: unknown) {
+                notify(`Data refresh failure: ${err}`, "error", TOAST_KEY_REFRESH);
+              }
               break;
             case "NONE":
               break;
@@ -1161,17 +1167,22 @@ export default function Dashboard({ initialData }: DashboardProps) {
         <Sidebar
           isMobile={isMobile}
           isTouch={isTouch}
-          onAttach={(id, host, title, isLocked) => {
-            attachSession(id, host, title, isLocked);
+          onAttach={(session) => {
             setMobileOpen(false);
+            attachSession(session);
           }}
-          onRefresh={() => {
-            refreshData({ sync: 2 });
+          onRefresh={async () => {
             setMobileOpen(false);
+            try {
+              await refreshData({ sync: 2 });
+              notify(`Data refreshed`, "success", TOAST_KEY_REFRESH);
+            } catch (err: unknown) {
+              notify(`Data refresh failure: ${err}`, "error", TOAST_KEY_REFRESH);
+            }
           }}
           onOpenScratchpad={() => {
-            openScratchpad();
             setMobileOpen(false);
+            openScratchpad();
           }}
         />
         <Box

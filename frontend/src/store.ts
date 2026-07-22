@@ -17,8 +17,6 @@ import type {
   Recent,
   LocalShell,
   ActiveTunnel,
-  RecentUpdateRequest,
-  SessionsAttachRequest,
   SessionsUnpinRequest,
   SessionsPinRequest,
   SessionsLockRequest,
@@ -120,7 +118,20 @@ export interface TabData {
 
 export type TerminalRefMap = Record<string, TerminalHandle | ScratchpadHandle | null>;
 
+export interface CustomMenu<T> {
+  key?: string;
+  name: string | ((item: T) => string);
+  action: (e: React.MouseEvent, item: T) => void | Promise<void>;
+  hidden?: (item: T) => boolean;
+  disabled?: (item: T) => boolean;
+}
+
 interface Store {
+  btnContextMenuOpen: boolean;
+  btnContextMenu: { element: Element; btn: ButtonData } | null;
+  extraHostMenu?: CustomMenu<HostData>[];
+  extraTabMenu?: CustomMenu<TabData>[];
+  extraButtonMenu?: CustomMenu<ButtonData>[];
   settingsTab: number;
   settingsOpen: boolean;
   filterStr: string;
@@ -141,8 +152,6 @@ interface Store {
    * Current editing button
    */
   editButton: ButtonData | null;
-  lastMenuBtn: ButtonData | null;
-  btnMenuAnchor: { anchor: HTMLElement; btn: ButtonData } | null;
   hostFormData: HostForm;
   initialHostFormData: HostForm | null;
   buttonFormData: ButtonForm;
@@ -247,6 +256,8 @@ export const startupParams = new URLSearchParams(location.search);
 export const useStore = create<Store>(
   () =>
     ({
+      btnContextMenuOpen: false,
+      btnContextMenu: null,
       settingsTab: 0,
       settingsOpen: false,
       filterStr: startupParams.get("filter") || "",
@@ -261,8 +272,6 @@ export const useStore = create<Store>(
       toasts: [],
       editHostName: "",
       editButton: null,
-      lastMenuBtn: null,
-      btnMenuAnchor: null,
       hostFormData: {
         name: "",
         hostname: "",
@@ -421,11 +430,46 @@ export const removeRecentButtonId = (id: string) => {
   });
 };
 
+export const setBtnContextMenuOpen = (btnContextMenuOpen: boolean) => useStore.setState({ btnContextMenuOpen });
+
+export const setBtnContextMenu = (btnContextMenu: { element: Element; btn: ButtonData } | null) =>
+  useStore.setState({ btnContextMenu });
+
 export const setSettingsTab = (settingsTab: number) => useStore.setState({ settingsTab });
 
 export const setSettingsOpen = (settingsOpen: boolean) => useStore.setState({ settingsOpen });
 
 export const setFilterStr = (filterStr: string) => useStore.setState({ filterStr });
+
+export const setExtraHostMenu = (
+  update:
+    | CustomMenu<HostData>[]
+    | undefined
+    | ((menu: CustomMenu<HostData>[] | undefined) => CustomMenu<HostData>[] | undefined),
+) =>
+  useStore.setState((state) => ({
+    extraHostMenu: typeof update === "function" ? update(state.extraHostMenu) : update,
+  }));
+
+export const setExtraTabMenu = (
+  update:
+    | CustomMenu<TabData>[]
+    | undefined
+    | ((menu: CustomMenu<TabData>[] | undefined) => CustomMenu<TabData>[] | undefined),
+) =>
+  useStore.setState((state) => ({
+    extraTabMenu: typeof update === "function" ? update(state.extraTabMenu) : update,
+  }));
+
+export const setExtraButtonMenu = (
+  update:
+    | CustomMenu<ButtonData>[]
+    | undefined
+    | ((menu: CustomMenu<ButtonData>[] | undefined) => CustomMenu<ButtonData>[] | undefined),
+) =>
+  useStore.setState((state) => ({
+    extraButtonMenu: typeof update === "function" ? update(state.extraButtonMenu) : update,
+  }));
 
 export const setAsyncDialogOpen = (update: boolean | ((data: boolean) => boolean)) =>
   useStore.setState((state) => ({
@@ -455,9 +499,6 @@ export const setMobileAppletsOpen = (update: boolean | ((data: boolean) => boole
   }));
 
 export const setEditButton = (editButton: ButtonData | null) => useStore.setState({ editButton });
-export const setLastMenuBtn = (lastMenuBtn: ButtonData | null) => useStore.setState({ lastMenuBtn });
-export const setBtnMenuAnchor = (btnMenuAnchor: { anchor: HTMLElement; btn: ButtonData } | null) =>
-  useStore.setState({ btnMenuAnchor });
 
 export const setActiveGroup = (activeGroup: string) => {
   useStore.setState({ activeGroup });
@@ -1144,6 +1185,23 @@ export async function openHost(
       return targetTab.id; // do nothing
     }
   }
+  if (!noUpdateRecent && host !== LOCAL_NAME) {
+    options = options || {};
+    options._updateRecent = "1";
+    const hostWithoutPass = removePassFromHost(host);
+    // Optimistic update for local recents
+    setRecents((prev) => {
+      const now = Math.floor(Date.now() / 1000);
+      const idx = prev.findIndex((r) => r.host === hostWithoutPass);
+      const next = [...prev];
+      if (idx >= 0) {
+        next[idx] = { ...next[idx], last_used: now };
+      } else {
+        next.push({ host: hostWithoutPass, last_used: now });
+      }
+      return next.sort((a, b) => b.last_used - a.last_used).slice(0, 50);
+    });
+  }
   let tabId: string;
   if (targetTab) {
     const newPane: PaneData = { id: paneId, sessionId, host, options, state: "" };
@@ -1166,38 +1224,10 @@ export async function openHost(
     setActiveTabId(tabId);
     setActivePaneId(paneId);
   }
-
-  host = removePassFromHost(host);
-
-  // Record recent
-  if (!noUpdateRecent && host !== LOCAL_NAME) {
-    try {
-      fetch("/api/recents", {
-        method: METHOD_POST,
-        headers: apiReqHeaders(),
-        body: JSON.stringify({ host } satisfies RecentUpdateRequest),
-      });
-
-      // Optimistic update for local recents
-      setRecents((prev) => {
-        const now = Math.floor(Date.now() / 1000);
-        const idx = prev.findIndex((r) => r.host === host);
-        const next = [...prev];
-        if (idx >= 0) {
-          next[idx] = { ...next[idx], last_used: now };
-        } else {
-          next.push({ host, last_used: now });
-        }
-        return next.sort((a, b) => b.last_used - a.last_used).slice(0, 50);
-      });
-    } catch (e) {
-      console.error("Failed to record recent:", e);
-    }
-  }
   return tabId;
 }
 
-export async function logout(needConfirm: boolean = false) {
+export async function logout(needConfirm = false, preserveLocalVars = false) {
   if (needConfirm) {
     if (!(await dialogs.confirm("Log out of current device?", "All data stored in this browser will be cleared."))) {
       return;
@@ -1219,7 +1249,7 @@ export async function logout(needConfirm: boolean = false) {
     );
     await fetch("/api/logout", { method: METHOD_POST, headers: apiReqHeaders() }).catch(Function.prototype as never);
   }
-  safeLogout();
+  safeLogout(preserveLocalVars);
 }
 
 export async function logoutAll(needConfirm = false) {
@@ -1306,12 +1336,18 @@ export async function cloneSession(id: string, cloneInSameTab?: boolean) {
   setActivePaneId(newPaneId);
 }
 
-export async function attachSession(
-  id: string,
-  host: string,
-  title: string,
-  isLocked: boolean = false,
+export const attachSession: typeof csAttach = async function (
+  id: Session | string,
+  host?: string,
+  title?: string,
+  isLocked?: boolean,
 ): Promise<string> {
+  if (typeof id === "object") {
+    ({ id, host, title, isLocked } = id);
+  }
+  if (!host || !title) {
+    throw new Error("Missing host or title");
+  }
   const existing = getStore().tabs.find((t) =>
     t.panes.some((p) => (p.sessionId || p.id) === id && p.state !== "stolen"),
   );
@@ -1322,11 +1358,6 @@ export async function attachSession(
     );
     return existing.id;
   }
-  await fetch("/api/sessions/attach", {
-    method: METHOD_POST,
-    headers: apiReqHeaders(),
-    body: JSON.stringify({ id } satisfies SessionsAttachRequest),
-  });
   const tabId = genTabId(host);
   const paneId = genPaneId(host);
   setTabs((prev) => [
@@ -1344,7 +1375,7 @@ export async function attachSession(
   setActiveTabId(tabId);
   setActivePaneId(paneId);
   return tabId;
-}
+};
 
 export async function unpinTab(id?: string) {
   id = id || getStore().activeTabId;
@@ -1635,6 +1666,11 @@ export async function openSaveTabToButtonDialog(tabId?: string) {
   const hostConnectionStrings: string[] = targetTab.panes.map((p, idx) => {
     let s = p.host;
     const params = new URLSearchParams(p.options);
+    for (const key of params.keys()) {
+      if (key.startsWith("_")) {
+        params.delete(key);
+      }
+    }
     const titleBase = removeNameNumSuffix(targetTab.title);
     if (idx === 0 && titleBase !== p.host) {
       params.set("title", titleBase);
@@ -1848,17 +1884,12 @@ export function getIntVar(name: string, defaultValue = 0): number {
 }
 
 export async function refreshData({ sync = 0, refresh = 0 } = {}) {
-  try {
-    const res = await fetch(`/api/fulldata?sync=${sync}&refresh=${refresh}`, { headers: apiReqHeaders() });
-    if (res.status === 401) {
-      safeLogout(true);
-      return;
-    }
-    const data: FullData = await res.json();
-    useStore.setState(data);
-  } catch (err) {
-    console.error(err);
+  const res = await fetch(`/api/fulldata?sync=${sync}&refresh=${refresh}`, { headers: apiReqHeaders() });
+  if (res.status === 401) {
+    safeLogout(true);
   }
+  const data: FullData = await res.json();
+  useStore.setState(data);
 }
 
 export async function moveServer(serverName: string, destGroupPath: string | null, beforeServerName: string | null) {
@@ -2029,7 +2060,7 @@ export async function moveGroup(srcPath: string, beforeSiblingPath: string) {
   }
 }
 
-export async function updateConfig(config: ConfigRequest) {
+export async function updateConfig(config: ConfigRequest): Promise<boolean> {
   try {
     const res = await fetch("/api/settings/config", {
       method: METHOD_POST,
@@ -2046,8 +2077,10 @@ export async function updateConfig(config: ConfigRequest) {
     };
     setSysinfo(sysinfo);
     notify("Settings saved", "success", TOAST_KEY_API_SETTINGS);
+    return true;
   } catch (e) {
     notify(`Failed to save setting: ${e}`, "error", TOAST_KEY_API_SETTINGS);
+    return false;
   }
 }
 
