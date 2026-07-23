@@ -33,6 +33,7 @@ import {
   LOCAL_NAME,
   METHOD_POST,
   MISC_FUNCTIONS,
+  PartialMatchHostKey,
   TERMINAL_FUNCTIONS,
 } from "./constants";
 import {
@@ -96,12 +97,14 @@ import {
   moveTabLeft,
   moveTabRight,
   setBtnContextMenuOpen,
+  unloadButton,
 } from "./store";
 import NewTabDialog from "./NewTabDialog";
 import { dialogs } from "./Dialogs";
 import FreeTextField from "./components/FreeTextField";
 import TextFieldWithCopy from "./components/TextFieldWithCopy";
 import ExtraMenu from "./components/ExtraMenu";
+import { runScript } from "./pluginAPI";
 
 export interface DialogManagerProps {
   isMobile: boolean;
@@ -164,6 +167,7 @@ export default function DialogManager({
   const appendNewLine = useStore((state) => state.appendNewLine);
   const extraTabMenu = useStore((state) => state.extraTabMenu);
   const extraButtonMenu = useStore((state) => state.extraButtonMenu);
+  const extraButtonFormMenu = useStore((state) => state.extraButtonFormMenu);
   const btnContextMenuOpen = useStore((state) => state.btnContextMenuOpen);
   const btnContextMenu = useStore((state) => state.btnContextMenu);
 
@@ -455,16 +459,31 @@ export default function DialogManager({
   const buttonFormSubmitDisabled =
     !buttonFormData.name || !buttonFormData.payload || (!!editButton && !buttonFormDirty);
 
+  const handleSaveButton = useCallback(async () => {
+    const { editButton, buttonFormData } = getStore();
+    const editId = editButton?.id;
+    const newBtn = await saveButton(buttonFormData, editId);
+    setInitialBtnFormData(null);
+    setEditButtonDialogOpen(false);
+    if (editId) {
+      const cached = !!__CS_MODULECACHE__[editId];
+      unloadButton(editId);
+      if (cached) {
+        runScript({ button: newBtn, background: true });
+      }
+    }
+  }, []);
+
   const handleEditButtonFormKeyDown = useCallback(
     (e: KeyboardEvent | React.KeyboardEvent) => {
       const key = getKeyCombination(e);
       if (key === "ctrl+enter" && !buttonFormSubmitDisabled) {
         e.preventDefault();
         e.stopPropagation();
-        saveButton();
+        handleSaveButton();
       }
     },
-    [buttonFormSubmitDisabled],
+    [buttonFormSubmitDisabled, handleSaveButton],
   );
 
   return (
@@ -970,6 +989,13 @@ export default function DialogManager({
           >
             Add Plugin Manager
           </MenuItem>
+          <ExtraMenu
+            extraMenu={extraButtonFormMenu}
+            target={buttonFormData}
+            before={() => {
+              handleTitleMenuClose();
+            }}
+          />
           <MenuItem
             disabled={!buttonFormDirty}
             onClick={() => {
@@ -1384,7 +1410,7 @@ export default function DialogManager({
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditButtonDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={saveButton} disabled={buttonFormSubmitDisabled}>
+          <Button variant="contained" onClick={handleSaveButton} disabled={buttonFormSubmitDisabled}>
             Save
           </Button>
         </DialogActions>
@@ -1715,8 +1741,9 @@ export default function DialogManager({
           let parsedHost: HostData | undefined;
           if (hostname !== LOCAL_NAME) {
             // Check if it's a direct connection and not in known hosts
+            const existingHost = getHost(hostname);
             parsedHost = getHost(hostname);
-            if (!parsedHost.source) {
+            if (!existingHost.source && !existingHost[PartialMatchHostKey]) {
               (async () => {
                 await fetch("/api/hosts", {
                   method: METHOD_POST,
@@ -1727,7 +1754,7 @@ export default function DialogManager({
                 await refreshData({ sync: 2 });
               })();
             }
-            hostStr = parsedHost.source === "config" ? parsedHost.name : getCanonicalHostString(parsedHost);
+            hostStr = parsedHost.source === "config" ? parsedHost.name : getCanonicalHostString(parsedHost, "root");
           }
           if (query) {
             hostStr += "?" + query;

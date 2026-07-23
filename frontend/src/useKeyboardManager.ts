@@ -88,6 +88,11 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         handleButtonClick(__CS_SHORTCUT_BUTTONS__[keycomb]);
         return;
       }
+      if (__CS_CUSTOM_SHORTCUTS__[keycomb] && !__CS_CUSTOM_SHORTCUTS__[keycomb].disabled) {
+        e.preventDefault();
+        __CS_CUSTOM_SHORTCUTS__[keycomb].action();
+        return;
+      }
       if (blackholeShortcuts.has(keycomb)) {
         e.preventDefault();
         return;

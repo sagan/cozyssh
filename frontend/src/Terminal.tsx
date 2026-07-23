@@ -758,6 +758,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
 
         if (
           __CS_SHORTCUT_BUTTONS__[kcomb] ||
+          (__CS_CUSTOM_SHORTCUTS__[kcomb] && !__CS_CUSTOM_SHORTCUTS__[kcomb].disabledInTerminal) ||
           ((appShortcuts.has(kcomb) || systemShortcuts.has(kcomb)) &&
             !disableShortcuts.has(kcomb) &&
             !blackholeShortcuts.has(kcomb))

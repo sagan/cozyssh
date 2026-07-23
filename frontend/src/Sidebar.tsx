@@ -247,6 +247,9 @@ export default function Sidebar({
   const settingsOpen = useStore((state) => state.settingsOpen);
   const settingsTab = useStore((state) => state.settingsTab);
   const extraHostMenu = useStore((state) => state.extraHostMenu);
+  const extraGroupMenu = useStore((state) => state.extraGroupMenu);
+  const extraTagMenu = useStore((state) => state.extraTagMenu);
+  const extraHostFormMenu = useStore((state) => state.extraHostFormMenu);
 
   const theme = useTheme();
   const [loading, setLoading] = useState(false);
@@ -2682,6 +2685,15 @@ export default function Sidebar({
         <MenuItem onClick={handleOpenSplitServers}>Open All (Split Screen)</MenuItem>
         <MenuItem onClick={handleOpenAllServersInNewWindow}>Open All (New Window)</MenuItem>
         <MenuItem onClick={handleCopyTagUrl}>Copy URL</MenuItem>
+        {!!tagContextMenu && (
+          <ExtraMenu
+            extraMenu={extraTagMenu}
+            target={tagContextMenu.tag}
+            before={() => {
+              setTagContextMenuOpen(false);
+            }}
+          />
+        )}
       </Menu>
 
       {/* Group Context Menu */}
@@ -2702,6 +2714,13 @@ export default function Sidebar({
           <>
             <MenuItem onClick={handleAddSubGroupClick}>Add Sub-Group</MenuItem>
             <MenuItem onClick={handleRenameGroupClick}>Rename Group</MenuItem>
+            <ExtraMenu
+              extraMenu={extraGroupMenu}
+              target={groupContextMenu.path}
+              before={() => {
+                setGroupContextMenuOpen(false);
+              }}
+            />
             <MenuItem onClick={handleDeleteGroupClick} sx={{ color: "error.main" }}>
               Delete Group
             </MenuItem>
@@ -3555,6 +3574,13 @@ export default function Sidebar({
             Run ssh-copy-id
           </MenuItem>
           <MenuItem onClick={handlePasteSshConfigBlock}>Paste SSH Config Block</MenuItem>
+          <ExtraMenu
+            extraMenu={extraHostFormMenu}
+            target={hostFormData}
+            before={() => {
+              setHostTitleMenuAnchor(null);
+            }}
+          />
           <MenuItem
             sx={{ color: "error.main" }}
             disabled={!editHostName}

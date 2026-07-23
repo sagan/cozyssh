@@ -48,6 +48,8 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
   - [Open a local shell](#open-a-local-shell)
   - [Run command on backend and notify result](#run-command-on-backend-and-notify-result)
   - [CORS-free API Fetch](#cors-free-api-fetch)
+  - [Add extra Host / Tab / Button context menu](#add-extra-host--tab--button-context-menu)
+  - [Register additional keyboard shortcuts](#register-additional-keyboard-shortcuts)
   - [Custom UI Applet](#custom-ui-applet)
   - [More Examples](#more-examples)
 
@@ -58,6 +60,7 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
 - **TypeScript Support**: The editor supports TypeScript syntax highlighting, and scripts are automatically transpiled on-the-fly using [Sucrase](https://github.com/alangpierce/sucrase).
 - **Fully Typed**: The scripting API is fully typed. We provide a auto-generated [TypeScript definition](../frontend/csapi.d.ts) file that can be used in script development to provide full-fledged Code Intelligence. See [CozySSH Plugins][] repository for how to write scripts/plugins.
 - **Auto-run**: You can enable **Auto-run on startup** for a script button. These scripts will execute automatically after the application finishes loading all data (hosts, buttons, variables). This is the recommended way to register global event listeners or initialize custom UI applets.
+- **Shortcuts Support**: You can assign a custom shortcut to any script button from Web UI to execute it from keyboard quickly. The script can register extra shortcuts by itself via API. Additionally, the first 10 buttons of the active button group can be executed by `alt+shift+1-9,0` shortcut automatically.
 - **Execution**: Scripts are executed as ES modules via dynamic `import()`. You can use all ES module features such as top-lebel `await`.
 - **Awaiting Completion**: The script engine automatically waits for all top-level `await` promises to resolve before finishing execution.
 - **Auto-focus**: By default, scripts will re-focus the terminal after execution.
@@ -65,6 +68,7 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
   - `run`: `(payload: {button: ButtonData, background?: boolean}) => void | Promise<void>` - The entrypoint of the script. If provided, it will be executed after the script is imported. It will always be executed each time the button is clicked, even if the script is cached (see `cache` below).
   - `cache`: `boolean` - If provided and `true`, the script will be cached when it's first imported. You may want to also provide a `run` function in this case otherwise clicking the script's button will have no effect after the first time it's imported. The cache is cleared when the browser page is reloaded.
   - `noFocus`: `boolean` - If provided and `true`, the script will not focus the terminal after execution.
+  - `shortcuts`: `CsShortcut[]` - Additional keyboard shortcuts to be registered.
 
 ## CozySSH Plugins
 
@@ -98,12 +102,9 @@ CozySSH sets some global variables in the browser's window object.
 - `window.__CS_USE_STORE__` : `typeof useStore` - The [zustand][] store hook function that CozySSH uses to manage state.
 - `window.__CS_TERMINAL_OPTIONS__` : `ITerminalOptions` - Used to set additional xterm.js terminal options. These options are merged with the default options. It uses Proxy so any modification takes effect to all terminals immediately. See xterm.js [ITerminalOptions](https://xtermjs.org/docs/api/terminal/interfaces/iterminaloptions/) for details. The default options can be found in `frontend/src/Terminal.tsx`.
 - `window.__CS_FONT_SIZE__`: `number` - Global font size. Default is `14` (MUI default). It uses Object.defineProperty so the modification takes effect immediately.
-- `window.__CS_EXTRA_HOST_MENU__`: `CustomMenu<HostData>[]` | `undefined`, `window.__CS_EXTRA_TAB_MENU__`: `CustomMenu<SessionData>[]` | `undefined`, `window.__CS_EXTRA_BUTTON_MENU__`: `CustomMenu<ButtonData>[]` | `undefined` - The extra menu items to be added to the host, tab, and button context menus respectively. It uses Object.defineProperty so any modification takes effect immediately. The default value is `undefined`. Example:
-  ```js
-  __CS_EXTRA_HOST_MENU__ = [{ name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }];
-  __CS_EXTRA_TAB_MENU__ = [{ name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }];
-  __CS_EXTRA_BUTTON_MENU__ = [{ name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }];
-  ```
+- `window.__CS_EXTRA_HOST_MENU__`: `CustomMenu<HostData>[] | undefined`, `window.__CS_EXTRA_TAB_MENU__`: `CustomMenu<TabData>[] | undefined`, `window.__CS_EXTRA_BUTTON_MENU__`: `CustomMenu<ButtonData>[] | undefined` - The extra menu items to be added to the host, tab, and button context menus respectively. The array object must be treated as immutable value. Any modification must be made by assigning a new array to it. The default value is `undefined`.
+- `window.__CS_EXTRA_GROUP_MENU__`, `window.__CS_EXTRA_TAG_MENU__` : `CustomMenu<string>[] | undefined` - The extra menu items to be added to the group and tag context menus respectively.
+- `window.__CS_EXTRA_HOST_FORM_MENU__`: `CustomMenu<HostForm>[] | undefined`, `window.__CS_EXTRA_BUTTON_FORM_MENU__`: `CustomMenu<ButtonForm>[] | undefined` - The extra menu items to be added to the add / edit host form and add / edit button form menus respectively.
 - `window.__CS_TOAST_KEY_MUTE_SET__`: `Set<string>` - The list of toast keys that should be muted. The element is a toast key string. If a key ends with `-`, it's treated as a prefix, and it will mute all toasts whose keys start with this prefix.
 - `window.__CS_LIQUID_ENGINE__` : `Liquid` - The LiquidJs Engine instannce that CozySSH uses for send_string buttons & Terminal Input dialog.
 - `window.__CS_ENV__` : `number` - `0` - CozySSH is running as web app; `1` - CozySSH is running as Windows Desktop app (webview2). This variable is also available in `<html data-cs-env>`.
@@ -543,6 +544,38 @@ if (!result.error) {
 const response = await csFetch("https://api.github.com/repos/sagan/cozyssh");
 const data = await response.json();
 csNotify(`CozySSH Stars: ${data.stargazers_count}`);
+```
+
+### Add extra Host / Tab / Button context menu
+
+```js
+const menu = { name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) };
+__CS_EXTRA_HOST_MENU__ = [menu];
+__CS_EXTRA_TAB_MENU__ = [menu];
+__CS_EXTRA_BUTTON_MENU__ = [menu];
+__CS_EXTRA_GROUP_MENU__ = [menu];
+__CS_EXTRA_TAG_MENU__ = [menu];
+__CS_EXTRA_HOST_FORM_MENU__ = [menu];
+__CS_EXTRA_BUTTON_FORM_MENU__ = [menu];
+```
+
+### Register additional keyboard shortcuts
+
+```js
+export default {
+  shortcuts: [
+    {
+      shortcut: "ctrl+a",
+      action() {
+        csNotify("ctrl+a pressed");
+      },
+    },
+  ],
+  run() {
+    csNotify("run");
+  },
+  cache: true,
+};
 ```
 
 ### Custom UI Applet

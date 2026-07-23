@@ -458,7 +458,7 @@ function updateMacModifierKeyRegex() {
 }
 
 /**
- * Get a key combination string from a KeyboardEvent
+ * Get a key combination string from a KeyboardEvent,
  * modifiers are in order, all lowercase.
  * Note for special keys, if shift is hold, the different character will be returned.
  * So if user press "Alt + Shift + 1" it will return "alt+shift+!" since the shift version of "1" is "!".

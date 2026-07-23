@@ -42,7 +42,6 @@ import {
   createSetProxy,
   genPaneId,
   genTabId,
-  generatePassword,
   getCanonicalHostString,
   getHostGroupPath,
   getHostOrder,
@@ -57,6 +56,7 @@ import {
   removeNameNumSuffix,
   removePassFromHost,
   assertUnreachable,
+  generatePassword,
 } from "./common";
 import type { TerminalHandle } from "./Terminal";
 import type { ScratchpadHandle } from "./Scratchpad";
@@ -86,6 +86,7 @@ import {
   METHOD_POST,
   METHOD_PUT,
   MIME_JSON,
+  PartialMatchHostKey,
   TAG_GROUP_PREFIX,
   TAG_ORDER_PREFIX,
   TOAST_KEY_API_SETTINGS,
@@ -132,6 +133,10 @@ interface Store {
   extraHostMenu?: CustomMenu<HostData>[];
   extraTabMenu?: CustomMenu<TabData>[];
   extraButtonMenu?: CustomMenu<ButtonData>[];
+  extraGroupMenu?: CustomMenu<string>[];
+  extraTagMenu?: CustomMenu<string>[];
+  extraHostFormMenu?: CustomMenu<HostForm>[];
+  extraButtonFormMenu?: CustomMenu<ButtonForm>[];
   settingsTab: number;
   settingsOpen: boolean;
   filterStr: string;
@@ -200,6 +205,30 @@ export interface CsScriptModule {
  * id => moduleObj
  */
 export const moduleCache: Record<string, CsScriptModule> = {};
+
+export function unloadButton(id: string) {
+  const module = moduleCache[id]?.default;
+  if (module) {
+    if (module.shortcuts) {
+      for (const shortcut of module.shortcuts) {
+        const registeredShortcut = __CS_CUSTOM_SHORTCUTS__[shortcut.shortcut];
+        if (registeredShortcut && registeredShortcut.key === shortcut.key) {
+          delete __CS_CUSTOM_SHORTCUTS__[shortcut.shortcut];
+        }
+      }
+    }
+    if (module.unload) {
+      module.unload();
+    }
+  } else {
+    for (const [key, shortcut] of Object.entries(__CS_CUSTOM_SHORTCUTS__)) {
+      if (shortcut.key?.startsWith(id + "-")) {
+        delete __CS_CUSTOM_SHORTCUTS__[key];
+      }
+    }
+  }
+  delete moduleCache[id];
+}
 
 /**
  * Load value from a localStorage item. The parsing behavior depends on T (infered from defaultValue at runtime).
@@ -469,6 +498,42 @@ export const setExtraButtonMenu = (
 ) =>
   useStore.setState((state) => ({
     extraButtonMenu: typeof update === "function" ? update(state.extraButtonMenu) : update,
+  }));
+
+export const setExtraGroupMenu = (
+  update:
+    CustomMenu<string>[] | undefined | ((menu: CustomMenu<string>[] | undefined) => CustomMenu<string>[] | undefined),
+) =>
+  useStore.setState((state) => ({
+    extraGroupMenu: typeof update === "function" ? update(state.extraGroupMenu) : update,
+  }));
+
+export const setExtraTagMenu = (
+  update:
+    CustomMenu<string>[] | undefined | ((menu: CustomMenu<string>[] | undefined) => CustomMenu<string>[] | undefined),
+) =>
+  useStore.setState((state) => ({
+    extraTagMenu: typeof update === "function" ? update(state.extraTagMenu) : update,
+  }));
+
+export const setExtraHostFormMenu = (
+  update:
+    | CustomMenu<HostForm>[]
+    | undefined
+    | ((menu: CustomMenu<HostForm>[] | undefined) => CustomMenu<HostForm>[] | undefined),
+) =>
+  useStore.setState((state) => ({
+    extraHostFormMenu: typeof update === "function" ? update(state.extraHostFormMenu) : update,
+  }));
+
+export const setExtraButtonFormMenu = (
+  update:
+    | CustomMenu<ButtonForm>[]
+    | undefined
+    | ((menu: CustomMenu<ButtonForm>[] | undefined) => CustomMenu<ButtonForm>[] | undefined),
+) =>
+  useStore.setState((state) => ({
+    extraButtonFormMenu: typeof update === "function" ? update(state.extraButtonFormMenu) : update,
   }));
 
 export const setAsyncDialogOpen = (update: boolean | ((data: boolean) => boolean)) =>
@@ -1737,53 +1802,33 @@ export function openScratchpad() {
   triggerFocus();
 }
 
-export async function saveButton() {
-  const { editButton, buttonFormData } = getStore();
-
-  // Auto-update liquidjs value based on detected user variables
-  const finalButtonFormData: ButtonData = {
-    ...buttonFormData,
-    id: buttonFormData.id || editButton?.id || generatePassword(12),
-  };
-  if (finalButtonFormData.type === "send_string") {
-    if (finalButtonFormData.liquidjs !== undefined && finalButtonFormData.liquidjs !== 0) {
-      const varsList = getTemplateVariables(finalButtonFormData.payload);
-      finalButtonFormData.liquidjs = varsList.length > 0 ? 2 : 1;
+export async function saveButton(btn: ButtonForm, editId?: string): Promise<ButtonData> {
+  const button: ButtonData = { ...btn, id: btn.id || editId || generatePassword(12) };
+  if (button.type === "send_string") {
+    if (button.liquidjs !== undefined && button.liquidjs !== 0) {
+      const varsList = getTemplateVariables(button.payload);
+      button.liquidjs = varsList.length > 0 ? 2 : 1;
     } else {
-      finalButtonFormData.liquidjs = 0;
+      button.liquidjs = 0;
     }
   } else {
-    finalButtonFormData.liquidjs = 0;
+    button.liquidjs = 0;
   }
-
-  const method = editButton ? METHOD_PUT : METHOD_POST;
-  const url = editButton ? `/api/buttons/${editButton.id}` : "/api/buttons";
-  if (editButton) {
-    const id = editButton.id;
-    if (moduleCache[id]?.default?.unload) {
-      await moduleCache[id].default.unload();
-    }
-    delete moduleCache[id];
-  }
-  await fetch(url, { method, headers: apiReqHeaders(), body: JSON.stringify(finalButtonFormData) });
-  setInitialBtnFormData(null);
-  setEditButtonDialogOpen(false);
+  const method = editId ? METHOD_PUT : METHOD_POST;
+  const url = editId ? `/api/buttons/${button.id}` : "/api/buttons";
+  await fetch(url, { method, headers: apiReqHeaders(), body: JSON.stringify(button) });
   const res = await fetch("/api/buttons", { headers: apiReqHeaders() });
   const data = (await res.json()) as ButtonData[];
   setButtons(data || []);
   setActiveGroup(getStore().buttonFormData.group || DEFAULT_BUTTON_GROUP);
+  return data.find((b) => b.id === button.id) || button;
 }
 
 export async function deleteButton(btn: ButtonData) {
   if (!(await dialogs.confirm(`Delete ${btn.type} button "${btn.name}" (${btn.id})?`))) {
     return;
   }
-  if (moduleCache[btn.id]) {
-    if (moduleCache[btn.id].default?.unload) {
-      moduleCache[btn.id].default!.unload!();
-    }
-    delete moduleCache[btn.id];
-  }
+  unloadButton(btn.id);
   await fetch(`/api/buttons/${btn.id}`, { method: METHOD_DELETE, headers: apiReqHeaders() });
   const res = await fetch("/api/buttons", { headers: apiReqHeaders() });
   const data: ButtonData[] = await res.json();
@@ -2263,25 +2308,45 @@ export function openEditHostByName(hostname: string) {
  */
 export function getHost(
   host: string | (Pick<HostData, "hostname"> & Partial<Pick<HostData, "port" | "user" | "password">>),
-): HostData {
+): HostData & { [PartialMatchHostKey]?: HostData } {
   const parsedHost = typeof host === "string" ? parseHostName(host) : host;
-  const parsedHostString = getCanonicalHostString(parsedHost, undefined, true);
-  const known = getStore().hosts.find(
-    (h) =>
-      (parsedHost.user === undefined &&
-        parsedHost.password === undefined &&
-        parsedHost.port === undefined &&
-        h.name === parsedHost.hostname) ||
-      getCanonicalHostString(h, undefined, true) === parsedHostString,
-  );
-  return (
-    known ||
-    Object.assign(parsedHost, {
-      name: parsedHost.hostname,
-      port: parsedHost.port || "22",
-      user: parsedHost.user || "root",
-    })
-  );
+  const parsedHostString = getCanonicalHostString(parsedHost, "root", true);
+  let nameMatchHost: HostData | undefined;
+  let infoMatchHost: HostData | undefined;
+  let exactFound: boolean | undefined;
+  const hosts = getStore().hosts;
+  for (const h of hosts) {
+    if (h.name === parsedHost.hostname) {
+      nameMatchHost = h;
+      if (parsedHost.user === undefined && parsedHost.password === undefined && parsedHost.port === undefined) {
+        exactFound = true;
+      }
+      break;
+    } else if (h.hostname === parsedHost.hostname) {
+      nameMatchHost = h;
+    }
+  }
+  if (!exactFound) {
+    for (const h of hosts) {
+      if (getCanonicalHostString(h, "root", true) === parsedHostString) {
+        infoMatchHost = h;
+        exactFound = true;
+        break;
+      }
+    }
+  }
+  if (exactFound) {
+    return (nameMatchHost || infoMatchHost)!;
+  }
+  const newHost: HostData & { [PartialMatchHostKey]?: HostData } = Object.assign(parsedHost, {
+    name: parsedHost.hostname,
+    port: parsedHost.port || "22",
+    user: parsedHost.user || "root",
+  });
+  if (nameMatchHost || infoMatchHost) {
+    newHost[PartialMatchHostKey] = nameMatchHost || infoMatchHost;
+  }
+  return newHost;
 }
 
 export function openEditButtonDialog(btn: ButtonData) {

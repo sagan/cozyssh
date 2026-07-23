@@ -2017,6 +2017,10 @@ export interface Store {
 	extraHostMenu?: CustomMenu<HostData>[];
 	extraTabMenu?: CustomMenu<TabData>[];
 	extraButtonMenu?: CustomMenu<ButtonData>[];
+	extraGroupMenu?: CustomMenu<string>[];
+	extraTagMenu?: CustomMenu<string>[];
+	extraHostFormMenu?: CustomMenu<HostForm>[];
+	extraButtonFormMenu?: CustomMenu<ButtonForm>[];
 	settingsTab: number;
 	settingsOpen: boolean;
 	filterStr: string;
@@ -2121,6 +2125,33 @@ declare global {
 		alternativeMode?: number;
 	}
 	/**
+	 * Custom shortcut that can be imported by a script to register as additional shortcut.
+	 */
+	interface CsShortcut {
+		/**
+		 * Optional key of the shortcut. If key is undefined, it will be updated to
+		 * a value derived from script id and `shortcut` automatically when the script is imported.
+		 * It's used when the button is unloaded or uninstalled to remove it's registered shortcuts.
+		 */
+		key?: string;
+		/**
+		 * Shortcut combination string like "ctrl+alt+shift+meta+a". All lowercase and modifiers in order.
+		 */
+		shortcut: string;
+		/**
+		 * The action when shortcut pressed
+		 */
+		action: () => void | Promise<void>;
+		/**
+		 * If true, the shortcut will be disabled when the terminal has focus.
+		 */
+		disabledInTerminal?: boolean;
+		/**
+		 * If true, the shortcut will be disabled
+		 */
+		disabled?: boolean;
+	}
+	/**
 	 * The optional default export type of custom script
 	 */
 	interface CsScript {
@@ -2143,6 +2174,10 @@ declare global {
 		 * no effect after the first time it's imported. The cache is cleared when the browser page is reloaded.
 		 */
 		cache?: boolean;
+		/**
+		 * Export additional shortcuts of the script
+		 */
+		shortcuts?: CsShortcut[];
 	}
 	/**
 	 * `1` - If all autorun scripts have been executed, unset (undefined) or `0` otherwise.
@@ -2212,21 +2247,47 @@ declare global {
 	 */
 	var __CS_FONT_SIZE__: number;
 	/**
-	 * Extra host context menu. It uses Object.defineProperty so any modification takes effect immediately.
+	 * Extra host context menu. It uses Object.defineProperty.
+	 * It must be treated as immutable value. Any modification must be made by assigning a new array to it.
+	 * For example: `__CS_EXTRA_HOST_MENU__ = [...(__CS_EXTRA_HOST_MENU__ || []), { name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }]`
 	 */
 	var __CS_EXTRA_HOST_MENU__: CustomMenu<HostData>[] | undefined;
 	/**
-	 * Extra tab context menu. It uses Object.defineProperty so any modification takes effect immediately.
+	 * Extra tab context menu. It uses Object.defineProperty.
+	 * It must be treated as immutable value. Any modification must be made by assigning a new array to it.
+	 * For example: `__CS_EXTRA_TAB_MENU__ = [...(__CS_EXTRA_TAB_MENU__ || []), { name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }]`
 	 */
 	var __CS_EXTRA_TAB_MENU__: CustomMenu<TabData>[] | undefined;
 	/**
-	 * Extra button context menu. It uses Object.defineProperty so any modification takes effect immediately.
+	 * Extra button context menu. It uses Object.defineProperty.
+	 * It must be treated as immutable value. Any modification must be made by assigning a new array to it.
+	 * For example: `__CS_EXTRA_BUTTON_MENU__ = [...(__CS_EXTRA_BUTTON_MENU__ || []), { name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }]`
 	 */
 	var __CS_EXTRA_BUTTON_MENU__: CustomMenu<ButtonData>[] | undefined;
+	/**
+	 * Extra host group context menu. The item is group name, possibly nested, e.g. "foo/bar".
+	 */
+	var __CS_EXTRA_GROUP_MENU__: CustomMenu<string>[] | undefined;
+	/**
+	 * Extra tag context menu. The item is tag name.
+	 */
+	var __CS_EXTRA_TAG_MENU__: CustomMenu<string>[] | undefined;
+	/**
+	 * Extra host form add / edit host dialog form menu.
+	 */
+	var __CS_EXTRA_HOST_FORM_MENU__: CustomMenu<HostForm>[] | undefined;
+	/**
+	 * Extra button form add / edit button dialog form menu.
+	 */
+	var __CS_EXTRA_BUTTON_FORM_MENU__: CustomMenu<ButtonForm>[] | undefined;
 	/**
 	 * Global shortcut button map.
 	 */
 	var __CS_SHORTCUT_BUTTONS__: Record<string, ButtonData>;
+	/**
+	 * Registered custom shortcuts
+	 */
+	var __CS_CUSTOM_SHORTCUTS__: Record<string, CsShortcut>;
 	/**
 	 * Toast keys that are muted. Keys can be prefixes ending with '-'.
 	 * For example, 'A-' matches 'A-1', 'A-2', etc.
@@ -2382,8 +2443,9 @@ declare global {
 	function csUpdateButton(btn: ButtonData | ButtonData[]): Promise<void>;
 	/**
 	 * Delete a button.
+	 * @param unloadOnly If true, only unload imported script from memory cache.
 	 */
-	function csDeleteButton(id: string): Promise<void>;
+	function csDeleteButton(id: string, unloadOnly?: boolean): Promise<void>;
 	/**
 	 * Update a host.
 	 */
@@ -2515,7 +2577,13 @@ declare global {
 		[CS_EVENT_VARS]: CustomEvent<CSEventDetailVars>;
 	}
 	// Window Desktop app bindings. All are unset (undefined) in web app
+	/**
+	 * Open a CozySSH url in new (secondary) webview window
+	 */
 	var appOpenNewWindow: ((targetURL: string) => Promise<void>) | undefined;
+	/**
+	 * Toggle fullscreen mode
+	 */
 	var appToggleFullscreen: (() => Promise<void>) | undefined;
 	/**
 	 * Get auth token (only valid for desktop app).

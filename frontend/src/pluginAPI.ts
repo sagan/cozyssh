@@ -75,6 +75,11 @@ import {
   setExtraHostMenu,
   setExtraTabMenu,
   setExtraButtonMenu,
+  unloadButton,
+  setExtraHostFormMenu,
+  setExtraButtonFormMenu,
+  setExtraGroupMenu,
+  setExtraTagMenu,
 } from "./store";
 import { dialogs } from "./Dialogs";
 import type { AppletData } from "./AppletWrapper";
@@ -93,6 +98,7 @@ window.__CS_BLACKHOLE_SHORTCUTS__ = blackholeShortcuts;
 window.__CS_LIQUID_ENGINE__ = liquidEngine;
 window.__CS_RUNNING_SCRIPT__ = undefined;
 window.__CS_SHORTCUT_BUTTONS__ = {};
+window.__CS_CUSTOM_SHORTCUTS__ = {};
 window.__CS_TOAST_KEY_MUTE_SET__ = toastKeyMuteSet;
 window.__CS_MAC_MODIFIER_SWAP__ = macModifierSwap;
 window.__CS_ENV__ = window.appToggleFullscreen ? 1 : 0;
@@ -255,6 +261,33 @@ Object.defineProperty(window, "__CS_EXTRA_BUTTON_MENU__", {
     return getStore().extraButtonMenu;
   },
   set: setExtraButtonMenu,
+});
+
+Object.defineProperty(window, "__CS_EXTRA_GROUP_MENU__", {
+  get() {
+    return getStore().extraGroupMenu;
+  },
+  set: setExtraGroupMenu,
+});
+
+Object.defineProperty(window, "__CS_EXTRA_TAG_MENU__", {
+  get() {
+    return getStore().extraTagMenu;
+  },
+  set: setExtraTagMenu,
+});
+
+Object.defineProperty(window, "__CS_EXTRA_HOST_FORM_MENU__", {
+  get() {
+    return getStore().extraHostFormMenu;
+  },
+  set: setExtraHostFormMenu,
+});
+Object.defineProperty(window, "__CS_EXTRA_BUTTON_FORM_MENU__", {
+  get() {
+    return getStore().extraButtonFormMenu;
+  },
+  set: setExtraButtonFormMenu,
 });
 
 window.csAlert = dialogs.alert;
@@ -448,6 +481,14 @@ export async function runScript({ button, background, alternativeMode }: CsRunSc
     if (button.id && moduleObj.default?.cache) {
       moduleCache[button.id] = moduleObj;
     }
+    if (moduleObj.default?.shortcuts) {
+      for (const s of moduleObj.default.shortcuts) {
+        if (!s.key) {
+          s.key = `${button.id}-${s.shortcut}`;
+        }
+        __CS_CUSTOM_SHORTCUTS__[s.shortcut] = s;
+      }
+    }
   } else {
     moduleObj = moduleCache[button.id];
     cached = true;
@@ -579,12 +620,10 @@ window.csUpdateButton = async (btn: ButtonData | ButtonData[]): Promise<void> =>
   }
 };
 
-window.csDeleteButton = async (id: string): Promise<void> => {
-  if (moduleCache[id]) {
-    if (moduleCache[id].default?.unload) {
-      moduleCache[id].default.unload();
-    }
-    delete moduleCache[id];
+window.csDeleteButton = async (id: string, unloadOnly = false): Promise<void> => {
+  unloadButton(id);
+  if (unloadOnly) {
+    return;
   }
   const res = await fetch(`/api/buttons/${id}`, { method: METHOD_DELETE, headers: apiReqHeaders() });
 

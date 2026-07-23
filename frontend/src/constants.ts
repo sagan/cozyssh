@@ -239,3 +239,5 @@ export const CLASS_HIDE_DESKTOP = "hide-desktop";
  * Hide element from web
  */
 export const CLASS_HIDE_WEB = "hide-web";
+
+export const PartialMatchHostKey: unique symbol = Symbol("PartialMatchHost");

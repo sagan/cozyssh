@@ -12,8 +12,9 @@ import {
   Checkbox,
   MenuItem,
 } from "@mui/material";
-import { setAsyncDialogOpen, triggerFocus, useStore } from "./store";
-import { isMuiModalOpen } from "./common";
+import { notify, setAsyncDialogOpen, triggerFocus, useStore } from "./store";
+import { getKeyCombination, isMuiModalOpen } from "./common";
+import { TOAST_KEY_COPY } from "./constants";
 
 export interface DialogApi {
   alert: typeof csAlert;
@@ -285,9 +286,33 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
                 disableElevation
                 autoFocus={config.type !== "prompt" && !config.verification}
                 disabled={isConfirmDisabled}
+                onKeyDown={(e) => {
+                  const kc = getKeyCombination(e);
+                  if (kc === "alt+enter") {
+                    const data = config.detail || config.message;
+                    if (data) {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      navigator.clipboard.writeText(data);
+                      notify(`Copied to clipboard`, "info", TOAST_KEY_COPY);
+                      handleClose(true);
+                    }
+                  }
+                }}
               >
                 OK
               </Button>
+              {config.type === "alert" && !!(config.detail || config.message) && (
+                <Button
+                  onClick={() => {
+                    navigator.clipboard.writeText((config.detail || config.message)!);
+                    handleClose(true);
+                  }}
+                  color="inherit"
+                >
+                  Copy (alt+enter)
+                </Button>
+              )}
             </>
           )}
         </DialogActions>
