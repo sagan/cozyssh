@@ -489,6 +489,7 @@ export default function DialogManager({
   return (
     <>
       <Menu
+        id="tab-menu"
         open={contextMenu !== null}
         onClose={handleCloseMenu}
         anchorReference="anchorPosition"
@@ -511,6 +512,7 @@ export default function DialogManager({
                     ).map((hostname) => (
                       <MenuItem
                         key={hostname}
+                        className="tab-menu-edit-host"
                         onClick={() => {
                           handleCloseMenu();
                           openEditHostByName(hostname);
@@ -526,6 +528,7 @@ export default function DialogManager({
                     {tab.isPinned ? (
                       <MenuItem
                         className={CLASS_HIDE_DESKTOP}
+                        id="tab-menu-unpin"
                         onClick={() => {
                           handleCloseMenu();
                           unpinTab(memoTabId);
@@ -537,6 +540,7 @@ export default function DialogManager({
                     ) : (
                       <MenuItem
                         className={CLASS_HIDE_DESKTOP}
+                        id="tab-menu-pin"
                         onClick={() => {
                           handleCloseMenu();
                           pinTab(memoTabId);
@@ -548,6 +552,7 @@ export default function DialogManager({
                     )}
                     {tab.isLocked ? (
                       <MenuItem
+                        id="tab-menu-unlock"
                         onClick={() => {
                           handleCloseMenu();
                           unlockTab(memoTabId);
@@ -558,6 +563,7 @@ export default function DialogManager({
                       </MenuItem>
                     ) : (
                       <MenuItem
+                        id="tab-menu-lock"
                         onClick={() => {
                           handleCloseMenu();
                           lockTab(memoTabId);
@@ -568,6 +574,7 @@ export default function DialogManager({
                       </MenuItem>
                     )}
                     <MenuItem
+                      id="tab-menu-hide"
                       onClick={() => {
                         handleCloseMenu();
                         hideTab(memoTabId);
@@ -581,6 +588,7 @@ export default function DialogManager({
                 {tab.type === "terminal" && (
                   <>
                     <MenuItem
+                      id="tab-menu-find"
                       onClick={() => {
                         handleCloseMenu();
                         setSearchOpen(true);
@@ -595,6 +603,7 @@ export default function DialogManager({
                       Find
                     </MenuItem>
                     <MenuItem
+                      id="tab-menu-send-input"
                       onClick={() => {
                         handleCloseMenu();
                         if (getStore().activeTabId == tab.id) {
@@ -611,6 +620,7 @@ export default function DialogManager({
                 )}
                 {tab.panes.length > 1 && (
                   <MenuItem
+                    id="tab-menu-close-tab"
                     onClick={() => {
                       handleCloseMenu();
                       closeTab();
@@ -620,6 +630,7 @@ export default function DialogManager({
                   </MenuItem>
                 )}
                 <MenuItem
+                  id="tab-menu-close-pane"
                   onClick={() => {
                     handleCloseMenu();
                     closeTabOrPane();
@@ -631,6 +642,7 @@ export default function DialogManager({
                 {tab.type !== "scratchpad" && (
                   <>
                     <MenuItem
+                      id="tab-menu-clone-session"
                       onClick={() => {
                         handleCloseMenu();
                         cloneSession(memoTabId);
@@ -640,6 +652,7 @@ export default function DialogManager({
                     </MenuItem>
                     {tab.panes.length < 4 && (
                       <MenuItem
+                        id="tab-menu-clone-session-split-screen"
                         onClick={() => {
                           handleCloseMenu();
                           cloneSession(memoTabId, true);
@@ -649,7 +662,7 @@ export default function DialogManager({
                       </MenuItem>
                     )}
                     {tab.panes.length === 1 && (
-                      <MenuItem onClick={handleToggleFiles}>
+                      <MenuItem id="tab-menu-toggle-files" onClick={handleToggleFiles}>
                         {tab.showFiles ? "Close Files" : tab.panes[0]?.host === LOCAL_NAME ? "Open Files" : "Open SFTP"}
                       </MenuItem>
                     )}
@@ -658,6 +671,7 @@ export default function DialogManager({
                 {tab.type !== "scratchpad" && (
                   <>
                     <MenuItem
+                      id="tab-menu-reconnect"
                       onClick={() => {
                         handleReconnectTab(memoTabId);
                         triggerFocus();
@@ -666,6 +680,7 @@ export default function DialogManager({
                       Reconnect
                     </MenuItem>
                     <MenuItem
+                      id="tab-menu-rename"
                       onClick={() => {
                         handleCloseMenu();
                         renameTab(memoTabId);
@@ -674,6 +689,7 @@ export default function DialogManager({
                       Rename Tab
                     </MenuItem>
                     <MenuItem
+                      id="tab-menu-save"
                       onClick={() => {
                         handleCloseMenu();
                         openSaveTabToButtonDialog(memoTabId);
@@ -684,6 +700,7 @@ export default function DialogManager({
                   </>
                 )}
                 <MenuItem
+                  id="tab-menu-close-other-tabs"
                   onClick={() => {
                     handleCloseMenu();
                     closeOtherTabs(memoTabId);
@@ -692,6 +709,7 @@ export default function DialogManager({
                   Close Other Tabs
                 </MenuItem>
                 <MenuItem
+                  id="tab-menu-close-right-tabs"
                   onClick={() => {
                     handleCloseMenu();
                     closeRightTabs(memoTabId);
@@ -701,6 +719,7 @@ export default function DialogManager({
                 </MenuItem>
                 {tab.type === "scratchpad" && (
                   <MenuItem
+                    id="tab-menu-force-sync"
                     onClick={() => {
                       handleCloseMenu();
                       fetch("/api/scratchpad/reload", { method: METHOD_POST, headers: apiReqHeaders() }).then(() => {
@@ -713,6 +732,7 @@ export default function DialogManager({
                 )}
                 <ExtraMenu extraMenu={extraTabMenu} target={tab} before={handleCloseMenu} />
                 <MenuItem
+                  id="tab-menu-move-left"
                   onClick={() => {
                     handleCloseMenu();
                     moveTabLeft(memoTabId);
@@ -721,6 +741,7 @@ export default function DialogManager({
                   Move Tab Left
                 </MenuItem>
                 <MenuItem
+                  id="tab-menu-move-right"
                   onClick={() => {
                     handleCloseMenu();
                     moveTabRight(memoTabId);
@@ -733,8 +754,14 @@ export default function DialogManager({
           })()}
       </Menu>
 
-      <Menu anchorEl={btnContextMenu?.element} open={btnContextMenuOpen} onClose={() => setBtnContextMenuOpen(false)}>
+      <Menu
+        id="button-menu"
+        anchorEl={btnContextMenu?.element}
+        open={btnContextMenuOpen}
+        onClose={() => setBtnContextMenuOpen(false)}
+      >
         <MenuItem
+          id="button-menu-edit"
           onClick={() => {
             if (!btnContextMenu) {
               return;
@@ -760,6 +787,7 @@ export default function DialogManager({
           Edit {btnContextMenu?.btn ? `${btnContextMenu.btn.name} (${btnContextMenu.btn.type})` : "Button"}
         </MenuItem>
         <MenuItem
+          id="button-menu-send"
           onClick={() => {
             if (!btnContextMenu) {
               return;
@@ -777,6 +805,7 @@ export default function DialogManager({
           Send
         </MenuItem>
         <MenuItem
+          id="button-menu-send-all"
           onClick={() => {
             if (!btnContextMenu) {
               return;
@@ -794,6 +823,7 @@ export default function DialogManager({
           Send To All
         </MenuItem>
         <MenuItem
+          id="button-menu-open-new-window"
           onClick={() => {
             if (!btnContextMenu) {
               return;
@@ -808,6 +838,7 @@ export default function DialogManager({
           Open (New Window)
         </MenuItem>
         <MenuItem
+          id="button-menu-open-in-current-tab"
           onClick={() => {
             if (!btnContextMenu) {
               return;
@@ -825,6 +856,7 @@ export default function DialogManager({
           Open (In Current Tab)
         </MenuItem>
         <MenuItem
+          id="button-menu-copy-url"
           onClick={() => {
             if (!btnContextMenu) {
               return;
@@ -842,6 +874,7 @@ export default function DialogManager({
           Copy URL
         </MenuItem>
         <MenuItem
+          id="button-menu-copy-contents"
           onClick={() => {
             if (!btnContextMenu) {
               return;
@@ -861,6 +894,7 @@ export default function DialogManager({
           Copy Contents
         </MenuItem>
         <MenuItem
+          id="button-menu-copy-button-data"
           onClick={() => {
             if (!btnContextMenu) {
               return;
@@ -879,6 +913,7 @@ export default function DialogManager({
           />
         )}
         <MenuItem
+          id="button-menu-move-left"
           onClick={() => {
             if (!btnContextMenu) {
               return;
@@ -890,6 +925,7 @@ export default function DialogManager({
           Move Button Left
         </MenuItem>
         <MenuItem
+          id="button-menu-move-right"
           onClick={() => {
             if (!btnContextMenu) {
               return;
@@ -901,6 +937,7 @@ export default function DialogManager({
           Move Button Right
         </MenuItem>
         <MenuItem
+          id="button-menu-delete"
           onClick={() => {
             if (!btnContextMenu) {
               return;
@@ -936,8 +973,8 @@ export default function DialogManager({
           </span>
           <IconButton
             aria-label="more"
-            id="edit-button-dialog-title-menu-button"
-            aria-controls={titleMenuAnchor ? "edit-button-dialog-title-menu" : undefined}
+            id="edit-button-form-menu-button"
+            aria-controls={titleMenuAnchor ? "edit-button-form-menu" : undefined}
             aria-expanded={titleMenuAnchor ? "true" : undefined}
             aria-haspopup="true"
             onClick={handleTitleMenuClick}
@@ -947,12 +984,13 @@ export default function DialogManager({
           </IconButton>
         </DialogTitle>
         <Menu
-          id="edit-button-dialog-title-menu"
+          id="edit-button-form-menu"
           anchorEl={titleMenuAnchor}
           open={!!titleMenuAnchor}
           onClose={handleTitleMenuClose}
         >
           <MenuItem
+            id="edit-button-form-menu-copy"
             disabled={!buttonFormData.name}
             onClick={async () => {
               handleTitleMenuClose();
@@ -963,6 +1001,7 @@ export default function DialogManager({
             Copy Button To Clipboard
           </MenuItem>
           <MenuItem
+            id="edit-button-form-menu-paste"
             onClick={async () => {
               handleTitleMenuClose();
               const text = await navigator.clipboard.readText();
@@ -972,6 +1011,7 @@ export default function DialogManager({
             Paste Button From Clipboard
           </MenuItem>
           <MenuItem
+            id="edit-button-form-menu-add-from-url"
             onClick={() => {
               handleTitleMenuClose();
               handleAddFromUrl();
@@ -981,6 +1021,7 @@ export default function DialogManager({
             Add From URL
           </MenuItem>
           <MenuItem
+            id="edit-button-form-menu-add-plugin-manager"
             onClick={() => {
               handleTitleMenuClose();
               handleInstallPluginManager();
@@ -997,6 +1038,7 @@ export default function DialogManager({
             }}
           />
           <MenuItem
+            id="edit-button-form-menu-reset"
             disabled={!buttonFormDirty}
             onClick={() => {
               handleTitleMenuClose();
@@ -1009,6 +1051,7 @@ export default function DialogManager({
             Reset Form
           </MenuItem>
           <MenuItem
+            id="edit-button-form-menu-delete"
             sx={{ color: "error.main" }}
             disabled={!editButton}
             onClick={() => {
@@ -1020,6 +1063,7 @@ export default function DialogManager({
             Delete Button
           </MenuItem>
           <MenuItem
+            id="edit-button-form-menu-clear-id"
             disabled={!!editButton || !buttonFormData.id}
             onClick={() => {
               handleTitleMenuClose();

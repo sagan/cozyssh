@@ -2547,9 +2547,17 @@ export default function Sidebar({
       </Menu>
 
       {/* Host Context Menu */}
-      <Menu open={contextMenuOpen} onClose={() => setContextMenuOpen(false)} anchorEl={contextMenu?.element}>
-        <MenuItem onClick={handleEditOpen}>Edit {contextMenu?.target.name}</MenuItem>
+      <Menu
+        id="host-menu"
+        open={contextMenuOpen}
+        onClose={() => setContextMenuOpen(false)}
+        anchorEl={contextMenu?.element}
+      >
+        <MenuItem id="host-menu-edit" onClick={handleEditOpen}>
+          Edit {contextMenu?.target.name}
+        </MenuItem>
         <MenuItem
+          id="host-menu-open-new-window"
           onClick={() => {
             if (!contextMenu) {
               return;
@@ -2562,6 +2570,7 @@ export default function Sidebar({
           Open (New Window)
         </MenuItem>
         <MenuItem
+          id="host-menu-open-current-tab"
           onClick={() => {
             if (!contextMenu) {
               return;
@@ -2575,6 +2584,7 @@ export default function Sidebar({
           Open (In Current Tab)
         </MenuItem>
         <MenuItem
+          id="host-menu-copy-url"
           className={CLASS_HIDE_DESKTOP}
           onClick={() => {
             if (!contextMenu) {
@@ -2591,6 +2601,7 @@ export default function Sidebar({
           Copy URL
         </MenuItem>
         <MenuItem
+          id="host-menu-copy-ssh-command"
           onClick={() => {
             if (!contextMenu) {
               return;
@@ -2603,6 +2614,7 @@ export default function Sidebar({
           Copy SSH Command
         </MenuItem>
         <MenuItem
+          id="host-menu-copy-upload-identity-command"
           onClick={() => {
             if (!contextMenu) {
               return;
@@ -2621,6 +2633,7 @@ export default function Sidebar({
           Copy Upload Identity Command
         </MenuItem>
         <MenuItem
+          id="host-menu-copy-ssh-config-block"
           onClick={() => {
             if (!contextMenu) {
               return;
@@ -2632,12 +2645,15 @@ export default function Sidebar({
         >
           Copy SSH Config Block
         </MenuItem>
-        <MenuItem onClick={handleRunCopyID}>Run ssh-copy-id</MenuItem>
-        <MenuItem onClick={handleToggleFavourite}>
+        <MenuItem id="host-menu-run-ssh-copy-id" onClick={handleRunCopyID}>
+          Run ssh-copy-id
+        </MenuItem>
+        <MenuItem id="host-menu-favourite" onClick={handleToggleFavourite}>
           {contextMenu?.target.isFavourite ? "Remove From Favourite" : "Add To Favourite"}
         </MenuItem>
         {contextMenu?.section === "tree" && (
           <MenuItem
+            id="host-menu-move-to-group"
             onClick={async () => {
               if (!contextMenu) {
                 return;
@@ -2669,22 +2685,35 @@ export default function Sidebar({
           <ExtraMenu extraMenu={extraHostMenu} target={contextMenu.target} before={() => setContextMenuOpen(false)} />
         )}
         {contextMenu?.target.source === "config" && (
-          <MenuItem onClick={handleDelete} sx={{ color: "error.main" }}>
+          <MenuItem id="host-menu-delete" onClick={handleDelete} sx={{ color: "error.main" }}>
             Delete Host
           </MenuItem>
         )}
         {contextMenu?.target.source === "known_hosts" && (
-          <MenuItem onClick={handleDeleteKnownHost} sx={{ color: "error.main" }}>
+          <MenuItem id="host-menu-delete" onClick={handleDeleteKnownHost} sx={{ color: "error.main" }}>
             Delete Known Host
           </MenuItem>
         )}
       </Menu>
 
-      <Menu open={tagContextMenuOpen} onClose={() => setTagContextMenuOpen(false)} anchorEl={tagContextMenu?.element}>
-        <MenuItem onClick={handleOpenAllServers}>Open All ({tagContextMenu?.tag})</MenuItem>
-        <MenuItem onClick={handleOpenSplitServers}>Open All (Split Screen)</MenuItem>
-        <MenuItem onClick={handleOpenAllServersInNewWindow}>Open All (New Window)</MenuItem>
-        <MenuItem onClick={handleCopyTagUrl}>Copy URL</MenuItem>
+      <Menu
+        id="tag-menu"
+        open={tagContextMenuOpen}
+        onClose={() => setTagContextMenuOpen(false)}
+        anchorEl={tagContextMenu?.element}
+      >
+        <MenuItem id="tag-menu-open-all" onClick={handleOpenAllServers}>
+          Open All ({tagContextMenu?.tag})
+        </MenuItem>
+        <MenuItem id="tag-menu-open-split" onClick={handleOpenSplitServers}>
+          Open All (Split Screen)
+        </MenuItem>
+        <MenuItem id="tag-menu-open-new-window" onClick={handleOpenAllServersInNewWindow}>
+          Open All (New Window)
+        </MenuItem>
+        <MenuItem id="tag-menu-copy-url" onClick={handleCopyTagUrl}>
+          Copy URL
+        </MenuItem>
         {!!tagContextMenu && (
           <ExtraMenu
             extraMenu={extraTagMenu}
@@ -2698,22 +2727,35 @@ export default function Sidebar({
 
       {/* Group Context Menu */}
       <Menu
+        id="group-menu"
         open={groupContextMenuOpen}
         onClose={() => setGroupContextMenuOpen(false)}
         anchorEl={groupContextMenu?.element}
       >
         {!!groupContextMenu?.path && (
           <>
-            <MenuItem onClick={handleOpenGroupAll}>Open All ({groupContextMenu?.path})</MenuItem>
-            <MenuItem onClick={handleOpenGroupAllInNewWindow}>Open All (New Window)</MenuItem>
-            <MenuItem onClick={handleOpenGroupAllSplitScreen}>Open All (Split Screen)</MenuItem>
+            <MenuItem id="group-menu-open-all" onClick={handleOpenGroupAll}>
+              Open All ({groupContextMenu?.path})
+            </MenuItem>
+            <MenuItem id="group-menu-open-new-window" onClick={handleOpenGroupAllInNewWindow}>
+              Open All (New Window)
+            </MenuItem>
+            <MenuItem id="group-menu-open-split" onClick={handleOpenGroupAllSplitScreen}>
+              Open All (Split Screen)
+            </MenuItem>
           </>
         )}
-        <MenuItem onClick={handleToggleExpandAll}>Expand/Collapse All</MenuItem>
+        <MenuItem id="group-menu-expand-collapse-all" onClick={handleToggleExpandAll}>
+          Expand/Collapse All
+        </MenuItem>
         {!!groupContextMenu?.path && (
           <>
-            <MenuItem onClick={handleAddSubGroupClick}>Add Sub-Group</MenuItem>
-            <MenuItem onClick={handleRenameGroupClick}>Rename Group</MenuItem>
+            <MenuItem id="group-menu-add-sub-group" onClick={handleAddSubGroupClick}>
+              Add Sub-Group
+            </MenuItem>
+            <MenuItem id="group-menu-rename-group" onClick={handleRenameGroupClick}>
+              Rename Group
+            </MenuItem>
             <ExtraMenu
               extraMenu={extraGroupMenu}
               target={groupContextMenu.path}
@@ -2721,7 +2763,7 @@ export default function Sidebar({
                 setGroupContextMenuOpen(false);
               }}
             />
-            <MenuItem onClick={handleDeleteGroupClick} sx={{ color: "error.main" }}>
+            <MenuItem id="group-menu-delete" onClick={handleDeleteGroupClick} sx={{ color: "error.main" }}>
               Delete Group
             </MenuItem>
           </>
@@ -3542,8 +3584,8 @@ export default function Sidebar({
           <span>{editHostName ? `Edit Host ${editHostName}` : "Add Host"}</span>
           <IconButton
             aria-label="more"
-            id="edit-button-dialog-title-menu-button"
-            aria-controls={hostTitleMenuAnchor ? "edit-host-dialog-title-menu" : undefined}
+            id="edit-button-form-menu-button"
+            aria-controls={hostTitleMenuAnchor ? "edit-host-form-menu" : undefined}
             aria-expanded={hostTitleMenuAnchor ? "true" : undefined}
             aria-haspopup="true"
             onClick={handleHostTitleMenuClick}
@@ -3553,27 +3595,49 @@ export default function Sidebar({
           </IconButton>
         </DialogTitle>
         <Menu
-          id="edit-host-dialog-title-menu"
+          id="edit-host-form-menu"
           anchorEl={hostTitleMenuAnchor}
           open={!!hostTitleMenuAnchor}
           onClose={handleHostTitleMenuClose}
         >
-          <MenuItem disabled={!hostFormData.hostname} onClick={handleCopySSHCommand}>
+          <MenuItem
+            id="edit-host-form-menu-copy-ssh-command"
+            disabled={!hostFormData.hostname}
+            onClick={handleCopySSHCommand}
+          >
             Copy SSH Command
           </MenuItem>
-          <MenuItem disabled={!hostFormData.hostname} onClick={handleCopyUploadIdentityCommand}>
+          <MenuItem
+            id="edit-host-form-menu-copy-upload-identity-command"
+            disabled={!hostFormData.hostname}
+            onClick={handleCopyUploadIdentityCommand}
+          >
             Copy Upload Identity Command
           </MenuItem>
-          <MenuItem disabled={!hostFormData.hostname} onClick={handleCopySSHCopyIdCommand}>
+          <MenuItem
+            id="edit-host-form-menu-copy-ssh-copy-id-command"
+            disabled={!hostFormData.hostname}
+            onClick={handleCopySSHCopyIdCommand}
+          >
             Copy ssh-copy-id Command
           </MenuItem>
-          <MenuItem disabled={!hostFormData.hostname} onClick={handleCopySshConfigBlock}>
+          <MenuItem
+            id="edit-host-form-menu-copy-ssh-config-block"
+            disabled={!hostFormData.hostname}
+            onClick={handleCopySshConfigBlock}
+          >
             Copy SSH Config Block
           </MenuItem>
-          <MenuItem disabled={!hostFormData.hostname} onClick={handleRunSSHCopyId}>
+          <MenuItem
+            id="edit-host-form-menu-run-ssh-copy-id"
+            disabled={!hostFormData.hostname}
+            onClick={handleRunSSHCopyId}
+          >
             Run ssh-copy-id
           </MenuItem>
-          <MenuItem onClick={handlePasteSshConfigBlock}>Paste SSH Config Block</MenuItem>
+          <MenuItem id="edit-host-form-menu-paste-ssh-config-block" onClick={handlePasteSshConfigBlock}>
+            Paste SSH Config Block
+          </MenuItem>
           <ExtraMenu
             extraMenu={extraHostFormMenu}
             target={hostFormData}
@@ -3582,6 +3646,7 @@ export default function Sidebar({
             }}
           />
           <MenuItem
+            id="edit-host-form-menu-delete"
             sx={{ color: "error.main" }}
             disabled={!editHostName}
             onClick={() => {
@@ -3593,6 +3658,7 @@ export default function Sidebar({
             Delete Host
           </MenuItem>
           <MenuItem
+            id="edit-host-form-menu-reset"
             disabled={!hostFormDirty}
             onClick={() => {
               setHostTitleMenuAnchor(null);
