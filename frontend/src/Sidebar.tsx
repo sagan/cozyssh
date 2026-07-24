@@ -250,6 +250,7 @@ export default function Sidebar({
   const extraGroupMenu = useStore((state) => state.extraGroupMenu);
   const extraTagMenu = useStore((state) => state.extraTagMenu);
   const extraHostFormMenu = useStore((state) => state.extraHostFormMenu);
+  const extraMainMenu = useStore((state) => state.extraMainMenu);
 
   const theme = useTheme();
   const [loading, setLoading] = useState(false);
@@ -2168,9 +2169,9 @@ export default function Sidebar({
         <IconButton onClick={(e) => setAnchorEl(e.currentTarget)} size="small">
           <MoreVertIcon />
         </IconButton>
-        <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
+        <Menu id="main-menu" anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
           <MenuItem
-            id="refresh-menu-item"
+            id="main-menu-refresh"
             onClick={() => {
               setAnchorEl(null);
               onRefresh();
@@ -2179,7 +2180,7 @@ export default function Sidebar({
             Refresh
           </MenuItem>
           <MenuItem
-            id="dashboard-menu-item"
+            id="main-menu-dashboard"
             onClick={() => {
               setAnchorEl(null);
               setSettingsOpen(true);
@@ -2191,7 +2192,7 @@ export default function Sidebar({
             Dashboard
           </MenuItem>
           <MenuItem
-            id="open-scratchpad-menu-item"
+            id="main-menu-open-scratchpad"
             onClick={() => {
               setAnchorEl(null);
               onOpenScratchpad();
@@ -2199,8 +2200,16 @@ export default function Sidebar({
           >
             Open Scratchpad
           </MenuItem>
+          <ExtraMenu
+            extraMenu={extraMainMenu}
+            // eslint-disable-next-line @typescript-eslint/prefer-as-const
+            target={"" as ""}
+            before={() => {
+              setAnchorEl(null);
+            }}
+          />
           <MenuItem
-            id="logout-menu-item"
+            id="main-menu-logout"
             className={CLASS_HIDE_DESKTOP}
             onClick={() => {
               setAnchorEl(null);
@@ -2210,7 +2219,7 @@ export default function Sidebar({
             Logout
           </MenuItem>
           <MenuItem
-            id="logout-all-menu-item"
+            id="main-menu-logout-all"
             className={CLASS_HIDE_DESKTOP}
             onClick={() => {
               setAnchorEl(null);

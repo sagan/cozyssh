@@ -63,7 +63,7 @@ export interface ButtonBarProps {
   isTouch: boolean;
   handleButtonClick: (
     btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">,
-    alternativeMode?: number,
+    alternativeMode?: AltMode,
   ) => void;
 }
 

@@ -30,6 +30,14 @@ import type { Liquid } from "liquidjs";
 
 declare global {
   type Modifier = "alt" | "ctrl" | "meta" | "shift";
+  /**
+   * Defines the trigger way of the script button
+   * - 0 / undefined : normal / default (Click / Enter)
+   * - 1 : Alt + Mouse Click, or Alt + Enter
+   * - 2 : Shift + Mouse Click, or Shift + Enter
+   * - 3 : Ctrl + Mouse Click, or Ctrl + Enter
+   */
+  type AltMode = 0 | 1 | 2 | 3;
   interface CsChooseAction {
     value: string; // The unique value returned when clicked (e.g., 'discard')
     label?: string; // The text displayed on the button (e.g., 'Save as Draft'), default to id
@@ -45,24 +53,26 @@ declare global {
      */
     background?: boolean;
     /**
-     * Defines the trigger way of the script button
-     * - 0 / undefined : normal / default;
-     * - 1 : Alt + Mouse Click
-     * - 2 : Shift + Mouse Click
-     * - 3 : Ctrl + Mouse Click
+     * The alternative mode. It defines the trigger way of the script.
      */
-    alternativeMode?: number;
+    altMode?: AltMode;
   }
   /**
    * Custom shortcut that can be imported by a script to register as additional shortcut.
    */
   interface CsShortcut {
     /**
-     * Optional key of the shortcut. If key is undefined, it will be updated to
+     * Optional key of the shortcut. If undefined, it will be updated to
      * a value derived from script id and `shortcut` automatically when the script is imported.
      * It's used when the button is unloaded or uninstalled to remove it's registered shortcuts.
      */
     key?: string;
+    /**
+     * Optional human readable name which should describe the shortcut function concisely.
+     * If undefined, it will be updated to a name derived from script button name and `shortcut`
+     * automatically when the script is imported.
+     */
+    name?: string;
     /**
      * Shortcut combination string like "ctrl+alt+shift+meta+a". All lowercase and modifiers in order.
      */
@@ -70,7 +80,7 @@ declare global {
     /**
      * The action when shortcut pressed
      */
-    action: () => void | Promise<void>;
+    action: (shortcut: CsShortcut) => void | Promise<void>;
     /**
      * If true, the shortcut will be disabled when the terminal has focus.
      */
@@ -196,20 +206,46 @@ declare global {
   var __CS_EXTRA_BUTTON_MENU__: CustomMenu<ButtonData>[] | undefined;
   /**
    * Extra host group context menu. The item is group name, possibly nested, e.g. "foo/bar".
+   * It must be treated as immutable value. Any modification must be made by assigning a new array to it.
+   * For example: `__CS_EXTRA_GROUP_MENU__ = [...(__CS_EXTRA_GROUP_MENU__ || []), { name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }]`
    */
   var __CS_EXTRA_GROUP_MENU__: CustomMenu<string>[] | undefined;
   /**
    * Extra tag context menu. The item is tag name.
+   * It must be treated as immutable value. Any modification must be made by assigning a new array to it.
+   * For example: `__CS_EXTRA_TAG_MENU__ = [...(__CS_EXTRA_TAG_MENU__ || []), { name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }]`
    */
   var __CS_EXTRA_TAG_MENU__: CustomMenu<string>[] | undefined;
   /**
    * Extra host form add / edit host dialog form menu.
+   * It must be treated as immutable value. Any modification must be made by assigning a new array to it.
+   * For example: `__CS_EXTRA_HOST_FORM_MENU__ = [...(__CS_EXTRA_HOST_FORM_MENU__ || []), { name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }]`
    */
   var __CS_EXTRA_HOST_FORM_MENU__: CustomMenu<HostForm>[] | undefined;
   /**
    * Extra button form add / edit button dialog form menu.
+   * It must be treated as immutable value. Any modification must be made by assigning a new array to it.
+   * For example: `__CS_EXTRA_BUTTON_FORM_MENU__ = [...(__CS_EXTRA_BUTTON_FORM_MENU__ || []), { name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }]`
    */
   var __CS_EXTRA_BUTTON_FORM_MENU__: CustomMenu<ButtonForm>[] | undefined;
+  /**
+   * Extra main menu.
+   * It must be treated as immutable value. Any modification must be made by assigning a new array to it.
+   * For example: `__CS_EXTRA_MAIN_MENU__ = [...(__CS_EXTRA_MAIN_MENU__ || []), { name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }]`
+   */
+  var __CS_EXTRA_MAIN_MENU__: CustomMenu<"">[] | undefined;
+  /**
+   * Extra tab bar context menu.
+   * It must be treated as immutable value. Any modification must be made by assigning a new array to it.
+   * For example: `__CS_EXTRA_TAB_BAR_MENU__ = [...(__CS_EXTRA_TAB_BAR_MENU__ || []), { name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }]`
+   */
+  var __CS_EXTRA_TAB_BAR_MENU__: CustomMenu<"">[] | undefined;
+  /**
+   * Extra new tab dialog item menu.
+   * It must be treated as immutable value. Any modification must be made by assigning a new array to it.
+   * For example: `__CS_EXTRA_NTD_MENU__ = [...(__CS_EXTRA_NTD_MENU__ || []), { name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }]`
+   */
+  var __CS_EXTRA_NTD_MENU__: CustomMenu<NtdItem>[] | undefined;
   /**
    * Global shortcut button map.
    */

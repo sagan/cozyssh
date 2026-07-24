@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Box, Tabs, Tab, IconButton } from "@mui/material";
+import { Box, Tabs, Tab, IconButton, Menu, MenuItem } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import AddIcon from "@mui/icons-material/Add";
 import ViewSidebarIcon from "@mui/icons-material/ViewSidebar";
@@ -34,9 +34,11 @@ import {
   closeTab,
   setTabs,
   activatePane,
+  openSaveTabsToButtonDialog,
 } from "./store";
 import { APP_NAME, ID_TERMINAL_SEARCH_INPUT, LOCAL_NAME } from "./constants";
 import TextFieldWithCopy from "./components/TextFieldWithCopy";
+import ExtraMenu from "./components/ExtraMenu";
 
 export interface TabBarProps {
   terminalRefs: React.MutableRefObject<TerminalRefMap>;
@@ -64,10 +66,13 @@ export default function TabBar({
   const unreadTabIds = useStore((state) => state.unreadTabIds);
   const sysSitename = useStore((state) => state.sysinfo.sitename);
   const searchOpen = useStore((state) => state.searchOpen);
+  const extraTabBarMenu = useStore((state) => state.extraTabBarMenu);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
   const [dragOverTab, setDragOverTab] = useState<{ id: string; position: "before" | "after" } | null>(null);
+
+  const [tabBarContextMenu, setTabBarContextMenu] = useState<{ mouseX: number; mouseY: number } | null>(null);
 
   const reorderTabs = (draggedId: string, targetId: string, position: "before" | "after") => {
     const draggedIndex = tabs.findIndex((t) => t.id === draggedId);
@@ -128,6 +133,11 @@ export default function TabBar({
             flexShrink: 0,
             overflow: "hidden",
             position: "relative",
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setTabBarContextMenu({ mouseX: e.clientX - 2, mouseY: e.clientY - 4 });
           }}
         >
           <IconButton
@@ -422,6 +432,47 @@ export default function TabBar({
               </IconButton>
             </Box>
           )}
+          <Menu
+            id="tab-bar-menu"
+            open={!!tabBarContextMenu}
+            onClose={() => setTabBarContextMenu(null)}
+            anchorReference="anchorPosition"
+            anchorPosition={
+              tabBarContextMenu
+                ? {
+                    top: tabBarContextMenu.mouseY,
+                    left: tabBarContextMenu.mouseX,
+                  }
+                : undefined
+            }
+          >
+            <MenuItem
+              disabled={tabs.length === 0}
+              onClick={() => {
+                setTabBarContextMenu(null);
+                setTabs([]);
+              }}
+            >
+              Close All Tabs ({tabs.length})
+            </MenuItem>
+            <MenuItem
+              disabled={tabs.length === 0}
+              onClick={() => {
+                setTabBarContextMenu(null);
+                openSaveTabsToButtonDialog();
+              }}
+            >
+              Save All to Button
+            </MenuItem>
+            <ExtraMenu
+              extraMenu={extraTabBarMenu}
+              // eslint-disable-next-line @typescript-eslint/prefer-as-const
+              target={"" as ""}
+              before={() => {
+                setTabBarContextMenu(null);
+              }}
+            />
+          </Menu>
         </Box>
       )}
     </>

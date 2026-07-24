@@ -10,6 +10,8 @@ import {
   ListItemText,
   Typography,
   Box,
+  Menu,
+  MenuItem,
 } from "@mui/material";
 import ComputerIcon from "@mui/icons-material/Computer";
 import CloseIcon from "@mui/icons-material/Close";
@@ -43,21 +45,25 @@ import {
   LINK_COZYSSH_DOC_PLUGINS,
   ID_NEW_TAB_DIALOG_LIST,
   ID_NEW_TAB_DIALOG_CONTENT,
+  RECENT_BUTTON_ID_PREFIX_CUSTOM_SHORTCUT,
 } from "./constants";
 import {
+  assertUnreachable,
   cutString,
-  filterButtons,
+  filterArrayByText,
   filterHosts,
   forceReload,
   getKeyCombination,
   isModifier,
   isValidHostname,
   localShellHost,
+  matchButton,
   parseHostName,
   searchStringAny,
   shortcutLabel,
 } from "./common";
 import {
+  type NtdItem,
   changeNewTabDialogViewMode,
   deleteRecent,
   fetchActiveTunnels,
@@ -72,44 +78,22 @@ import {
   getHost,
   logout,
   logoutAll,
+  type NtdItemAction,
+  type NtdItemHost,
+  type NtdItemTab,
+  type NtdItemPinnedTab,
+  type NtdItemButton,
+  type NtdItemTunnel,
+  type NtdItemTag,
+  type NtdItemHelp,
+  type NtdItemCustomShortcut,
 } from "./store";
 import TextFieldWithCopy from "./components/TextFieldWithCopy";
-
-interface DialogItem {
-  type:
-    | "recent"
-    | "host"
-    | "direct"
-    | "local"
-    | "tab"
-    | "pinned_tab"
-    | "button"
-    | "other_button"
-    | "builtin_button"
-    | "tag"
-    | "tunnel"
-    | "link"
-    | "action"
-    | "help";
-  value: string;
-  label: string;
-  subtitle?: string;
-  tooltip?: string;
-  isFav?: boolean;
-  id?: string;
-  session?: Session;
-  btn?: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">;
-  tag?: string;
-  className?: string;
-  flatIndex: number;
-  /** True for items that can be removed from the recents list */
-  isDeletable?: boolean;
-  action?: () => void;
-}
+import ExtraMenu from "./components/ExtraMenu";
 
 interface DialogSection {
   title: string;
-  items: DialogItem[];
+  items: NtdItem[];
 }
 
 interface NewTabDialogProps {
@@ -117,13 +101,10 @@ interface NewTabDialogProps {
   isTouch: boolean;
   open: boolean;
   onClose: () => void;
-  onSelect: (host: string, alternativeMode?: number) => void;
+  onSelect: (host: string, altMode?: AltMode) => void;
   onSelectTab: (tabId: string) => void;
-  onAttachPinned: (session: Session, alternativeMode?: number) => void;
-  onExecuteButton: (
-    btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">,
-    alternativeMode?: number,
-  ) => void;
+  onAttachPinned: (session: Session, altMode?: AltMode) => void;
+  onExecuteButton: (btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">, altMode?: AltMode) => void;
 }
 
 const modes = [
@@ -145,7 +126,7 @@ const modes = [
   { type: "help", icon: <HelpIcon fontSize="small" />, label: "Help", shortcut: "alt+?" },
 ] as const;
 
-const helpOptions: Omit<DialogItem, "flatIndex">[] = [
+const helpOptions: NtdItemHelp[] = [
   {
     type: "help",
     value: "",
@@ -190,7 +171,7 @@ const helpOptions: Omit<DialogItem, "flatIndex">[] = [
   },
 ] as const;
 
-const helpLinks: Omit<DialogItem, "flatIndex">[] = [
+const helpLinks: NtdItem[] = [
   {
     type: "link",
     value: LINK_COZYSSH_DOC_SCRIPTS,
@@ -217,14 +198,14 @@ const helpLinks: Omit<DialogItem, "flatIndex">[] = [
           value: "logout",
           subtitle: "Logout of current device",
           action: () => logout(true),
-        },
+        } as NtdItemAction,
         {
           type: "action",
           label: "Logout All",
           value: "logout_all",
           subtitle: "Logout of all devices",
           action: () => logoutAll(true),
-        },
+        } as NtdItemAction,
       ] as const)
     : []),
   {
@@ -234,8 +215,125 @@ const helpLinks: Omit<DialogItem, "flatIndex">[] = [
     label: "Force Reload",
     subtitle: "Unregister the Service Worker, clear all caches and reload",
     tag: "ctrl+alt+shift+r",
-  },
+  } as NtdItemAction,
 ] as const;
+
+/*
+ * Return the label of a open action of a item.
+ * It return empty string if the item doesn't support the corresponding alternativeMode.
+ * All items support altMode = 0.
+ */
+function itemLabel(item: NtdItem, altMode: AltMode): string {
+  switch (item.type) {
+    case "recent":
+    case "host":
+    case "direct":
+    case "local":
+      switch (altMode) {
+        case 0:
+          return "Open";
+        case 1:
+          return "Open In Current Tab";
+        case 2:
+          return "Edit";
+        case 3:
+          return "Open In New Window";
+      }
+      break;
+    case "builtin_button":
+    case "other_button":
+    case "button":
+      switch (altMode) {
+        case 0:
+          return "Execute";
+        case 1:
+          if (item.btn.type === "send_string") {
+            return "Copy";
+          }
+          return "";
+        case 2:
+          return "Edit";
+        case 3:
+          if (item.btn.type === "send_string") {
+            return "Send"; // open Terminal Input dialog to send
+          }
+          return "";
+      }
+      break;
+    case "pinned_tab":
+      return altMode === 0 ? "Attach" : "";
+    case "tab":
+      return altMode === 0 ? "Switch To" : "";
+    case "tunnel":
+      return altMode === 0 ? "Copy Entrypoint" : "";
+    case "action":
+    case "custom_shortcut":
+      return altMode === 0 ? "Execute" : "";
+  }
+  return altMode === 0 ? "Open" : "";
+}
+
+function itemIcon(item: NtdItem, selectedIndex: number) {
+  // Use 'as const' so TS knows these are exact literal values, not generic strings
+  const baseProps = {
+    fontSize: "small" as const,
+  };
+  const activeProps = {
+    ...baseProps,
+    color: "primary" as const,
+    sx: { color: selectedIndex === item.flatIndex ? "white" : "primary.main" },
+  };
+  switch (item.type) {
+    case "recent":
+      return <HistoryIcon {...baseProps} />;
+    case "direct":
+      return <SendIcon {...baseProps} />;
+    case "local":
+      return <ComputerIcon {...baseProps} />;
+    case "tab":
+      return <TabIcon {...activeProps} />;
+    case "pinned_tab":
+      return item.session.isHidden ? (
+        <VisibilityOffIcon {...activeProps} />
+      ) : item.session.isLocked ? (
+        <LockIcon {...activeProps} />
+      ) : (
+        <PushPinIcon {...activeProps} />
+      );
+    case "button":
+    case "other_button":
+    case "builtin_button":
+    case "custom_shortcut":
+      return <SmartButtonIcon {...activeProps} />;
+    case "tunnel":
+      return <ShortcutIcon {...activeProps} />;
+    case "link":
+      return <LinkIcon {...activeProps} />;
+    case "help":
+      if (item.value === ">") {
+        return <SmartButtonIcon {...activeProps} />;
+      } else if (item.value === "@") {
+        return <TabIcon {...activeProps} />;
+      } else if (item.value === "?") {
+        return <HelpIcon {...activeProps} />;
+      } else if (item.value === "#") {
+        return <TagIcon {...activeProps} />;
+      } else {
+        return <DnsIcon {...baseProps} />;
+      }
+    case "host":
+      if (item.isFav) {
+        return <StarIcon {...activeProps} />;
+      }
+      return <DnsIcon {...baseProps} />;
+      break;
+    case "action":
+    case "tag":
+      return <DnsIcon {...baseProps} />;
+    default:
+      assertUnreachable(item);
+  }
+}
 
 export default function NewTabDialog({
   isMobile,
@@ -257,6 +355,7 @@ export default function NewTabDialog({
   const activeTunnels = useStore((state) => state.activeTunnels);
   const recents = useStore((state) => state.recents);
   const appVersion = useStore((state) => state.sysinfo.version);
+  const extraNtdMenu = useStore((state) => state.extraNtdMenu);
 
   const defaultShell = shells[0];
   const alternativeShell = shells[1];
@@ -267,14 +366,17 @@ export default function NewTabDialog({
 
   const [localPinned, setLocalPinned] = useState<Session[]>([]);
 
-  const aboutLink: Omit<DialogItem, "flatIndex"> = useMemo(() => {
+  const [contextMenuOpen, setContextMenuOpen] = useState<boolean>(false);
+  const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number; item: NtdItem } | null>(null);
+
+  const aboutLink: NtdItem = useMemo(() => {
     return {
       type: "link",
       value: LINK_COZYSSH_GITHUB,
       label: "About (GitHub)",
       subtitle: `CozySSH ${PACKAGE_JSON_VERSION} (Backend: ${appVersion})`,
       tag: PACKAGE_JSON_VERSION,
-    } satisfies Omit<DialogItem, "flatIndex">;
+    };
   }, [appVersion]);
 
   const uniqueTags: { tag: string; count: number }[] = useMemo(() => {
@@ -299,12 +401,15 @@ export default function NewTabDialog({
   }, [newTabDialogFilter]);
 
   useEffect(() => {
-    const value = inputRef.current?.value;
+    if (!inputRef.current) {
+      return;
+    }
+    const value = inputRef.current.value;
     if (value && !value.startsWith("#")) {
       if (viewMode === "servers") {
-        inputRef.current!.select();
+        inputRef.current.select();
       } else {
-        inputRef.current!.setSelectionRange(1, value.length);
+        inputRef.current.setSelectionRange(1, value.length);
       }
     }
   }, [viewMode]);
@@ -425,8 +530,8 @@ export default function NewTabDialog({
     if (viewMode !== "buttons") {
       return { matchedUser: [], matchedBuiltin: [] };
     }
-    const matchedUser = filterButtons(buttons, f);
-    const matchedBuiltin = filterButtons(BUILTIN_BUTTONS, f);
+    const matchedUser = filterArrayByText(buttons, f, matchButton);
+    const matchedBuiltin = filterArrayByText(BUILTIN_BUTTONS, f, matchButton);
     return { matchedUser, matchedBuiltin };
   }, [buttons, f, viewMode]);
 
@@ -455,45 +560,107 @@ export default function NewTabDialog({
     return allFilteredButtons.matchedBuiltin;
   }, [allFilteredButtons, viewMode]);
 
-  const recentButtons = useMemo(() => {
+  const filteredShortcuts: NtdItemCustomShortcut[] = useMemo(() => {
     if (viewMode !== "buttons") {
       return [];
     }
-    const list: Pick<
-      ButtonData,
-      "id" | "name" | "type" | "payload" | "liquidjs" | "group" | "shortcut" | "shortcut_scope"
-    >[] = [];
-    recentButtonIds.forEach((id) => {
-      const userBtn = buttons.find((b) => b.id === id);
-      if (userBtn) {
-        list.push(userBtn);
-        return;
+    const shortcuts: NtdItemCustomShortcut[] = [];
+    for (const shortcut of Object.values(__CS_CUSTOM_SHORTCUTS__)) {
+      if (f && !shortcut.name?.toLowerCase().includes(f) && !shortcut.shortcut.includes(f)) {
+        continue;
       }
-      const builtinBtn = BUILTIN_BUTTONS.find((b) => b.id === id);
-      if (builtinBtn) {
-        list.push({
-          id: builtinBtn.id,
-          name: builtinBtn.name,
-          type: builtinBtn.type,
-          payload: builtinBtn.payload,
-          group: "",
-          shortcut: builtinBtn.shortcut ? shortcutLabel(builtinBtn.shortcut) : "",
-        });
-      }
-    });
+      shortcuts.push({
+        type: "custom_shortcut",
+        value: "",
+        label: shortcut.name || shortcut.shortcut,
+        tag: shortcut.shortcut,
+        subtitle: `Custom Shortcut | ${shortcut.name || shortcut.shortcut}`,
+        shortcut,
+      });
+    }
+    return shortcuts;
+  }, [viewMode, f]);
 
+  const recentButtons: readonly (NtdItemButton | NtdItemCustomShortcut)[] = useMemo(() => {
+    if (viewMode !== "buttons") {
+      return [];
+    }
+    const list: (NtdItemButton | NtdItemCustomShortcut)[] = [];
+    for (const id of recentButtonIds) {
+      if (id.startsWith(RECENT_BUTTON_ID_PREFIX_CUSTOM_SHORTCUT)) {
+        const kc = id.substring(RECENT_BUTTON_ID_PREFIX_CUSTOM_SHORTCUT.length);
+        const shortcut = __CS_CUSTOM_SHORTCUTS__[kc];
+        if (shortcut) {
+          list.push({
+            type: "custom_shortcut",
+            shortcut,
+            label: shortcut.name || shortcut.shortcut,
+            tag: shortcut.shortcut,
+            subtitle: `Custom Shortcut | ${shortcut.name || shortcut.shortcut}`,
+            value: id,
+            isDeletable: true,
+          });
+        }
+      } else {
+        const btn = buttons.find((b) => b.id === id);
+        if (btn) {
+          list.push({
+            type: "button",
+            value: id,
+            label: btn.name,
+            subtitle: `Group: ${btn.group || DEFAULT_BUTTON_GROUP} | Type: ${btn.type}${
+              btn.type !== "send_string" && btn.type !== "run_script" ? " | Payload: " + btn.payload : ""
+            }`,
+            tooltip: btn.type !== "run_script" ? btn.payload : undefined,
+            btn: btn,
+            tag:
+              !btn.shortcut_scope || (btn.group || DEFAULT_BUTTON_GROUP) === activeGroup
+                ? shortcutLabel(btn.shortcut)
+                : undefined,
+            isDeletable: true,
+          });
+        } else {
+          const btn = BUILTIN_BUTTONS.find((b) => b.id === id);
+          if (btn) {
+            list.push({
+              type: "builtin_button",
+              value: id,
+              label: btn.name,
+              subtitle: `Built-in Button | Type: ${btn.type}`,
+              tooltip: undefined,
+              btn: btn,
+              tag: btn.shortcut ? shortcutLabel(btn.shortcut) : undefined,
+              isDeletable: true,
+            });
+          }
+        }
+      }
+    }
     if (!f) {
       return list;
     }
-    return filterButtons(list, f);
-  }, [recentButtonIds, buttons, f, viewMode]);
+    return filterArrayByText(
+      list,
+      f,
+      function (item: NtdItemButton | NtdItemCustomShortcut, searchText: string): boolean {
+        if (item.type === "custom_shortcut") {
+          return (
+            item.shortcut.name?.toLowerCase().includes(searchText.toLowerCase()) ||
+            item.shortcut.shortcut.includes(searchText.toLowerCase())
+          );
+        } else {
+          return matchButton(item.btn, searchText);
+        }
+      },
+    );
+  }, [viewMode, f, recentButtonIds, buttons, activeGroup]);
 
   const { sections, items } = useMemo(() => {
     const sections: DialogSection[] = [];
-    const items: DialogItem[] = [];
+    const items: NtdItem[] = [];
     let flatIndex = 0;
 
-    const addSection = (title: string, rawItems: Omit<DialogItem, "flatIndex">[]) => {
+    const addSection = (title: string, rawItems: readonly NtdItem[]) => {
       if (rawItems.length === 0) {
         return;
       }
@@ -507,7 +674,7 @@ export default function NewTabDialog({
 
     if (viewMode === "servers") {
       // Recents
-      const recentList: Omit<DialogItem, "flatIndex">[] = [];
+      const recentList: NtdItemHost[] = [];
       filteredRecents.forEach((r) => {
         const knownHost = getHost(r.host);
         recentList.push({
@@ -526,7 +693,7 @@ export default function NewTabDialog({
       addSection("Recents", recentList);
 
       // Local shells
-      const localList: Omit<DialogItem, "flatIndex">[] = [];
+      const localList: NtdItemHost[] = [];
       filteredShells.forEach((shell) => {
         localList.push({
           type: "local",
@@ -540,7 +707,7 @@ export default function NewTabDialog({
       addSection("Local Shells", localList);
 
       // Older recents
-      const olderRecentList: Omit<DialogItem, "flatIndex">[] = [];
+      const olderRecentList: NtdItemHost[] = [];
       filteredOlderRecents.forEach((r) => {
         const knownHost = getHost(r.host);
         olderRecentList.push({
@@ -559,7 +726,7 @@ export default function NewTabDialog({
       addSection("Older Recents", olderRecentList);
 
       // Favourite servers
-      const favList: Omit<DialogItem, "flatIndex">[] = [];
+      const favList: NtdItemHost[] = [];
       filteredHosts.favourite.forEach((h) => {
         let subtitle = `${h.user || "root"}@${h.hostname}`;
         if (f && h.comment) {
@@ -584,7 +751,7 @@ export default function NewTabDialog({
       addSection("Favourite Servers", favList);
 
       // 4. Normal servers
-      const normalList: Omit<DialogItem, "flatIndex">[] = [];
+      const normalList: NtdItemHost[] = [];
       filteredHosts.normal.forEach((h) => {
         let subtitle = `${h.user || "root"}@${h.hostname}`;
         if (f && h.comment) {
@@ -609,7 +776,7 @@ export default function NewTabDialog({
       addSection("Normal Servers", normalList);
 
       // 5. Auto servers
-      const autoList: Omit<DialogItem, "flatIndex">[] = [];
+      const autoList: NtdItemHost[] = [];
       filteredHosts.auto.forEach((h) => {
         let subtitle = `${h.user || "root"}@${h.hostname}`;
         if (f && h.comment) {
@@ -644,7 +811,7 @@ export default function NewTabDialog({
         ]);
       }
     } else if (viewMode === "tabs") {
-      const activeTabsItems: Omit<DialogItem, "flatIndex">[] = [];
+      const activeTabsItems: NtdItemTab[] = [];
       tabs.forEach((tab, idx) => {
         if (
           !f ||
@@ -653,7 +820,7 @@ export default function NewTabDialog({
         ) {
           activeTabsItems.push({
             type: "tab",
-            id: tab.id,
+            tab: tab,
             value: tab.id,
             label: tab.title,
             subtitle: tab.type === "scratchpad" ? "Scratchpad" : `Terminal: ${tab.panes.map((p) => p.host).join(", ")}`,
@@ -663,7 +830,7 @@ export default function NewTabDialog({
       });
       addSection("Current Browser Tabs", activeTabsItems);
 
-      const pinnedTabsItems: Omit<DialogItem, "flatIndex">[] = attachablePinnedTabs.map((p) => ({
+      const pinnedTabsItems: NtdItemPinnedTab[] = attachablePinnedTabs.map((p) => ({
         type: "pinned_tab",
         value: p.id,
         label: p.title || p.host,
@@ -672,41 +839,9 @@ export default function NewTabDialog({
       }));
       addSection("Attachable Pinned Tabs", pinnedTabsItems);
     } else if (viewMode === "buttons") {
-      const recentList: Omit<DialogItem, "flatIndex">[] = [];
-      recentButtons.forEach((b) => {
-        let subtitle = "";
-        const isBuiltin = b.id.startsWith("builtin-");
-        if (isBuiltin) {
-          subtitle = `Built-in | Type: ${b.type} | Payload: ${b.payload}`;
-        } else {
-          subtitle = `Group: ${b.group || DEFAULT_BUTTON_GROUP} | Type: ${b.type}${
-            b.type !== "send_string" && b.type !== "run_script" ? " | Payload: " + b.payload : ""
-          }`;
-        }
-        if (f && b.type === "send_string" && b.payload) {
-          const matchedPayload = searchStringAny(b.payload, f);
-          if (matchedPayload) {
-            subtitle += ` // ${matchedPayload}`;
-          }
-        }
-        recentList.push({
-          type: isBuiltin ? "builtin_button" : "button",
-          id: b.id,
-          value: b.id,
-          label: b.name,
-          subtitle,
-          tooltip: b.type !== "run_script" ? b.payload : undefined,
-          btn: b,
-          tag:
-            !b.shortcut_scope || (b.group || DEFAULT_BUTTON_GROUP) === activeGroup
-              ? shortcutLabel(b.shortcut)
-              : undefined,
-          isDeletable: true,
-        });
-      });
-      addSection("Recently used", recentList);
+      addSection("Recently used", recentButtons);
 
-      const activeGroupList: Omit<DialogItem, "flatIndex">[] = [];
+      const activeGroupList: NtdItemButton[] = [];
       activeGroupButtons.forEach((b, idx) => {
         let subtitle = `Group: ${b.group || DEFAULT_BUTTON_GROUP} | Type: ${b.type}${
           b.type !== "send_string" && b.type !== "run_script" ? " | Payload: " + b.payload : ""
@@ -719,7 +854,6 @@ export default function NewTabDialog({
         }
         activeGroupList.push({
           type: "button",
-          id: b.id,
           value: b.id,
           label: b.name,
           subtitle,
@@ -735,7 +869,7 @@ export default function NewTabDialog({
       });
       addSection(`Active Group (${activeGroup || DEFAULT_BUTTON_GROUP})`, activeGroupList);
 
-      const otherGroupList: Omit<DialogItem, "flatIndex">[] = [];
+      const otherGroupList: NtdItemButton[] = [];
       otherGroupButtons.forEach((b) => {
         let subtitle = `Group: ${b.group || DEFAULT_BUTTON_GROUP} | Type: ${b.type}${
           b.type !== "send_string" && b.type !== "run_script" ? " | Payload: " + b.payload : ""
@@ -748,7 +882,6 @@ export default function NewTabDialog({
         }
         otherGroupList.push({
           type: "other_button",
-          id: b.id,
           value: b.id,
           label: b.name,
           subtitle,
@@ -759,9 +892,10 @@ export default function NewTabDialog({
       });
       addSection("Other Groups", otherGroupList);
 
-      const builtinList: Omit<DialogItem, "flatIndex">[] = builtinButtons.map((b) => ({
+      addSection("Custom Shortcuts", filteredShortcuts);
+
+      const builtinList: NtdItemButton[] = builtinButtons.map((b) => ({
         type: "builtin_button",
-        id: b.id,
         value: b.id,
         label: b.name,
         subtitle: `Built-in | Type: ${b.type} | Payload: ${b.payload}`,
@@ -770,9 +904,8 @@ export default function NewTabDialog({
       }));
       addSection("Built-in Functions", builtinList);
     } else if (viewMode === "tunnels") {
-      const tunnelItems: Omit<DialogItem, "flatIndex">[] = filteredActiveTunnels.map((t) => ({
+      const tunnelItems: NtdItemTunnel[] = filteredActiveTunnels.map((t) => ({
         type: "tunnel",
-        id: `${t.bindPort}-${t.remotePort || "socks5"}-${t.remoteHost || "dynamic"}`,
         value:
           t.type === "dynamic"
             ? `${t.bindAddr || "127.0.0.1"}:${t.bindPort}`
@@ -789,9 +922,8 @@ export default function NewTabDialog({
       }));
       addSection("Active SSH Tunnels", tunnelItems);
     } else if (viewMode === "tags") {
-      const tagItems: Omit<DialogItem, "flatIndex">[] = filteredTags.map((t) => ({
+      const tagItems: NtdItemTag[] = filteredTags.map((t) => ({
         type: "tag",
-        id: t.tag,
         value: t.tag,
         label: "#" + t.tag,
         subtitle: `${t.count} servers`,
@@ -824,6 +956,7 @@ export default function NewTabDialog({
     activeGroupButtons,
     activeGroup,
     otherGroupButtons,
+    filteredShortcuts,
     builtinButtons,
     filteredActiveTunnels,
     filteredTags,
@@ -852,8 +985,8 @@ export default function NewTabDialog({
     }
     if (item.type === "recent") {
       deleteRecent(item.value);
-    } else if ((item.type === "button" || item.type === "builtin_button") && item.id) {
-      removeRecentButtonId(item.id);
+    } else if (["button", "other_button", "builtin_button", "custom_shortcut"].includes(item.type) && item.value) {
+      removeRecentButtonId(item.value);
     }
     // Keep the dialog open; adjust selection if needed
     setSelectedIndex((prev) => Math.max(0, prev - 1));
@@ -863,23 +996,23 @@ export default function NewTabDialog({
   }, []);
 
   const handleSelect = useCallback(
-    (item: (typeof items)[number], alternativeMode = 0) => {
+    (item: (typeof items)[number], altMode: AltMode = 0) => {
       switch (item.type) {
         case "tab":
-          onSelectTab(item.id!);
+          onSelectTab(item.tab.id);
           onClose();
           break;
         case "pinned_tab":
-          onAttachPinned(item.session!, alternativeMode);
+          onAttachPinned(item.session, altMode);
           onClose();
           break;
         case "button":
         case "other_button":
         case "builtin_button":
-          if (item.btn?.id && alternativeMode === 0) {
+          if (item.btn.id && altMode === 0) {
             updateRecentButtonId(item.btn.id);
           }
-          onExecuteButton(item.btn!, alternativeMode);
+          onExecuteButton(item.btn, altMode);
           onClose();
           break;
         case "tag":
@@ -910,14 +1043,23 @@ export default function NewTabDialog({
           onClose();
           break;
         case "action":
-          if (item.action) {
-            item.action();
-            onClose();
-          }
+          item.action();
+          onClose();
+          break;
+        case "host":
+        case "recent":
+        case "local":
+        case "direct":
+          onSelect(item.value, altMode);
+          onClose();
+          break;
+        case "custom_shortcut":
+          updateRecentButtonId(RECENT_BUTTON_ID_PREFIX_CUSTOM_SHORTCUT + item.shortcut.shortcut);
+          item.shortcut.action(item.shortcut);
+          onClose();
           break;
         default:
-          onSelect(item.value, alternativeMode);
-          onClose();
+          assertUnreachable(item);
       }
     },
     [onAttachPinned, onClose, onExecuteButton, onSelect, onSelectTab],
@@ -1040,60 +1182,52 @@ export default function NewTabDialog({
     [isMobile, isTouch],
   );
 
-  const getItemIcon = (item: (typeof items)[number], index: number, selectedIndex: number) => {
-    // Use 'as const' so TS knows these are exact literal values, not generic strings
-    const baseProps = {
-      fontSize: "small" as const,
-    };
-    const activeProps = {
-      ...baseProps,
-      color: "primary" as const,
-      sx: { color: selectedIndex === index ? "white" : "primary.main" },
-    };
-    switch (item.type) {
-      case "recent":
-        return <HistoryIcon {...baseProps} />;
-      case "direct":
-        return <SendIcon {...baseProps} />;
-      case "local":
-        return <ComputerIcon {...baseProps} />;
-      case "tab":
-        return <TabIcon {...activeProps} />;
-      case "pinned_tab":
-        return item.session!.isHidden ? (
-          <VisibilityOffIcon {...activeProps} />
-        ) : item.session!.isLocked ? (
-          <LockIcon {...activeProps} />
-        ) : (
-          <PushPinIcon {...activeProps} />
-        );
-      case "button":
-      case "other_button":
-      case "builtin_button":
-        return <SmartButtonIcon {...activeProps} />;
-      case "tunnel":
-        return <ShortcutIcon {...activeProps} />;
-      case "link":
-        return <LinkIcon {...activeProps} />;
-      case "help":
-        if (item.value === ">") {
-          return <SmartButtonIcon {...activeProps} />;
-        } else if (item.value === "@") {
-          return <TabIcon {...activeProps} />;
-        } else if (item.value === "?") {
-          return <HelpIcon {...activeProps} />;
-        } else if (item.value === "#") {
-          return <TagIcon {...activeProps} />;
-        } else {
-          return <DnsIcon {...baseProps} />;
-        }
-      default:
-        if (item.isFav) {
-          return <StarIcon {...activeProps} />;
-        }
-        return <DnsIcon {...baseProps} />;
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      const item = items[parseInt((e.currentTarget as HTMLElement).dataset.index!)];
+      if (!item) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      setContextMenu({ mouseX: e.clientX - 2, mouseY: e.clientY - 4, item });
+      setContextMenuOpen(true);
+    },
+    [items],
+  );
+
+  const itemMenus = useMemo(() => {
+    if (!contextMenu) {
+      return null;
     }
-  };
+    const item = contextMenu.item;
+    const elements: React.ReactNode[] = [];
+    const altModes: AltMode[] = ["recent", "host", "direct", "local"].includes(item.type) ? [0, 1, 3, 2] : [0, 1, 2, 3];
+    for (const altMode of altModes) {
+      const label = itemLabel(item, altMode);
+      if (!label) {
+        continue;
+      }
+      elements.push(
+        <MenuItem
+          id={`ntdm-open-${altMode}`}
+          data-type={item.type}
+          data-value={item.value}
+          className={item.className}
+          onClick={() => {
+            setContextMenuOpen(false);
+            handleSelect(item, altMode);
+          }}
+        >
+          {label}
+          {altMode === 0 ? ` (${item.label})` : ""}
+          &nbsp;({altMode === 0 ? "enter" : altMode === 1 ? "alt+enter" : altMode === 2 ? "shift+enter" : "ctrl+enter"})
+        </MenuItem>,
+      );
+    }
+    return <>{elements}</>;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contextMenu?.item, handleSelect]);
 
   return (
     <Dialog
@@ -1215,6 +1349,7 @@ export default function NewTabDialog({
               {section.items.map((item) => (
                 <ListItemButton
                   key={item.flatIndex}
+                  onContextMenu={handleContextMenu}
                   selected={selectedIndex === item.flatIndex}
                   ref={selectedIndex === item.flatIndex ? selectedItemRef : null}
                   onClick={(e) =>
@@ -1224,6 +1359,7 @@ export default function NewTabDialog({
                   data-type={item.type}
                   data-label={item.label}
                   data-value={item.value}
+                  data-index={item.flatIndex}
                   className={`new-tab-dialog-item ${item.className ?? ""}`}
                   sx={{
                     py: 0.5,
@@ -1246,14 +1382,14 @@ export default function NewTabDialog({
                     },
                   }}
                 >
-                  <ListItemIcon sx={{ minWidth: 36 }}>{getItemIcon(item, item.flatIndex, selectedIndex)}</ListItemIcon>
+                  <ListItemIcon sx={{ minWidth: 36 }}>{itemIcon(item, selectedIndex)}</ListItemIcon>
                   <ListItemText
                     primary={
                       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 0.5 }}>
                         <Typography
                           variant="body2"
                           sx={{
-                            fontWeight: item.isFav ? "bold" : "normal",
+                            fontWeight: "isFav" in item && item.isFav ? "bold" : "normal",
                             lineHeight: 1.2,
                             color: "inherit",
                           }}
@@ -1331,6 +1467,43 @@ export default function NewTabDialog({
             </Box>
           )}
         </List>
+        <Menu
+          id="ntdm"
+          open={contextMenuOpen}
+          onClose={() => {
+            setContextMenuOpen(false);
+          }}
+          anchorReference="anchorPosition"
+          anchorPosition={contextMenu ? { top: contextMenu.mouseY, left: contextMenu.mouseX } : undefined}
+        >
+          {!!contextMenu && (
+            <>
+              {itemMenus}
+              <ExtraMenu
+                extraMenu={extraNtdMenu}
+                target={contextMenu.item}
+                before={() => {
+                  setContextMenuOpen(false);
+                }}
+                after={onClose}
+              />
+              {contextMenu.item.isDeletable && (
+                <MenuItem
+                  id="ntdm-delete"
+                  data-type={contextMenu.item.type}
+                  data-value={contextMenu.item.value}
+                  className={contextMenu.item.className}
+                  onClick={() => {
+                    setContextMenuOpen(false);
+                    handleDeleteItem(contextMenu.item);
+                  }}
+                >
+                  Delete (alt+d)
+                </MenuItem>
+              )}
+            </>
+          )}
+        </Menu>
       </DialogContent>
     </Dialog>
   );

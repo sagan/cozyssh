@@ -119,14 +119,108 @@ export interface TabData {
 
 export type TerminalRefMap = Record<string, TerminalHandle | ScratchpadHandle | null>;
 
+/**
+ * The custom / extra menu. Used in scripting API.
+ */
 export interface CustomMenu<T> {
+  /**
+   * Optional key of the menu item. If not provided, the index of the menu item will be used
+   */
   key?: string;
-  name: string | ((item: T) => string);
-  action: (e: React.MouseEvent, item: T) => void | Promise<void>;
-  hidden?: (item: T) => boolean;
-  disabled?: (item: T) => boolean;
+  /**
+   * The menu displayed name
+   */
+  name: string | ((item: T, menu: CustomMenu<T>) => string);
+  /**
+   * The action when the menu is clicked. It may optionally return a number,
+   * the behavior of the return value depends on the menu type.
+   */
+  action: (e: React.MouseEvent, item: T, menu: CustomMenu<T>) => undefined | number | Promise<undefined | number>;
+  /**
+   * Whether the menu item should be hidden. If true, the menu item will not be displayed.
+   */
+  hidden?: (item: T, menu: CustomMenu<T>) => boolean;
+  /**
+   * Whether the menu item should be disabled. If true, the menu item will not be clickable.
+   */
+  disabled?: (item: T, menu: CustomMenu<T>) => boolean;
 }
 
+interface NtdItemBasic {
+  value: string;
+  label: string;
+  className?: string;
+  flatIndex?: number;
+  isDeletable?: boolean;
+  subtitle?: string;
+  tooltip?: string;
+  tag?: string;
+}
+
+export interface NtdItemHost extends NtdItemBasic {
+  type: "recent" | "host" | "direct" | "local";
+  isFav?: boolean;
+}
+
+export interface NtdItemButton extends NtdItemBasic {
+  type: "button" | "other_button" | "builtin_button";
+  btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">;
+}
+
+export interface NtdItemTab extends NtdItemBasic {
+  type: "tab";
+  tab: TabData;
+}
+
+export interface NtdItemPinnedTab extends NtdItemBasic {
+  type: "pinned_tab";
+  session: Session;
+}
+
+export interface NtdItemCustomShortcut extends NtdItemBasic {
+  type: "custom_shortcut";
+  shortcut: CsShortcut;
+}
+
+export interface NtdItemTag extends NtdItemBasic {
+  type: "tag";
+}
+
+export interface NtdItemTunnel extends NtdItemBasic {
+  type: "tunnel";
+}
+
+export interface NtdItemLink extends NtdItemBasic {
+  type: "link";
+}
+
+export interface NtdItemAction extends NtdItemBasic {
+  type: "action";
+  action: () => void;
+}
+
+export interface NtdItemHelp extends NtdItemBasic {
+  type: "help";
+}
+
+/**
+ * New Tab Dialog item
+ */
+export type NtdItem =
+  | NtdItemHost
+  | NtdItemButton
+  | NtdItemTab
+  | NtdItemPinnedTab
+  | NtdItemCustomShortcut
+  | NtdItemTag
+  | NtdItemTunnel
+  | NtdItemLink
+  | NtdItemAction
+  | NtdItemHelp;
+
+/**
+ * The type of CozySSH main zustand store.
+ */
 interface Store {
   btnContextMenuOpen: boolean;
   btnContextMenu: { element: Element; btn: ButtonData } | null;
@@ -137,6 +231,9 @@ interface Store {
   extraTagMenu?: CustomMenu<string>[];
   extraHostFormMenu?: CustomMenu<HostForm>[];
   extraButtonFormMenu?: CustomMenu<ButtonForm>[];
+  extraMainMenu?: CustomMenu<"">[];
+  extraTabBarMenu?: CustomMenu<"">[];
+  extraNtdMenu?: CustomMenu<NtdItem>[];
   settingsTab: number;
   settingsOpen: boolean;
   filterStr: string;
@@ -278,10 +375,13 @@ channel.onmessage = (event) => {
 };
 
 /**
- * The initial URL params parsed from location.search
+ * The initial URL params parsed from location.search at page load time.
  */
 export const startupParams = new URLSearchParams(location.search);
 
+/**
+ * The main zustand store object for CozySSH. It stores all states needed globally.
+ */
 export const useStore = create<Store>(
   () =>
     ({
@@ -534,6 +634,30 @@ export const setExtraButtonFormMenu = (
 ) =>
   useStore.setState((state) => ({
     extraButtonFormMenu: typeof update === "function" ? update(state.extraButtonFormMenu) : update,
+  }));
+
+export const setExtraMainMenu = (
+  update: CustomMenu<"">[] | undefined | ((menu: CustomMenu<"">[] | undefined) => CustomMenu<"">[] | undefined),
+) =>
+  useStore.setState((state) => ({
+    extraMainMenu: typeof update === "function" ? update(state.extraMainMenu) : update,
+  }));
+
+export const setExtraTabBarMenu = (
+  update: CustomMenu<"">[] | undefined | ((menu: CustomMenu<"">[] | undefined) => CustomMenu<"">[] | undefined),
+) =>
+  useStore.setState((state) => ({
+    extraTabBarMenu: typeof update === "function" ? update(state.extraTabBarMenu) : update,
+  }));
+
+export const setExtraNtdMenu = (
+  update:
+    | CustomMenu<NtdItem>[]
+    | undefined
+    | ((menu: CustomMenu<NtdItem>[] | undefined) => CustomMenu<NtdItem>[] | undefined),
+) =>
+  useStore.setState((state) => ({
+    extraNtdMenu: typeof update === "function" ? update(state.extraNtdMenu) : update,
   }));
 
 export const setAsyncDialogOpen = (update: boolean | ((data: boolean) => boolean)) =>
@@ -1720,15 +1844,8 @@ export function openAddButtonDialog(initial?: Partial<ButtonForm>) {
   setEditButtonDialogOpen(true);
 }
 
-export async function openSaveTabToButtonDialog(tabId?: string) {
-  const { activeTabId, tabs, activeGroup, buttons } = getStore();
-  tabId = tabId || activeTabId;
-  const targetTab = tabs.find((t) => t.id === tabId);
-  if (!targetTab || targetTab.type !== "terminal") {
-    return;
-  }
-  const maxOrder = buttons.length > 0 ? Math.max(...buttons.map((b) => b.order || 0)) : 0;
-  const hostConnectionStrings: string[] = targetTab.panes.map((p, idx) => {
+export function getTabConnectionString(tab: TabData): string {
+  const hostConnectionStrings: string[] = tab.panes.map((p, idx) => {
     let s = p.host;
     const params = new URLSearchParams(p.options);
     for (const key of params.keys()) {
@@ -1736,7 +1853,7 @@ export async function openSaveTabToButtonDialog(tabId?: string) {
         params.delete(key);
       }
     }
-    const titleBase = removeNameNumSuffix(targetTab.title);
+    const titleBase = removeNameNumSuffix(tab.title);
     if (idx === 0 && titleBase !== p.host) {
       params.set("title", titleBase);
     }
@@ -1745,7 +1862,43 @@ export async function openSaveTabToButtonDialog(tabId?: string) {
     }
     return s;
   });
-  const payload = hostConnectionStrings.join(",");
+  return hostConnectionStrings.join(",");
+}
+
+export async function openSaveTabsToButtonDialog() {
+  const tabs = getStore().tabs.filter((t) => t.type === "terminal");
+  if (tabs.length === 0) {
+    dialogs.alert("No opened terminal tabs to save");
+    return;
+  }
+  const payload = tabs.map((t) => `csOpen(${JSON.stringify(getTabConnectionString(t))});`).join("\n") + "\n";
+  const { activeGroup, buttons } = getStore();
+  const maxOrder = buttons.length > 0 ? Math.max(...buttons.map((b) => b.order || 0)) : 0;
+  const data: ButtonData = {
+    id: "",
+    name: "Save all opened tabs",
+    type: "run_script",
+    payload,
+    group: activeGroup,
+    autorun: 0,
+    order: maxOrder + 10 || 10,
+    shortcut: "",
+  };
+  setEditButton(null);
+  setButtonFormData(data);
+  setInitialBtnFormData(data);
+  setEditButtonDialogOpen(true);
+}
+
+export async function openSaveTabToButtonDialog(tabId?: string) {
+  const { activeTabId, tabs, activeGroup, buttons } = getStore();
+  tabId = tabId || activeTabId;
+  const targetTab = tabs.find((t) => t.id === tabId);
+  if (!targetTab || targetTab.type !== "terminal") {
+    return;
+  }
+  const maxOrder = buttons.length > 0 ? Math.max(...buttons.map((b) => b.order || 0)) : 0;
+  const payload = getTabConnectionString(targetTab);
   const existingButton = buttons.find((b) => b.type === "open_terminal" && b.payload === payload);
   if (existingButton) {
     const action = await dialogs.choose(

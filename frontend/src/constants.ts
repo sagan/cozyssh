@@ -241,3 +241,5 @@ export const CLASS_HIDE_DESKTOP = "hide-desktop";
 export const CLASS_HIDE_WEB = "hide-web";
 
 export const PartialMatchHostKey: unique symbol = Symbol("PartialMatchHost");
+
+export const RECENT_BUTTON_ID_PREFIX_CUSTOM_SHORTCUT = "$custom_shortcut$.";

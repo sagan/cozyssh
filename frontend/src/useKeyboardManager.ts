@@ -72,7 +72,7 @@ import {
 
 export interface KeyboardManagerOptions {
   /** Called when a button shortcut is triggered */
-  handleButtonClick: (btn: ButtonData, alternativeMode?: number) => void;
+  handleButtonClick: (btn: ButtonData, altMode?: AltMode) => void;
   /** Getter for the live terminal ref map */
   getTerminalRefs: () => TerminalRefMap;
 }
@@ -90,7 +90,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
       }
       if (__CS_CUSTOM_SHORTCUTS__[keycomb] && !__CS_CUSTOM_SHORTCUTS__[keycomb].disabled) {
         e.preventDefault();
-        __CS_CUSTOM_SHORTCUTS__[keycomb].action();
+        __CS_CUSTOM_SHORTCUTS__[keycomb].action(__CS_CUSTOM_SHORTCUTS__[keycomb]);
         return;
       }
       if (blackholeShortcuts.has(keycomb)) {

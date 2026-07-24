@@ -2001,13 +2001,85 @@ export interface TabData {
 	type: "terminal" | "scratchpad";
 }
 export type TerminalRefMap = Record<string, TerminalHandle | ScratchpadHandle | null>;
+/**
+ * The custom / extra menu. Used in scripting API.
+ */
 export interface CustomMenu<T> {
+	/**
+	 * Optional key of the menu item. If not provided, the index of the menu item will be used
+	 */
 	key?: string;
-	name: string | ((item: T) => string);
-	action: (e: React.MouseEvent, item: T) => void | Promise<void>;
-	hidden?: (item: T) => boolean;
-	disabled?: (item: T) => boolean;
+	/**
+	 * The menu displayed name
+	 */
+	name: string | ((item: T, menu: CustomMenu<T>) => string);
+	/**
+	 * The action when the menu is clicked. It may optionally return a number,
+	 * the behavior of the return value depends on the menu type.
+	 */
+	action: (e: React.MouseEvent, item: T, menu: CustomMenu<T>) => undefined | number | Promise<undefined | number>;
+	/**
+	 * Whether the menu item should be hidden. If true, the menu item will not be displayed.
+	 */
+	hidden?: (item: T, menu: CustomMenu<T>) => boolean;
+	/**
+	 * Whether the menu item should be disabled. If true, the menu item will not be clickable.
+	 */
+	disabled?: (item: T, menu: CustomMenu<T>) => boolean;
 }
+export interface NtdItemBasic {
+	value: string;
+	label: string;
+	className?: string;
+	flatIndex?: number;
+	isDeletable?: boolean;
+	subtitle?: string;
+	tooltip?: string;
+	tag?: string;
+}
+export interface NtdItemHost extends NtdItemBasic {
+	type: "recent" | "host" | "direct" | "local";
+	isFav?: boolean;
+}
+export interface NtdItemButton extends NtdItemBasic {
+	type: "button" | "other_button" | "builtin_button";
+	btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">;
+}
+export interface NtdItemTab extends NtdItemBasic {
+	type: "tab";
+	tab: TabData;
+}
+export interface NtdItemPinnedTab extends NtdItemBasic {
+	type: "pinned_tab";
+	session: Session;
+}
+export interface NtdItemCustomShortcut extends NtdItemBasic {
+	type: "custom_shortcut";
+	shortcut: CsShortcut;
+}
+export interface NtdItemTag extends NtdItemBasic {
+	type: "tag";
+}
+export interface NtdItemTunnel extends NtdItemBasic {
+	type: "tunnel";
+}
+export interface NtdItemLink extends NtdItemBasic {
+	type: "link";
+}
+export interface NtdItemAction extends NtdItemBasic {
+	type: "action";
+	action: () => void;
+}
+export interface NtdItemHelp extends NtdItemBasic {
+	type: "help";
+}
+/**
+ * New Tab Dialog item
+ */
+export type NtdItem = NtdItemHost | NtdItemButton | NtdItemTab | NtdItemPinnedTab | NtdItemCustomShortcut | NtdItemTag | NtdItemTunnel | NtdItemLink | NtdItemAction | NtdItemHelp;
+/**
+ * The type of CozySSH main zustand store.
+ */
 export interface Store {
 	btnContextMenuOpen: boolean;
 	btnContextMenu: {
@@ -2021,6 +2093,9 @@ export interface Store {
 	extraTagMenu?: CustomMenu<string>[];
 	extraHostFormMenu?: CustomMenu<HostForm>[];
 	extraButtonFormMenu?: CustomMenu<ButtonForm>[];
+	extraMainMenu?: CustomMenu<"">[];
+	extraTabBarMenu?: CustomMenu<"">[];
+	extraNtdMenu?: CustomMenu<NtdItem>[];
 	settingsTab: number;
 	settingsOpen: boolean;
 	filterStr: string;
@@ -2101,6 +2176,14 @@ export interface CsExecResult {
 }
 declare global {
 	type Modifier = "alt" | "ctrl" | "meta" | "shift";
+	/**
+	 * Defines the trigger way of the script button
+	 * - 0 / undefined : normal / default (Click / Enter)
+	 * - 1 : Alt + Mouse Click, or Alt + Enter
+	 * - 2 : Shift + Mouse Click, or Shift + Enter
+	 * - 3 : Ctrl + Mouse Click, or Ctrl + Enter
+	 */
+	type AltMode = 0 | 1 | 2 | 3;
 	interface CsChooseAction {
 		value: string; // The unique value returned when clicked (e.g., 'discard')
 		label?: string; // The text displayed on the button (e.g., 'Save as Draft'), default to id
@@ -2116,24 +2199,26 @@ declare global {
 		 */
 		background?: boolean;
 		/**
-		 * Defines the trigger way of the script button
-		 * - 0 / undefined : normal / default;
-		 * - 1 : Alt + Mouse Click
-		 * - 2 : Shift + Mouse Click
-		 * - 3 : Ctrl + Mouse Click
+		 * The alternative mode. It defines the trigger way of the script.
 		 */
-		alternativeMode?: number;
+		altMode?: AltMode;
 	}
 	/**
 	 * Custom shortcut that can be imported by a script to register as additional shortcut.
 	 */
 	interface CsShortcut {
 		/**
-		 * Optional key of the shortcut. If key is undefined, it will be updated to
+		 * Optional key of the shortcut. If undefined, it will be updated to
 		 * a value derived from script id and `shortcut` automatically when the script is imported.
 		 * It's used when the button is unloaded or uninstalled to remove it's registered shortcuts.
 		 */
 		key?: string;
+		/**
+		 * Optional human readable name which should describe the shortcut function concisely.
+		 * If undefined, it will be updated to a name derived from script button name and `shortcut`
+		 * automatically when the script is imported.
+		 */
+		name?: string;
 		/**
 		 * Shortcut combination string like "ctrl+alt+shift+meta+a". All lowercase and modifiers in order.
 		 */
@@ -2141,7 +2226,7 @@ declare global {
 		/**
 		 * The action when shortcut pressed
 		 */
-		action: () => void | Promise<void>;
+		action: (shortcut: CsShortcut) => void | Promise<void>;
 		/**
 		 * If true, the shortcut will be disabled when the terminal has focus.
 		 */
@@ -2266,20 +2351,46 @@ declare global {
 	var __CS_EXTRA_BUTTON_MENU__: CustomMenu<ButtonData>[] | undefined;
 	/**
 	 * Extra host group context menu. The item is group name, possibly nested, e.g. "foo/bar".
+	 * It must be treated as immutable value. Any modification must be made by assigning a new array to it.
+	 * For example: `__CS_EXTRA_GROUP_MENU__ = [...(__CS_EXTRA_GROUP_MENU__ || []), { name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }]`
 	 */
 	var __CS_EXTRA_GROUP_MENU__: CustomMenu<string>[] | undefined;
 	/**
 	 * Extra tag context menu. The item is tag name.
+	 * It must be treated as immutable value. Any modification must be made by assigning a new array to it.
+	 * For example: `__CS_EXTRA_TAG_MENU__ = [...(__CS_EXTRA_TAG_MENU__ || []), { name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }]`
 	 */
 	var __CS_EXTRA_TAG_MENU__: CustomMenu<string>[] | undefined;
 	/**
 	 * Extra host form add / edit host dialog form menu.
+	 * It must be treated as immutable value. Any modification must be made by assigning a new array to it.
+	 * For example: `__CS_EXTRA_HOST_FORM_MENU__ = [...(__CS_EXTRA_HOST_FORM_MENU__ || []), { name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }]`
 	 */
 	var __CS_EXTRA_HOST_FORM_MENU__: CustomMenu<HostForm>[] | undefined;
 	/**
 	 * Extra button form add / edit button dialog form menu.
+	 * It must be treated as immutable value. Any modification must be made by assigning a new array to it.
+	 * For example: `__CS_EXTRA_BUTTON_FORM_MENU__ = [...(__CS_EXTRA_BUTTON_FORM_MENU__ || []), { name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }]`
 	 */
 	var __CS_EXTRA_BUTTON_FORM_MENU__: CustomMenu<ButtonForm>[] | undefined;
+	/**
+	 * Extra main menu.
+	 * It must be treated as immutable value. Any modification must be made by assigning a new array to it.
+	 * For example: `__CS_EXTRA_MAIN_MENU__ = [...(__CS_EXTRA_MAIN_MENU__ || []), { name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }]`
+	 */
+	var __CS_EXTRA_MAIN_MENU__: CustomMenu<"">[] | undefined;
+	/**
+	 * Extra tab bar context menu.
+	 * It must be treated as immutable value. Any modification must be made by assigning a new array to it.
+	 * For example: `__CS_EXTRA_TAB_BAR_MENU__ = [...(__CS_EXTRA_TAB_BAR_MENU__ || []), { name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }]`
+	 */
+	var __CS_EXTRA_TAB_BAR_MENU__: CustomMenu<"">[] | undefined;
+	/**
+	 * Extra new tab dialog item menu.
+	 * It must be treated as immutable value. Any modification must be made by assigning a new array to it.
+	 * For example: `__CS_EXTRA_NTD_MENU__ = [...(__CS_EXTRA_NTD_MENU__ || []), { name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }]`
+	 */
+	var __CS_EXTRA_NTD_MENU__: CustomMenu<NtdItem>[] | undefined;
 	/**
 	 * Global shortcut button map.
 	 */

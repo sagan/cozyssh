@@ -92,23 +92,26 @@ You can also import any external module, for example from a CDN url.
 
 ## Available global variables
 
-CozySSH sets some global variables in the browser's window object.
+CozySSH sets some global variables in the browser's `window` object. All these variables are pre-initialized so you don't need to use `window.` prefix to access them. Some variables can be modified (either by assigning a new value to it, or by updating the Array / Set element, or by calling its methods), see the description for details. All modifications should be reflected in CozySSH app instantly.
 
-- `window.__CS_AUTORUN_DONE__` : `undefined | 0 | 1` - `1` - If all autorun scripts have been executed, unset (undefined) or 0 otherwise. It can be used to determine if the script is executed via auto-run or via clicking the button.
-- `window.__CS_MODULECACHE__` : `Record<string, CsScriptModule>` - The module cache of imported scripts. The key is the button internal id.
-- `window.__CS_PASSTHROUGH_SHORTCUTS__` : `Set<string>` - The additional list of key combinations that should be passed through to the terminal if terminal has focus. Each element is a key combination string such as `ctrl+shift+m` (all lowercase, modifiers in `ctrl,alt,shift,meta` order).
-- `window.__CS_DISABLE_SHORTCUTS__` : `Set<string>` - The list of keyboard shortcuts that should be disabled. The element is in the same format as `__CS_PASSTHROUGH_SHORTCUTS__` element.
-- `window.__CS_BLACKHOLE_SHORTCUTS__` : `Set<string>` - The list of keyboard shortcuts that should be silently consumed / ignored. The difference between it and `__CS_DISABLE_SHORTCUTS__` is that for shortcut in this list it will execute `e.preventDefault()` before returning in keyboard event handle.
-- `window.__CS_USE_STORE__` : `typeof useStore` - The [zustand][] store hook function that CozySSH uses to manage state.
-- `window.__CS_TERMINAL_OPTIONS__` : `ITerminalOptions` - Used to set additional xterm.js terminal options. These options are merged with the default options. It uses Proxy so any modification takes effect to all terminals immediately. See xterm.js [ITerminalOptions](https://xtermjs.org/docs/api/terminal/interfaces/iterminaloptions/) for details. The default options can be found in `frontend/src/Terminal.tsx`.
-- `window.__CS_FONT_SIZE__`: `number` - Global font size. Default is `14` (MUI default). It uses Object.defineProperty so the modification takes effect immediately.
-- `window.__CS_EXTRA_HOST_MENU__`: `CustomMenu<HostData>[] | undefined`, `window.__CS_EXTRA_TAB_MENU__`: `CustomMenu<TabData>[] | undefined`, `window.__CS_EXTRA_BUTTON_MENU__`: `CustomMenu<ButtonData>[] | undefined` - The extra menu items to be added to the host, tab, and button context menus respectively. The array object must be treated as immutable value. Any modification must be made by assigning a new array to it. The default value is `undefined`.
-- `window.__CS_EXTRA_GROUP_MENU__`, `window.__CS_EXTRA_TAG_MENU__` : `CustomMenu<string>[] | undefined` - The extra menu items to be added to the group and tag context menus respectively.
-- `window.__CS_EXTRA_HOST_FORM_MENU__`: `CustomMenu<HostForm>[] | undefined`, `window.__CS_EXTRA_BUTTON_FORM_MENU__`: `CustomMenu<ButtonForm>[] | undefined` - The extra menu items to be added to the add / edit host form and add / edit button form menus respectively.
-- `window.__CS_TOAST_KEY_MUTE_SET__`: `Set<string>` - The list of toast keys that should be muted. The element is a toast key string. If a key ends with `-`, it's treated as a prefix, and it will mute all toasts whose keys start with this prefix.
-- `window.__CS_LIQUID_ENGINE__` : `Liquid` - The LiquidJs Engine instannce that CozySSH uses for send_string buttons & Terminal Input dialog.
-- `window.__CS_ENV__` : `number` - `0` - CozySSH is running as web app; `1` - CozySSH is running as Windows Desktop app (webview2). This variable is also available in `<html data-cs-env>`.
-- `window.__CS_VERSION__` : `string` - The current frontend version of CozySSH. E.g. `0.5.0`. This variable is also available in `<html data-cs-version>`.
+- `__CS_AUTORUN_DONE__` : `undefined | 0 | 1` - `1` - If all autorun scripts have been executed, unset (undefined) or 0 otherwise. It can be used to determine if the script is executed via auto-run or via clicking the button.
+- `__CS_MODULECACHE__` : `Record<string, CsScriptModule>` - The module cache of imported scripts. The key is the button internal id.
+- `__CS_PASSTHROUGH_SHORTCUTS__` : `Set<string>` - The additional list of key combinations that should be passed through to the terminal if terminal has focus. Each element is a key combination string such as `ctrl+shift+m` (all lowercase, modifiers in `ctrl,alt,shift,meta` order).
+- `__CS_DISABLE_SHORTCUTS__` : `Set<string>` - The list of keyboard shortcuts that should be disabled. The element is in the same format as `__CS_PASSTHROUGH_SHORTCUTS__` element.
+- `__CS_BLACKHOLE_SHORTCUTS__` : `Set<string>` - The list of keyboard shortcuts that should be silently consumed / ignored. The difference between it and `__CS_DISABLE_SHORTCUTS__` is that for shortcut in this list it will execute `e.preventDefault()` before returning in keyboard event handle.
+- `__CS_USE_STORE__` : `typeof useStore` - The [zustand][] store hook function that CozySSH uses to manage state.
+- `__CS_TERMINAL_OPTIONS__` : `ITerminalOptions` - Used to set additional xterm.js terminal options. These options are merged with the default options. It uses Proxy so any modification takes effect to all terminals immediately. See xterm.js [ITerminalOptions](https://xtermjs.org/docs/api/terminal/interfaces/iterminaloptions/) for details. The default options can be found in `frontend/src/Terminal.tsx`.
+- `__CS_FONT_SIZE__`: `number` - Global font size. Default is `14` (MUI default). It uses Object.defineProperty so the modification takes effect immediately.
+- `__CS_EXTRA_HOST_MENU__`: `CustomMenu<HostData>[] | undefined`, `__CS_EXTRA_TAB_MENU__`: `CustomMenu<TabData>[] | undefined`, `__CS_EXTRA_BUTTON_MENU__`: `CustomMenu<ButtonData>[] | undefined` - The extra menu items to be added to the host, tab, and button context menus respectively. The array object must be treated as immutable value. Any modification must be made by assigning a new array to it. The default value is `undefined`.
+- `__CS_EXTRA_GROUP_MENU__`, `__CS_EXTRA_TAG_MENU__` : `CustomMenu<string>[] | undefined` - The extra menu items to be added to the group and tag context menus respectively.
+- `__CS_EXTRA_HOST_FORM_MENU__`: `CustomMenu<HostForm>[] | undefined`, `__CS_EXTRA_BUTTON_FORM_MENU__`: `CustomMenu<ButtonForm>[] | undefined` - The extra menu items to be added to the add / edit host form and add / edit button form menus respectively.
+- `__CS_EXTRA_MAIN_MENU__` : `CustomMenu<"">[] | undefined` - The extra menu items to be added to the main menu (in sidebar). The item is fixed to empty string.
+- `__CS_EXTRA_TAB_BAR_MENU__` : `CustomMenu<"">[] | undefined` - The extra menu items to be added to the tab bar context menu. The item is fixed to empty string.
+- `__CS_EXTRA_NTD_MENU__` : `CustomMenu<NtdItem>[] | undefined` - The extra menu items to be added to the new tab dialog item context menu.
+- `__CS_TOAST_KEY_MUTE_SET__`: `Set<string>` - The list of toast keys that should be muted. The element is a toast key string. If a key ends with `-`, it's treated as a prefix, and it will mute all toasts whose keys start with this prefix.
+- `__CS_LIQUID_ENGINE__` : `Liquid` - The LiquidJs Engine instannce that CozySSH uses for send_string buttons & Terminal Input dialog.
+- `__CS_ENV__` : `number` - `0` - CozySSH is running as web app; `1` - CozySSH is running as Desktop app (webview2). This variable is also available in `<html data-cs-env>`.
+- `__CS_VERSION__` : `string` - The current frontend version of CozySSH. E.g. `0.5.0`. This variable is also available in `<html data-cs-version>`.
 
 ## Available global functions
 
@@ -549,7 +552,7 @@ csNotify(`CozySSH Stars: ${data.stargazers_count}`);
 ### Add extra Host / Tab / Button context menu
 
 ```js
-const menu = { name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) };
+const menu = { name: "Show Info", action: (e, item) => csAlert("Info", JSON.stringify(item)) };
 __CS_EXTRA_HOST_MENU__ = [menu];
 __CS_EXTRA_TAB_MENU__ = [menu];
 __CS_EXTRA_BUTTON_MENU__ = [menu];
@@ -557,6 +560,9 @@ __CS_EXTRA_GROUP_MENU__ = [menu];
 __CS_EXTRA_TAG_MENU__ = [menu];
 __CS_EXTRA_HOST_FORM_MENU__ = [menu];
 __CS_EXTRA_BUTTON_FORM_MENU__ = [menu];
+__CS_EXTRA_MAIN_MENU__ = [menu];
+__CS_EXTRA_TAB_BAR_MENU__ = [menu];
+__CS_EXTRA_NTD_MENU__ = [menu];
 ```
 
 ### Register additional keyboard shortcuts

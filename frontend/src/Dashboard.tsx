@@ -423,8 +423,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, [extraKeysOpen]);
 
   const handleButtonClick = useCallback(
-    async (btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">, alternativeMode = 0) => {
-      if (alternativeMode === 2) {
+    async (btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">, altMode: AltMode = 0) => {
+      if (altMode === 2) {
         let button: ButtonData | undefined;
         if (btn.id) {
           button = getStore().buttons.find((b) => b.id === btn.id);
@@ -440,13 +440,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
       let noFocus = false;
       switch (btn.type) {
         case "send_string": {
-          if (alternativeMode === 1) {
+          if (altMode === 1) {
             navigator.clipboard.writeText(btn.payload);
             notify("Copied", "info", TOAST_KEY_COPY);
             triggerFocus();
           } else {
-            const openDialog =
-              alternativeMode === 3 || (!!btn.liquidjs && getTemplateVariables(btn.payload).length > 0);
+            const openDialog = altMode === 3 || (!!btn.liquidjs && getTemplateVariables(btn.payload).length > 0);
             if (openDialog) {
               openInputDialog({
                 inputValue: btn.payload,
@@ -463,11 +462,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
         }
 
         case "open_terminal": {
-          if (alternativeMode === 3) {
+          if (altMode === 3) {
             openHostInNewWindow(btn.payload);
           } else {
             const hosts = btn.payload.split(/\s*,\s*/);
-            openHostsAsSplit2(hosts, { target: alternativeMode === 1 ? "_self" : undefined });
+            openHostsAsSplit2(hosts, { target: altMode === 1 ? "_self" : undefined });
           }
           break;
         }
@@ -826,7 +825,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
           break;
         }
         case "run_script":
-          await runScript({ button: btn, alternativeMode });
+          await runScript({ button: btn, altMode: altMode });
           break;
 
         default:
@@ -1087,6 +1086,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   const handleContextMenu = useCallback((e: React.MouseEvent, id: string) => {
     e.preventDefault();
+    e.stopPropagation();
     setMemoTabId(id);
     setContextMenu({ mouseX: e.clientX + 2, mouseY: e.clientY - 6, targetTabId: id });
   }, []);

@@ -118,7 +118,7 @@ export interface DialogManagerProps {
   sendParsedString: (s: string, isLiquid?: boolean, userVars?: Record<string, string>) => void;
   handleButtonClick: (
     btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">,
-    alternativeMode?: number,
+    alternativeMode?: AltMode,
   ) => Promise<void>;
 }
 
@@ -512,6 +512,7 @@ export default function DialogManager({
                     ).map((hostname) => (
                       <MenuItem
                         key={hostname}
+                        data-name={hostname}
                         className="tab-menu-edit-host"
                         onClick={() => {
                           handleCloseMenu();
@@ -1466,7 +1467,7 @@ export default function DialogManager({
         onClose={(e, reason) => handleCloseInputDialog(reason === "backdropClick" && (e as MouseEvent)?.ctrlKey)}
         disableRestoreFocus
         fullWidth
-        maxWidth={inputLiquid ? "md" : "sm"}
+        maxWidth="md"
       >
         <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span>Terminal Input</span>
@@ -1779,7 +1780,7 @@ export default function DialogManager({
           attachSession(session);
           closeNewTabDialog();
         }}
-        onSelect={async (host, alternativeMode = 0) => {
+        onSelect={async (host, altMode: AltMode = 0) => {
           const [hostname, query] = cutString(host, "?");
           let hostStr = hostname;
           let parsedHost: HostData | undefined;
@@ -1804,9 +1805,9 @@ export default function DialogManager({
             hostStr += "?" + query;
           }
 
-          if (alternativeMode === 3) {
+          if (altMode === 3) {
             openHostInNewWindow(hostStr);
-          } else if (alternativeMode === 2) {
+          } else if (altMode === 2) {
             if (parsedHost) {
               if (parsedHost.source) {
                 openEditHostDialog(parsedHost);
@@ -1815,7 +1816,7 @@ export default function DialogManager({
               }
             }
           } else {
-            openHost(hostStr, { target: alternativeMode ? "_self" : undefined });
+            openHost(hostStr, { target: altMode ? "_self" : undefined });
           }
         }}
       />

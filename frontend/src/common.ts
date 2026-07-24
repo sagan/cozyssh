@@ -643,21 +643,22 @@ function matchHost(host: HostData, searchText: string): boolean {
   );
 }
 
-export function filterButtons<T extends Pick<ButtonData, "name" | "type" | "payload">>(
-  buttons: readonly T[],
+export function filterArrayByText<T>(
+  arr: readonly T[],
   filterStr: string,
+  match: (obj: T, searchText: string) => boolean,
 ): readonly T[] {
   filterStr = filterStr.trim().toLowerCase();
   if (!filterStr) {
-    return buttons;
+    return arr;
   }
   const tokens = filterStr.split(/\s+/);
-  return buttons.filter((host) => {
-    return tokens.every((searchText) => matchButton(host, searchText));
+  return arr.filter((obj) => {
+    return tokens.every((searchText) => match(obj, searchText));
   });
 }
 
-function matchButton(btn: Pick<ButtonData, "name" | "type" | "payload">, searchText: string): boolean {
+export function matchButton(btn: Pick<ButtonData, "name" | "type" | "payload">, searchText: string): boolean {
   return (
     btn.name.toLowerCase().includes(searchText) ||
     (!(["run_script", "send_string"] as ButtonData["type"][]).includes(btn.type) &&

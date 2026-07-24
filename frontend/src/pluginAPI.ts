@@ -80,6 +80,9 @@ import {
   setExtraButtonFormMenu,
   setExtraGroupMenu,
   setExtraTagMenu,
+  setExtraMainMenu,
+  setExtraTabBarMenu,
+  setExtraNtdMenu,
 } from "./store";
 import { dialogs } from "./Dialogs";
 import type { AppletData } from "./AppletWrapper";
@@ -290,6 +293,27 @@ Object.defineProperty(window, "__CS_EXTRA_BUTTON_FORM_MENU__", {
   set: setExtraButtonFormMenu,
 });
 
+Object.defineProperty(window, "__CS_EXTRA_MAIN_MENU__", {
+  get() {
+    return getStore().extraMainMenu;
+  },
+  set: setExtraMainMenu,
+});
+
+Object.defineProperty(window, "__CS_EXTRA_TAB_BAR_MENU__", {
+  get() {
+    return getStore().extraTabBarMenu;
+  },
+  set: setExtraTabBarMenu,
+});
+
+Object.defineProperty(window, "__CS_EXTRA_NTD_MENU__", {
+  get() {
+    return getStore().extraNtdMenu;
+  },
+  set: setExtraNtdMenu,
+});
+
 window.csAlert = dialogs.alert;
 window.csConfirm = dialogs.confirm;
 window.csPrompt = dialogs.prompt;
@@ -433,7 +457,7 @@ const virtualModulesImportRegex = (() => {
   );
 })();
 
-export async function runScript({ button, background, alternativeMode }: CsRunScriptPayload) {
+export async function runScript({ button, background, altMode: alternativeMode }: CsRunScriptPayload) {
   let moduleObj: CsScriptModule;
   let cached = false;
 
@@ -486,6 +510,9 @@ export async function runScript({ button, background, alternativeMode }: CsRunSc
         if (!s.key) {
           s.key = `${button.id}-${s.shortcut}`;
         }
+        if (!s.name) {
+          s.name = `${s.shortcut} (${button.name})`;
+        }
         __CS_CUSTOM_SHORTCUTS__[s.shortcut] = s;
       }
     }
@@ -496,7 +523,7 @@ export async function runScript({ button, background, alternativeMode }: CsRunSc
 
   if (moduleObj.default?.run) {
     try {
-      await moduleObj.default.run({ button, background, alternativeMode });
+      await moduleObj.default.run({ button, background, altMode: alternativeMode });
     } catch (e) {
       console.error(`Script ${button.name} run() Error:`, e);
       notify(`Script ${button.name} run() Error: ${e}`, "error", TOAST_KEY_SCRIPT);
