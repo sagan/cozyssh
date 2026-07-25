@@ -4,6 +4,7 @@ import { defineConfig } from "vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import babel from "@rolldown/plugin-babel";
 import { VitePWA } from "vite-plugin-pwa";
+import jsonStringify from "json-stable-stringify";
 
 import { CACHE_API_DATA, CACHE_MANIFEST } from "./src/constants";
 
@@ -85,7 +86,7 @@ function compileTimeI18nPlugin() {
 
       // Synchronize changes back to disk immediately after file transforms completes
       if (fileMutated) {
-        fs.writeFileSync(localePath, JSON.stringify(translations, null, 2), "utf-8");
+        fs.writeFileSync(localePath, jsonStringify(translations, { space: 2 })!, "utf-8");
       }
 
       return { code: transformedCode, map: null };

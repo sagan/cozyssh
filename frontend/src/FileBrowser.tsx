@@ -31,7 +31,7 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import { Menu, MenuItem, TableSortLabel, InputBase } from "@mui/material";
 
 import type { FileInfo, FileMkdirRequest, FileRenameRequest, FsList, FsToken } from "./api";
-import { type Order, apiReqHeaders, formatSize, getKeyCombination, triggerDownload } from "./common";
+import { type Order, apiReqHeaders, formatSize, getKeyCombination, t, triggerDownload } from "./common";
 import { METHOD_POST } from "./constants";
 import TextEditor from "./TextEditor";
 import { dialogs } from "./Dialogs";
@@ -105,24 +105,22 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
       const res = await fetch(`/api/fs/list?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(path)}`, {
         headers: apiReqHeaders(),
       });
-      if (res.ok) {
-        const data: FsList = await res.json();
-        setCurrentPath(data.path);
-        setFiles(data.files || []);
-        if (isWindowsPath(data.path) || (data.files && data.files.some((f) => isWindowsPath(f.name)))) {
-          setIsWindowsHost(true);
-        }
-        // Reset filter if not pinned on directory change
-        if (!isFilterPinned && data.path !== currentPath) {
-          setIsFilterOpen(false);
-          setFilterValue("");
-        }
-      } else {
-        dialogs.alert("Failed to list files");
+      if (!res.ok) {
+        throw new Error(`status=${res.status}`);
       }
-    } catch (e) {
-      console.error(e);
-      dialogs.alert("Error fetching files");
+      const data: FsList = await res.json();
+      setCurrentPath(data.path);
+      setFiles(data.files || []);
+      if (isWindowsPath(data.path) || (data.files && data.files.some((f) => isWindowsPath(f.name)))) {
+        setIsWindowsHost(true);
+      }
+      // Reset filter if not pinned on directory change
+      if (!isFilterPinned && data.path !== currentPath) {
+        setIsFilterOpen(false);
+        setFilterValue("");
+      }
+    } catch (err) {
+      dialogs.alert(t("Failed to list files:") + ` ${err}`);
     } finally {
       setLoading(false);
     }
@@ -223,23 +221,23 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
         },
       );
 
-      if (res.ok) {
-        const fileInfo: FileInfo = await res.json();
-        if (fileInfo.isDir) {
-          fetchFiles(targetPath);
-        } else {
-          if (fileInfo.size <= 1048576) {
-            handleEditAsText(fileInfo, targetPath);
-          } else {
-            dialogs.alert(`File is too large to open (${formatSize(fileInfo.size)}). Max limit is 1MB.`);
-          }
-        }
-      } else {
-        dialogs.alert("Path not found or error accessing path");
+      if (!res.ok) {
+        throw new Error(`status=${res.status}`);
       }
-    } catch (e) {
-      console.error(e);
-      dialogs.alert("Error accessing path");
+      const fileInfo: FileInfo = await res.json();
+      if (fileInfo.isDir) {
+        fetchFiles(targetPath);
+      } else {
+        if (fileInfo.size <= 1048576) {
+          handleEditAsText(fileInfo, targetPath);
+        } else {
+          dialogs.alert(
+            t("File is too large to open. Max limit is 1MiB. The file size is:") + " " + formatSize(fileInfo.size),
+          );
+        }
+      }
+    } catch (err: unknown) {
+      dialogs.alert(t("Error accessing path:") + ` ${err}`);
     } finally {
       setLoading(false);
     }
@@ -268,15 +266,12 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
           body: formData,
         },
       );
-
-      if (res.ok) {
-        fetchFiles(currentPath);
-      } else {
-        dialogs.alert("Upload failed");
+      if (!res.ok) {
+        throw new Error(`status=${res.status}`);
       }
-    } catch (error) {
-      console.error(error);
-      dialogs.alert("Upload error");
+      fetchFiles(currentPath);
+    } catch (err: unknown) {
+      dialogs.alert(t("Upload failed:") + ` ${err}`);
     } finally {
       setLoading(false);
       if (fileInputRef.current) {
@@ -306,7 +301,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
       )}&expires=${data.expires}&sig=${data.sig}`;
       triggerDownload(dlUrl, filename);
     } catch (err: unknown) {
-      dialogs.alert(`Error downloading file ${filename}: ${err}`);
+      dialogs.alert(t("Error downloading file:") + ` ${err} (${filename})`);
     }
   };
 
@@ -322,26 +317,23 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
           headers: apiReqHeaders(),
         },
       );
-      if (res.ok) {
-        const data: FsToken = await res.json();
-        const dlUrl = `/api/fs/download?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(
-          targetPath,
-        )}&expires=${data.expires}&sig=${data.sig}`;
-        const dlRes = await fetch(dlUrl, { headers: apiReqHeaders() });
-        if (dlRes.ok) {
-          const text = await dlRes.text();
-          setEditorContent(text);
-          setEditingFile(file);
-          setEditingPath(targetPath);
-        } else {
-          dialogs.alert("Failed to download file for editing.");
-        }
-      } else {
-        dialogs.alert("Failed to initiate secure editing.");
+      if (!res.ok) {
+        throw new Error(`status=${res.status}`);
       }
-    } catch (e) {
-      console.error(e);
-      dialogs.alert("Error fetching file for editing.");
+      const data: FsToken = await res.json();
+      const dlUrl = `/api/fs/download?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(
+        targetPath,
+      )}&expires=${data.expires}&sig=${data.sig}`;
+      const dlRes = await fetch(dlUrl, { headers: apiReqHeaders() });
+      if (!dlRes.ok) {
+        throw new Error(t("failed to download file for editing:") + ` status=${dlRes.status}`);
+      }
+      const text = await dlRes.text();
+      setEditorContent(text);
+      setEditingFile(file);
+      setEditingPath(targetPath);
+    } catch (err: unknown) {
+      dialogs.alert(t("Error fetching file for editing:") + ` ${err}`);
     } finally {
       setLoading(false);
     }
@@ -381,17 +373,15 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
         },
       );
 
-      if (res.ok) {
-        setEditorContent(newContent);
-        if (parentDir === currentPath) {
-          fetchFiles(currentPath);
-        }
-      } else {
-        dialogs.alert("Save failed");
+      if (!res.ok) {
+        throw new Error(`status=${res.status}`);
       }
-    } catch (error) {
-      console.error(error);
-      dialogs.alert("Save error");
+      setEditorContent(newContent);
+      if (parentDir === currentPath) {
+        fetchFiles(currentPath);
+      }
+    } catch (err: unknown) {
+      dialogs.alert(t("Save error:") + ` ${err}`);
     } finally {
       setLoading(false);
     }
@@ -399,7 +389,10 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
 
   const handleRename = async (file: FileInfo) => {
     setContextMenu(null);
-    const newName = await dialogs.prompt(`Rename ${file.name} to:`, file.name);
+    const newName = await dialogs.prompt(
+      t("Rename file") + ". " + t("Current name:") + " " + file.name + ". " + t("Enter new name:") + " ",
+      file.name,
+    );
     if (!newName || newName === file.name) {
       return;
     }
@@ -415,19 +408,18 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
           body: JSON.stringify({ newPath } satisfies FileRenameRequest),
         },
       );
-      if (res.ok) {
-        fetchFiles(currentPath);
-      } else {
-        dialogs.alert("Rename failed");
+      if (!res.ok) {
+        throw new Error(`status=${res.status}`);
       }
-    } catch (e) {
-      console.error(e);
+      fetchFiles(currentPath);
+    } catch (err: unknown) {
+      dialogs.alert(t("Rename failed:") + ` ${err}`);
     }
   };
 
   const handleDelete = async (file: FileInfo) => {
     setContextMenu(null);
-    if (!(await dialogs.confirm(`Are you sure you want to delete ${file.name}?`))) {
+    if (!(await dialogs.confirm(t("Are you sure you want to delete this file:") + " " + file.name))) {
       return;
     }
     const join = getPathJoiner(currentPath);
@@ -437,18 +429,17 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
         method: METHOD_POST,
         headers: apiReqHeaders(),
       });
-      if (res.ok) {
-        fetchFiles(currentPath);
-      } else {
-        dialogs.alert("Delete failed");
+      if (!res.ok) {
+        throw new Error(`status=${res.status}`);
       }
-    } catch (e) {
-      console.error(e);
+      fetchFiles(currentPath);
+    } catch (err: unknown) {
+      dialogs.alert(t("Delete failed:") + ` ${err}`);
     }
   };
 
   const handleMkdir = async () => {
-    const name = await dialogs.prompt("New folder name:");
+    const name = await dialogs.prompt(t("Enter new folder name:"));
     if (!name) {
       return;
     }
@@ -462,18 +453,17 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
           body: JSON.stringify({ name } satisfies FileMkdirRequest),
         },
       );
-      if (res.ok) {
-        fetchFiles(currentPath);
-      } else {
-        dialogs.alert("Failed to create folder");
+      if (!res.ok) {
+        throw new Error(`status=${res.status}`);
       }
-    } catch (e) {
-      console.error(e);
+      fetchFiles(currentPath);
+    } catch (err: unknown) {
+      dialogs.alert(t("Failed to create folder:") + ` ${err}`);
     }
   };
 
   const handleNewFile = async () => {
-    const name = await dialogs.prompt("New file name:");
+    const name = await dialogs.prompt(t("Enter new file name:"));
     if (!name) {
       return;
     }
@@ -491,15 +481,12 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
           body: formData,
         },
       );
-
-      if (res.ok) {
-        fetchFiles(currentPath);
-      } else {
-        dialogs.alert("Failed to create file");
+      if (!res.ok) {
+        throw new Error(`status=${res.status}`);
       }
-    } catch (error) {
-      console.error(error);
-      dialogs.alert("Error creating file");
+      fetchFiles(currentPath);
+    } catch (err: unknown) {
+      dialogs.alert(t("Error creating file:") + ` ${err}`);
     } finally {
       setLoading(false);
     }
@@ -541,7 +528,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
           bgcolor: "#f4f6f8",
         }}
       >
-        <IconButton size="small" onClick={() => handleNavigate("..")} sx={{ mr: 1 }} title="Up one level">
+        <IconButton size="small" onClick={() => handleNavigate("..")} sx={{ mr: 1 }} title={t("Up one level")}>
           <ArrowUpwardIcon fontSize="small" />
         </IconButton>
         <Typography
@@ -561,14 +548,14 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
           onClick={() => fetchFiles(currentPath)}
           disabled={loading}
           sx={{ mr: 1 }}
-          title="Refresh"
+          title={t("Refresh")}
         >
           <RefreshIcon fontSize="small" />
         </IconButton>
-        <IconButton size="small" onClick={handleMkdir} disabled={loading} sx={{ mr: 1 }} title="New Folder">
+        <IconButton size="small" onClick={handleMkdir} disabled={loading} sx={{ mr: 1 }} title={t("New Folder")}>
           <CreateNewFolderIcon fontSize="small" />
         </IconButton>
-        <IconButton size="small" onClick={handleNewFile} disabled={loading} sx={{ mr: 1 }} title="New File">
+        <IconButton size="small" onClick={handleNewFile} disabled={loading} sx={{ mr: 1 }} title={t("New File")}>
           <NoteAddIcon fontSize="small" />
         </IconButton>
         <IconButton
@@ -576,11 +563,17 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
           onClick={() => shellCwd && fetchFiles(shellCwd)}
           disabled={loading || !shellCwd}
           sx={{ mr: 1 }}
-          title={shellCwd ? `Go to Shell CWD: ${shellCwd}` : "Shell CWD not detected"}
+          title={shellCwd ? t("Go to Shell CWD:") + " " + shellCwd : t("Shell CWD not detected")}
         >
           <TerminalIcon fontSize="small" />
         </IconButton>
-        <IconButton size="small" onClick={() => fetchFiles("~")} disabled={loading} sx={{ mr: 1 }} title="Go To Home">
+        <IconButton
+          size="small"
+          onClick={() => fetchFiles("~")}
+          disabled={loading}
+          sx={{ mr: 1 }}
+          title={t("Go To Home")}
+        >
           <HomeIcon fontSize="small" />
         </IconButton>
         <IconButton
@@ -588,15 +581,21 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
           onClick={() => setIsFilterOpen(!isFilterOpen)}
           color={isFilterOpen ? "primary" : "default"}
           sx={{ mr: 1, bgcolor: isFilterOpen ? "action.selected" : "transparent" }}
-          title="Filter files"
+          title={t("Filter files")}
         >
           <SearchIcon fontSize="small" />
         </IconButton>
-        <IconButton size="small" title="Upload files" onClick={handleUploadClick} disabled={loading} sx={{ mr: 1 }}>
+        <IconButton
+          size="small"
+          title={t("Upload files")}
+          onClick={handleUploadClick}
+          disabled={loading}
+          sx={{ mr: 1 }}
+        >
           <CloudUploadIcon fontSize="small" />
         </IconButton>
         <input type="file" ref={fileInputRef} style={{ display: "none" }} onChange={handleFileChange} />
-        <IconButton size="small" onClick={onClose} title="Close File Browser">
+        <IconButton size="small" onClick={onClose} title={t("Close File Browser")}>
           <CloseIcon fontSize="small" />
         </IconButton>
       </Box>
@@ -615,7 +614,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
         >
           <SearchIcon fontSize="small" sx={{ color: "action.active", mr: 1 }} />
           <InputBase
-            placeholder="Filter files..."
+            placeholder={t("Filter files...")}
             fullWidth
             size="small"
             autoFocus
@@ -640,7 +639,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
             size="small"
             onClick={handleGoTo}
             disabled={loading || !filterValue.trim()}
-            title="Go to path"
+            title={t("Go to path")}
             sx={{ mr: 0.5 }}
           >
             <ArrowForwardIcon fontSize="small" />
@@ -650,7 +649,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
             size="small"
             onClick={() => setIsFilterPinned(!isFilterPinned)}
             color={isFilterPinned ? "primary" : "default"}
-            title={isFilterPinned ? "Unpin filter" : "Pin filter"}
+            title={isFilterPinned ? t("Unpin filter") : t("Pin filter")}
           >
             {isFilterPinned ? <PushPinIcon fontSize="small" /> : <PushPinOutlinedIcon fontSize="small" />}
           </IconButton>
@@ -727,7 +726,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
                   <TableCell padding="none" sx={{ pr: 1, textAlign: "right" }}>
                     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
                       {!file.isDir && (
-                        <IconButton size="small" title="Download securely" onClick={() => handleDownload(file.name)}>
+                        <IconButton size="small" title={t("Download")} onClick={() => handleDownload(file.name)}>
                           <CloudDownloadIcon fontSize="small" color="primary" />
                         </IconButton>
                       )}

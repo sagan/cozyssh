@@ -30,6 +30,7 @@ import {
   isModifier,
   isMuiModalOpen,
   localShellHost,
+  t,
 } from "./common";
 import {
   type TerminalRefMap,
@@ -146,10 +147,10 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           e.preventDefault();
           refreshData({ sync: 2 })
             .then(() => {
-              notify(`Data refreshed`, "success", TOAST_KEY_REFRESH);
+              notify(t("Data refreshed"), "success", TOAST_KEY_REFRESH);
             })
             .catch((err: unknown) => {
-              notify(`Data refresh failure: ${err}`, "error", TOAST_KEY_REFRESH);
+              notify(t("Data refresh failure:") + ` ${err}`, "error", TOAST_KEY_REFRESH);
             });
           return;
         }

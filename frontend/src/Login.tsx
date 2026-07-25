@@ -11,7 +11,7 @@ import {
   METHOD_POST,
   MIME_JSON,
 } from "./constants";
-import { forceReload, getKeyCombination, loginTheme, blackholeShortcuts } from "./common";
+import { forceReload, getKeyCombination, loginTheme, blackholeShortcuts, t } from "./common";
 import { dialogs } from "./Dialogs";
 
 export default function Login({ onLoginSuccess }: { onLoginSuccess: (data?: FullData) => void }) {
@@ -59,7 +59,7 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess: (data?: Full
     async (e: React.SubmitEvent) => {
       e.preventDefault();
       if (!password) {
-        dialogs.alert("Please enter the App Password.");
+        dialogs.alert(t("Please enter the App Password."));
         return;
       }
       const res = await fetch("/api/login", {
@@ -78,14 +78,14 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess: (data?: Full
           window.location.href = "/";
         }
       } else {
-        dialogs.alert("Login failed. Check the terminal output for the initial App Password.");
+        dialogs.alert(t("Login failed. Check the terminal output for the initial App Password."));
       }
     },
     [onLoginSuccess, password],
   );
 
   const handleClearCache = useCallback(async () => {
-    if (!(await dialogs.confirm("This will unregister the Service Worker, clear all caches and reload. Proceed?"))) {
+    if (!(await dialogs.confirm(t("This will unregister the Service Worker, clear all caches and reload. Proceed?")))) {
       return;
     }
     forceReload();
@@ -112,21 +112,22 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess: (data?: Full
         data = await res.json();
       })();
       await dialogs.alert(
-        `Welcome to CozySSH Desktop App`,
+        t("Welcome to CozySSH Desktop App"),
         authResponse.useKeyring
-          ? `The app password is automatically generated on first run and loaded from system keyring.` +
-              ` Your saved SSH passwords are encrypted with it.` +
-              ` You can change the app password or disable keyring usage from Dashboard menu - Settings.`
-          : `Please check the initial app password in "initial_password.txt" file of CozySSH data directory.
-
-The default data dir path:
-
-  %USERPROFILE%\\.config\\cozyssh(Windows)
-  ~/.config/cozyssh</b> (Linux)
-
-The app password can be changed from Dashboard menu - Settings. You can safely delete the initial_password.txt file after you remember or change the app password.
-
-Please remember the app password. You will need it to access your saved SSH passwords.`,
+          ? t("The app password is automatically generated on first run and loaded from system keyring.") +
+              " " +
+              t("Your saved SSH passwords are encrypted with it.") +
+              " " +
+              t("You can change the app password or disable keyring usage from Dashboard menu - Settings.")
+          : t(`Please check the initial app password in "initial_password.txt" file of CozySSH data directory.`) +
+              " " +
+              t("The default data dir path:") +
+              " %USERPROFILE%\\.config\\cozyssh (Windows); ~/.config/cozyssh</b> (Linux). " +
+              t("The app password can be changed from Dashboard menu - Settings.") +
+              " " +
+              t("You can safely delete the initial_password.txt file after you remember or change the app password.") +
+              " " +
+              t("You should save the app password. You will need it to access your saved SSH passwords."),
       );
       localStorage.setItem(BROWSER_STORAGE_KEY_TOKEN, authResponse.token);
       onLoginSuccess(data?.fulldata);
@@ -145,7 +146,7 @@ Please remember the app password. You will need it to access your saved SSH pass
           <Box component="form" onSubmit={handleLogin} sx={{ mt: 2 }}>
             <TextField
               fullWidth
-              label="App Password"
+              label={t("App Password")}
               type="password"
               variant="outlined"
               margin="normal"
@@ -154,7 +155,7 @@ Please remember the app password. You will need it to access your saved SSH pass
               autoFocus
             />
             <Button fullWidth variant="contained" type="submit" sx={{ mt: 3, mb: 1 }}>
-              Sign In
+              {t("Sign In")}
             </Button>
           </Box>
           <Button
@@ -164,7 +165,7 @@ Please remember the app password. You will need it to access your saved SSH pass
             onClick={handleClearCache}
             sx={{ mt: 2, fontSize: "typography.caption.fontSize", textTransform: "none" }}
           >
-            Force clear cache & unregister service worker
+            {t("Force clear cache & unregister service worker")}
           </Button>
           <Typography variant="body2" sx={{ mt: 2, fontSize: "typography.caption.fontSize" }}>
             v{PACKAGE_JSON_VERSION}&nbsp;|&nbsp;

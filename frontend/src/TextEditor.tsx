@@ -19,6 +19,7 @@ import { rust } from "@codemirror/lang-rust";
 import { sql } from "@codemirror/lang-sql";
 import { xml } from "@codemirror/lang-xml";
 import { dialogs } from "./Dialogs";
+import { t } from "./common";
 
 const getLanguageExtension = (fileName: string) => {
   const ext = fileName.split(".").pop()?.toLowerCase();
@@ -79,7 +80,7 @@ export default function TextEditor({ fileName, initialContent, onSave, onClose, 
 
   const handleClose = useCallback(async () => {
     if (hasChanged) {
-      if (!(await dialogs.confirm("You have unsaved changes. Discard them and close?"))) {
+      if (!(await dialogs.confirm(t("You have unsaved changes. Discard them and close?")))) {
         return;
       }
     }

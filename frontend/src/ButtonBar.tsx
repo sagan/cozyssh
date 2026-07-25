@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Box, TextField, Tabs, Tab, IconButton } from "@mui/material";
+import { Box, TextField, Tabs, Tab, IconButton, Menu, MenuItem } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 
 import type { ButtonData } from "./api";
 import {
+  getStore,
   openAddButtonDialog,
   reorderButtons,
   setActiveGroup,
@@ -13,7 +14,9 @@ import {
 } from "./store";
 import { useShallow } from "zustand/react/shallow";
 import { DEFAULT_BUTTON_GROUP } from "./constants";
-import { isModifier } from "./common";
+import { isModifier, t } from "./common";
+import ExtraMenu from "./components/ExtraMenu";
+import { dialogs } from "./Dialogs";
 
 const buttonStyleBorder: Record<ButtonData["type"], string> = {
   run_script: "2px dashed",
@@ -72,7 +75,9 @@ export default function ButtonBar({ groups, handleButtonClick, isMobile, isTouch
   const filteredButtons = useStore(
     useShallow((state) => state.buttons.filter((b) => (b.group || DEFAULT_BUTTON_GROUP) === state.activeGroup)),
   );
+  const extraButtonBarMenu = useStore((state) => state.extraButtonBarMenu);
 
+  const [buttonBarContextMenu, setButtonBarContextMenu] = useState<{ mouseX: number; mouseY: number } | null>(null);
   const [draggedButtonId, setDraggedButtonId] = useState<string | null>(null);
   const [dragOverButton, setDragOverButton] = useState<{ id: string; position: "before" | "after" } | null>(null);
 
@@ -86,6 +91,11 @@ export default function ButtonBar({ groups, handleButtonClick, isMobile, isTouch
         flexShrink: 0,
         display: "flex",
         alignItems: "center",
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setButtonBarContextMenu({ mouseX: e.clientX - 2, mouseY: e.clientY - 4 });
       }}
     >
       <Box
@@ -164,6 +174,7 @@ export default function ButtonBar({ groups, handleButtonClick, isMobile, isTouch
               }
               onContextMenu={(e) => {
                 e.preventDefault();
+                e.stopPropagation();
                 setBtnContextMenu({ element: e.currentTarget, btn });
                 setBtnContextMenuOpen(true);
               }}
@@ -235,10 +246,88 @@ export default function ButtonBar({ groups, handleButtonClick, isMobile, isTouch
         })}
       </Tabs>
       <Box sx={{ flexShrink: 0, px: 1, borderLeft: 1, borderColor: "divider" }}>
-        <IconButton size="small" title="New Button" onClick={() => openAddButtonDialog()} sx={{ p: 0.5 }}>
+        <IconButton size="small" title={t("New Button")} onClick={() => openAddButtonDialog()} sx={{ p: 0.5 }}>
           <AddIcon fontSize="small" />
         </IconButton>
       </Box>
+      <Menu
+        id="button-bar-menu"
+        open={!!buttonBarContextMenu}
+        onClose={() => setButtonBarContextMenu(null)}
+        anchorReference="anchorPosition"
+        anchorPosition={
+          buttonBarContextMenu
+            ? {
+                top: buttonBarContextMenu.mouseY,
+                left: buttonBarContextMenu.mouseX,
+              }
+            : undefined
+        }
+      >
+        <MenuItem
+          id="button-bar-menu-show-shortcuts"
+          onClick={() => {
+            setButtonBarContextMenu(null);
+            const { buttons, activeGroup } = getStore();
+            let text = t("Active Group Buttons:") + ` (${activeGroup})\n`;
+            for (let i = 0; i < filteredButtons.length; i++) {
+              const btn = filteredButtons[i];
+              let shortcut = "";
+              if (i <= 8) {
+                shortcut = `alt+shift+${i + 1} `;
+              } else if (i === 9) {
+                shortcut = "alt+shift+0";
+              }
+              if (btn.shortcut) {
+                if (shortcut !== "") {
+                  shortcut += "  ";
+                }
+                shortcut += btn.shortcut + (btn.shortcut_scope === 1 ? `(${t("local shortcut")})` : "");
+              }
+              if (!shortcut && !btn.autorun) {
+                continue;
+              }
+              text += `${btn.name}: ${shortcut || t("<none>")} (${t("Type:")} ${btn.type})${
+                btn.autorun ? `  [${t("Autorun")}]` : ""
+              }\n`;
+            }
+            text += "\n";
+
+            text += t("Other Group Buttons:") + "\n";
+            const otherButtons = buttons.filter((b) => (b.group || DEFAULT_BUTTON_GROUP) !== activeGroup);
+            for (const btn of otherButtons) {
+              let shortcut = "";
+              if (btn.shortcut) {
+                shortcut = btn.shortcut + (btn.shortcut_scope === 1 ? `(${t("local shortcut")})` : "");
+              }
+              if (!shortcut && !btn.autorun) {
+                continue;
+              }
+              text += `${btn.name}: ${shortcut || t("<none>")} (${t("Group:")} ${
+                btn.group || DEFAULT_BUTTON_GROUP
+              }, ${t("Type:")} ${btn.type})${btn.autorun ? `  [${t("Autorun")}]` : ""}\n`;
+            }
+            text += "\n";
+
+            text += t("Custom Shortcuts:") + "\n";
+            for (const shortcut of Object.values(__CS_CUSTOM_SHORTCUTS__)) {
+              text += `${shortcut.name}: ${shortcut.shortcut}\n`;
+            }
+
+            dialogs.alert(t("Buttons Shortcut and Autorun"), text);
+          }}
+        >
+          {t("Show Buttons Shortcut and Autorun")}
+        </MenuItem>
+        <ExtraMenu
+          extraMenu={extraButtonBarMenu}
+          // eslint-disable-next-line @typescript-eslint/prefer-as-const
+          target={"" as ""}
+          before={() => {
+            setButtonBarContextMenu(null);
+          }}
+        />
+      </Menu>
     </Box>
   );
 }

@@ -2102,6 +2102,7 @@ export interface Store {
 	extraButtonFormMenu?: CustomMenu<ButtonForm>[];
 	extraMainMenu?: CustomMenu<"">[];
 	extraTabBarMenu?: CustomMenu<"">[];
+	extraButtonBarMenu?: CustomMenu<"">[];
 	extraNtdMenu?: CustomMenu<NtdItem>[];
 	settingsTab: number;
 	settingsOpen: boolean;
@@ -2329,6 +2330,12 @@ declare global {
 	 */
 	var __CS_RUNNING_SCRIPT__: Pick<ButtonData, "id" | "name" | "type" | "payload"> | undefined;
 	/**
+	 * The i18n language of CozySSH app. E.g. "en", "zh-CN".
+	 * Note the i18n is done at frontend bundle/build time, so the value is static.
+	 * CozySSH provides different language bundled Go program.
+	 */
+	var __CS_LANG__: string;
+	/**
 	 * `0` - CozySSH is running as web app
 	 * `1` - CozySSH is running as Windows Desktop app (webview2)
 	 */
@@ -2392,6 +2399,12 @@ declare global {
 	 * For example: `__CS_EXTRA_TAB_BAR_MENU__ = [...(__CS_EXTRA_TAB_BAR_MENU__ || []), { name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }]`
 	 */
 	var __CS_EXTRA_TAB_BAR_MENU__: CustomMenu<"">[] | undefined;
+	/**
+	 * Extra button bar context menu.
+	 * It must be treated as immutable value. Any modification must be made by assigning a new array to it.
+	 * For example: `__CS_EXTRA_BUTTON_BAR_MENU__ = [...(__CS_EXTRA_BUTTON_BAR_MENU__ || []), { name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }]`
+	 */
+	var __CS_EXTRA_BUTTON_BAR_MENU__: CustomMenu<"">[] | undefined;
 	/**
 	 * Extra new tab dialog item menu.
 	 * It must be treated as immutable value. Any modification must be made by assigning a new array to it.

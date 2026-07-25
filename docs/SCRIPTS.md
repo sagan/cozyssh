@@ -106,7 +106,7 @@ CozySSH sets some global variables in the browser's `window` object. All these v
 - `__CS_EXTRA_GROUP_MENU__`, `__CS_EXTRA_TAG_MENU__` : `CustomMenu<string>[] | undefined` - The extra menu items to be added to the group and tag context menus respectively.
 - `__CS_EXTRA_HOST_FORM_MENU__`: `CustomMenu<HostForm>[] | undefined`, `__CS_EXTRA_BUTTON_FORM_MENU__`: `CustomMenu<ButtonForm>[] | undefined` - The extra menu items to be added to the add / edit host form and add / edit button form menus respectively.
 - `__CS_EXTRA_MAIN_MENU__` : `CustomMenu<"">[] | undefined` - The extra menu items to be added to the main menu (in sidebar). The item is fixed to empty string.
-- `__CS_EXTRA_TAB_BAR_MENU__` : `CustomMenu<"">[] | undefined` - The extra menu items to be added to the tab bar context menu. The item is fixed to empty string.
+- `__CS_EXTRA_TAB_BAR_MENU__`, `__CS_EXTRA_BUTTON_BAR_MENU__` : `CustomMenu<"">[] | undefined` - The extra menu items to be added to the tab bar / button bar context menu. The item is fixed to empty string.
 - `__CS_EXTRA_NTD_MENU__` : `CustomMenu<NtdItem>[] | undefined` - The extra menu items to be added to the new tab dialog item context menu.
 - `__CS_TOAST_KEY_MUTE_SET__`: `Set<string>` - The list of toast keys that should be muted. The element is a toast key string. If a key ends with `-`, it's treated as a prefix, and it will mute all toasts whose keys start with this prefix.
 - `__CS_LIQUID_ENGINE__` : `Liquid` - The LiquidJs Engine instannce that CozySSH uses for send_string buttons & Terminal Input dialog.
@@ -562,6 +562,7 @@ __CS_EXTRA_HOST_FORM_MENU__ = [menu];
 __CS_EXTRA_BUTTON_FORM_MENU__ = [menu];
 __CS_EXTRA_MAIN_MENU__ = [menu];
 __CS_EXTRA_TAB_BAR_MENU__ = [menu];
+__CS_EXTRA_BUTTON_BAR_MENU__ = [menu];
 __CS_EXTRA_NTD_MENU__ = [menu];
 ```
 

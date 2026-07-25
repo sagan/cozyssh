@@ -13,7 +13,7 @@ import {
   MenuItem,
 } from "@mui/material";
 import { notify, setAsyncDialogOpen, triggerFocus, useStore } from "./store";
-import { getKeyCombination, isMuiModalOpen } from "./common";
+import { getKeyCombination, isMuiModalOpen, t } from "./common";
 import { TOAST_KEY_COPY } from "./constants";
 
 export interface DialogApi {
@@ -163,7 +163,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
         maxWidth="md"
       >
         <DialogTitle sx={{ pb: 1 }}>{config.message}</DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ whiteSpace: "pre" }}>
           {config.detail && (
             <DialogContentText sx={{ mb: config.type === "prompt" || config.verification ? 2 : 0 }}>
               {config.detail}
@@ -187,7 +187,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
                   }}
                 />
               }
-              label="I confirm and wish to proceed"
+              label={t("I confirm and wish to proceed")}
             />
           )}
 
@@ -277,7 +277,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
             <>
               {config.type !== "alert" && (
                 <Button onClick={() => handleClose(false)} color="inherit">
-                  Cancel
+                  {t("Cancel")}
                 </Button>
               )}
               <Button
@@ -294,13 +294,13 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
                       e.stopPropagation();
                       e.preventDefault();
                       navigator.clipboard.writeText(data);
-                      notify(`Copied to clipboard`, "info", TOAST_KEY_COPY);
+                      notify(t("Copied"), "info", TOAST_KEY_COPY);
                       handleClose(true);
                     }
                   }
                 }}
               >
-                OK
+                {t("OK")}
               </Button>
               {config.type === "alert" && !!(config.detail || config.message) && (
                 <Button
@@ -310,7 +310,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
                   }}
                   color="inherit"
                 >
-                  Copy (alt+enter)
+                  {t("Copy")} (alt+enter)
                 </Button>
               )}
             </>

@@ -47,6 +47,7 @@ import {
   disableShortcuts,
   blackholeShortcuts,
   terminalClientSideParams,
+  t,
 } from "./common";
 import { type PaneData, notify, getIntVar } from "./store";
 
@@ -830,8 +831,8 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
         );
         try {
           await Promise.all(promises);
-        } catch (error) {
-          notify(`Error in terminal setup: ${error}`, "error", TOAST_KEY_TERMINAL);
+        } catch (err: unknown) {
+          notify(t("Error in terminal setup:") + ` ${err}`, "error", TOAST_KEY_TERMINAL);
           return;
         }
 

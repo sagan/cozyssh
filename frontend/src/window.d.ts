@@ -247,6 +247,12 @@ declare global {
    */
   var __CS_EXTRA_TAB_BAR_MENU__: CustomMenu<"">[] | undefined;
   /**
+   * Extra button bar context menu.
+   * It must be treated as immutable value. Any modification must be made by assigning a new array to it.
+   * For example: `__CS_EXTRA_BUTTON_BAR_MENU__ = [...(__CS_EXTRA_BUTTON_BAR_MENU__ || []), { name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }]`
+   */
+  var __CS_EXTRA_BUTTON_BAR_MENU__: CustomMenu<"">[] | undefined;
+  /**
    * Extra new tab dialog item menu.
    * It must be treated as immutable value. Any modification must be made by assigning a new array to it.
    * For example: `__CS_EXTRA_NTD_MENU__ = [...(__CS_EXTRA_NTD_MENU__ || []), { name: "Show Info", action: (e, item) => csAlert(JSON.stringify(item)) }]`

@@ -398,11 +398,11 @@ export default function Sidebar({
       if (!res.ok) {
         throw new Error(`status=${res.status}, msg=${await res.text()}`);
       }
-      notify(nextEnabled ? "Sync enabled" : "Sync disabled", "success", TOAST_KEY_SYNC);
+      notify(nextEnabled ? t("Sync enabled") : t("Sync disabled"), "success", TOAST_KEY_SYNC);
       setWebdavEnabled(nextEnabled);
       fetchWebdavStatus(false);
-    } catch (e: unknown) {
-      notify(`Failed to toggle sync: ${e}`, "error", TOAST_KEY_SYNC);
+    } catch (err: unknown) {
+      notify(t("Failed to toggle sync:") + ` ${err}`, "error", TOAST_KEY_SYNC);
     }
   };
 
@@ -430,7 +430,7 @@ export default function Sidebar({
         if (!res.ok) {
           throw new Error(`status=${res.status}, msg=${await res.text()}`);
         }
-        notify("WebDAV settings cleared successfully", "success", TOAST_KEY_SYNC);
+        notify(t("WebDAV settings cleared successfully"), "success", TOAST_KEY_SYNC);
         setWebdavUrl("");
         setCurrentWebdavUrl("");
         setWebdavUser("");
@@ -470,7 +470,7 @@ export default function Sidebar({
 
         if (!detectRes.ok) {
           throw new Error(
-            `Failed to verify WebDAV connection: status=${detectRes.status}, msg=${await detectRes.text()}`,
+            t("Failed to verify WebDAV connection:") + ` status=${detectRes.status}, msg=${await detectRes.text()}`,
           );
         }
 
@@ -478,9 +478,9 @@ export default function Sidebar({
 
         if (data.encrypted && (data.keyRequired || data.keyInvalid)) {
           const keyInput = await dialogs.prompt(
-            "Encrypted WebDAV Session Detected. " + data.keyInvalid
-              ? "The master key you entered is invalid. Please enter the correct master key:"
-              : "This WebDAV server is encrypted. Please enter the master key to unlock and sync:",
+            t("Encrypted WebDAV Session Detected. ") + data.keyInvalid
+              ? t("The master key you entered is invalid. Please enter the correct master key:")
+              : t("This WebDAV server is encrypted. Please enter the master key to unlock and sync:"),
           );
           if (keyInput === null) {
             return;
@@ -504,8 +504,8 @@ export default function Sidebar({
 
           if (!retryRes.ok) {
             throw new Error(
-              `Failed to verify WebDAV connection with the provided key: ` +
-                `status=${retryRes.status}, msg=${await retryRes.text()}`,
+              t("Failed to verify WebDAV connection with the provided key:") +
+                ` status=${retryRes.status}, msg=${await retryRes.text()}`,
             );
           }
 
@@ -521,7 +521,7 @@ export default function Sidebar({
         let msg = "";
         let detail = "";
         if (data.brandNew) {
-          msg = "WebDAV server connection ready";
+          msg = t("WebDAV server connection ready");
           detail =
             `The server ${webdavUrl} is brand-new and contains no CozySSH data. ` +
             `Your local data (buttons, vars, scratchpad) will be uploaded to it when synchronization is triggered.` +
@@ -529,7 +529,7 @@ export default function Sidebar({
               ? "\n\nEnd-to-End Encryption (E2EE) is enabled. A new 32-byte master key will be automatically generated and saved if you don't specify one."
               : "");
         } else {
-          msg = "WebDAV server connection successful!";
+          msg = t("WebDAV server connection successful!");
           detail =
             `The server ${webdavUrl} contains existing CozySSH data. ` +
             `If sync is enabled, the following changes will be applied during sync:\n` +
@@ -542,7 +542,7 @@ export default function Sidebar({
 
         const confirmed = await dialogs.confirm(
           msg,
-          detail + "\n\nDo you want to save these settings and enable WebDAV sync?",
+          detail + "\n\n" + t("Do you want to save these settings and enable WebDAV sync?"),
         );
         if (!confirmed) {
           return;
@@ -565,13 +565,13 @@ export default function Sidebar({
       if (!saveRes.ok) {
         throw new Error(`status=${saveRes.status}, msg=${await saveRes.text()}`);
       }
-      notify("WebDAV settings saved successfully", "success", TOAST_KEY_SYNC);
+      notify(t("WebDAV settings saved successfully"), "success", TOAST_KEY_SYNC);
       setCurrentWebdavUrl(webdavUrl.trim());
       setCurrentWebdavUser(webdavUser);
       setCurrentWebdavPassword(webdavPassword);
       fetchWebdavStatus(false);
-    } catch (e: unknown) {
-      notify(`Failed to save WebDAV settings: ${e}`, "error", TOAST_KEY_SYNC);
+    } catch (err: unknown) {
+      notify(t("Failed to save WebDAV settings:") + ` ${err}`, "error", TOAST_KEY_SYNC);
     } finally {
       setIsTestingWebdav(false);
     }
@@ -595,11 +595,17 @@ export default function Sidebar({
     setIsTestingWebdav(true);
     if (
       !(await dialogs.confirm(
-        "Are you sure you want to clear WebDAV settings?",
-        `It will not remove any existing files from WebDAV server.` +
+        t("Are you sure you want to clear WebDAV settings?"),
+        t("It will not remove any existing files from WebDAV server.") +
           (webdavEncrypted
-            ? ` The WebDAV remote directory is encrypted with master key ${masterKey}.` +
-              ` If you proceed, the master key will be deleted from CozySSH server. Make sure you have a backup of it.`
+            ? " " +
+              t("The WebDAV remote directory is encrypted with master key:") +
+              " " +
+              masterKey +
+              ". " +
+              t("If you proceed, the master key will be deleted from CozySSH server.") +
+              " " +
+              t("Make sure you have a backup of it.")
             : ""),
         webdavEncrypted,
       ))
@@ -625,7 +631,7 @@ export default function Sidebar({
       if (!res.ok) {
         throw new Error(`status=${res.status}, msg=${await res.text()}`);
       }
-      notify("WebDAV settings cleared successfully", "success", TOAST_KEY_SYNC);
+      notify(t("WebDAV settings cleared successfully"), "success", TOAST_KEY_SYNC);
       setWebdavUrl("");
       setCurrentWebdavUrl("");
       setWebdavUser("");
@@ -638,8 +644,8 @@ export default function Sidebar({
       setCurrentMasterKey("");
       fetchWebdavStatus(false);
       return;
-    } catch (e: unknown) {
-      notify(`Failed to clear WebDAV settings: ${e}`, "error", TOAST_KEY_SYNC);
+    } catch (err: unknown) {
+      notify(t("Failed to clear WebDAV settings:") + ` ${err}`, "error", TOAST_KEY_SYNC);
     } finally {
       setIsTestingWebdav(false);
     }
@@ -652,10 +658,10 @@ export default function Sidebar({
       if (!res.ok) {
         throw new Error(`status=${res.status}`);
       }
-      notify("Sync triggered", "success", TOAST_KEY_SYNC);
+      notify(t("Sync triggered"), "success", TOAST_KEY_SYNC);
       setTimeout(() => fetchWebdavStatus(true), 500, TOAST_KEY_SYNC);
-    } catch (e: unknown) {
-      notify(`Failed to trigger sync: ${e}`, "error");
+    } catch (err: unknown) {
+      notify(t("Failed to trigger sync:") + ` ${err}`, "error");
     }
   }, [fetchWebdavStatus]);
 
@@ -776,14 +782,22 @@ export default function Sidebar({
     try {
       const text = await navigator.clipboard.readText();
       if (!text) {
-        notify("Clipboard is empty", "warning", TOAST_KEY_PASTE_SSH_CONFIG_BLOCK);
+        notify(t("Clipboard is empty"), "warning", TOAST_KEY_PASTE_SSH_CONFIG_BLOCK);
         return;
       }
       const host = parseSSHConfigBlock(text);
       setHostFormData({ ...host, tags: host.tags?.join(" ") || "" });
-      notify("Successfully imported Host settings from SSH config block", "success", TOAST_KEY_PASTE_SSH_CONFIG_BLOCK);
-    } catch (err) {
-      notify(`Failed to read clipboard or parse config block: ${err}`, "error", TOAST_KEY_PASTE_SSH_CONFIG_BLOCK);
+      notify(
+        t("Successfully imported Host settings from SSH config block"),
+        "success",
+        TOAST_KEY_PASTE_SSH_CONFIG_BLOCK,
+      );
+    } catch (err: unknown) {
+      notify(
+        t("Failed to read clipboard or parse config block:") + ` ${err}`,
+        "error",
+        TOAST_KEY_PASTE_SSH_CONFIG_BLOCK,
+      );
     }
   }, []);
 
@@ -829,8 +843,8 @@ export default function Sidebar({
         throw new Error(`status=${res.status}`);
       }
       fetchPasswords();
-    } catch (e: unknown) {
-      dialogs.alert(`Failed to lock password store: ${e}`);
+    } catch (err: unknown) {
+      dialogs.alert(t("Failed to lock password store:") + ` ${err}`);
     }
   }, [fetchPasswords]);
 
@@ -854,7 +868,7 @@ export default function Sidebar({
       const useKeyring = getStore().sysinfo.useKeyring;
       let appPassword = dialogAppPassword;
       if (!useKeyring && !appPassword) {
-        const entered = await dialogs.promptPassword("Enter App Password to confirm:");
+        const entered = await dialogs.promptPassword(t("Enter App Password to confirm:"));
         if (!entered) {
           return;
         }
@@ -875,8 +889,8 @@ export default function Sidebar({
         if (!useKeyring) {
           setDialogAppPassword(appPassword);
         }
-      } catch (e: unknown) {
-        dialogs.alert(`Failed to reveal password: ${e}`);
+      } catch (err: unknown) {
+        dialogs.alert(t("Failed to reveal password"), `${err}`);
       }
     },
     [dialogAppPassword, passwordsState],
@@ -889,7 +903,7 @@ export default function Sidebar({
       if (!pwd) {
         let appPassword = dialogAppPassword;
         if (!useKeyring && !appPassword) {
-          const entered = await dialogs.promptPassword("Enter App Password to confirm:");
+          const entered = await dialogs.promptPassword(t("Enter App Password to confirm:"));
           if (!entered) {
             return;
           }
@@ -910,8 +924,8 @@ export default function Sidebar({
             setDialogAppPassword(appPassword);
           }
           setPasswordsState({ ...passwordsState, locked: false });
-        } catch (e: unknown) {
-          dialogs.alert(`Failed to retrieve password: ${e}`);
+        } catch (err: unknown) {
+          dialogs.alert(t("Failed to retrieve password"), `${err}`);
           return;
         }
       }
@@ -932,13 +946,13 @@ export default function Sidebar({
       const useKeyring = getStore().sysinfo.useKeyring;
       let appPassword = dialogAppPassword;
       if (!useKeyring && !appPassword) {
-        const entered = await dialogs.promptPassword("Enter App Password to confirm:");
+        const entered = await dialogs.promptPassword(t("Enter App Password to confirm:"));
         if (!entered) {
           return;
         }
         appPassword = entered;
       }
-      const newPwd = await dialogs.promptPassword(`Enter new password for ${key}:`);
+      const newPwd = await dialogs.promptPassword(t("Enter new password for the key:") + " " + key);
       if (newPwd === null) {
         return;
       }
@@ -960,8 +974,8 @@ export default function Sidebar({
         if (!useKeyring) {
           setDialogAppPassword(appPassword);
         }
-      } catch (e: unknown) {
-        dialogs.alert(`Failed to update password: ${e}`);
+      } catch (err: unknown) {
+        dialogs.alert(t("Failed to update password"), `${err}`);
       }
     },
     [dialogAppPassword],
@@ -969,7 +983,9 @@ export default function Sidebar({
 
   const handleDeletePassword = useCallback(
     async (key: string) => {
-      if (!(await dialogs.confirm(`Are you sure you want to delete the password for ${key}?`))) {
+      if (
+        !(await dialogs.confirm(t("Will delete the password of this key:") + " " + key + ". " + t("Are you sure?")))
+      ) {
         return;
       }
       try {
@@ -987,15 +1003,15 @@ export default function Sidebar({
           delete next[key];
           return next;
         });
-      } catch (e: unknown) {
-        dialogs.alert(`Failed to delete password: ${e}`);
+      } catch (err: unknown) {
+        dialogs.alert(t("Failed to delete password"), `${err}`);
       }
     },
     [fetchPasswords],
   );
 
   const handleChangeSitename = useCallback(async () => {
-    const sitename = await dialogs.prompt("New sitename:", getStore().sysinfo.sitename);
+    const sitename = await dialogs.prompt(t("New sitename:"), getStore().sysinfo.sitename);
     if (!sitename || sitename === getStore().sysinfo.sitename) {
       return;
     }
@@ -1004,7 +1020,7 @@ export default function Sidebar({
 
   const handleSavePassword = useCallback(async () => {
     if (newPwd !== confirmPwd) {
-      dialogs.alert("Passwords don't match");
+      dialogs.alert(t("Passwords don't match"));
       return;
     }
     const res = await fetch("/api/settings/password", {
@@ -1017,11 +1033,16 @@ export default function Sidebar({
       const text = await res.text();
       if (text.includes("Saved passwords are locked")) {
         const action = await dialogs.confirm(
-          "Saved passwords are locked. Would you like to enter your old app password to unlock and re-encrypt them? (Selecting Cancel will let you choose to Force Update instead.)",
+          t("Saved passwords are locked.") +
+            " " +
+            t("Would you like to enter your old app password to unlock and re-encrypt them?") +
+            " (" +
+            t("Selecting Cancel will let you choose to Force Update instead.") +
+            ")",
         );
 
         if (action) {
-          const oldPwd = await dialogs.promptPassword("Enter old app password to unlock:");
+          const oldPwd = await dialogs.promptPassword(t("Enter old app password to unlock:"));
           if (!oldPwd) {
             return;
           }
@@ -1045,21 +1066,24 @@ export default function Sidebar({
             });
 
             if (retryRes.ok) {
-              await dialogs.alert("Password updated! You will be logged out.");
+              await dialogs.alert(t("Password updated! You will be logged out."));
               logout(false, true);
-              return;
             } else {
-              const retryErr = await retryRes.text();
-              dialogs.alert("Failed to update password after unlocking: " + (retryErr || retryRes.statusText));
-              return;
+              dialogs.alert(
+                t("Failed to update password after unlocking"),
+                `status=${retryRes.status}, msg=${await retryRes.text()}`,
+              );
             }
+            return;
           } else {
-            dialogs.alert("Incorrect app password.");
+            dialogs.alert(t("Incorrect app password"));
             return;
           }
         } else {
           const forceConfirm = await dialogs.confirm(
-            "Force updating the app password will permanently discard/wipe all saved SSH passwords. Are you sure you want to proceed?",
+            t("Force updating the app password will permanently discard/wipe all saved SSH passwords.") +
+              " " +
+              t("Are you sure you want to proceed?"),
           );
           if (forceConfirm) {
             const forceRes = await fetch("/api/settings/password", {
@@ -1069,14 +1093,15 @@ export default function Sidebar({
             });
 
             if (forceRes.ok) {
-              dialogs.alert("App password updated and saved passwords wiped! You will be logged out.");
+              dialogs.alert(t("App password updated and saved passwords wiped! You will be logged out."));
               logout(false, true);
-              return;
             } else {
-              const forceErr = await forceRes.text();
-              dialogs.alert("Failed to force update password: " + (forceErr || forceRes.statusText));
-              return;
+              dialogs.alert(
+                t("Failed to force update password"),
+                `status=${forceRes.status}, msg=${await forceRes.text()}`,
+              );
             }
+            return;
           }
         }
         return;
@@ -1084,16 +1109,15 @@ export default function Sidebar({
     }
 
     if (res.ok) {
-      await dialogs.alert("Password updated! You will be logged out.");
+      await dialogs.alert(t("Password updated! You will be logged out."));
       logout(false, true);
     } else {
-      const errText = await res.text();
-      dialogs.alert("Failed to update password: " + (errText || res.statusText));
+      dialogs.alert(t("Failed to update password"), `status=${res.status}, msg=${await res.text()}`);
     }
   }, [confirmPwd, newPwd]);
 
   const handleClearCache = useCallback(async () => {
-    if (!(await dialogs.confirm("This will unregister the Service Worker, clear all caches and reload. Proceed?"))) {
+    if (!(await dialogs.confirm(t("This will unregister the Service Worker, clear all caches and reload. Proceed?")))) {
       return;
     }
     forceReload();
@@ -1223,7 +1247,7 @@ export default function Sidebar({
     setContextMenuOpen(false);
     if (
       await dialogs.confirm(
-        `Are you extremely certain you want to permanently delete "${target.hostname}" from known_hosts?`,
+        t("Will delete this host from known_hosts:") + " " + target.hostname + ". " + t("Are you sure?"),
       )
     ) {
       const port = target.port || "22";
@@ -1232,11 +1256,10 @@ export default function Sidebar({
         headers: apiReqHeaders(),
       });
       if (res.ok) {
-        notify("Successfully removed entry from known_hosts", "success");
+        notify(t("Successfully removed entry from known_hosts"), "success");
         fetchHosts();
       } else {
-        const text = await res.text();
-        notify("Failed to delete known_host entry: " + text, "error");
+        notify(t("Failed to delete known_host entry:") + ` status=${res.status}, msg=${await res.text()}`, "error");
       }
     }
   }, [contextMenu]);
@@ -1347,14 +1370,18 @@ export default function Sidebar({
       return;
     }
     const parentPath = groupContextMenu.path;
-    const name = await dialogs.prompt(`Create new sub-group in "${parentPath}", enter sub-group name:`, "", {
-      validate: function (str: string): string | undefined {
-        if (str.includes(" ") || str.includes("/")) {
-          return "Group name cannot contain spaces or slashes (/)";
-        }
-        return undefined;
+    const name = await dialogs.prompt(
+      t("Create new sub-group") + ` (${t("Parent group:")} ${parentPath}). ` + t("Enter sub-group name:"),
+      "",
+      {
+        validate: function (str: string): string | undefined {
+          if (str.includes(" ") || str.includes("/")) {
+            return t("Group name cannot contain spaces or slashes (/)");
+          }
+          return undefined;
+        },
       },
-    });
+    );
     if (!name) {
       return;
     }
@@ -1363,13 +1390,13 @@ export default function Sidebar({
       return;
     }
     if (trimmed.includes(" ") || trimmed.includes("/")) {
-      dialogs.alert("Group name cannot contain spaces or slashes (/).");
+      dialogs.alert(t("Group name cannot contain spaces or slashes (/)."));
       return;
     }
     const { groups } = getStore();
     const newPath = `${parentPath}/${trimmed}`;
     if (groups.includes(newPath)) {
-      dialogs.alert("Sub-group already exists.");
+      dialogs.alert(t("Sub-group already exists."));
       return;
     }
     const nextGroups = [...groups, newPath];
@@ -1386,14 +1413,14 @@ export default function Sidebar({
         return next;
       });
     } else {
-      dialogs.alert("Failed to save group");
+      dialogs.alert(t("Failed to save group"));
     }
   }, [groupContextMenu]);
 
   const handleAddTopLevelGroupClick = useCallback(async () => {
     setGroupContextMenuOpen(false);
     setContextMenuOpen(false);
-    const name = await dialogs.prompt("Enter top-level group name:");
+    const name = await dialogs.prompt(t("Enter top-level group name:"));
     if (!name) {
       return;
     }
@@ -1402,12 +1429,12 @@ export default function Sidebar({
       return;
     }
     if (trimmed.includes(" ") || trimmed.includes("/")) {
-      dialogs.alert("Group name cannot contain spaces or slashes (/).");
+      dialogs.alert(t("Group name cannot contain spaces or slashes (/)."));
       return;
     }
     const { groups } = getStore();
     if (groups.includes(trimmed)) {
-      dialogs.alert("Group already exists.");
+      dialogs.alert(t("Group already exists."));
       return;
     }
     const nextGroups = [...groups, trimmed];
@@ -1419,7 +1446,7 @@ export default function Sidebar({
     if (res.ok) {
       setGroups(nextGroups);
     } else {
-      dialogs.alert("Failed to save group");
+      dialogs.alert(t("Failed to save group"));
     }
   }, []);
 
@@ -1431,7 +1458,13 @@ export default function Sidebar({
     const G = groupContextMenu.path;
     if (
       !(await dialogs.confirm(
-        `Are you sure you want to delete the group "${G}"? Belonging servers will be relocated to parent group or ungrouped.`,
+        t("Will delete this group:") +
+          " " +
+          G +
+          ". " +
+          t("Are you sure?") +
+          " " +
+          t("Belonging servers will be relocated to parent group or ungrouped."),
       ))
     ) {
       return;
@@ -1503,17 +1536,21 @@ export default function Sidebar({
     const lastPart = parts[parts.length - 1];
     const parentPath = parts.length > 1 ? parts.slice(0, -1).join("/") : null;
 
-    const name = await dialogs.prompt(`Rename group "${lastPart}"${parentPath ? ` (${G})` : ""} to:`, lastPart, {
-      validate: function (str: string): string | undefined {
-        if (!str.trim()) {
-          return "Group name cannot be empty";
-        }
-        if (str.includes(" ") || str.includes("/")) {
-          return "Group name cannot contain spaces or slashes (/)";
-        }
-        return undefined;
+    const name = await dialogs.prompt(
+      t("Rename group") + ` "${lastPart}"${parentPath ? ` (${G})` : ""}. ` + t("Enter new name:") + " ",
+      lastPart,
+      {
+        validate: function (str: string): string | undefined {
+          if (!str.trim()) {
+            return t("Group name cannot be empty");
+          }
+          if (str.includes(" ") || str.includes("/")) {
+            return t("Group name cannot contain spaces or slashes (/)");
+          }
+          return undefined;
+        },
       },
-    });
+    );
 
     if (!name) {
       return;
@@ -1528,7 +1565,7 @@ export default function Sidebar({
     const { hosts, groups } = getStore();
     // Check if new group already exists in the same level
     if (groups.includes(newG)) {
-      dialogs.alert("A group with that name already exists.");
+      dialogs.alert(t("A group with that name already exists."));
       return;
     }
 
@@ -1544,7 +1581,7 @@ export default function Sidebar({
 
     // Just in case, ensure no duplicate paths overall
     if (new Set(nextGroups).size !== nextGroups.length) {
-      dialogs.alert("A group with that name already exists.");
+      dialogs.alert(t("A group with that name already exists."));
       return;
     }
 
@@ -1592,7 +1629,7 @@ export default function Sidebar({
         return next;
       });
     } else {
-      dialogs.alert("Failed to save renamed group");
+      dialogs.alert(t("Failed to save renamed group"));
       return;
     }
 
@@ -1638,7 +1675,7 @@ export default function Sidebar({
     };
 
     if (!isValidHostname(payload.name) || !isValidHostname(payload.hostname)) {
-      dialogs.alert("Invalid hostname or name");
+      dialogs.alert(t("Invalid hostname or name"));
       return;
     }
 
@@ -1652,7 +1689,7 @@ export default function Sidebar({
       const text = await res.text();
       if (text.includes("encryption key not set")) {
         const appPwd = await dialogs.promptPassword(
-          "The password store is locked. Enter your CozySSH app password to unlock and save the host password:",
+          t("The password store is locked. Enter your CozySSH app password to unlock and save the host password:"),
         );
         if (!appPwd) {
           return;
@@ -1682,22 +1719,21 @@ export default function Sidebar({
             fetchHosts();
             return;
           } else {
-            const retryErr = await retryRes.text();
-            dialogs.alert("Failed to save host details after unlocking: " + (retryErr || retryRes.statusText));
+            dialogs.alert(
+              t("Failed to save host details after unlocking"),
+              `status=${retryRes.status},msg=${retryRes.text()}`,
+            );
           }
         } else {
-          dialogs.alert("Incorrect app password. Host was not saved.");
+          dialogs.alert(t("Incorrect app password. Host was not saved."));
         }
         return;
       }
     }
-
     if (!res.ok) {
-      const text = await res.text();
-      dialogs.alert("Failed to save host: " + (text || res.statusText));
+      dialogs.alert(t("Failed to save host"), `status=${res.status}, msg=${await res.text()}`);
       return;
     }
-
     setInitialHostFormData(null); // Reset dirty state on successful save
     setEditHostDialogOpen(false);
     await fetchHosts();
@@ -2270,7 +2306,7 @@ export default function Sidebar({
           />
           <IconButton
             size="small"
-            title="New Server"
+            title={t("New Server")}
             onClick={() => openAddHostDialog()}
             sx={{ bgcolor: "action.hover", border: "1px solid #ccc" }}
           >
@@ -2478,7 +2514,7 @@ export default function Sidebar({
                 handleAddTopLevelGroupClick();
               }}
               sx={{ p: 0, opacity: 0.6, transition: "opacity 0.2s", "&:hover": { opacity: 1 } }}
-              title="Add Group"
+              title={t("Add Group")}
             >
               <AddIcon fontSize="small" />
             </IconButton>
@@ -2582,7 +2618,7 @@ export default function Sidebar({
         anchorEl={contextMenu?.element}
       >
         <MenuItem id="host-menu-edit" onClick={handleEditOpen}>
-          Edit {contextMenu?.target.name}
+          {t("Edit")} {contextMenu?.target.name ?? ""}
         </MenuItem>
         <MenuItem
           id="host-menu-open-new-window"
@@ -2595,7 +2631,7 @@ export default function Sidebar({
             openHostInNewWindow(target.name);
           }}
         >
-          Open (New Window)
+          {t("Open (New Window)")}
         </MenuItem>
         <MenuItem
           id="host-menu-open-current-tab"
@@ -2609,7 +2645,7 @@ export default function Sidebar({
             setMobileOpen(false);
           }}
         >
-          Open (In Current Tab)
+          {t("Open (In Current Tab)")}
         </MenuItem>
         <MenuItem
           id="host-menu-copy-url"
@@ -2677,7 +2713,7 @@ export default function Sidebar({
           {t("Run ssh-copy-id")}
         </MenuItem>
         <MenuItem id="host-menu-favourite" onClick={handleToggleFavourite}>
-          {contextMenu?.target.isFavourite ? "Remove From Favourite" : "Add To Favourite"}
+          {contextMenu?.target.isFavourite ? t("Remove From Favourite") : t("Add To Favourite")}
         </MenuItem>
         {contextMenu?.section === "tree" && (
           <MenuItem
@@ -2691,10 +2727,20 @@ export default function Sidebar({
               const groups = getStore().groups;
               const currentGroup = getHostGroupPath(target);
               const dstGroup = await dialogs.prompt(
-                `Move server "${target.name}" (current group: ${currentGroup || "<none>"}) to group:`,
+                t("Move server to new group. ") +
+                  t("Server:") +
+                  " " +
+                  target.name +
+                  "; " +
+                  t("Current group:") +
+                  " " +
+                  (currentGroup || t("<none>")) +
+                  ". " +
+                  t("Select new group:") +
+                  " ",
                 currentGroup || "",
                 {
-                  options: [{ value: "", label: "(no group)" }, ...groups],
+                  options: [{ value: "", label: t("(no group)") }, ...groups],
                 },
               );
               if (dstGroup === null) {
@@ -2957,7 +3003,7 @@ export default function Sidebar({
                     )}
                     <Chip
                       icon={passwordsState.locked ? <LockIcon fontSize="small" /> : <LockOpenIcon fontSize="small" />}
-                      label={passwordsState.locked ? "Locked" : useKeyring ? "Unlocked (Keyring)" : "Unlocked"}
+                      label={passwordsState.locked ? "Locked" : useKeyring ? t("Unlocked (Keyring)") : t("Unlocked")}
                       color={passwordsState.locked ? "warning" : "success"}
                       size="small"
                       variant="outlined"
@@ -3016,17 +3062,17 @@ export default function Sidebar({
                                     )}
                                   </IconButton>
                                 </Tooltip>
-                                <Tooltip title="Copy Password">
+                                <Tooltip title={t("Copy Password")}>
                                   <IconButton size="small" onClick={() => handleCopyPassword(key)}>
                                     <ContentCopyIcon fontSize="small" />
                                   </IconButton>
                                 </Tooltip>
-                                <Tooltip title="Change">
+                                <Tooltip title={t("Change")}>
                                   <IconButton size="small" color="primary" onClick={() => handleChangePassword(key)}>
                                     <EditIcon fontSize="small" />
                                   </IconButton>
                                 </Tooltip>
-                                <Tooltip title="Delete">
+                                <Tooltip title={t("Delete")}>
                                   <IconButton size="small" color="error" onClick={() => handleDeletePassword(key)}>
                                     <DeleteIcon fontSize="small" />
                                   </IconButton>
@@ -3135,11 +3181,17 @@ export default function Sidebar({
                         appPassword = ((await res.json()) as RevealAppPasswordResponse).appPassword;
                         if (
                           !(await dialogs.confirm(
-                            `Disable system keyring`,
-                            `It will remove the saved app password "${appPassword}" from system keyring.` +
-                              ` You MUST save this app password manually before proceeding,` +
-                              ` otherwise all your saved SSH passwords will be lost.` +
-                              ` To continue, enter the above app password below:`,
+                            t("Disable system keyring"),
+                            t("It will remove the saved app password from system keyring.") +
+                              " " +
+                              t("You MUST save your app password manually before proceeding.") +
+                              " " +
+                              t("Otherwise all your saved SSH passwords will be lost.") +
+                              " " +
+                              t("Your app password is: ") +
+                              appPassword +
+                              ". " +
+                              t("To continue, enter the above app password below:"),
                             appPassword,
                           ))
                         ) {
@@ -3153,8 +3205,10 @@ export default function Sidebar({
                           return;
                         }
                         const pass = await dialogs.promptPassword(
-                          "It will enable system keyring and stores the app password in it." +
-                            " Enter current app password to continue",
+                          t("It will enable system keyring and stores the app password in it.") +
+                            " " +
+                            t("Enter current app password to continue:") +
+                            " ",
                         );
                         if (!pass) {
                           return;
@@ -3203,16 +3257,20 @@ export default function Sidebar({
             {settingsTab === SETTINGS_TAB_IDX_SYNC && (
               <>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1, mt: -1 }}>
-                  <b>WebDAV Synchronization</b>: Sync CozySSH data (buttons, vars, scratchpad) with a custom WebDAV
-                  directory.
+                  <b>{t("WebDAV Synchronization")}</b>:{" "}
+                  {t("Sync CozySSH data (buttons, vars, scratchpad) with a custom WebDAV directory.")}
                   <br />
-                  <b>Note</b>: OpenSSH hosts data sync is opt-in and semi-automatic; You must manually import other
-                  device's hosts from "Import" page. OpenSSH private keys and saved passwords will&nbsp;
-                  <b>NOT</b> be uploaded. See&nbsp;
+                  <b>{t("Note")}</b>:{" "}
+                  {t(`OpenSSH hosts data sync is opt-in and semi-automatic.`) +
+                    " " +
+                    t(`You must manually import other device's hosts from "Import" page.`) +
+                    " " +
+                    t("OpenSSH private keys and saved passwords will NOT be uploaded.")}
+                  &nbsp;
+                  {t("Reference link:")}&nbsp;
                   <a target="_blank" rel="noopener noreferrer" href={LINK_COZYSSH_DOC_DATA + "#sync"}>
                     CozySSH Data doccument
                   </a>
-                  &nbsp;for more details.
                 </Typography>
                 <Box
                   sx={{
@@ -3578,9 +3636,9 @@ export default function Sidebar({
                   CozySSH
                 </Typography>
                 <Typography variant="body1" color="text.secondary" gutterBottom>
-                  Version: <b>{PACKAGE_JSON_VERSION}</b>
+                  {t("Version:")} <b>{PACKAGE_JSON_VERSION}</b>
                   <br />
-                  Backend: <b>{appVersion}</b>
+                  {t("Backend:")} <b>{appVersion}</b>
                 </Typography>
                 <Typography variant="body2" sx={{ mt: 3 }}>
                   <a
@@ -3589,7 +3647,7 @@ export default function Sidebar({
                     rel="noopener noreferrer"
                     style={{ color: theme.palette.primary.main, textDecoration: "none" }}
                   >
-                    GitHub Repository
+                    {t("GitHub Repository")}
                   </a>
                 </Typography>
               </Box>
@@ -3614,7 +3672,7 @@ export default function Sidebar({
         <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pr: 1.5 }}>
           <span>{editHostName ? t("Edit Host") + " " + editHostName : t("Add Host")}</span>
           <IconButton
-            aria-label="more"
+            aria-label={t("More")}
             id="edit-button-form-menu-button"
             aria-controls={hostTitleMenuAnchor ? "edit-host-form-menu" : undefined}
             aria-expanded={hostTitleMenuAnchor ? "true" : undefined}
@@ -3782,7 +3840,7 @@ export default function Sidebar({
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Add Tag"
+                    label={t("Add Tag")}
                     placeholder="Select tag or type new one and press Enter"
                     size="small"
                   />

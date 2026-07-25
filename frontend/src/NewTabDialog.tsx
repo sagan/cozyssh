@@ -62,6 +62,9 @@ import {
   searchStringAny,
   shortcutLabel,
   t,
+  type Equal,
+  type Expect,
+  type ViewMode,
 } from "./common";
 import {
   type NtdItem,
@@ -88,6 +91,7 @@ import {
   type NtdItemTag,
   type NtdItemHelp,
   type NtdItemCustomShortcut,
+  type NtdItemLink,
 } from "./store";
 import TextFieldWithCopy from "./components/TextFieldWithCopy";
 import ExtraMenu from "./components/ExtraMenu";
@@ -109,102 +113,104 @@ interface NewTabDialogProps {
 }
 
 const modes = [
-  { type: "servers", icon: <DnsIcon fontSize="small" />, label: "Servers", shortcut: "alt+o" },
+  { type: "servers", icon: <DnsIcon fontSize="small" />, label: t("Servers"), shortcut: "alt+o" },
   {
     type: "buttons",
     icon: <SmartButtonIcon fontSize="small" />,
-    label: "Buttons",
+    label: t("Buttons"),
     shortcut: "alt+e",
   },
-  { type: "tabs", icon: <TabIcon fontSize="small" />, label: "Tabs", shortcut: "alt+a" },
-  { type: "tags", icon: <TagIcon fontSize="small" />, label: "Tags", shortcut: "alt+p" },
+  { type: "tabs", icon: <TabIcon fontSize="small" />, label: t("Tabs"), shortcut: "alt+a" },
+  { type: "tags", icon: <TagIcon fontSize="small" />, label: t("Tags"), shortcut: "alt+p" },
   {
     type: "tunnels",
     icon: <ShortcutIcon fontSize="small" />,
-    label: "Tunnels",
+    label: t("Tunnels"),
     shortcut: "alt+:",
   },
-  { type: "help", icon: <HelpIcon fontSize="small" />, label: "Help", shortcut: "alt+?" },
+  { type: "help", icon: <HelpIcon fontSize="small" />, label: t("Help"), shortcut: "alt+?" },
 ] as const;
 
 const helpOptions: NtdItemHelp[] = [
   {
     type: "help",
     value: "",
-    label: "Servers / Connections",
-    subtitle: "Connect to saved servers, local shells, or a direct SSH address",
+    label: t("Servers / Connections"),
+    subtitle: t("Connect to saved servers, local shells, or a direct SSH address"),
     tag: "alt+o",
   },
   {
     type: "help",
     value: ">",
-    label: "> Buttons (Commands)",
-    subtitle: "Execute custom buttons, scripts, or built-in functions",
+    label: "> " + t("Buttons (Commands)"),
+    subtitle: t("Execute custom buttons, scripts, or built-in functions"),
     tag: "alt+e / ctrl+shift+p",
   },
   {
     type: "help",
     value: "@",
-    label: "@ Tabs",
-    subtitle: "Switch to active browser tabs or attach pinned sessions",
+    label: "@ " + t("Tabs"),
+    subtitle: t("Switch to active browser tabs or attach pinned sessions"),
     tag: "alt+a",
   },
   {
     type: "help",
     value: "#",
-    label: "# Tag",
+    label: "# " + t("Tag"),
     tag: "alt+p",
-    subtitle: "Filter servers by tag",
+    subtitle: t("Filter servers by tag"),
   },
   {
     type: "help",
     value: ":",
-    label: ": Tunnels",
+    label: ": " + t("Tunnels"),
     tag: "alt+:",
-    subtitle: "Display active SSH tunnels",
+    subtitle: t("Display active SSH tunnels"),
   },
   {
     type: "help",
     value: "?",
-    label: "? Help",
+    label: "? " + t("Help"),
     tag: "alt+?",
-    subtitle: "Show help guide for command palette prefixes",
+    subtitle: t("Show help guide for command palette prefixes"),
   },
 ] as const;
 
-const helpLinks: NtdItem[] = [
+export type _checkModes = Expect<Equal<(typeof modes)[number]["type"], ViewMode>>;
+
+const helpLinks: (NtdItemLink | NtdItemAction)[] = [
   {
     type: "link",
     value: LINK_COZYSSH_DOC_SCRIPTS,
-    label: "Scripts Docoment",
-    subtitle: "CozySSH custom scripts guide",
+    label: t("Scripts Docoment"),
+    subtitle: t("CozySSH custom scripts guide"),
   },
   {
     type: "link",
     value: LINK_COZYSSH_DOC_SCRIPTS,
-    label: "Data Docoment",
-    subtitle: "CozySSH data storage document",
+    label: t("Data Docoment"),
+    subtitle: t("CozySSH data storage document"),
   },
   {
     type: "link",
     value: LINK_COZYSSH_DOC_PLUGINS,
-    label: "Plugin",
-    subtitle: "CozySSH official plugins repository",
+    label: t("Plugin"),
+    subtitle: t("CozySSH official plugins repository"),
   },
   ...(__CS_ENV__ === 0
     ? ([
         {
           type: "action",
-          label: "Logout",
+          label: t("Logout"),
           value: "logout",
-          subtitle: "Logout of current device",
+          subtitle: t("Logout of current device"),
           action: () => logout(true),
         } as NtdItemAction,
         {
           type: "action",
-          label: "Logout All",
+          label: t("Logout All"),
           value: "logout_all",
-          subtitle: "Logout of all devices",
+          subtitle: t("Logout of all devices"),
           action: () => logoutAll(true),
         } as NtdItemAction,
       ] as const)
@@ -213,11 +219,30 @@ const helpLinks: NtdItem[] = [
     type: "action",
     action: forceReload,
     value: "force_reload",
-    label: "Force Reload",
-    subtitle: "Unregister the Service Worker, clear all caches and reload",
+    label: t("Force Reload"),
+    subtitle: t("Unregister the Service Worker, clear all caches and reload"),
     tag: "ctrl+alt+shift+r",
   } as NtdItemAction,
 ] as const;
+
+function modeEmptyPlaceholder(mode: ViewMode): string {
+  switch (mode) {
+    case "servers":
+      return t("No matching servers found");
+    case "tabs":
+      return t("No matching tabs found");
+    case "buttons":
+      return t("No matching buttons found");
+    case "help":
+      return t("No matching help found");
+    case "tags":
+      return t("No matching tags found");
+    case "tunnels":
+      return t("No matching tunnnels found");
+    default:
+      assertUnreachable(mode);
+  }
+}
 
 /*
  * Return the label of a open action of a item.
@@ -232,13 +257,13 @@ function itemLabel(item: NtdItem, altMode: AltMode): string {
     case "local":
       switch (altMode) {
         case 0:
-          return "Open";
+          return t("Open");
         case 1:
-          return "Open In Current Tab";
+          return t("Open In Current Tab");
         case 2:
-          return "Edit";
+          return t("Edit");
         case 3:
-          return "Open In New Window";
+          return t("Open In New Window");
       }
       break;
     case "builtin_button":
@@ -246,32 +271,32 @@ function itemLabel(item: NtdItem, altMode: AltMode): string {
     case "button":
       switch (altMode) {
         case 0:
-          return "Execute";
+          return t("Execute");
         case 1:
           if (item.btn.type === "send_string") {
-            return "Copy";
+            return t("Copy");
           }
           return "";
         case 2:
-          return "Edit";
+          return t("Edit");
         case 3:
           if (item.btn.type === "send_string") {
-            return "Send"; // open Terminal Input dialog to send
+            return t("Send"); // open Terminal Input dialog to send
           }
           return "";
       }
       break;
     case "pinned_tab":
-      return altMode === 0 ? "Attach" : "";
+      return altMode === 0 ? t("Attach") : "";
     case "tab":
-      return altMode === 0 ? "Switch To" : "";
+      return altMode === 0 ? t("Switch To") : "";
     case "tunnel":
-      return altMode === 0 ? "Copy Entrypoint" : "";
+      return altMode === 0 ? t("Copy Entrypoint") : "";
     case "action":
     case "custom_shortcut":
-      return altMode === 0 ? "Execute" : "";
+      return altMode === 0 ? t("Execute") : "";
   }
-  return altMode === 0 ? "Open" : "";
+  return altMode === 0 ? t("Open") : "";
 }
 
 function itemIcon(item: NtdItem, selectedIndex: number) {
@@ -609,9 +634,13 @@ export default function NewTabDialog({
             type: "button",
             value: id,
             label: btn.name,
-            subtitle: `Group: ${btn.group || DEFAULT_BUTTON_GROUP} | Type: ${btn.type}${
-              btn.type !== "send_string" && btn.type !== "run_script" ? " | Payload: " + btn.payload : ""
-            }`,
+            subtitle:
+              t("Group:") +
+              ` ${btn.group || DEFAULT_BUTTON_GROUP} | ` +
+              +t("Type:") +
+              ` ${btn.type}${
+                btn.type !== "send_string" && btn.type !== "run_script" ? " | " + t("Payload:") + " " + btn.payload : ""
+              }`,
             tooltip: btn.type !== "run_script" ? btn.payload : undefined,
             btn: btn,
             tag:
@@ -627,7 +656,7 @@ export default function NewTabDialog({
               type: "builtin_button",
               value: id,
               label: btn.name,
-              subtitle: `Built-in Button | Type: ${btn.type}`,
+              subtitle: t("Built-in Button") + ` | ` + t("Type:") + " " + btn.type,
               tooltip: undefined,
               btn: btn,
               tag: btn.shortcut ? shortcutLabel(btn.shortcut) : undefined,
@@ -691,7 +720,7 @@ export default function NewTabDialog({
           isDeletable: true,
         });
       });
-      addSection("Recents", recentList);
+      addSection(t("Recents"), recentList);
 
       // Local shells
       const localList: NtdItemHost[] = [];
@@ -701,11 +730,11 @@ export default function NewTabDialog({
           value: shell !== defaultShell ? localShellHost(shell) : LOCAL_NAME,
           label:
             shell.name + (shell === defaultShell ? " (Default)" : shell === alternativeShell ? " (Alternative)" : ""),
-          subtitle: `Local Shell - ` + shell.path,
+          subtitle: t("Local Shell") + " - " + shell.path,
           tag: shell === defaultShell ? "alt+n" : shell === alternativeShell ? "alt+shift+n" : "",
         });
       });
-      addSection("Local Shells", localList);
+      addSection(t("Local Shells"), localList);
 
       // Older recents
       const olderRecentList: NtdItemHost[] = [];
@@ -724,7 +753,7 @@ export default function NewTabDialog({
           isDeletable: true,
         });
       });
-      addSection("Older Recents", olderRecentList);
+      addSection(t("Older Recents"), olderRecentList);
 
       // Favourite servers
       const favList: NtdItemHost[] = [];
@@ -749,7 +778,7 @@ export default function NewTabDialog({
             .join(" "),
         });
       });
-      addSection("Favourite Servers", favList);
+      addSection(t("Favourite Servers"), favList);
 
       // 4. Normal servers
       const normalList: NtdItemHost[] = [];
@@ -774,7 +803,7 @@ export default function NewTabDialog({
             .join(" "),
         });
       });
-      addSection("Normal Servers", normalList);
+      addSection(t("Normal Servers"), normalList);
 
       // 5. Auto servers
       const autoList: NtdItemHost[] = [];
@@ -799,15 +828,15 @@ export default function NewTabDialog({
             .join(" "),
         });
       });
-      addSection("Auto Servers", autoList);
+      addSection(t("Auto Servers"), autoList);
 
       // 6. Direct Connection
       if (directConnect) {
-        addSection("Direct Connection", [
+        addSection(t("Direct Connection"), [
           {
             type: "direct",
             value: directConnect,
-            label: `Connect to ${directConnect} (SSH)`,
+            label: t("Connect to") + " " + directConnect + " (SSH)",
           },
         ]);
       }
@@ -824,12 +853,15 @@ export default function NewTabDialog({
             tab: tab,
             value: tab.id,
             label: tab.title,
-            subtitle: tab.type === "scratchpad" ? "Scratchpad" : `Terminal: ${tab.panes.map((p) => p.host).join(", ")}`,
+            subtitle:
+              tab.type === "scratchpad"
+                ? t("Scratchpad")
+                : t("Terminal:") + ` ${tab.panes.map((p) => p.host).join(", ")}`,
             tag: idx < 9 ? `alt+${idx + 1}` : idx === tabs.length - 1 ? "alt+0" : "",
           });
         }
       });
-      addSection("Current Browser Tabs", activeTabsItems);
+      addSection(t("Current Browser Tabs"), activeTabsItems);
 
       const pinnedTabsItems: NtdItemPinnedTab[] = attachablePinnedTabs.map((p) => ({
         type: "pinned_tab",
@@ -838,15 +870,19 @@ export default function NewTabDialog({
         subtitle: "Terminal: " + p.host,
         session: p,
       }));
-      addSection("Attachable Pinned Tabs", pinnedTabsItems);
+      addSection(t("Attachable Pinned Tabs"), pinnedTabsItems);
     } else if (viewMode === "buttons") {
-      addSection("Recently used", recentButtons);
+      addSection(t("Recently used"), recentButtons);
 
       const activeGroupList: NtdItemButton[] = [];
       activeGroupButtons.forEach((b, idx) => {
-        let subtitle = `Group: ${b.group || DEFAULT_BUTTON_GROUP} | Type: ${b.type}${
-          b.type !== "send_string" && b.type !== "run_script" ? " | Payload: " + b.payload : ""
-        }`;
+        let subtitle =
+          t("Group:") +
+          ` ${b.group || DEFAULT_BUTTON_GROUP} | ` +
+          t("Type:") +
+          ` ${b.type}${
+            b.type !== "send_string" && b.type !== "run_script" ? " | " + t("Payload:") + " " + b.payload : ""
+          }`;
         if (f && b.type === "send_string" && b.payload) {
           const matchedPayload = searchStringAny(b.payload, f);
           if (matchedPayload) {
@@ -868,13 +904,17 @@ export default function NewTabDialog({
               : ""),
         });
       });
-      addSection(`Active Group (${activeGroup || DEFAULT_BUTTON_GROUP})`, activeGroupList);
+      addSection(t("Active Group") + ` (${activeGroup || DEFAULT_BUTTON_GROUP})`, activeGroupList);
 
       const otherGroupList: NtdItemButton[] = [];
       otherGroupButtons.forEach((b) => {
-        let subtitle = `Group: ${b.group || DEFAULT_BUTTON_GROUP} | Type: ${b.type}${
-          b.type !== "send_string" && b.type !== "run_script" ? " | Payload: " + b.payload : ""
-        }`;
+        let subtitle =
+          t("Group:") +
+          ` ${b.group || DEFAULT_BUTTON_GROUP} | ` +
+          t("Type:") +
+          ` ${b.type}${
+            b.type !== "send_string" && b.type !== "run_script" ? " | " + t("Payload:") + " " + b.payload : ""
+          }`;
         if (f && b.type === "send_string" && b.payload) {
           const matchedPayload = searchStringAny(b.payload, f);
           if (matchedPayload) {
@@ -891,9 +931,9 @@ export default function NewTabDialog({
           tag: !b.shortcut_scope ? shortcutLabel(b.shortcut) : undefined,
         });
       });
-      addSection("Other Groups", otherGroupList);
+      addSection(t("Other Groups"), otherGroupList);
 
-      addSection("Custom Shortcuts", filteredShortcuts);
+      addSection(t("Custom Shortcuts"), filteredShortcuts);
 
       const builtinList: NtdItemButton[] = builtinButtons.map((b) => ({
         type: "builtin_button",
@@ -903,39 +943,47 @@ export default function NewTabDialog({
         btn: b,
         tag: b.shortcut ? shortcutLabel(b.shortcut) : undefined,
       }));
-      addSection("Built-in Functions", builtinList);
+      addSection(t("Built-in Functions"), builtinList);
     } else if (viewMode === "tunnels") {
-      const tunnelItems: NtdItemTunnel[] = filteredActiveTunnels.map((t) => ({
+      const tunnelItems: NtdItemTunnel[] = filteredActiveTunnels.map((tunnel) => ({
         type: "tunnel",
         value:
-          t.type === "dynamic"
-            ? `${t.bindAddr || "127.0.0.1"}:${t.bindPort}`
-            : t.type === "local"
-              ? `${t.bindAddr || "127.0.0.1"}:${t.bindPort}`
-              : `${t.remoteHost || "127.0.0.1"}:${t.remotePort}`,
+          tunnel.type === "dynamic"
+            ? `${tunnel.bindAddr || "127.0.0.1"}:${tunnel.bindPort}`
+            : tunnel.type === "local"
+              ? `${tunnel.bindAddr || "127.0.0.1"}:${tunnel.bindPort}`
+              : `${tunnel.remoteHost || "127.0.0.1"}:${tunnel.remotePort}`,
         label:
-          t.type === "dynamic"
-            ? `SOCKS5 proxy ${t.bindAddr}:${t.bindPort} (via ${t.hostName})`
-            : t.type === "local"
-              ? `local ${t.bindAddr}:${t.bindPort} -> ${t.remoteHost}:${t.remotePort}`
-              : `remote ${t.remoteHost}:${t.remotePort} -> ${t.bindAddr}:${t.bindPort}`,
-        subtitle: `Type: ${t.type === "dynamic" ? "SOCKS5" : t.type} | Server: ${t.hostName}`,
+          tunnel.type === "dynamic"
+            ? `SOCKS5 proxy ${tunnel.bindAddr}:${tunnel.bindPort} (via ${tunnel.hostName})`
+            : tunnel.type === "local"
+              ? `local ${tunnel.bindAddr}:${tunnel.bindPort} -> ${tunnel.remoteHost}:${tunnel.remotePort}`
+              : `remote ${tunnel.remoteHost}:${tunnel.remotePort} -> ${tunnel.bindAddr}:${tunnel.bindPort}`,
+        subtitle:
+          t("Type:") + ` ${tunnel.type === "dynamic" ? "SOCKS5" : tunnel.type} | ${t("Server:")} ${tunnel.hostName}`,
       }));
-      addSection("Active SSH Tunnels", tunnelItems);
+      addSection(t("Active SSH Tunnels"), tunnelItems);
     } else if (viewMode === "tags") {
-      const tagItems: NtdItemTag[] = filteredTags.map((t) => ({
+      const tagItems: NtdItemTag[] = filteredTags.map((tag) => ({
         type: "tag",
-        value: t.tag,
-        label: "#" + t.tag,
-        subtitle: `${t.count} servers`,
+        value: tag.tag,
+        label: "#" + tag.tag,
+        subtitle: `${tag.count} ` + t("servers"),
       }));
-      addSection("Tags", tagItems);
+      addSection(t("Tags"), tagItems);
     } else if (viewMode === "help") {
-      const filteredHelp = helpOptions.filter(
-        (o) => o.label.toLowerCase().includes(f) || o.subtitle?.toLowerCase().includes(f) || o.value.includes(f),
-      );
-      addSection("Command Palette Prefix Guide", filteredHelp);
-      addSection("Help", [aboutLink, ...helpLinks]);
+      let filteredHelp = helpOptions;
+      if (f) {
+        filteredHelp = filteredHelp.filter(
+          (o) => o.label.toLowerCase().includes(f) || o.subtitle?.toLowerCase().includes(f) || o.value.includes(f),
+        );
+      }
+      addSection(t("Command Palette Prefix Guide"), filteredHelp);
+      let items = [aboutLink, ...helpLinks];
+      if (f) {
+        items = items.filter((item) => item.label.includes(f) || item.subtitle?.includes(f));
+      }
+      addSection(t("Help"), items);
     }
 
     return { sections, items };
@@ -1034,7 +1082,11 @@ export default function NewTabDialog({
           navigator.clipboard
             .writeText(item.value)
             .then(() =>
-              notify(`Tunnel entrypoint "${item.value}" copied to clipboard`, "info", TOAST_KEY_COPY_TUNNEL_ENTRYPOINT),
+              notify(
+                t("Tunnel entrypoint copied to clipboard:") + " " + item.value,
+                "info",
+                TOAST_KEY_COPY_TUNNEL_ENTRYPOINT,
+              ),
             )
             .catch(() => {});
           onClose();
@@ -1316,7 +1368,7 @@ export default function NewTabDialog({
           autoFocus
           fullWidth
           variant="outlined"
-          placeholder="Search server. ? for help. Hold Alt/Ctrl to open in current tab / new window"
+          placeholder={t("Search server. ? for help. Hold Alt/Ctrl to open in current tab / new window")}
           value={newTabDialogFilter}
           onChange={(e) => {
             setNewTabDialogFilter(e.target.value);
@@ -1437,7 +1489,7 @@ export default function NewTabDialog({
                         e.stopPropagation();
                         handleDeleteItem(item);
                       }}
-                      title="Remove from recents (delete / alt+d)"
+                      title={t("Remove from recents") + " (delete / alt+d)"}
                       sx={{
                         display: "flex",
                         alignItems: "center",
@@ -1463,7 +1515,7 @@ export default function NewTabDialog({
           {items.length === 0 && (
             <Box sx={{ p: 3, textAlign: "center" }}>
               <Typography variant="body2" color="text.secondary">
-                No matching {viewMode} found
+                {modeEmptyPlaceholder(viewMode)}
               </Typography>
             </Box>
           )}

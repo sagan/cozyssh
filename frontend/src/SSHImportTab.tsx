@@ -38,7 +38,7 @@ import FileUploadIcon from "@mui/icons-material/FileUpload";
 import { METHOD_DELETE, METHOD_POST } from "./constants";
 import { notify, refreshData } from "./store";
 import type { DeviceSSHData, RemoteHostEntry, RemoteKnownHostEntry } from "./api";
-import { apiReqHeaders, triggerDownloadString } from "./common";
+import { apiReqHeaders, t, triggerDownloadString } from "./common";
 import { dialogs } from "./Dialogs";
 
 function keyFingerprint(keyData: string): string {
@@ -96,14 +96,14 @@ function DeviceListView({ onSelectDevice }: { onSelectDevice: (device: DeviceSSH
         fileType = "known_hosts";
       }
       if (!fileType) {
-        notify(`Acceptable files are OpenSSH format "config", "known_hosts" or a "CSV" file.`, "error");
+        notify(t(`Acceptable files are OpenSSH format "config", "known_hosts" or a "CSV" file.`), "error");
         if (fileInputRef.current) {
           fileInputRef.current.value = "";
         }
         return;
       }
       if (file.size >= 10 << 20) {
-        notify(`File size ${file.size} bytes is too large. Maximum size is 10MiB.`, "error");
+        notify(t("File is too large. Maximum size is 10MiB. The file size:") + " " + file.size, "error");
         if (fileInputRef.current) {
           fileInputRef.current.value = "";
         }
@@ -124,9 +124,9 @@ function DeviceListView({ onSelectDevice }: { onSelectDevice: (device: DeviceSSH
           throw new Error(`status=${res.status}, msg=${await res.text()}`);
         }
         load();
-        notify("File uploaded successfully.", "success");
+        notify(t("File uploaded successfully."), "success");
       } catch (err: unknown) {
-        notify(`Upload failed: ${err}`, "error");
+        notify(t("Upload failed:") + ` ${err}`, "error");
       } finally {
         if (fileInputRef.current) fileInputRef.current.value = "";
         setLoading(false);
@@ -137,7 +137,7 @@ function DeviceListView({ onSelectDevice }: { onSelectDevice: (device: DeviceSSH
 
   const handleDelete = useCallback(
     async (id: string) => {
-      if (!(await dialogs.confirm(`Are you sure you want to delete ${id} files?`))) {
+      if (!(await dialogs.confirm(t("Are you sure you want to delete those files?") + ` (${id})`))) {
         return;
       }
       setLoading(true);
@@ -151,7 +151,7 @@ function DeviceListView({ onSelectDevice }: { onSelectDevice: (device: DeviceSSH
         }
         load();
       } catch (err: unknown) {
-        notify(`Delete failed: ${err}`, "error");
+        notify(t("Delete failed:") + ` ${err}`, "error");
       } finally {
         setLoading(false);
       }
@@ -181,23 +181,23 @@ function DeviceListView({ onSelectDevice }: { onSelectDevice: (device: DeviceSSH
       <Button
         size="small"
         variant="outlined"
-        title="Download sample CSV template for importing hosts"
+        title={t("Download sample CSV template for importing hosts")}
         startIcon={<CloudDownloadIcon />}
         onClick={downloadCSVTemplate}
       >
-        CSV Template
+        {t("CSV Template")}
       </Button>
       <Button
         size="small"
         variant="outlined"
-        title="Upload files to import. Supported formats: OpenSSH config, known_hosts, and CSV (.csv)"
+        title={t("Upload files to import. Supported formats: OpenSSH config, known_hosts, and CSV (.csv)")}
         startIcon={<FileUploadIcon />}
         onClick={() => fileInputRef.current?.click()}
         disabled={loading}
       >
-        Upload
+        {t("Upload")}
       </Button>
-      <IconButton size="small" onClick={load} title="Refresh">
+      <IconButton size="small" onClick={load} title={t("Refresh")}>
         <RefreshIcon fontSize="small" />
       </IconButton>
     </Stack>
@@ -207,7 +207,7 @@ function DeviceListView({ onSelectDevice }: { onSelectDevice: (device: DeviceSSH
     <Box>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
         <Typography variant="subtitle2" sx={{ fontWeight: "bold" }}>
-          Devices
+          {t("Devices")}
         </Typography>
         {actionButtons}
       </Box>
@@ -216,11 +216,11 @@ function DeviceListView({ onSelectDevice }: { onSelectDevice: (device: DeviceSSH
         <Box sx={{ textAlign: "center", py: 6, color: "text.secondary" }}>
           <CloudDownloadIcon sx={{ fontSize: 48, mb: 1, opacity: 0.4 }} />
           <Typography variant="body1" gutterBottom>
-            No SSH data from other devices yet.
+            {t("No SSH data from other devices yet.")}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Other devices with WebDAV sync enabled can choose to upload their SSH data. Once fetched, they'll appear
-            here.
+            {t("Other devices with WebDAV sync enabled can choose to upload their SSH data.")} + " " +
+            {t("Once fetched, they'll appear here.")}
           </Typography>
         </Box>
       ) : (
@@ -231,9 +231,9 @@ function DeviceListView({ onSelectDevice }: { onSelectDevice: (device: DeviceSSH
           <Table size="small">
             <TableHead>
               <TableRow>
-                <TableCell sx={{ fontWeight: "bold" }}>Device Name</TableCell>
-                <TableCell sx={{ fontWeight: "bold" }}>SSH Config</TableCell>
-                <TableCell sx={{ fontWeight: "bold" }}>Known Hosts</TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>{t("Device Name")}</TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>{t("SSH Config")}</TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>{t("Known Hosts")}</TableCell>
                 <TableCell />
               </TableRow>
             </TableHead>
@@ -279,11 +279,11 @@ function DeviceListView({ onSelectDevice }: { onSelectDevice: (device: DeviceSSH
                           onClick={() => handleDelete(d.deviceName)}
                           disabled={loading}
                         >
-                          Delete
+                          {t("Delete")}
                         </Button>
                       )}
                       <Button size="small" variant="contained" disableElevation onClick={() => onSelectDevice(d)}>
-                        Import
+                        {t("Import")}
                       </Button>
                     </Stack>
                   </TableCell>
@@ -398,17 +398,17 @@ function SSHConfigImportView({
     }
     setImporting(true);
     try {
-      const r = await fetch("/api/settings/webdav/import/sshconfig", {
+      const res = await fetch("/api/settings/webdav/import/sshconfig", {
         method: METHOD_POST,
         headers: apiReqHeaders(),
         body: JSON.stringify({ deviceName: device.deviceName, hostNames: Array.from(selected) }),
       });
-      if (r.ok) {
-        notify(`Imported ${selected.size} host(s) into ~/.ssh/config`, "success");
+      if (res.ok) {
+        notify(t("Imported hosts into ~/.ssh/config:") + " " + selected.size, "success");
         onDone();
         refreshData({ sync: 2 });
       } else {
-        notify("Import failed: " + (await r.text()), "error");
+        notify(t("Import failed:") + ` status=${res.status}, msg=${await res.text()}`, "error");
       }
     } finally {
       setImporting(false);
@@ -477,13 +477,13 @@ function SSHConfigImportView({
           sx={{ textTransform: "none" }}
         >
           {importing ? <CircularProgress size={14} sx={{ mr: 1 }} /> : null}
-          Import {selected.size} hosts
+          {t("Import Hosts")} ({selected.size})
         </Button>
       </Stack>
 
       {filtered.length === 0 ? (
         <Box sx={{ py: 3, textAlign: "center", color: "text.secondary" }}>
-          <Typography variant="body2">No hosts to display with current filters.</Typography>
+          <Typography variant="body2">{t("No hosts to display with current filters.")}</Typography>
         </Box>
       ) : (
         <TableContainer
@@ -508,10 +508,10 @@ function SSHConfigImportView({
                     onChange={handleSelectAllClick}
                   />
                 </TableCell>
-                <TableCell sx={{ fontWeight: "bold" }}>Host Alias</TableCell>
-                <TableCell sx={{ fontWeight: "bold" }}>Hostname</TableCell>
-                <TableCell sx={{ fontWeight: "bold" }}>User / Port</TableCell>
-                <TableCell sx={{ fontWeight: "bold" }}>Status</TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>{t("Host Alias")}</TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>{t("Hostname")}</TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>{t("User / Port")}</TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>{t("Status")}</TableCell>
                 <TableCell padding="checkbox" />
               </TableRow>
             </TableHead>
@@ -541,17 +541,23 @@ function SSHConfigImportView({
                       {entry.isNew && (
                         <Chip
                           icon={<AddCircleOutlineIcon />}
-                          label="New"
+                          label={t("New")}
                           size="small"
                           color="success"
                           variant="outlined"
                         />
                       )}
                       {entry.isModified && (
-                        <Chip icon={<EditIcon />} label="Modified" size="small" color="warning" variant="outlined" />
+                        <Chip
+                          icon={<EditIcon />}
+                          label={t("Modified")}
+                          size="small"
+                          color="warning"
+                          variant="outlined"
+                        />
                       )}
                       {!entry.isNew && !entry.isModified && (
-                        <Chip icon={<CheckCircleOutlineIcon />} label="Same" size="small" variant="outlined" />
+                        <Chip icon={<CheckCircleOutlineIcon />} label={t("Same")} size="small" variant="outlined" />
                       )}
                     </TableCell>
                     <TableCell padding="checkbox">
@@ -595,7 +601,7 @@ function SSHConfigImportView({
                                 color="text.secondary"
                                 sx={{ fontWeight: "bold", display: "block", mb: 0.5 }}
                               >
-                                REMOTE ({device.deviceName})
+                                {t("REMOTE")} ({device.deviceName})
                               </Typography>
                               {Object.entries(entry.directives).map(([k, v]) => (
                                 <Typography
@@ -613,7 +619,7 @@ function SSHConfigImportView({
                                 color="text.secondary"
                                 sx={{ fontWeight: "bold", display: "block", mb: 0.5 }}
                               >
-                                LOCAL
+                                {t("LOCAL")}
                               </Typography>
                               {entry.localDirectives &&
                                 Object.entries(entry.localDirectives).map(([k, v]) => (
@@ -747,11 +753,11 @@ function KnownHostsImportView({
       if (!res.ok) {
         throw new Error(`status=${res.status}, msg=${await res.text()}`);
       }
-      notify(`Imported ${lines.length} known_hosts entry/entries`, "success");
+      notify(t("Imported known_hosts entry/entries:") + ` (${lines.length}})`, "success");
       onDone();
       refreshData({ sync: 2 });
     } catch (e: unknown) {
-      notify(`Import failed: ${e}`, "error");
+      notify(t("Import failed:") + ` ${e}`, "error");
     } finally {
       setImporting(false);
     }
@@ -771,7 +777,7 @@ function KnownHostsImportView({
           <ArrowBackIcon fontSize="small" />
         </IconButton>
         <Typography variant="subtitle2" sx={{ fontWeight: "bold", mr: 1 }}>
-          Import from: <span style={{ fontFamily: "monospace" }}>{device.deviceName}</span>
+          {t("Import from:")} <span style={{ fontFamily: "monospace" }}>{device.deviceName}</span>
         </Typography>
 
         <FormControlLabel
@@ -791,7 +797,7 @@ function KnownHostsImportView({
 
         <TextField
           size="small"
-          placeholder="Filter entries..."
+          placeholder={t("Filter entries...")}
           value={filterText}
           onChange={(e) => setFilterText(e.target.value)}
           sx={{
@@ -827,13 +833,13 @@ function KnownHostsImportView({
           sx={{ textTransform: "none" }}
         >
           {importing ? <CircularProgress size={14} sx={{ mr: 1 }} /> : null}
-          Import {selected.size} entries
+          {t("Import entries")} ({selected.size})
         </Button>
       </Stack>
 
       {filtered.length === 0 ? (
         <Box sx={{ py: 3, textAlign: "center", color: "text.secondary" }}>
-          <Typography variant="body2">No known_hosts entries to display.</Typography>
+          <Typography variant="body2">{t("No known_hosts entries to display.")}</Typography>
         </Box>
       ) : (
         <TableContainer
@@ -858,10 +864,10 @@ function KnownHostsImportView({
                     onChange={handleSelectAllClick}
                   />
                 </TableCell>
-                <TableCell sx={{ fontWeight: "bold" }}>Hostname Pattern(s)</TableCell>
-                <TableCell sx={{ fontWeight: "bold" }}>Key Type</TableCell>
-                <TableCell sx={{ fontWeight: "bold" }}>Key (partial)</TableCell>
-                <TableCell sx={{ fontWeight: "bold" }}>Status</TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>{t("Hostname Pattern(s)")}</TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>{t("Key Type")}</TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>{t("Key (partial)")}</TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>{t("Status")}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -908,16 +914,16 @@ function KnownHostsImportView({
                       {entry.isNew && (
                         <Chip
                           icon={<AddCircleOutlineIcon />}
-                          label="New"
+                          label={t("New")}
                           size="small"
                           color="success"
                           variant="outlined"
                         />
                       )}
                       {entry.isConflict && (
-                        <Chip icon={<WarningAmberIcon />} label="CONFLICT" size="small" color="error" />
+                        <Chip icon={<WarningAmberIcon />} label={t("CONFLICT")} size="small" color="error" />
                       )}
-                      {!entry.isNew && !entry.isConflict && <Chip label="Same" size="small" variant="outlined" />}
+                      {!entry.isNew && !entry.isConflict && <Chip label={t("Same")} size="small" variant="outlined" />}
                     </TableCell>
                   </TableRow>
                   {entry.isConflict && selected.has(entry.line) && (
@@ -930,18 +936,18 @@ function KnownHostsImportView({
                           sx={{ borderRadius: 0, "& .MuiAlert-message": { width: "100%" } }}
                         >
                           <Typography variant="body2" sx={{ fontWeight: "bold", mb: 0.5 }}>
-                            ⛔ KEY CONFLICT: {entry.patterns}
+                            ⛔ {t("KEY CONFLICT:")} {entry.patterns}
                           </Typography>
                           <Typography variant="caption" sx={{ display: "block", mb: 1 }}>
-                            A known_hosts record for this host already exists locally with a DIFFERENT key. This could
-                            indicate a man-in-the-middle attack or a server re-key. Only proceed if you know this is
-                            expected.
+                            {t("A known_hosts record for this host already exists locally with a DIFFERENT key.")} + " "
+                            +{t("This could indicate a man-in-the-middle attack or a server re-key.")} + " " +
+                            {t("Only proceed if you know this is expected.")}
                           </Typography>
                           <Typography variant="caption" sx={{ fontFamily: "monospace", display: "block", mb: 0.5 }}>
-                            Local: {entry.localKeyType} {entry.localKeyData?.slice(0, 16)}…
+                            {t("Local:")} {entry.localKeyType} {entry.localKeyData?.slice(0, 16)}…
                           </Typography>
                           <Typography variant="caption" sx={{ fontFamily: "monospace", display: "block", mb: 1 }}>
-                            Remote: {entry.keyType} {entry.keyData.slice(0, 16)}…
+                            {t("Remote:")} {entry.keyType} {entry.keyData.slice(0, 16)}…
                           </Typography>
                           <FormControlLabel
                             control={
@@ -964,7 +970,7 @@ function KnownHostsImportView({
                             }
                             label={
                               <Typography variant="caption" sx={{ fontWeight: "bold" }}>
-                                I understand and confirm this replacement
+                                {t("I understand and confirm this replacement")}
                               </Typography>
                             }
                           />
@@ -997,7 +1003,6 @@ function DeviceDetailView({ device, onBack }: { device: DeviceSSHData; onBack: (
 
   return (
     <Box>
-      {/* Sub-tabs */}
       <Box sx={{ display: "flex", gap: 1, mb: 2 }}>
         {device.hasSSHConfig && (
           <Button
@@ -1006,7 +1011,7 @@ function DeviceDetailView({ device, onBack }: { device: DeviceSSHData; onBack: (
             size="small"
             onClick={() => setActiveTab("sshconfig")}
           >
-            SSH Config
+            {t("SSH Config")}
           </Button>
         )}
         {device.hasKnownHosts && (
@@ -1016,7 +1021,7 @@ function DeviceDetailView({ device, onBack }: { device: DeviceSSHData; onBack: (
             size="small"
             onClick={() => setActiveTab("knownhosts")}
           >
-            Known Hosts
+            {t("Known Hosts")}
           </Button>
         )}
       </Box>
@@ -1047,8 +1052,9 @@ export default function SSHImportTab() {
   return (
     <Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2, mt: -1 }}>
-        <b>SSH Data Import</b>: Import SSH data from other devices of same WebDAV server, or upload a file directly
-        (Supported file formats: OpenSSH "config", "known_hosts"; csv file).
+        <b>{t("SSH Data Import")}</b>:{" "}
+        {t("Import SSH data from other devices of same WebDAV server, or upload a file directly.")} (
+        {t(`Supported file formats: OpenSSH "config", "known_hosts"; csv file`)}).
       </Typography>
 
       {selectedDevice ? (

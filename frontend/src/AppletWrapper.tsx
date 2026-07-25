@@ -5,6 +5,7 @@ import ViewSidebarIcon from "@mui/icons-material/ViewSidebar";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowRightIcon from "@mui/icons-material/KeyboardArrowRight";
+import { t } from "./common";
 
 export type AppletPosition = "widget" | "sidebar" | "dialog";
 
@@ -293,10 +294,15 @@ export default function AppletWrapper({ applet, invisible, onClose, onSwitchPosi
         <Typography variant="subtitle2" sx={{ flexGrow: 1, fontWeight: "bold" }}>
           {applet.name}
         </Typography>
-        <IconButton size="small" color="inherit" title="Move to sidebar" onClick={() => onSwitchPosition("sidebar")}>
+        <IconButton
+          size="small"
+          color="inherit"
+          title={t("Move to sidebar")}
+          onClick={() => onSwitchPosition("sidebar")}
+        >
           <ViewSidebarIcon fontSize="small" />
         </IconButton>
-        <IconButton size="small" color="inherit" title="Move to dialog" onClick={() => onSwitchPosition("dialog")}>
+        <IconButton size="small" color="inherit" title={t("Move to dialog")} onClick={() => onSwitchPosition("dialog")}>
           <OpenInNewIcon fontSize="small" />
         </IconButton>
         <IconButton size="small" color="inherit" onClick={onClose} sx={{ ml: 0.5 }}>

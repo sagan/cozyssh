@@ -55,6 +55,7 @@ import {
   removePassFromHost,
   assertUnreachable,
   generatePassword,
+  t,
 } from "./common";
 import type { TerminalHandle } from "./Terminal";
 import type { ScratchpadHandle } from "./Scratchpad";
@@ -240,6 +241,7 @@ interface Store {
   extraButtonFormMenu?: CustomMenu<ButtonForm>[];
   extraMainMenu?: CustomMenu<"">[];
   extraTabBarMenu?: CustomMenu<"">[];
+  extraButtonBarMenu?: CustomMenu<"">[];
   extraNtdMenu?: CustomMenu<NtdItem>[];
   settingsTab: number;
   settingsOpen: boolean;
@@ -658,6 +660,13 @@ export const setExtraTabBarMenu = (
 ) =>
   useStore.setState((state) => ({
     extraTabBarMenu: typeof update === "function" ? update(state.extraTabBarMenu) : update,
+  }));
+
+export const setExtraButtonBarMenu = (
+  update: CustomMenu<"">[] | undefined | ((menu: CustomMenu<"">[] | undefined) => CustomMenu<"">[] | undefined),
+) =>
+  useStore.setState((state) => ({
+    extraButtonBarMenu: typeof update === "function" ? update(state.extraButtonBarMenu) : update,
   }));
 
 export const setExtraNtdMenu = (
@@ -1362,10 +1371,10 @@ export async function openHost(
     const open = await openBackgroundTerminal(host, options);
     const hostLabel = removePassFromHost(host);
     if (open) {
-      notify(`Background terminal "${hostLabel}" opened successfully`, "success");
+      notify(t("Background terminal opened successfully:") + " " + hostLabel, "success");
       return "_";
     } else {
-      notify(`Failed to open background terminal "${hostLabel}"`, "error");
+      notify(t("Failed to open background terminal:") + " " + hostLabel, "error");
       return "";
     }
   }
@@ -1436,14 +1445,18 @@ export async function openHost(
 
 export async function logout(needConfirm = false, preserveLocalVars = false) {
   if (needConfirm) {
-    if (!(await dialogs.confirm("Log out of current device?", "All data stored in this browser will be cleared."))) {
+    if (
+      !(await dialogs.confirm(t("Log out of current device?"), t("All data stored in this browser will be cleared.")))
+    ) {
       return;
     }
     const syncState = localStorage.getItem(BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE);
     if (syncState && syncState !== "synced") {
       if (
         !(await dialogs.confirm(
-          "Scratchpad data is not fully synced to the server. Are you sure you want to log out and clear the local cache?",
+          t("Scratchpad data is not fully synced to the server.") +
+            " " +
+            t("Are you sure you want to log out and clear the local cache?"),
         ))
       ) {
         return;
@@ -1463,9 +1476,10 @@ export async function logoutAll(needConfirm = false) {
   if (
     needConfirm &&
     !(await dialogs.confirm(
-      "Log out of all browser sessions?",
-      "This will invalidate all active sessions and require you to sign in again on all devices." +
-        " All data stored in this browser will be cleared.",
+      t("Log out of all browser sessions?"),
+      t("This will invalidate all active sessions and require you to sign in again on all devices.") +
+        " " +
+        t("All data stored in this browser will be cleared."),
     ))
   ) {
     return;
@@ -1474,7 +1488,9 @@ export async function logoutAll(needConfirm = false) {
   if (syncState && syncState !== "synced") {
     if (
       !(await dialogs.confirm(
-        "Scratchpad data is not fully synced to the server. Are you sure you want to log out of all browser sessions and clear the local cache?",
+        t("Scratchpad data is not fully synced to the server.") +
+          " " +
+          t("Are you sure you want to log out of all browser sessions and clear the local cache?"),
       ))
     ) {
       return;
@@ -1613,7 +1629,7 @@ export async function pinTab(id?: string) {
     return;
   }
   if (tab.panes.length > 1) {
-    dialogs.alert("Only single-pane tabs can be pinned.");
+    dialogs.alert(t("Only single-pane tabs can be pinned."));
     return;
   }
   const pane = tab.panes[0];
@@ -1638,7 +1654,7 @@ export async function unlockTab(id?: string) {
     return;
   }
   if (tab.panes.length > 1) {
-    dialogs.alert("Only single-pane tabs can be unlocked.");
+    dialogs.alert(t("Only single-pane tabs can be unlocked."));
     return;
   }
   const pane = tab.panes[0];
@@ -1662,7 +1678,7 @@ export async function lockTab(id?: string) {
     return;
   }
   if (tab.panes.length > 1) {
-    dialogs.alert("Only single-pane tabs can be locked.");
+    dialogs.alert(t("Only single-pane tabs can be locked."));
     return;
   }
   const pane = tab.panes[0];
@@ -1686,7 +1702,7 @@ export async function hideTab(id?: string) {
     return;
   }
   if (tab.panes.length > 1) {
-    dialogs.alert("Only single-pane tabs can be hided.");
+    dialogs.alert(t("Only single-pane tabs can be hided."));
     return;
   }
   const pane = tab.panes[0];
@@ -1815,7 +1831,7 @@ export async function renameTab(targetId?: string) {
   if (!targetTab) {
     return;
   }
-  let newTitle = await dialogs.prompt("Enter new tab title:", targetTab.title);
+  let newTitle = await dialogs.prompt(t("Enter new tab title:"), targetTab.title);
   if (!newTitle) {
     return;
   }
@@ -1896,7 +1912,7 @@ export function getTabConnectionString(tab: TabData): string {
 export async function openSaveTabsToButtonDialog() {
   const tabs = getStore().tabs.filter((t) => t.type === "terminal");
   if (tabs.length === 0) {
-    dialogs.alert("No opened terminal tabs to save");
+    dialogs.alert(t("No opened terminal tabs to save"));
     return;
   }
   const payload = tabs.map((t) => `csOpen(${JSON.stringify(getTabConnectionString(t))});`).join("\n") + "\n";
@@ -2006,7 +2022,11 @@ export async function saveButton(btn: ButtonForm, editId?: string): Promise<Butt
 }
 
 export async function deleteButton(btn: ButtonData) {
-  if (!(await dialogs.confirm(`Delete ${btn.type} button "${btn.name}" (${btn.id})?`))) {
+  if (
+    !(await dialogs.confirm(
+      t("Will delete this button:") + ` type=${btn.type}, name=${btn.name}, id=${btn.id}. ` + t("Are you sure?"),
+    ))
+  ) {
     return;
   }
   unloadButton(btn.id);
@@ -2282,7 +2302,7 @@ export async function moveGroup(srcPath: string, beforeSiblingPath: string) {
   if (res.ok) {
     setGroups(nextGroups);
   } else {
-    dialogs.alert("Failed to save group order");
+    dialogs.alert(t("Failed to save group order"));
   }
 }
 
@@ -2302,10 +2322,10 @@ export async function updateConfig(config: ConfigRequest): Promise<boolean> {
       useKeyring: config.useKeyring,
     };
     setSysinfo(sysinfo);
-    notify("Settings saved", "success", TOAST_KEY_API_SETTINGS);
+    notify(t("Settings saved"), "success", TOAST_KEY_API_SETTINGS);
     return true;
-  } catch (e) {
-    notify(`Failed to save setting: ${e}`, "error", TOAST_KEY_API_SETTINGS);
+  } catch (err: unknown) {
+    notify(t("Failed to save setting:") + ` ${err}`, "error", TOAST_KEY_API_SETTINGS);
     return false;
   }
 }
@@ -2375,8 +2395,11 @@ export async function sshCopyId(target: HostData | HostForm) {
       });
 
       if (!res.ok) {
-        const text = await res.text();
-        dialogs.alert(`ssh-copy-id "${payload.name}": Error copying SSH key: ${text || res.statusText}`);
+        dialogs.alert(
+          `ssh-copy-id "${payload.name}": ` +
+            t("Error copying SSH key:") +
+            ` status=${res.status}, msg=${await res.text()}`,
+        );
         break;
       }
 
@@ -2387,7 +2410,7 @@ export async function sshCopyId(target: HostData | HostForm) {
       } else if (data.status === "need_app_password") {
         const appPwd = await dialogs.promptPassword(
           `ssh-copy-id "${payload.name}": ${
-            data.message || "The password store is locked. Enter your CozySSH app password to unlock it:"
+            data.message || t("The password store is locked. Enter your CozySSH app password to unlock it:")
           }`,
         );
         if (!appPwd) {
@@ -2401,7 +2424,7 @@ export async function sshCopyId(target: HostData | HostForm) {
           body: JSON.stringify({ password: appPwd }),
         });
         if (!res.ok) {
-          dialogs.alert(`ssh-copy-id "${payload.name}": Invalid app password, can't unlock password store.`);
+          dialogs.alert(`ssh-copy-id "${payload.name}": ` + t("Invalid app password, can't unlock password store."));
           break;
         }
       } else if (data.status === "need_password") {
@@ -2416,8 +2439,16 @@ export async function sshCopyId(target: HostData | HostForm) {
       } else if (data.status === "need_hostkey_confirm") {
         if (
           !(await dialogs.confirm(
-            `ssh-copy-id "${payload.name}": host key isn't trusted: ${data.message}. ` +
-              `New host key finterprint: ${data.fingerprint}. Accept it?`,
+            `ssh-copy-id "${payload.name}": ` +
+              t("host key isn't trusted:") +
+              " " +
+              data.message +
+              ". " +
+              t("New host key finterprint:") +
+              " " +
+              data.fingerprint +
+              ". " +
+              t("Accept it?"),
             "",
             true,
           ))
@@ -2474,7 +2505,7 @@ export function openEditHost(host: string | HostData) {
     host = getHost(host);
   }
   if (host.hostname === LOCAL_NAME) {
-    dialogs.alert("local shell can't be edited");
+    dialogs.alert(t("local shell can't be edited"));
     return;
   }
   if (host.source) {
@@ -2579,7 +2610,7 @@ export function newTabTitle(baseTitle: string): string {
 }
 
 export async function deleteHost(name: string) {
-  if (!(await dialogs.confirm(`Are you certain you want to permanently delete host "${name}"?`))) {
+  if (!(await dialogs.confirm(t("Will delete this host:") + " " + name + ". " + t("Are you sure?")))) {
     return;
   }
   await fetch(`/api/hosts/${name}`, { method: METHOD_DELETE, headers: apiReqHeaders() });

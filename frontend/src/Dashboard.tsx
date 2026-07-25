@@ -55,6 +55,7 @@ import {
   hostSorter,
   assertUnreachable,
   getCanonicalHostString,
+  t,
 } from "./common";
 import {
   type TabData,
@@ -445,7 +446,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         case "send_string": {
           if (altMode === 1) {
             navigator.clipboard.writeText(btn.payload);
-            notify("Copied", "info", TOAST_KEY_COPY);
+            notify(t("Copied"), "info", TOAST_KEY_COPY);
             triggerFocus();
           } else {
             const openDialog = altMode === 3 || (!!btn.liquidjs && getTemplateVariables(btn.payload).length > 0);
@@ -820,9 +821,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
             case "REFRESH":
               try {
                 await refreshData({ sync: 2 });
-                notify(`Data refreshed`, "success", TOAST_KEY_REFRESH);
+                notify(t("Data refreshed"), "success", TOAST_KEY_REFRESH);
               } catch (err: unknown) {
-                notify(`Data refresh failure: ${err}`, "error", TOAST_KEY_REFRESH);
+                notify(t("Data refresh failure:") + ` ${err}`, "error", TOAST_KEY_REFRESH);
               }
               break;
             case "NONE":
@@ -889,8 +890,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
             throw new Error(`status=${res.status}`);
           }
           data = (await res.json()) as FullData;
-        } catch (e: unknown) {
-          notify(`Fail to load data: ${e}`, "error", TOAST_KEY_API_FULLDATA);
+        } catch (err: unknown) {
+          notify(t("Fail to load data:") + ` ${err}`, "error", TOAST_KEY_API_FULLDATA);
           const tabId = genTabId(LOCAL_NAME);
           const paneId = genPaneId(LOCAL_NAME);
           setTabs((tabs) => [
@@ -912,6 +913,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
       useStore.setState(data);
 
       __CS_AUTORUN_DONE__ = 0;
+      document.documentElement.dataset.csAutorunDone = "0";
       if (autorun) {
         const buttons = getStore().buttons;
         if (!hash) {
@@ -932,6 +934,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         }
       }
       __CS_AUTORUN_DONE__ = 1;
+      document.documentElement.dataset.csAutorunDone = "1";
 
       const pinnedTabsData = data.pinned.filter((p) => !p.isHidden);
       const pinnedElsewhere = pinnedTabsData.some((p) => p.listenerCount > 0);
@@ -992,7 +995,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             ]);
             setActiveTabId(tabId);
             setActivePaneId(paneId);
-            dialogs.alert(`SSH server "${hash}" not found.`);
+            dialogs.alert(t("SSH server not found"), hash);
           }
         }
       } else if (autoload) {
@@ -1187,9 +1190,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
             setMobileOpen(false);
             try {
               await refreshData({ sync: 2 });
-              notify(`Data refreshed`, "success", TOAST_KEY_REFRESH);
+              notify(t("Data refreshed"), "success", TOAST_KEY_REFRESH);
             } catch (err: unknown) {
-              notify(`Data refresh failure: ${err}`, "error", TOAST_KEY_REFRESH);
+              notify(t("Data refresh failure:") + ` ${err}`, "error", TOAST_KEY_REFRESH);
             }
           }}
           onOpenScratchpad={() => {
@@ -1372,7 +1375,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               </Typography>
               <IconButton
                 size="small"
-                title="Move to sidebar"
+                title={t("Move to sidebar")}
                 onClick={() =>
                   setApplets((prev) => prev.map((a) => (a.name === applet.name ? { ...a, position: "sidebar" } : a)))
                 }
@@ -1382,7 +1385,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               </IconButton>
               <IconButton
                 size="small"
-                title="Move to widget"
+                title={t("Move to widget")}
                 onClick={() =>
                   setApplets((prev) =>
                     prev.map((a) =>

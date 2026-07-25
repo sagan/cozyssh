@@ -4,7 +4,7 @@ import DownloadIcon from "@mui/icons-material/Download";
 import SettingsIcon from "@mui/icons-material/Settings";
 import ShieldIcon from "@mui/icons-material/Shield";
 
-import { triggerAuthedUrlDownload } from "./common";
+import { t, triggerAuthedUrlDownload } from "./common";
 import { notify } from "./store";
 
 export default function SSHExportTab() {
@@ -27,8 +27,8 @@ export default function SSHExportTab() {
   return (
     <Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 4, mt: -1 }}>
-        <b>SSH Data Export</b>: Download your local OpenSSH configuration files to your computer for backup, migration,
-        or sharing.
+        <b>{t("SSH Data Export")}</b>:&nbsp;
+        {t("Download your local OpenSSH configuration files to your computer for backup, migration, or sharing.")}"
       </Typography>
 
       <Box
@@ -73,13 +73,15 @@ export default function SSHExportTab() {
                 <SettingsIcon />
               </Box>
               <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
-                Export SSH Config
+                {t("Export SSH Config")}
               </Typography>
             </Box>
 
             <Typography variant="body2" color="text.secondary" sx={{ minHeight: 48 }}>
-              Download your local OpenSSH configuration file (<code>~/.ssh/config</code>). This contains all of your
-              configured host aliases, hostnames, usernames, ports, and custom directives.
+              {t("Download your local OpenSSH configuration file.")} (<code>~/.ssh/config</code>)&nbsp;
+              {t(
+                "It contains all of your configured host aliases, hostnames, usernames, ports, and custom directives.",
+              )}
             </Typography>
 
             <Box sx={{ flexGrow: 1 }} />
@@ -101,7 +103,7 @@ export default function SSHExportTab() {
                 },
               }}
             >
-              Export Config
+              {t("Export Config")}
             </Button>
           </CardContent>
         </Card>
@@ -141,13 +143,13 @@ export default function SSHExportTab() {
                 <ShieldIcon />
               </Box>
               <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
-                Export known_hosts
+                {t("Export known_hosts")}
               </Typography>
             </Box>
 
             <Typography variant="body2" color="text.secondary" sx={{ minHeight: 48 }}>
-              Download your local known hosts file (<code>~/.ssh/known_hosts</code>). This contains the cryptographic
-              host key signatures verifying the identity of servers you have connected to.
+              {t("Download your local known hosts file.")} (<code>~/.ssh/known_hosts</code>)&nbsp;
+              {t("It contains cryptographic signatures of all hosts that you have connected to.")}
             </Typography>
 
             <Box sx={{ flexGrow: 1 }} />
@@ -169,7 +171,7 @@ export default function SSHExportTab() {
                 },
               }}
             >
-              Export known_hosts
+              {t("Export known_hosts")}
             </Button>
           </CardContent>
         </Card>

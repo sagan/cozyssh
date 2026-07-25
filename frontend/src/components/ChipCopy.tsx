@@ -2,6 +2,7 @@ import Chip, { type ChipProps } from "@mui/material/Chip";
 
 import { TOAST_KEY_COPY } from "../constants";
 import { notify } from "../store";
+import { t } from "../common";
 
 interface ChipCopyProps extends Omit<ChipProps, "onClick"> {
   label: string | undefined | null;
@@ -20,10 +21,10 @@ export default function ChipCopy(props: ChipCopyProps) {
         navigator.clipboard
           .writeText(props.label)
           .then(() => {
-            notify("Copied to clipboard", "info", TOAST_KEY_COPY);
+            notify(t("Copied to clipboard"), "info", TOAST_KEY_COPY);
           })
           .catch(() => {
-            notify("Failed to copy to clipboard", "error", TOAST_KEY_COPY);
+            notify(t("Failed to copy to clipboard"), "error", TOAST_KEY_COPY);
           });
       }}
     />

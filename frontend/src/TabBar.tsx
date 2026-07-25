@@ -144,7 +144,7 @@ export default function TabBar({
         >
           <IconButton
             color="inherit"
-            aria-label="open drawer"
+            aria-label={t("Open drawer")}
             edge="start"
             onClick={() => setMobileOpen((a) => !a)}
             sx={{ ml: 1, display: { md: "none" } }}
@@ -326,7 +326,7 @@ export default function TabBar({
           </Box>
           <IconButton
             size="small"
-            title="New Tab (Alt+O)"
+            title={t("New Tab") + " (Alt+O)"}
             onClick={() => {
               setNewTabDialogFilter(getStore().newTabDialogFilter.slice(0, 1)); // preserve mode (if any)
               setNewTabDialogOpen(true);
@@ -413,7 +413,7 @@ export default function TabBar({
                     term.findPrevious(searchQuery);
                   }
                 }}
-                title="Previous"
+                title={t("Previous")}
               >
                 <NavigateBeforeIcon fontSize="small" />
               </IconButton>
@@ -425,11 +425,11 @@ export default function TabBar({
                     term.findNext(searchQuery);
                   }
                 }}
-                title="Next"
+                title={t("Next")}
               >
                 <NavigateNextIcon fontSize="small" />
               </IconButton>
-              <IconButton size="small" onClick={handleCloseSearch} title="Close">
+              <IconButton size="small" onClick={handleCloseSearch} title={t("Close")}>
                 <CloseIcon fontSize="small" />
               </IconButton>
             </Box>

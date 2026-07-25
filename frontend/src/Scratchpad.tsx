@@ -12,7 +12,7 @@ import {
   BROWSER_STORAGE_KEY_SCRATCHPAD_SYNC_STATE,
   BROWSER_STORAGE_KEY_TOKEN,
 } from "./constants";
-import { type ScratchpadSyncState, generatePassword } from "./common";
+import { type ScratchpadSyncState, generatePassword, t } from "./common";
 import { dialogs } from "./Dialogs";
 
 export interface ScratchpadHandle {
@@ -298,7 +298,7 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
     if (!targetPage) {
       return;
     }
-    const newTitle = await dialogs.prompt("Rename page:", targetPage.title);
+    const newTitle = await dialogs.prompt(t("Rename page:"), targetPage.title);
     if (newTitle && newTitle !== targetPage.title) {
       const updatedNow = Date.now();
       setData((prev) => ({
@@ -318,11 +318,11 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
     const pageId = contextMenu.pageId;
     setContextMenu(null);
     if (data.pages.length <= 1) {
-      dialogs.alert("Cannot delete the last page.");
+      dialogs.alert(t("Cannot delete the last page."));
       return;
     }
     const activePage = data.pages.find((p) => p.id === pageId);
-    if (!(await dialogs.confirm(`Delete page "${activePage?.title}"?`))) {
+    if (!(await dialogs.confirm(t("Will Delete page:") + ` "${activePage?.title}". ` + t("Are you sure?")))) {
       return;
     }
     const newData = {
@@ -426,7 +426,7 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
             ))}
           </Tabs>
         </Box>
-        <IconButton size="small" onClick={handleAddPage} sx={{ ml: 1, mr: 1 }} title="New Page">
+        <IconButton size="small" onClick={handleAddPage} sx={{ ml: 1, mr: 1 }} title={t("New Page")}>
           <AddIcon fontSize="small" />
         </IconButton>
       </Box>

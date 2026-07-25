@@ -5,7 +5,7 @@ import AddIcon from "@mui/icons-material/Add";
 import ViewSidebarIcon from "@mui/icons-material/ViewSidebar";
 
 import { VAR_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN } from "./constants";
-import { type ScratchpadSyncState, genPaneId } from "./common";
+import { type ScratchpadSyncState, genPaneId, t } from "./common";
 import {
   type PaneData,
   type TerminalRefMap,
@@ -380,7 +380,7 @@ export default function TerminalGrid({
             }}
           >
             <Box sx={{ display: "flex", justifyContent: "center", gap: 3, mb: 4 }}>
-              <Tooltip title="Open Sidebar">
+              <Tooltip title={t("Open Sidebar")}>
                 <IconButton
                   onClick={() => setMobileOpen(true)}
                   sx={{
@@ -395,7 +395,7 @@ export default function TerminalGrid({
                   <MenuIcon sx={{ fontSize: 32 }} />
                 </IconButton>
               </Tooltip>
-              <Tooltip title="New Tab (Alt+O)">
+              <Tooltip title={t("New Tab") + " (Alt+O)"}>
                 <IconButton
                   onClick={() => {
                     setNewTabDialogFilter("");
@@ -414,7 +414,7 @@ export default function TerminalGrid({
                 </IconButton>
               </Tooltip>
               {isMobile && hasSidebarApplet && (
-                <Tooltip title="Open Applets">
+                <Tooltip title={t("Open Applets")}>
                   <IconButton
                     color="inherit"
                     onClick={() => setMobileAppletsOpen((a) => !a)}
@@ -432,7 +432,7 @@ export default function TerminalGrid({
               )}
             </Box>
             <Typography color="text.secondary" variant="body1" sx={{ maxWidth: 400, fontWeight: 500 }}>
-              Select a server from the sidebar or open a new tab to start.
+              {t("Select a server from the sidebar or open a new tab to start.")}
             </Typography>
           </Box>
         )}

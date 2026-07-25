@@ -323,7 +323,11 @@ export default function DialogManager({
           if (
             btn &&
             !(await dialogs.confirm(
-              `Button "${btn.name}" (id: "${btn.id}") already exists in group "${btn.group}". Overwrite it?`,
+              t("Same id button already exists.") +
+                " " +
+                t("Existing button:") +
+                ` name=${btn.name}, group=${btn.group}. ` +
+                t("Overwrite it?"),
             ))
           ) {
             return;
@@ -377,7 +381,11 @@ export default function DialogManager({
           if (
             btn &&
             !(await dialogs.confirm(
-              `Button "${btn.name}" (id: "${btn.id}") already exists in group "${btn.group}". Overwrite it?`,
+              t("Same id button already exists.") +
+                " " +
+                t("Existing button:") +
+                ` name=${btn.name}, group=${btn.group}. ` +
+                t("Overwrite it?"),
             ))
           ) {
             return;
@@ -448,7 +456,7 @@ export default function DialogManager({
   );
 
   const handleAddFromUrl = useCallback(async () => {
-    const url = await dialogs.prompt("Enter URL to load button data from:");
+    const url = await dialogs.prompt(t("Enter URL to load button data from:"));
     if (!url) {
       return;
     }
@@ -1311,7 +1319,7 @@ export default function DialogManager({
                 </Box>
                 {editButtonVars.length > 0 && (
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.8 }}>
-                    <b>Detected Custom Variables:</b>
+                    <b>{t("Detected Custom Variables:")}</b>
                     {editButtonVars.map((v) => (
                       <Chip color="secondary" label={v} />
                     ))}
@@ -1321,7 +1329,7 @@ export default function DialogManager({
             ) : (
               <TextFieldWithCopy
                 fullWidth
-                label="Command / String"
+                label={t("Command / String")}
                 size="small"
                 required
                 multiline
@@ -1443,16 +1451,15 @@ export default function DialogManager({
                 }}
               >
                 <Typography variant="caption" color="text.secondary">
-                  Check&nbsp;
+                  {t("Check scripts help:")}&nbsp;
                   <a
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{ color: "#1976d2" }}
                     href={LINK_COZYSSH_DOC_SCRIPTS}
                   >
-                    help
+                    SCRIPTS
                   </a>
-                  &nbsp; about scripts.
                 </Typography>
               </Box>
               <CodeMirror
