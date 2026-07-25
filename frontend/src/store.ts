@@ -17,9 +17,7 @@ import type {
   Recent,
   LocalShell,
   ActiveTunnel,
-  SessionsUnpinRequest,
   SessionsPinRequest,
-  SessionsLockRequest,
   SessionsCloseRequest,
   SessionsRenameRequest,
   ButtonsMoveRequest,
@@ -29,7 +27,7 @@ import type {
   ConfigRequest,
   CopyIDRequest,
   CopyIDResponse,
-  SessionsHideRequest,
+  SessionsRequest,
 } from "./api";
 import {
   type ButtonForm,
@@ -79,6 +77,8 @@ import {
   DEFAULT_BUTTON_GROUP,
   DEFAULT_FONT_SIZE,
   DEFAULT_TERMINAL_FONT_SIZE,
+  DEFAULT_TOAST_NUMBER,
+  DEFAULT_TOAST_TIMEOUT,
   HEADER_CONTENT_TYPE,
   LOCAL_NAME,
   LOCAL_VAR_PREFIX,
@@ -93,6 +93,8 @@ import {
   TOAST_KEY_FONT_SIZE,
   VAR_CS_FONT_SIZE,
   VAR_CS_TERMINAL_FONT_SIZE,
+  VAR_TOAST_NUMBER,
+  VAR_TOAST_TIMEOUT,
 } from "./constants";
 import { dialogs } from "./Dialogs";
 
@@ -100,6 +102,7 @@ export interface PaneData {
   id: string;
   sessionId?: string;
   host: string;
+  canonicalHostString: string;
   state: WsTerminalMessage["state"];
   cloneFrom?: string;
   // optional session scope params
@@ -109,6 +112,10 @@ export interface PaneData {
 export interface TabData {
   id: string;
   title: string;
+  isCustomTitle?: boolean;
+  /**
+   * A tab always has at least 1 pane.
+   */
   panes: PaneData[];
   activePaneId: string;
   isPinned?: boolean;
@@ -515,11 +522,14 @@ export const notify = (msg: string, severity: Severity = "info", key?: string) =
     const newToasts = key
       ? [...prev.filter((t) => typeof t.id === "number" || !t.id.startsWith(key + "-")), newToast]
       : [...prev, newToast];
-    return newToasts.slice(-3); // Keep last 3
+    return newToasts.slice(-getIntVar(VAR_TOAST_NUMBER, DEFAULT_TOAST_NUMBER));
   });
-  setTimeout(() => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, 4000);
+  setTimeout(
+    () => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    },
+    getIntVar(VAR_TOAST_TIMEOUT, DEFAULT_TOAST_TIMEOUT),
+  );
 };
 
 export const updateRecentButtonId = (id: string) => {
@@ -714,7 +724,7 @@ export const setEditButtonDialogOpen = (editButtonDialogOpen: boolean) => useSto
 export const setEditHostDialogOpen = (editHostDialogOpen: boolean) => useStore.setState({ editHostDialogOpen });
 export const setNewTabDialogOpen = (newTabDialogOpen: boolean) => useStore.setState({ newTabDialogOpen });
 export const setNewTabDialogFilter = (newTabDialogFilter: string) => useStore.setState({ newTabDialogFilter });
-export const closeNewTabDialog = () => useStore.setState({ newTabDialogOpen: false, newTabDialogFilter: "" });
+export const closeNewTabDialog = () => useStore.setState({ newTabDialogOpen: false });
 
 export function parseNewTabDialogFilter(filter: string): [viewMode: ViewMode, f: string] {
   if (filter.startsWith(">")) {
@@ -735,7 +745,7 @@ export function parseNewTabDialogFilter(filter: string): [viewMode: ViewMode, f:
  * Change new tab dialog view mode
  * @param target the new view mode; or undefined / false for next; true for prev;
  */
-export const changeNewTabDialogViewMode = (target?: boolean | ViewMode) =>
+export const changeNewTabDialogViewMode = (target?: boolean | ViewMode, resetFilter = false) =>
   useStore.setState((state) => {
     let nextMode: ViewMode;
     const [mode, f] = parseNewTabDialogFilter(state.newTabDialogFilter);
@@ -762,7 +772,7 @@ export const changeNewTabDialogViewMode = (target?: boolean | ViewMode) =>
               : nextMode === "help"
                 ? "?"
                 : "";
-    return { newTabDialogFilter: prefix + f };
+    return { newTabDialogFilter: prefix + (resetFilter ? "" : f) };
   });
 
 export const setInputDialogOpen = (inputDialogOpen: boolean) => useStore.setState({ inputDialogOpen });
@@ -1242,6 +1252,7 @@ export function openHostsAsSplit(
       ({
         id: genPaneId(host),
         host,
+        canonicalHostString: getCanonicalHostString(host),
         options: hostOptions?.[i],
         state: "",
       }) satisfies PaneData,
@@ -1393,7 +1404,14 @@ export async function openHost(
   }
   let tabId: string;
   if (targetTab) {
-    const newPane: PaneData = { id: paneId, sessionId, host, options, state: "" };
+    const newPane: PaneData = {
+      id: paneId,
+      sessionId,
+      host,
+      canonicalHostString: getCanonicalHostString(host),
+      options,
+      state: "",
+    };
     setTabs((prev) =>
       prev.map((t) => (t.id === target ? { ...t, panes: [...t.panes, newPane], activePaneId: paneId } : t)),
     );
@@ -1405,7 +1423,7 @@ export async function openHost(
     const newTab: TabData = {
       id: tabId,
       title: title || newTabTitle(hostTitle(host)),
-      panes: [{ id: paneId, host, options, state: "" }],
+      panes: [{ id: paneId, host, canonicalHostString: getCanonicalHostString(host), options, state: "" }],
       activePaneId: paneId,
       type: "terminal",
     };
@@ -1478,10 +1496,6 @@ export async function cloneSession(id: string, cloneInSameTab?: boolean) {
   let tab: TabData | undefined;
   outer: for (const t of getStore().tabs) {
     if (t.id === id) {
-      if (t.panes.length === 0) {
-        // impossible case
-        return;
-      }
       tab = t;
       pane = t.panes[0];
       break;
@@ -1501,7 +1515,13 @@ export async function cloneSession(id: string, cloneInSameTab?: boolean) {
   const newTabId = genTabId(pane.host);
   const backendSessionId = pane.sessionId || pane.id;
   setTabs((prev) => {
-    const newPane = { id: newPaneId, host: pane.host, cloneFrom: backendSessionId, state: pane.state };
+    const newPane: PaneData = {
+      id: newPaneId,
+      host: pane.host,
+      canonicalHostString: pane.canonicalHostString,
+      cloneFrom: backendSessionId,
+      state: pane.state,
+    };
     if (cloneInSameTab) {
       return prev.map((t) =>
         t.id === tab.id && t.panes.length < 4 ? { ...t, panes: [...t.panes, newPane], activePaneId: newPaneId } : t,
@@ -1531,8 +1551,10 @@ export const attachSession: typeof csAttach = async function (
   title?: string,
   isLocked?: boolean,
 ): Promise<string> {
+  let isCustomTitle = false;
+  let canonicalHostString = "";
   if (typeof id === "object") {
-    ({ id, host, title, isLocked } = id);
+    ({ id, host, title, canonicalHostString, isCustomTitle, isLocked } = id);
   }
   if (!host || !title) {
     throw new Error("Missing host or title");
@@ -1547,15 +1569,19 @@ export const attachSession: typeof csAttach = async function (
     );
     return existing.id;
   }
+  if (!canonicalHostString) {
+    canonicalHostString = getCanonicalHostString(host);
+  }
   const tabId = genTabId(host);
   const paneId = genPaneId(host);
   setTabs((prev) => [
     ...prev,
     {
       id: tabId,
-      panes: [{ id: paneId, sessionId: id, host, state: "" }],
+      panes: [{ id: paneId, sessionId: id, host, canonicalHostString, state: "" }],
       activePaneId: paneId,
       title,
+      isCustomTitle,
       isPinned: true,
       isLocked,
       type: "terminal",
@@ -1576,14 +1602,14 @@ export async function unpinTab(id?: string) {
   await fetch("/api/sessions/unpin", {
     method: METHOD_POST,
     headers: apiReqHeaders(),
-    body: JSON.stringify({ id: backendSessionId } satisfies SessionsUnpinRequest),
+    body: JSON.stringify({ id: backendSessionId } satisfies SessionsRequest),
   });
 }
 
 export async function pinTab(id?: string) {
   id = id || getStore().activeTabId;
   const tab = getStore().tabs.find((t) => t.id === id);
-  if (!tab) {
+  if (!tab || tab.type !== "terminal") {
     return;
   }
   if (tab.panes.length > 1) {
@@ -1591,16 +1617,16 @@ export async function pinTab(id?: string) {
     return;
   }
   const pane = tab.panes[0];
-  if (!pane) {
-    return;
-  }
   const backendSessionId = pane.sessionId || pane.id;
   // Pinning only supports single-pane tabs for now (backend requirement)
-  const host = pane.host || LOCAL_NAME;
   await fetch("/api/sessions/pin", {
     method: METHOD_POST,
     headers: apiReqHeaders(),
-    body: JSON.stringify({ id: backendSessionId, host, title: tab.title } satisfies SessionsPinRequest),
+    body: JSON.stringify({
+      id: backendSessionId,
+      title: tab.title,
+      isCustomTitle: tab.isCustomTitle,
+    } satisfies SessionsPinRequest),
   });
   setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, isPinned: true } : t)));
 }
@@ -1608,7 +1634,7 @@ export async function pinTab(id?: string) {
 export async function unlockTab(id?: string) {
   id = id || getStore().activeTabId;
   const tab = getStore().tabs.find((t) => t.id === id);
-  if (!tab) {
+  if (!tab || tab.type !== "terminal") {
     return;
   }
   if (tab.panes.length > 1) {
@@ -1616,15 +1642,15 @@ export async function unlockTab(id?: string) {
     return;
   }
   const pane = tab.panes[0];
-  if (!pane) {
-    return;
-  }
   const paneId = pane.sessionId || pane.id;
-  const host = pane.host || LOCAL_NAME;
   await fetch("/api/sessions/pin", {
     method: METHOD_POST,
     headers: apiReqHeaders(),
-    body: JSON.stringify({ id: paneId, host, title: tab.title } satisfies SessionsPinRequest),
+    body: JSON.stringify({
+      id: paneId,
+      title: tab.title,
+      isCustomTitle: tab.isCustomTitle,
+    } satisfies SessionsPinRequest),
   });
   setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, isLocked: false } : t)));
 }
@@ -1632,7 +1658,7 @@ export async function unlockTab(id?: string) {
 export async function lockTab(id?: string) {
   id = id || getStore().activeTabId;
   const tab = getStore().tabs.find((t) => t.id === id);
-  if (!tab) {
+  if (!tab || tab.type !== "terminal") {
     return;
   }
   if (tab.panes.length > 1) {
@@ -1640,15 +1666,15 @@ export async function lockTab(id?: string) {
     return;
   }
   const pane = tab.panes[0];
-  if (!pane) {
-    return;
-  }
   const backendSessionId = pane.sessionId || pane.id;
-  const host = pane.host || LOCAL_NAME;
   await fetch("/api/sessions/lock", {
     method: METHOD_POST,
     headers: apiReqHeaders(),
-    body: JSON.stringify({ id: backendSessionId, host, title: tab.title } satisfies SessionsLockRequest),
+    body: JSON.stringify({
+      id: backendSessionId,
+      title: tab.title,
+      isCustomTitle: tab.isCustomTitle,
+    } satisfies SessionsPinRequest),
   });
   setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, isLocked: true } : t)));
 }
@@ -1656,7 +1682,7 @@ export async function lockTab(id?: string) {
 export async function hideTab(id?: string) {
   id = id || getStore().activeTabId;
   const tab = getStore().tabs.find((t) => t.id === id);
-  if (!tab) {
+  if (!tab || tab.type !== "terminal") {
     return;
   }
   if (tab.panes.length > 1) {
@@ -1664,14 +1690,11 @@ export async function hideTab(id?: string) {
     return;
   }
   const pane = tab.panes[0];
-  if (!pane) {
-    return;
-  }
   const backendSessionId = pane.sessionId || pane.id;
   await fetch("/api/sessions/hide", {
     method: METHOD_POST,
     headers: apiReqHeaders(),
-    body: JSON.stringify({ id: backendSessionId } satisfies SessionsHideRequest),
+    body: JSON.stringify({ id: backendSessionId } satisfies SessionsRequest),
   });
   const { tabs, activeTabId } = getStore();
   const idx = tabs.findIndex((t) => t.id === id);
@@ -1797,30 +1820,33 @@ export async function renameTab(targetId?: string) {
     return;
   }
   newTitle = newTitle.trim();
-  if (newTitle && newTitle !== targetTab.title) {
-    if (targetTab.isPinned) {
-      const backendSessionId = targetTab.panes[0]?.sessionId || targetTab.panes[0]?.id || targetId;
-      await fetch("/api/sessions/rename", {
-        method: METHOD_POST,
-        headers: apiReqHeaders(),
-        body: JSON.stringify({ id: backendSessionId, title: newTitle } satisfies SessionsRenameRequest),
-      });
-    }
-    setTabs((prev) => prev.map((t) => (t.id === targetId ? { ...t, title: newTitle } : t)));
+  if (!newTitle || newTitle === targetTab.title) {
+    return;
   }
+  if (targetTab.isPinned) {
+    const backendSessionId = targetTab.panes[0]?.sessionId || targetTab.panes[0]?.id || targetId;
+    await fetch("/api/sessions/rename", {
+      method: METHOD_POST,
+      headers: apiReqHeaders(),
+      body: JSON.stringify({ id: backendSessionId, title: newTitle } satisfies SessionsRenameRequest),
+    });
+  }
+  setTabs((prev) => prev.map((t) => (t.id === targetId ? { ...t, title: newTitle, isCustomTitle: true } : t)));
 }
 
-export async function fetchHosts() {
+export async function fetchHosts(): Promise<boolean> {
   try {
     const res = await fetch("/api/hosts", { headers: apiReqHeaders() });
     if (res.status === 401) {
       safeLogout(true);
-      return;
+      return false;
     }
     const data: HostData[] = await res.json();
     setHosts(data || []);
+    return true;
   } catch (err) {
     console.error(err);
+    return false;
   }
 }
 
@@ -1853,9 +1879,11 @@ export function getTabConnectionString(tab: TabData): string {
         params.delete(key);
       }
     }
-    const titleBase = removeNameNumSuffix(tab.title);
-    if (idx === 0 && titleBase !== p.host) {
-      params.set("title", titleBase);
+    if (idx === 0 && tab.isCustomTitle) {
+      const titleBase = removeNameNumSuffix(tab.title);
+      if (titleBase !== p.host) {
+        params.set("title", titleBase);
+      }
     }
     if (params.size > 0) {
       s += "?" + params.toString();
@@ -1876,7 +1904,7 @@ export async function openSaveTabsToButtonDialog() {
   const maxOrder = buttons.length > 0 ? Math.max(...buttons.map((b) => b.order || 0)) : 0;
   const data: ButtonData = {
     id: "",
-    name: "Save all opened tabs",
+    name: "Saved tabs",
     type: "run_script",
     payload,
     group: activeGroup,
@@ -1945,7 +1973,7 @@ export function openScratchpad() {
   const newTab: TabData = {
     id: tabId,
     title: "Scratchpad",
-    panes: [{ id: tabId, host: "scratchpad", state: "" }],
+    panes: [{ id: tabId, host: "", canonicalHostString: "", state: "" }],
     activePaneId: tabId,
     type: "scratchpad",
   };
@@ -2438,11 +2466,13 @@ export function openEditTabHost(target?: TabData | string) {
     return;
   }
   const pane = target.panes.find((p) => p.id === target.activePaneId) || target.panes[0];
-  openEditHostByName(pane.host);
+  openEditHost(pane.canonicalHostString);
 }
 
-export function openEditHostByName(hostname: string) {
-  const host = getHost(hostname);
+export function openEditHost(host: string | HostData) {
+  if (typeof host === "string") {
+    host = getHost(host);
+  }
   if (host.hostname === LOCAL_NAME) {
     dialogs.alert("local shell can't be edited");
     return;
@@ -2457,7 +2487,7 @@ export function openEditHostByName(hostname: string) {
 /**
  * Find a host. It always returns a HostData.
  * It first tries to match the host with existing store hosts record.
- * If not found, it constructs and returns a new HostData object which source = "".
+ * If not found, it constructs and returns a new HostData object with source = "".
  */
 export function getHost(
   host: string | (Pick<HostData, "hostname"> & Partial<Pick<HostData, "port" | "user" | "password">>),
@@ -2580,4 +2610,37 @@ export function moveTabRight(tabId?: string) {
   newTabs[i + 1] = tabs[i];
   newTabs[i] = tabs[i + 1];
   setTabs(newTabs);
+}
+
+/**
+ * Update tab titles when host is updated.
+ * @param name The host's name or hostname to update tab titles for.
+ */
+export function updateTabTitles(name: string) {
+  const host = getHost(name);
+  if (host.source !== "config") {
+    return;
+  }
+  const tabs = getStore().tabs;
+  // host name changed, try to rename opened tab titles
+  const newTabs: TabData[] = [];
+  let changed = false;
+  for (const tab of tabs) {
+    if (tab.type === "terminal" && tab.panes.length === 1 && !tab.isCustomTitle) {
+      const paneHost = getHost(tab.panes[0].canonicalHostString);
+      if (paneHost.source === "config" && getCanonicalHostString(paneHost) === getCanonicalHostString(host)) {
+        const title = removeNameNumSuffix(tab.title);
+        if (title !== host.name) {
+          const newTitle = host.name + tab.title.slice(title.length);
+          newTabs.push({ ...tab, title: newTitle });
+          changed = true;
+          continue;
+        }
+      }
+    }
+    newTabs.push(tab);
+  }
+  if (changed) {
+    setTabs(newTabs);
+  }
 }

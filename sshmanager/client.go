@@ -785,24 +785,24 @@ type TerminalUI interface {
 // DialSSH resolves standard configs and connects via id_ed25519
 // It always returns a new independent connection.
 func DialSSH(name string, term TerminalUI, rows, cols int, identity string, proxyJump string, noPublicKey bool,
-	env []string) (*PooledClient, *ssh.Session, string, error) {
-	client, closers, remoteCommand, sendEnv, err := getSSHClient(name, term, identity, proxyJump, noPublicKey)
+	env []string) (pClient *PooledClient, session *ssh.Session, canonicalHostString string, remoteCommand string, err error) {
+	client, closers, canonicalHostString, remoteCommand, sendEnv, err := getSSHClient(name, term, identity, proxyJump, noPublicKey)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, "", "", err
 	}
 
-	pClient := &PooledClient{Client: client, Refs: 1, Closers: closers, RemoteCommand: remoteCommand, SendEnv: sendEnv}
+	pClient = &PooledClient{Client: client, Refs: 1, Closers: closers, RemoteCommand: remoteCommand, SendEnv: sendEnv}
 
-	session, err := client.NewSession()
+	session, err = client.NewSession()
 	if err != nil {
 		pClient.Release()
-		return nil, nil, "", err
+		return nil, nil, "", "", err
 	}
 
 	if err := setupSession(session, rows, cols); err != nil {
 		session.Close()
 		pClient.Release()
-		return nil, nil, "", err
+		return nil, nil, "", "", err
 	}
 
 	applySendEnv(session, pClient.SendEnv)
@@ -816,14 +816,15 @@ func DialSSH(name string, term TerminalUI, rows, cols int, identity string, prox
 
 	go startKeepAlive(client)
 
-	return pClient, session, remoteCommand, nil
+	return pClient, session, canonicalHostString, remoteCommand, nil
 }
 
 // name: server name, or [username[:password]@]hostname[:port].
 // $identity: directly set the content of the identity file.
 // noPublicKey: skip default public key authentication.
 func getSSHClient(name string, term TerminalUI, identity string,
-	proxyJump string, noPublicKey bool) (*ssh.Client, []io.Closer, string, string, error) {
+	proxyJump string, noPublicKey bool) (client *ssh.Client, closers []io.Closer,
+	canonicalHostString string, remoteCommand string, sendEnv string, err error) {
 	configPath := filepath.Join(globalConfig.AbsSSHDir, "config")
 	f, err := os.Open(configPath)
 	var cfg *ssh_config.Config
@@ -882,9 +883,7 @@ func getSSHClient(name string, term TerminalUI, identity string,
 	}
 
 	identityFile := ""
-	remoteCommand := ""
 	addressFamily := ""
-	sendEnv := ""
 	if cfg != nil {
 		identityFile, _ = cfg.Get(name, "IdentityFile")
 		if proxyJump == "" {
@@ -920,6 +919,11 @@ func getSSHClient(name string, term TerminalUI, identity string,
 	}
 
 	canonicalAddr := fmt.Sprintf("%s@%s:%s", user, host, port)
+
+	canonicalHostString = fmt.Sprintf("%s@%s", user, host)
+	if port != "22" {
+		canonicalHostString += ":" + port
+	}
 
 	var authMethods []ssh.AuthMethod
 	if password != "" {
@@ -1060,7 +1064,7 @@ func getSSHClient(name string, term TerminalUI, identity string,
 				if !passstore.HasEncryptionKey() {
 					term.Print("\r\n")
 					var appPwd string
-					for attempts := 0; attempts < 3; attempts++ {
+					for attempts := range 3 {
 						appPwd, err = term.PromptMasked("Enter CozySSH app password to unlock saved passwords: ")
 						if err != nil {
 							return nil, err
@@ -1121,7 +1125,7 @@ func getSSHClient(name string, term TerminalUI, identity string,
 			if term != nil {
 				term.Print(fmt.Sprintf("\r\nknown_hosts error: %v\r\n", khErr))
 			}
-			return nil, nil, "", "", khErr
+			return nil, nil, "", "", "", khErr
 		}
 	}
 
@@ -1321,12 +1325,10 @@ func getSSHClient(name string, term TerminalUI, identity string,
 	}
 
 	addr := fmt.Sprintf("%s:%s", host, port)
-	var client *ssh.Client
-	var closers []io.Closer
 
 	dialFunc := func(config *ssh.ClientConfig) (*ssh.Client, error) {
 		if proxyJump != "" {
-			proxyClient, proxyClosers, _, _, err := getSSHClient(proxyJump, term, "", "", false)
+			proxyClient, proxyClosers, _, _, _, err := getSSHClient(proxyJump, term, "", "", false)
 			if err != nil {
 				return nil, fmt.Errorf("failed to connect to ProxyJump %s: %w", proxyJump, err)
 			}
@@ -1408,10 +1410,10 @@ func getSSHClient(name string, term TerminalUI, identity string,
 		for _, c := range closers {
 			c.Close()
 		}
-		return nil, nil, "", "", err
+		return nil, nil, "", "", "", err
 	}
 
-	return client, closers, remoteCommand, sendEnv, nil
+	return client, closers, canonicalHostString, remoteCommand, sendEnv, nil
 }
 
 // GetHostForwardRules reads LocalForward, RemoteForward, and DynamicForward directives
@@ -1813,7 +1815,7 @@ func tryPubKeyAuth(name string, host *models.HostData, expectedFingerprint strin
 
 	var client *ssh.Client
 	if host.ProxyJump != "" {
-		proxyClient, proxyClosers, _, _, err := getSSHClient(host.ProxyJump, nil, "", "", false)
+		proxyClient, proxyClosers, _, _, _, err := getSSHClient(host.ProxyJump, nil, "", "", false)
 		if err != nil {
 			return false, nil, fmt.Errorf("failed to connect to ProxyJump %s: %w", host.ProxyJump, err)
 		}
@@ -1903,7 +1905,7 @@ func executeCopyIDWithPassword(name string, host *models.HostData, password stri
 	var closers []io.Closer
 
 	if host.ProxyJump != "" {
-		proxyClient, proxyClosers, _, _, err := getSSHClient(host.ProxyJump, nil, "", "", false)
+		proxyClient, proxyClosers, _, _, _, err := getSSHClient(host.ProxyJump, nil, "", "", false)
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to ProxyJump %s: %w", host.ProxyJump, err)
 		}

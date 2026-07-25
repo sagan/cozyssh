@@ -210,13 +210,15 @@ type ButtonsMoveRequest struct {
 }
 
 type Session struct {
-	Id            string `json:"id"`
-	Host          string `json:"host"`
-	Title         string `json:"title"`
-	IsPinned      bool   `json:"isPinned"`
-	IsLocked      bool   `json:"isLocked"`
-	IsHidden      bool   `json:"isHidden"`
-	ListenerCount int    `json:"listenerCount"`
+	Id                  string `json:"id"`
+	Host                string `json:"host"`
+	CanonicalHostString string `json:"canonicalHostString"`
+	Title               string `json:"title"`
+	IsCustomTitle       bool   `json:"isCustomTitle"`
+	IsPinned            bool   `json:"isPinned"`
+	IsLocked            bool   `json:"isLocked"`
+	IsHidden            bool   `json:"isHidden"`
+	ListenerCount       int    `json:"listenerCount"`
 }
 
 // POST /api/sessions/close payload
@@ -230,30 +232,21 @@ type PasswordUpdateRequest struct {
 	Force       bool   `json:"force"`
 }
 
-// POST /api/sessions/pin payload
+// POST /api/sessions/pin & /api/sessions/lock payload
 type SessionsPinRequest struct {
-	Id    string `json:"id"`
-	Host  string `json:"host"`
-	Title string `json:"title"`
+	Id            string `json:"id"`
+	Title         string `json:"title"`
+	IsCustomTitle bool   `json:"isCustomTitle,omitempty"`
 }
 
-type SessionsUnpinRequest struct {
+// POST /api/sessions/unpin & /api/sessions/hide payload
+type SessionsRequest struct {
 	Id string `json:"id"`
 }
 
 type SessionsRenameRequest struct {
 	Id    string `json:"id"`
 	Title string `json:"title"`
-}
-
-type SessionsLockRequest struct {
-	Id    string `json:"id"`
-	Host  string `json:"host"`
-	Title string `json:"title"`
-}
-
-type SessionsHideRequest struct {
-	Id string `json:"id"`
 }
 
 type Recent struct {

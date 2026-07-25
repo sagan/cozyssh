@@ -52,6 +52,16 @@ export const VAR_CS_NO_PASTE_ON_CONTEXTMENU = "cs_no_paste_on_contextmenu";
 export const VAR_CS_REMAP_CTRL_L = "cs_remap_ctrl_l";
 export const VAR_CS_TERMINAL_FONT_SIZE = "cs_terminal_font_size";
 export const VAR_CS_FONT_SIZE = "cs_font_size";
+export const VAR_VIBRATE_PATTERN = "cs_vibrate_pattern";
+/**
+ * The keeped toasts number
+ */
+export const VAR_TOAST_NUMBER = "cs_toast_number";
+/**
+ * The toast timeout in ms
+ */
+export const VAR_TOAST_TIMEOUT = "cs_toast_timeout";
+export const VAR_SIDEBAR_WIDTH = "cs_sidebar_width";
 
 export const VAR_NOAUTOLOAD = "noautoload";
 export const VAR_NOAUTORUN = "noautorun";
@@ -60,7 +70,11 @@ export const DEFAULT_BUTTON_GROUP = "Default";
 
 export const EVENT_LOCAL_STORAGE_SYNC = "local-storage-sync";
 
-export const VIBRATE_PATTERN = 100;
+export const DEFAULT_VIBRATE_PATTERN = 100;
+export const DEFAULT_TOAST_NUMBER = 3;
+export const DEFAULT_TOAST_TIMEOUT = 4000;
+export const DEFAULT_SIDEBAR_WIDTH = 260;
+
 export const COZYSSH_TOKEN_PREFIX = "cozytoken.";
 export const WS_PROTOCOL_QUERY_PREFIX = "query.";
 export const WS_PROTOCOL_IDENTITY_PREFIX = "identity.";
@@ -98,9 +112,11 @@ export const TERMINAL_FUNCTIONS = [
   { value: "ATTACH", label: "Attach (Background Session)" },
   { value: "EDIT_TAB_HOST", label: "Edit (Tab Host)" },
   { value: "SAVE_TAB", label: "Save (Tab)" },
+  { value: "SAVE_ALL_TABS", label: "Save (All Tabs)" },
   { value: "CLEAR_UNREAD_TABS", label: "Clear Unread Tabs" },
   { value: "CLOSE_OTHER_TABS", label: "Close Other Tabs", shortcut: "ctrl+alt+shift+w" },
   { value: "CLOSE_RIGHT_TABS", label: "Close Tabs to the Right" },
+  { value: "CLOSE_ALL_TABS", label: "Close All Tabs" },
   { value: "MOVE_TAB_LEFT", label: "Move Tab Left" },
   { value: "MOVE_TAB_RIGHT", label: "Move Tab Right" },
 ] as const;

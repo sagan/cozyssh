@@ -155,7 +155,9 @@ export interface ButtonsMoveRequest {
 export interface Session {
     id: string;
     host: string;
+    canonicalHostString: string;
     title: string;
+    isCustomTitle: boolean;
     isPinned: boolean;
     isLocked: boolean;
     isHidden: boolean;
@@ -170,23 +172,15 @@ export interface PasswordUpdateRequest {
 }
 export interface SessionsPinRequest {
     id: string;
-    host: string;
     title: string;
+    isCustomTitle?: boolean;
 }
-export interface SessionsUnpinRequest {
+export interface SessionsRequest {
     id: string;
 }
 export interface SessionsRenameRequest {
     id: string;
     title: string;
-}
-export interface SessionsLockRequest {
-    id: string;
-    host: string;
-    title: string;
-}
-export interface SessionsHideRequest {
-    id: string;
 }
 export interface Recent {
     host: string;

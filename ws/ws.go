@@ -192,12 +192,14 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			s = session.NewSession(sessionID, host, ls.Pty, ls.Pty, ls.Close, ls.Resize)
+			s.CanonicalHostString = constants.LOCAL_NAME
 		} else {
 			conn.WriteMessage(websocket.TextMessage, models.WsMsgStateConnecting)
 			term := &WsTerminal{conn: conn}
 
 			var pClient *sshmanager.PooledClient
 			var sshSession *ssh.Session
+			var canonicalHostString string
 			var remoteCommand string
 			var err error
 
@@ -209,7 +211,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if pClient == nil {
-				pClient, sshSession, remoteCommand, err = sshmanager.DialSSH(host, term, rows, cols, identity,
+				pClient, sshSession, canonicalHostString, remoteCommand, err = sshmanager.DialSSH(host, term, rows, cols, identity,
 					sessionProxyJump, noPublicKey, env)
 			}
 
@@ -252,6 +254,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 				return sshSession.WindowChange(int(rows), int(cols))
 			})
 			s.SSHClient = pClient
+			s.CanonicalHostString = canonicalHostString
 
 			var localFwd, remoteFwd, dynamicFwd string
 			if localForwards != "" || remoteForwards != "" || dynamicForwards != "" {
@@ -280,7 +283,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			s.RetryFunc = func() (io.Reader, io.Writer, error) {
 				s.Broadcast(append([]byte(models.WS_MSG_PREFIX_STATE), models.WsMsgStateDisconnected...))
 
-				newPClient, newSess, newRemoteCommand, err := sshmanager.DialSSH(host, nil, rows, cols, identity,
+				newPClient, newSess, newCanonicalHostString, newRemoteCommand, err := sshmanager.DialSSH(host, nil, rows, cols, identity,
 					sessionProxyJump, noPublicKey, env)
 				if err != nil {
 					errStr := strings.ToLower(err.Error())
@@ -320,6 +323,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 				pClient = newPClient
 				sshSession = newSess
 				s.SSHClient = pClient
+				s.CanonicalHostString = newCanonicalHostString
 
 				s.Broadcast(append([]byte(models.WS_MSG_PREFIX_STATE), models.WsMsgStateConnected...))
 

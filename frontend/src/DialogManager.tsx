@@ -84,7 +84,6 @@ import {
   saveButton,
   deleteButton,
   moveButton,
-  refreshData,
   openSaveTabToButtonDialog,
   openEditHostDialog,
   closeTabOrPane,
@@ -93,11 +92,14 @@ import {
   openAddHostDialog,
   getHost,
   getPane,
-  openEditHostByName,
+  openEditHost,
   moveTabLeft,
   moveTabRight,
   setBtnContextMenuOpen,
   unloadButton,
+  type PaneData,
+  fetchHosts,
+  updateTabTitles,
 } from "./store";
 import NewTabDialog from "./NewTabDialog";
 import { dialogs } from "./Dialogs";
@@ -266,6 +268,10 @@ export default function DialogManager({
   const activeTab: TabData | undefined = useMemo(() => {
     return tabs.find((t) => t.id === activeTabId);
   }, [activeTabId, tabs]);
+
+  const activePane: PaneData | undefined = useMemo(() => {
+    return activeTab?.panes.find((p) => p.id === activeTab.activePaneId);
+  }, [activeTab]);
 
   useEffect(() => {
     if (!editButtonDialogOpen) {
@@ -516,7 +522,7 @@ export default function DialogManager({
                         className="tab-menu-edit-host"
                         onClick={() => {
                           handleCloseMenu();
-                          openEditHostByName(hostname);
+                          openEditHost(hostname);
                         }}
                       >
                         Edit {hostname}
@@ -1470,7 +1476,7 @@ export default function DialogManager({
         maxWidth="md"
       >
         <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span>Terminal Input</span>
+          <span>Terminal Input (Current pane: {activePane?.host ?? "<none>"})</span>
           {!inputLiquid && (
             <IconButton disabled={!inputValue} onClick={() => navigator.clipboard.writeText(inputValue)} size="small">
               <ContentCopyIcon fontSize="small" />
@@ -1796,7 +1802,8 @@ export default function DialogManager({
                   // don't save password from direct connect string
                   body: JSON.stringify({ ...parsedHost, password: undefined } satisfies HostData),
                 });
-                await refreshData({ sync: 2 });
+                await fetchHosts();
+                updateTabTitles(parsedHost.name);
               })();
             }
             hostStr = parsedHost.source === "config" ? parsedHost.name : getCanonicalHostString(parsedHost, "root");

@@ -21,6 +21,7 @@ import {
   WS_PROTOCOL_QUERY_PREFIX,
 } from "./constants";
 import type React from "react";
+import { getHost } from "./store";
 
 export type Expect<T extends true> = T;
 export type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2 ? true : false;
@@ -318,11 +319,17 @@ export const appShortcuts = new Set([
   "alt+c",
   "alt+shift+c",
   "alt+o",
+  "alt+shift+o",
   "alt+p",
+  "alt+shift+p",
   "alt+;",
+  "alt+shift+:",
   "alt+/",
+  "alt+shift+?",
   "alt+a",
+  "alt+shift+a",
   "alt+e",
+  "alt+shift+e",
   "ctrl+shift+p",
   "alt+n",
   "ctrl+alt+n",
@@ -918,10 +925,13 @@ export function parseHostName(
  * - If alwaysHasPort is true or host.port is not "22", the result contains port part.
  */
 export function getCanonicalHostString(
-  host: Pick<HostData, "hostname"> & Partial<Pick<HostData, "user" | "port">>,
+  host: string | (Pick<HostData, "hostname"> & Partial<Pick<HostData, "user" | "port">>),
   defaultUser?: string,
   alwaysHasPort?: boolean,
 ): string {
+  if (typeof host === "string") {
+    host = getHost(host);
+  }
   let s = "";
   if (host.user || defaultUser) {
     s += `${encodeURIComponent((host.user || defaultUser)!)}@`;

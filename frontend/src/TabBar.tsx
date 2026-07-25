@@ -35,6 +35,7 @@ import {
   setTabs,
   activatePane,
   openSaveTabsToButtonDialog,
+  getStore,
 } from "./store";
 import { APP_NAME, ID_TERMINAL_SEARCH_INPUT, LOCAL_NAME } from "./constants";
 import TextFieldWithCopy from "./components/TextFieldWithCopy";
@@ -326,7 +327,7 @@ export default function TabBar({
             size="small"
             title="New Tab (Alt+O)"
             onClick={() => {
-              setNewTabDialogFilter("");
+              setNewTabDialogFilter(getStore().newTabDialogFilter.slice(0, 1)); // preserve mode (if any)
               setNewTabDialogOpen(true);
             }}
             sx={{ mr: 1, ml: 0.5, bgcolor: "action.hover", "&:hover": { bgcolor: "action.selected" } }}
@@ -447,6 +448,7 @@ export default function TabBar({
             }
           >
             <MenuItem
+              id="tab-bar-menu-close-all"
               disabled={tabs.length === 0}
               onClick={() => {
                 setTabBarContextMenu(null);
@@ -456,6 +458,7 @@ export default function TabBar({
               Close All Tabs ({tabs.length})
             </MenuItem>
             <MenuItem
+              id="tab-bar-menu-save-all"
               disabled={tabs.length === 0}
               onClick={() => {
                 setTabBarContextMenu(null);

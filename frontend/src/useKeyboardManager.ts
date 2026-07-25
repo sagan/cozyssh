@@ -212,39 +212,45 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           return;
 
         case "alt+o":
+        case "alt+shift+o":
           e.preventDefault();
-          changeNewTabDialogViewMode("servers");
+          changeNewTabDialogViewMode("servers", !e.shiftKey);
           setNewTabDialogOpen(true);
           return;
 
         case "alt+p":
+        case "alt+shift+p":
           e.preventDefault();
-          changeNewTabDialogViewMode("tags");
+          changeNewTabDialogViewMode("tags", !e.shiftKey);
           setNewTabDialogOpen(true);
           return;
 
         case "alt+;":
+        case "alt+shift+:":
           e.preventDefault();
-          changeNewTabDialogViewMode("tunnels");
+          changeNewTabDialogViewMode("tunnels", !e.shiftKey);
           setNewTabDialogOpen(true);
           return;
 
         case "alt+/":
+        case "alt+shift+?":
           e.preventDefault();
-          changeNewTabDialogViewMode("help");
+          changeNewTabDialogViewMode("help", !e.shiftKey);
           setNewTabDialogOpen(true);
           return;
 
         case "alt+a":
+        case "alt+shift+a":
           e.preventDefault();
-          changeNewTabDialogViewMode("tabs");
+          changeNewTabDialogViewMode("tabs", !e.shiftKey);
           setNewTabDialogOpen(true);
           return;
 
         case "alt+e":
+        case "alt+shift+e":
         case "ctrl+shift+p":
           e.preventDefault();
-          changeNewTabDialogViewMode("buttons");
+          changeNewTabDialogViewMode("buttons", keycomb !== "alt+shift+e");
           setNewTabDialogOpen(true);
           return;
 
@@ -273,7 +279,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
         case "alt+shift+i":
           if (!isMuiModalOpen()) {
             e.preventDefault();
-            if (keycomb === "alt+shift+i") {
+            if (!e.shiftKey) {
               csSetSidebarFilter("");
             }
             document.getElementById(ID_SIDEBAR_FILTER)?.focus();
@@ -405,7 +411,7 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           e.preventDefault();
           const { tabs, activeTabId } = getStore();
           const activeTab = tabs.find((t) => t.id === activeTabId);
-          if (activeTab && activeTab.panes.length > 0) {
+          if (activeTab) {
             activatePane(activeTab.panes[0].id, activeTab.id);
             triggerFocus();
           }

@@ -1074,7 +1074,7 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 			}
 			if s := session.GlobalManager.Get(req.Id); s != nil {
 				s.SetState(1)
-				s.Title = req.Title
+				s.SetTitle(req.Title, req.IsCustomTitle)
 				s.BroadcastTabState()
 			}
 			w.WriteHeader(http.StatusNoContent)
@@ -1085,14 +1085,14 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		var req models.SessionsLockRequest
+		var req models.SessionsPinRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
 			return
 		}
 		if s := session.GlobalManager.Get(req.Id); s != nil {
 			s.SetState(2)
-			s.Title = req.Title
+			s.SetTitle(req.Title, req.IsCustomTitle)
 			s.BroadcastTabState()
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -1103,7 +1103,7 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		var req models.SessionsHideRequest
+		var req models.SessionsRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
 			return
@@ -1120,7 +1120,7 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		var req models.SessionsUnpinRequest
+		var req models.SessionsRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
 			return
@@ -1199,7 +1199,7 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 				return
 			}
 			if s := session.GlobalManager.Get(req.Id); s != nil {
-				s.Title = req.Title
+				s.SetTitle(req.Title, true)
 			}
 			w.WriteHeader(http.StatusNoContent)
 		}))))

@@ -29,7 +29,7 @@ import {
   VAR_CS_SCROLL_LINES,
   VAR_NOAUTOLOAD,
   VAR_NOAUTORUN,
-  VIBRATE_PATTERN,
+  DEFAULT_VIBRATE_PATTERN,
   ID_TERMINAL_SEARCH_INPUT,
   TAG_GROUP_PREFIX,
   TAG_FAV,
@@ -39,6 +39,7 @@ import {
   TERMINAL_FUNCTIONS,
   MISC_FUNCTIONS,
   TOAST_KEY_REFRESH,
+  VAR_VIBRATE_PATTERN,
 } from "./constants";
 import {
   type ContextMenu,
@@ -53,6 +54,7 @@ import {
   openHostInNewWindow,
   hostSorter,
   assertUnreachable,
+  getCanonicalHostString,
 } from "./common";
 import {
   type TabData,
@@ -109,6 +111,7 @@ import {
   setSettingsOpen,
   moveTabLeft,
   moveTabRight,
+  openSaveTabsToButtonDialog,
 } from "./store";
 import { setupPluginAPI, runScript } from "./pluginAPI";
 import { useKeyboardManager } from "./useKeyboardManager";
@@ -324,13 +327,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
         const currentIndex = tabs.findIndex((t) => t.id === activeTabId);
         if (diffX > 0 && currentIndex > 0) {
           const newTab = tabs[currentIndex - 1];
-          window.navigator.vibrate?.(VIBRATE_PATTERN);
+          window.navigator.vibrate?.(getIntVar(VAR_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN));
           setActiveTabId(newTab.id);
           setActivePaneId(newTab.activePaneId);
           triggerFocus();
         } else if (diffX < 0 && currentIndex < tabs.length - 1) {
           const newTab = tabs[currentIndex + 1];
-          window.navigator.vibrate?.(VIBRATE_PATTERN);
+          window.navigator.vibrate?.(getIntVar(VAR_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN));
           setActiveTabId(newTab.id);
           setActivePaneId(newTab.activePaneId);
           triggerFocus();
@@ -436,7 +439,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         }
         return;
       }
-      window.navigator.vibrate?.(VIBRATE_PATTERN);
+      window.navigator.vibrate?.(getIntVar(VAR_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN));
       let noFocus = false;
       switch (btn.type) {
         case "send_string": {
@@ -695,6 +698,12 @@ export default function Dashboard({ initialData }: DashboardProps) {
               break;
             }
 
+            case "SAVE_ALL_TABS": {
+              noFocus = true;
+              openSaveTabsToButtonDialog();
+              break;
+            }
+
             case "CLEAR_UNREAD_TABS": {
               setUnreadTabIds(new Set());
               break;
@@ -712,6 +721,9 @@ export default function Dashboard({ initialData }: DashboardProps) {
               break;
             case "CLOSE_RIGHT_TABS":
               closeRightTabs();
+              break;
+            case "CLOSE_ALL_TABS":
+              setTabs([]);
               break;
             default: {
               return assertUnreachable(payload);
@@ -885,7 +897,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             ...tabs,
             {
               id: tabId,
-              panes: [{ id: paneId, host: LOCAL_NAME, state: "" }],
+              panes: [{ id: paneId, host: LOCAL_NAME, canonicalHostString: LOCAL_NAME, state: "" }],
               activePaneId: paneId,
               title: LOCAL_NAME,
               type: "terminal",
@@ -951,7 +963,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               ...tabs,
               {
                 id: tabId,
-                panes: [{ id: paneId, host: LOCAL_NAME, state: "" }],
+                panes: [{ id: paneId, host: LOCAL_NAME, canonicalHostString: LOCAL_NAME, state: "" }],
                 activePaneId: paneId,
                 title: LOCAL_NAME,
                 type: "terminal",
@@ -972,7 +984,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               ...tabs,
               {
                 id: tabId,
-                panes: [{ id: paneId, host: LOCAL_NAME, state: "" }],
+                panes: [{ id: paneId, host: LOCAL_NAME, canonicalHostString: LOCAL_NAME, state: "" }],
                 activePaneId: paneId,
                 title: LOCAL_NAME,
                 type: "terminal",
@@ -991,7 +1003,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
             const paneId = p.id;
             return {
               id: p.id,
-              panes: [{ id: paneId, host: p.host, state: "" }],
+              panes: [{ id: paneId, host: p.host, canonicalHostString: getCanonicalHostString(p.host), state: "" }],
               activePaneId: paneId,
               title: p.title,
               isPinned: true,
@@ -1016,7 +1028,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
                 : [
                     {
                       id: tabId,
-                      panes: [{ id: paneId, host: LOCAL_NAME, state: "" }],
+                      panes: [{ id: paneId, host: LOCAL_NAME, canonicalHostString: LOCAL_NAME, state: "" }],
                       activePaneId: paneId,
                       title: LOCAL_NAME,
                       type: "terminal",
@@ -1039,7 +1051,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
               : [
                   {
                     id: tabId,
-                    panes: [{ id: paneId, host: LOCAL_NAME, state: "" }],
+                    panes: [{ id: paneId, host: LOCAL_NAME, canonicalHostString: LOCAL_NAME, state: "" }],
                     activePaneId: paneId,
                     title: LOCAL_NAME,
                     type: "terminal",

@@ -1736,7 +1736,9 @@ export interface ButtonData {
 export interface Session {
 	id: string;
 	host: string;
+	canonicalHostString: string;
 	title: string;
+	isCustomTitle: boolean;
 	isPinned: boolean;
 	isLocked: boolean;
 	isHidden: boolean;
@@ -1986,6 +1988,7 @@ export interface PaneData {
 	id: string;
 	sessionId?: string;
 	host: string;
+	canonicalHostString: string;
 	state: WsTerminalMessage["state"];
 	cloneFrom?: string;
 	options?: Record<string, string>;
@@ -1993,6 +1996,10 @@ export interface PaneData {
 export interface TabData {
 	id: string;
 	title: string;
+	isCustomTitle?: boolean;
+	/**
+	 * A tab always has at least 1 pane.
+	 */
 	panes: PaneData[];
 	activePaneId: string;
 	isPinned?: boolean;

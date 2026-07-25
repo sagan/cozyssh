@@ -4,7 +4,6 @@ package e2e
 
 import (
 	"cozyssh/common"
-	"cozyssh/constants"
 	"cozyssh/models"
 	"fmt"
 	"net/http"
@@ -90,7 +89,6 @@ func TestPinTab(t *testing.T) {
 	// 2. Pin it via the API (simulates right-click → "Pin tab").
 	resp := apiPost(t, url, token, "/api/sessions/pin", &models.SessionsPinRequest{
 		Id:    sessionId,
-		Host:  constants.LOCAL_NAME,
 		Title: "PIN_TEST",
 	})
 	resp.Body.Close()
@@ -139,7 +137,7 @@ func TestPinTab(t *testing.T) {
 	t.Logf("pinned tab title after reload: %s", tabTitle)
 
 	// 4. Unpin via the API.
-	resp = apiPost(t, url, token, "/api/sessions/unpin", &models.SessionsUnpinRequest{Id: sessionId})
+	resp = apiPost(t, url, token, "/api/sessions/unpin", &models.SessionsRequest{Id: sessionId})
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("unpin: expected 204, got %d", resp.StatusCode)
@@ -181,9 +179,8 @@ func TestLockTab(t *testing.T) {
 	t.Logf("session id: %s", sessionId)
 
 	// Lock the session.
-	resp := apiPost(t, url, token, "/api/sessions/lock", &models.SessionsLockRequest{
+	resp := apiPost(t, url, token, "/api/sessions/lock", &models.SessionsPinRequest{
 		Id:    sessionId,
-		Host:  constants.LOCAL_NAME,
 		Title: "LOCK_TEST",
 	})
 	resp.Body.Close()
@@ -229,7 +226,6 @@ func TestLockTab(t *testing.T) {
 	// Downgrade: unlock → pin only (so it can be closed).
 	resp = apiPost(t, url, token, "/api/sessions/pin", &models.SessionsPinRequest{
 		Id:    sessionId,
-		Host:  constants.LOCAL_NAME,
 		Title: "LOCK_TEST",
 	})
 	resp.Body.Close()
@@ -276,7 +272,6 @@ func TestAttachStealsSession(t *testing.T) {
 	// Pin the session so it persists when the WS is stolen.
 	resp := apiPost(t, url, tokenA, "/api/sessions/pin", &models.SessionsPinRequest{
 		Id:    sessionId,
-		Host:  constants.LOCAL_NAME,
 		Title: "STEAL_TEST",
 	})
 	resp.Body.Close()
@@ -353,7 +348,6 @@ func TestPinnedSessionSurvivesClientDisconnect(t *testing.T) {
 	// Pin.
 	resp := apiPost(t, url, token, "/api/sessions/pin", &models.SessionsPinRequest{
 		Id:    sessionId,
-		Host:  constants.LOCAL_NAME,
 		Title: "SURVIVE_TEST",
 	})
 	resp.Body.Close()
@@ -454,7 +448,7 @@ Host fav2
 	// Clean up leaked pinned sessions from previous tests because session.GlobalManager is global
 	token := getToken(t, page)
 	for _, p := range pinnedSessions(t, url, token) {
-		apiPost(t, url, token, "/api/sessions/unpin", &models.SessionsUnpinRequest{Id: p.Id})
+		apiPost(t, url, token, "/api/sessions/unpin", &models.SessionsRequest{Id: p.Id})
 	}
 
 	// Now open the target URL directly (since token is in localStorage for this origin, it will skip login)
@@ -526,7 +520,7 @@ Host fav2
 	// Clean up leaked pinned sessions from previous tests
 	token := getToken(t, page)
 	for _, p := range pinnedSessions(t, url, token) {
-		apiPost(t, url, token, "/api/sessions/unpin", &models.SessionsUnpinRequest{Id: p.Id})
+		apiPost(t, url, token, "/api/sessions/unpin", &models.SessionsRequest{Id: p.Id})
 	}
 
 	// Now open the tag URL directly

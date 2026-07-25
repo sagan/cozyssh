@@ -1160,19 +1160,26 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
         }
       });
 
-      // Copy-on-select: use mouseup instead of onSelectionChange + setTimeout.
+      // Track whether selection has changed since last copy
+      let hasNewSelection = false;
+      const selectionDisposable = term.onSelectionChange(() => {
+        hasNewSelection = Boolean(term.getSelection());
+      });
+
+      // Copy-on-select: triggered on mouseup, blur, or mouseleave.
       //
       // navigator.clipboard.writeText() requires either a trusted user gesture
       // ("transient activation") or an actively focused document at the moment
-      // of the call.  A setTimeout-based debounce breaks that guarantee: the
-      // callback runs in a detached task where the browser no longer considers
-      // the original mouse event to be active, causing silent failures with
-      // "Document is not focused" / NotAllowedError - especially when the mouse
-      // leaves the browser window during selection.
+      // of the call.
       //
-      // mouseup fires synchronously inside the user gesture, so the clipboard
-      // write is always performed in a trusted context.
+      // We listen on `window` (and blur/mouseleave) rather than `container` so that
+      // if the user starts selecting inside the terminal and drags the mouse past the
+      // container edge (e.g. over sidebar, header, or outside window), mouseup still fires
+      // and copies the selection reliably.
       const handleCopyOnSelect = () => {
+        if (!hasNewSelection) {
+          return;
+        }
         if (getIntVar(VAR_CS_NO_SELECT_TO_COPY) === 1) {
           return;
         }
@@ -1181,6 +1188,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
           navigator.clipboard.writeText(selection).catch((err) => {
             console.debug("[terminal] copy-on-select failed:", err);
           });
+          hasNewSelection = false;
         }
       };
 
@@ -1204,17 +1212,23 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       const container = terminalRef.current;
       if (container) {
         container.addEventListener("contextmenu", handleContextMenu);
-        container.addEventListener("mouseup", handleCopyOnSelect);
       }
+
+      window.addEventListener("mouseup", handleCopyOnSelect);
+      window.addEventListener("blur", handleCopyOnSelect);
+      document.addEventListener("mouseleave", handleCopyOnSelect);
 
       return () => {
         isDisposed = true;
         clearTimeout(reconnectTimer);
         resizeObserver.disconnect();
+        selectionDisposable.dispose();
         if (container) {
           container.removeEventListener("contextmenu", handleContextMenu);
-          container.removeEventListener("mouseup", handleCopyOnSelect);
         }
+        window.removeEventListener("mouseup", handleCopyOnSelect);
+        window.removeEventListener("blur", handleCopyOnSelect);
+        document.removeEventListener("mouseleave", handleCopyOnSelect);
         if (wsRef.current) {
           wsRef.current.close();
         }

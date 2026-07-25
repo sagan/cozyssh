@@ -127,6 +127,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - `Alt + P` : Open new tab dialog - tags view
   - `Alt + :` : Open new tab dialog - tunnels view
   - `Alt + ?` : Open new tab dialog - all view
+  - `Shift` holded with `Alt + O/A/E/P/:/?` : Same as `Alt + O/A/E/P/:/?` but preserve last input filter value
   - `Alt + N` : Open new default local shell tab; Hold `Ctrl` to open in current tab
   - `Alt + Shift + N` : Open new alternative local shell tab; Hold `Ctrl` to open in current tab
   - `Alt + S` : Open scratchpad
@@ -139,8 +140,8 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - `Alt + Shift + W` : Close active tab
   - `Ctrl + Alt + Shift + W` : Close other tabs
   - `Ctrl + Alt + Shift + L` : Toggle Lock/Unlock current tab
-  - `Alt + I` : Focus sidebar search filter, then use `↑ ↓` to select, `Enter` to open (or toggle group expandness), `Alt + Enter` to open in current tab, `Ctrl + Enter` to open in new window (or toggle group and all sub-groups expandness), `Shift + Enter` to open context menu. `Ctrl/Alt + Mouse Click` is same as `Ctrl/Alt + Enter`, `Shift + Mouse Click` to edit host.
-  - `Alt + Shift + I` : Focus sidebar search filter and clear current value
+  - `Alt + I` : Focus sidebar search filter and clear current value, then use `↑ ↓` to select, `Enter` to open (or toggle group expandness), `Alt + Enter` to open in current tab, `Ctrl + Enter` to open in new window (or toggle group and all sub-groups expandness), `Shift + Enter` to open context menu. `Ctrl/Alt + Mouse Click` is same as `Ctrl/Alt + Enter`, `Shift + Mouse Click` to edit host.
+  - `Alt + Shift + I` : Focus sidebar search filter but preserve current value
   - `Ctrl + Alt + Backquote` : Toggle sidebar tags section expandness
   - `Ctrl + Alt + 1/2/3` : Toggle sidebar fav/all/auto section expandness
   - `Ctrl + Alt + G` : Toggle sidebar all groups expandness

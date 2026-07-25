@@ -45,22 +45,31 @@ func (b *CircularBuffer) Bytes() []byte {
 
 // Session represents a persistent terminal session (PTY or SSH).
 type Session struct {
-	ID         string
-	Host       string
-	Title      string
-	isPinned   bool
-	isLocked   bool
-	isHidden   bool
-	Reader     io.Reader
-	Writer     io.Writer
-	CloseFunc  func() error
-	ResizeFunc func(rows, cols uint16) error
-	RetryFunc  func() (io.Reader, io.Writer, error)
-	Buffer     *CircularBuffer
-	SSHClient  *sshmanager.PooledClient
+	ID                  string
+	Host                string
+	CanonicalHostString string // "user@host[:port]", port part exists if it's not 22
+	Title               string
+	IsCustomTitle       bool
+	isPinned            bool
+	isLocked            bool
+	isHidden            bool
+	Reader              io.Reader
+	Writer              io.Writer
+	CloseFunc           func() error
+	ResizeFunc          func(rows, cols uint16) error
+	RetryFunc           func() (io.Reader, io.Writer, error)
+	Buffer              *CircularBuffer
+	SSHClient           *sshmanager.PooledClient
 
 	mu        sync.Mutex
 	listeners []chan []byte
+}
+
+func (s *Session) SetTitle(title string, isCustomTitle bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Title = title
+	s.IsCustomTitle = isCustomTitle
 }
 
 func (s *Session) GetState() (isPinned, isLocked, isHidden bool) {
@@ -93,7 +102,8 @@ func (s *Session) SetState(state int) {
 	}
 }
 
-func NewSession(id, host string, r io.Reader, w io.Writer, closeFunc func() error, resizeFunc func(rows, cols uint16) error) *Session {
+func NewSession(id, host string, r io.Reader, w io.Writer,
+	closeFunc func() error, resizeFunc func(rows, cols uint16) error) *Session {
 	s := &Session{
 		ID:         id,
 		Host:       host,
@@ -384,13 +394,15 @@ func (m *SessionManager) GetAll(pinnedOnly bool) []*models.Session {
 		s.mu.Lock()
 		if !pinnedOnly || s.isPinned || s.isLocked {
 			sessions = append(sessions, &models.Session{
-				Id:            s.ID,
-				Host:          s.Host,
-				Title:         s.Title,
-				IsPinned:      s.isPinned,
-				IsLocked:      s.isLocked,
-				IsHidden:      s.isHidden,
-				ListenerCount: len(s.listeners),
+				Id:                  s.ID,
+				Host:                s.Host,
+				CanonicalHostString: s.CanonicalHostString,
+				Title:               s.Title,
+				IsCustomTitle:       s.IsCustomTitle,
+				IsPinned:            s.isPinned,
+				IsLocked:            s.isLocked,
+				IsHidden:            s.isHidden,
+				ListenerCount:       len(s.listeners),
 			})
 		}
 		s.mu.Unlock()

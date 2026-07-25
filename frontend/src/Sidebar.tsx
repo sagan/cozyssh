@@ -104,6 +104,8 @@ import {
   SETTINGS_TAB_IDX_ABOUT,
   ID_SIDEBAR,
   ID_SIDEBAR_MAIN,
+  VAR_SIDEBAR_WIDTH,
+  DEFAULT_SIDEBAR_WIDTH,
 } from "./constants";
 import {
   type ServiceWorkerStatus,
@@ -163,6 +165,7 @@ import {
   setSettingsTab,
   deleteHost,
   reorderFavourites,
+  updateTabTitles,
 } from "./store";
 import { useShallow } from "zustand/react/shallow";
 import FreeTextField from "./components/FreeTextField";
@@ -171,8 +174,6 @@ import SSHExportTab from "./SSHExportTab";
 import ChipCopy from "./components/ChipCopy";
 import TextFieldWithCopy from "./components/TextFieldWithCopy";
 import ExtraMenu from "./components/ExtraMenu";
-
-const drawerWidth = 260;
 
 type Section = "fav" | "tree" | "auto";
 
@@ -728,6 +729,8 @@ export default function Sidebar({
 
   const [hostTitleMenuAnchor, setHostTitleMenuAnchor] = useState<null | HTMLElement>(null);
 
+  const filterStrLower = filterStr.toLowerCase().trim();
+
   const handleHostTitleMenuClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
     setHostTitleMenuAnchor(event.currentTarget);
   }, []);
@@ -1104,9 +1107,25 @@ export default function Sidebar({
     [],
   );
 
-  const handleTagContextMenu = useCallback((e: React.MouseEvent, tag: string) => {
+  const handleTagClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      const tag = (e.currentTarget as HTMLElement).dataset.tag!;
+      const tagLower = tag.toLowerCase();
+      const isActive = filterStrLower.includes(`#${tagLower} `) || filterStrLower.endsWith(`#${tagLower}`);
+      if (isActive && filterStr.trim() === `#${tag}`) {
+        setFilterStr("");
+      } else {
+        setFilterStr(`#${tag} `);
+      }
+      document.getElementById(ID_SIDEBAR_FILTER)?.focus();
+    },
+    [filterStr, filterStrLower],
+  );
+
+  const handleTagContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    setTagContextMenu({ element: e.currentTarget, tag });
+    setTagContextMenu({ element: e.currentTarget, tag: (e.currentTarget as HTMLElement).dataset.tag! });
     setTagContextMenuOpen(true);
   }, []);
 
@@ -1680,7 +1699,8 @@ export default function Sidebar({
 
     setInitialHostFormData(null); // Reset dirty state on successful save
     setEditHostDialogOpen(false);
-    fetchHosts();
+    await fetchHosts();
+    updateTabTitles(payload.name);
   }, []);
 
   const hostFormDirty = useMemo(() => {
@@ -2148,6 +2168,8 @@ export default function Sidebar({
     setDraggedItem(null);
   };
 
+  const sidebarWidth = getIntVar(VAR_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH);
+
   return (
     <Drawer
       id={ID_SIDEBAR}
@@ -2156,9 +2178,9 @@ export default function Sidebar({
       onClose={closeMobileSidebar}
       ModalProps={{ keepMounted: true }}
       sx={{
-        width: drawerWidth,
+        width: sidebarWidth,
         flexShrink: 0,
-        [`& .MuiDrawer-paper`]: { width: drawerWidth, boxSizing: "border-box" },
+        [`& .MuiDrawer-paper`]: { width: sidebarWidth, boxSizing: "border-box" },
       }}
     >
       <Toolbar sx={{ justifyContent: "space-between", pr: 1 }}>
@@ -2235,6 +2257,7 @@ export default function Sidebar({
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <TextFieldWithCopy
             size="small"
+            autoComplete="off"
             type="search"
             id="sidebar-filter"
             placeholder="Filter hosts or #tag..."
@@ -2271,7 +2294,6 @@ export default function Sidebar({
             >
               {uniqueTags.map((tag) => {
                 const tagLower = tag.toLowerCase();
-                const filterStrLower = filterStr.toLowerCase().trim();
                 const isActive = filterStrLower.includes(`#${tagLower} `) || filterStrLower.endsWith(`#${tagLower}`);
                 return (
                   <Chip
@@ -2282,15 +2304,8 @@ export default function Sidebar({
                     className="sidebar-tag"
                     color={isActive ? "primary" : "default"}
                     variant={isActive ? "filled" : "outlined"}
-                    onClick={() => {
-                      if (isActive && filterStr.trim() === `#${tag}`) {
-                        setFilterStr("");
-                      } else {
-                        setFilterStr(`#${tag} `);
-                      }
-                      document.getElementById(ID_SIDEBAR_FILTER)?.focus();
-                    }}
-                    onContextMenu={(e) => handleTagContextMenu(e, tag)}
+                    onClick={handleTagClick}
+                    onContextMenu={handleTagContextMenu}
                     sx={{
                       borderRadius: "6px",
                       fontWeight: isActive ? 600 : 400,
@@ -3431,6 +3446,9 @@ export default function Sidebar({
                   <br />
                   <b>Alt + ?</b> : Open new tab dialog - all view
                   <br />
+                  <b>Shift</b> holded with <b>Alt + O/A/E/P/:/?</b> : Same as <b>Alt + O/A/E/P/:/?</b> but preserve last
+                  input filter value
+                  <br />
                   <b>Alt + N</b> : Open new default local shell tab; Hold <b>Ctrl</b> to open in current tab
                   <br />
                   <b>Alt + Shift + N</b> : Open new alternative local shell tab; Hold <b>Ctrl</b> to open in current tab
@@ -3455,14 +3473,14 @@ export default function Sidebar({
                   <br />
                   <b>Ctrl + Alt + Shift + L</b> : Toggle Lock/Unlock current tab
                   <br />
-                  <b>Alt + I</b> : Focus sidebar search filter, use <b>↑ ↓</b> to select, <b>Enter</b> to open (or
-                  toggle group expandness),&nbsp;
+                  <b>Alt + I</b> : Focus sidebar search filter and clear current value, use <b>↑ ↓</b> to select,{" "}
+                  <b>Enter</b> to open (or toggle group expandness),&nbsp;
                   <b>Alt + Enter</b> to open in current tab, <b>Ctrl + Enter</b> to open in new window (or toggle group
                   and all sub-groups expandness),&nbsp;
                   <b>Shift + Enter</b> to open context menu. <b>Ctrl/Alt + Mouse Click</b> is same as&nbsp;
                   <b>Ctrl/Alt + Enter</b>, <b>Shift + Mouse Click</b> to edit host.
                   <br />
-                  <b>Alt + Shift + I</b> : Focus sidebar search filter and clear current value
+                  <b>Alt + Shift + I</b> : Focus sidebar search filter but preserve current value
                   <br />
                   <b>Ctrl + Alt + Backquote</b> : Toggle sidebar tags section expandness
                   <br />
