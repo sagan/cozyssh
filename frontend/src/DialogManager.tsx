@@ -47,6 +47,7 @@ import {
   openHostInNewWindow,
   cutString,
   apiReqHeaders,
+  t,
 } from "./common";
 import {
   type TabData,
@@ -525,7 +526,7 @@ export default function DialogManager({
                           openEditHost(hostname);
                         }}
                       >
-                        Edit {hostname}
+                        {t("Edit")} {hostname}
                       </MenuItem>
                     ))}
                   </>
@@ -542,7 +543,7 @@ export default function DialogManager({
                           triggerFocus();
                         }}
                       >
-                        Unpin Tab
+                        {t("Unpin Tab")}
                       </MenuItem>
                     ) : (
                       <MenuItem
@@ -554,7 +555,7 @@ export default function DialogManager({
                           triggerFocus();
                         }}
                       >
-                        Pin Tab
+                        {t("Pin Tab")}
                       </MenuItem>
                     )}
                     {tab.isLocked ? (
@@ -566,7 +567,7 @@ export default function DialogManager({
                           triggerFocus();
                         }}
                       >
-                        Unlock Tab
+                        {t("Unlock Tab")}
                       </MenuItem>
                     ) : (
                       <MenuItem
@@ -577,7 +578,7 @@ export default function DialogManager({
                           triggerFocus();
                         }}
                       >
-                        Lock Tab
+                        {t("Lock Tab")}
                       </MenuItem>
                     )}
                     <MenuItem
@@ -588,7 +589,7 @@ export default function DialogManager({
                         triggerFocus();
                       }}
                     >
-                      Run in Background
+                      {t("Run in Background")}
                     </MenuItem>
                   </>
                 )}
@@ -607,7 +608,7 @@ export default function DialogManager({
                         }
                       }}
                     >
-                      Find
+                      {t("Find")}
                     </MenuItem>
                     <MenuItem
                       id="tab-menu-send-input"
@@ -621,7 +622,7 @@ export default function DialogManager({
                         }
                       }}
                     >
-                      Send Input
+                      {t("Send Input")}
                     </MenuItem>
                   </>
                 )}
@@ -633,7 +634,7 @@ export default function DialogManager({
                       closeTab();
                     }}
                   >
-                    Close Tab
+                    {t("Close Tab")}
                   </MenuItem>
                 )}
                 <MenuItem
@@ -643,7 +644,7 @@ export default function DialogManager({
                     closeTabOrPane();
                   }}
                 >
-                  Close Pane/Tab
+                  {t("Close Pane/Tab")}
                 </MenuItem>
 
                 {tab.type !== "scratchpad" && (
@@ -655,7 +656,7 @@ export default function DialogManager({
                         cloneSession(memoTabId);
                       }}
                     >
-                      Clone Session
+                      {t("Clone Session")}
                     </MenuItem>
                     {tab.panes.length < 4 && (
                       <MenuItem
@@ -665,12 +666,16 @@ export default function DialogManager({
                           cloneSession(memoTabId, true);
                         }}
                       >
-                        Clone Session (Split Screen)
+                        {t("Clone Session (Split Screen)")}
                       </MenuItem>
                     )}
                     {tab.panes.length === 1 && (
                       <MenuItem id="tab-menu-toggle-files" onClick={handleToggleFiles}>
-                        {tab.showFiles ? "Close Files" : tab.panes[0]?.host === LOCAL_NAME ? "Open Files" : "Open SFTP"}
+                        {tab.showFiles
+                          ? t("Close Files")
+                          : tab.panes[0]?.host === LOCAL_NAME
+                            ? t("Open Files")
+                            : t("Open SFTP")}
                       </MenuItem>
                     )}
                   </>
@@ -684,7 +689,7 @@ export default function DialogManager({
                         triggerFocus();
                       }}
                     >
-                      Reconnect
+                      {t("Reconnect")}
                     </MenuItem>
                     <MenuItem
                       id="tab-menu-rename"
@@ -693,7 +698,7 @@ export default function DialogManager({
                         renameTab(memoTabId);
                       }}
                     >
-                      Rename Tab
+                      {t("Rename Tab")}
                     </MenuItem>
                     <MenuItem
                       id="tab-menu-save"
@@ -702,7 +707,7 @@ export default function DialogManager({
                         openSaveTabToButtonDialog(memoTabId);
                       }}
                     >
-                      Save Tab to Button
+                      {t("Save Tab to Button")}
                     </MenuItem>
                   </>
                 )}
@@ -713,7 +718,7 @@ export default function DialogManager({
                     closeOtherTabs(memoTabId);
                   }}
                 >
-                  Close Other Tabs
+                  {t("Close Other Tabs")}
                 </MenuItem>
                 <MenuItem
                   id="tab-menu-close-right-tabs"
@@ -722,7 +727,7 @@ export default function DialogManager({
                     closeRightTabs(memoTabId);
                   }}
                 >
-                  Close Tabs to the Right
+                  {t("Close Tabs to the Right")}
                 </MenuItem>
                 {tab.type === "scratchpad" && (
                   <MenuItem
@@ -734,7 +739,7 @@ export default function DialogManager({
                       });
                     }}
                   >
-                    Force sync
+                    {t("Force sync")}
                   </MenuItem>
                 )}
                 <ExtraMenu extraMenu={extraTabMenu} target={tab} before={handleCloseMenu} />
@@ -745,7 +750,7 @@ export default function DialogManager({
                     moveTabLeft(memoTabId);
                   }}
                 >
-                  Move Tab Left
+                  {t("Move Tab Left")}
                 </MenuItem>
                 <MenuItem
                   id="tab-menu-move-right"
@@ -754,7 +759,7 @@ export default function DialogManager({
                     moveTabRight(memoTabId);
                   }}
                 >
-                  Move Tab Right
+                  {t("Move Tab Right")}
                 </MenuItem>
               </>
             );
@@ -791,7 +796,7 @@ export default function DialogManager({
             setEditButtonDialogOpen(true);
           }}
         >
-          Edit {btnContextMenu?.btn ? `${btnContextMenu.btn.name} (${btnContextMenu.btn.type})` : "Button"}
+          {t("Edit")} {btnContextMenu?.btn ? `${btnContextMenu.btn.name} (${btnContextMenu.btn.type})` : t("Button")}
         </MenuItem>
         <MenuItem
           id="button-menu-send"
@@ -809,7 +814,7 @@ export default function DialogManager({
           }}
           sx={{ display: btnContextMenu?.btn.type === "send_string" ? "flex" : "none" }}
         >
-          Send
+          {t("Send")}
         </MenuItem>
         <MenuItem
           id="button-menu-send-all"
@@ -827,7 +832,7 @@ export default function DialogManager({
           }}
           sx={{ display: btnContextMenu?.btn.type === "send_string" ? "flex" : "none" }}
         >
-          Send To All
+          {t("Send To All")}
         </MenuItem>
         <MenuItem
           id="button-menu-open-new-window"
@@ -842,7 +847,7 @@ export default function DialogManager({
             display: btnContextMenu?.btn.type === "open_terminal" ? "flex" : "none",
           }}
         >
-          Open (New Window)
+          {t("Open (New Window)")}
         </MenuItem>
         <MenuItem
           id="button-menu-open-in-current-tab"
@@ -860,7 +865,7 @@ export default function DialogManager({
             display: btnContextMenu?.btn.type === "open_terminal" ? "flex" : "none",
           }}
         >
-          Open (In Current Tab)
+          {t("Open (In Current Tab)")}
         </MenuItem>
         <MenuItem
           id="button-menu-copy-url"
@@ -878,7 +883,7 @@ export default function DialogManager({
             display: btnContextMenu?.btn.type === "open_terminal" ? "flex" : "none",
           }}
         >
-          Copy URL
+          {t("Copy URL")}
         </MenuItem>
         <MenuItem
           id="button-menu-copy-contents"
@@ -898,7 +903,7 @@ export default function DialogManager({
                 : "none",
           }}
         >
-          Copy Contents
+          {t("Copy Contents")}
         </MenuItem>
         <MenuItem
           id="button-menu-copy-button-data"
@@ -910,7 +915,7 @@ export default function DialogManager({
             navigator.clipboard.writeText(JSON.stringify(btnContextMenu.btn));
           }}
         >
-          Copy Button Data
+          {t("Copy Button Data")}
         </MenuItem>
         {btnContextMenu && (
           <ExtraMenu
@@ -929,7 +934,7 @@ export default function DialogManager({
             moveButton(btnContextMenu.btn.id, -1);
           }}
         >
-          Move Button Left
+          {t("Move Button Left")}
         </MenuItem>
         <MenuItem
           id="button-menu-move-right"
@@ -941,7 +946,7 @@ export default function DialogManager({
             moveButton(btnContextMenu.btn.id, 1);
           }}
         >
-          Move Button Right
+          {t("Move Button Right")}
         </MenuItem>
         <MenuItem
           id="button-menu-delete"
@@ -954,7 +959,7 @@ export default function DialogManager({
           }}
           sx={{ color: "error.main" }}
         >
-          Delete Button
+          {t("Delete Button")}
         </MenuItem>
       </Menu>
 
@@ -975,8 +980,8 @@ export default function DialogManager({
         <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pr: 1.5 }}>
           <span>
             {editButton
-              ? "Edit Button " + editButton.id
-              : "Add Button" + (buttonFormData.id ? " (" + buttonFormData.id + ")" : "")}
+              ? t("Edit Button") + " " + editButton.id
+              : t("Add Button") + (buttonFormData.id ? " (" + buttonFormData.id + ")" : "")}
           </span>
           <IconButton
             aria-label="more"
@@ -1005,7 +1010,7 @@ export default function DialogManager({
               navigator.clipboard.writeText(JSON.stringify(btn));
             }}
           >
-            Copy Button To Clipboard
+            {t("Copy Button To Clipboard")}
           </MenuItem>
           <MenuItem
             id="edit-button-form-menu-paste"
@@ -1015,7 +1020,7 @@ export default function DialogManager({
               importFromData(text);
             }}
           >
-            Paste Button From Clipboard
+            {t("Paste Button From Clipboard")}
           </MenuItem>
           <MenuItem
             id="edit-button-form-menu-add-from-url"
@@ -1025,7 +1030,7 @@ export default function DialogManager({
             }}
             disabled={!!editButton}
           >
-            Add From URL
+            {t("Add From URL")}
           </MenuItem>
           <MenuItem
             id="edit-button-form-menu-add-plugin-manager"
@@ -1035,7 +1040,7 @@ export default function DialogManager({
             }}
             disabled={!!editButton}
           >
-            Add Plugin Manager
+            {t("Add Plugin Manager")}
           </MenuItem>
           <ExtraMenu
             extraMenu={extraButtonFormMenu}
@@ -1055,7 +1060,7 @@ export default function DialogManager({
               }
             }}
           >
-            Reset Form
+            {t("Reset Form")}
           </MenuItem>
           <MenuItem
             id="edit-button-form-menu-delete"
@@ -1067,7 +1072,7 @@ export default function DialogManager({
               deleteButton(editButton!);
             }}
           >
-            Delete Button
+            {t("Delete Button")}
           </MenuItem>
           <MenuItem
             id="edit-button-form-menu-clear-id"
@@ -1077,7 +1082,7 @@ export default function DialogManager({
               setButtonFormData({ ...buttonFormData, id: "" });
             }}
           >
-            Clear New Button Id
+            {t("Clear New Button Id")}
           </MenuItem>
         </Menu>
         <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
@@ -1089,9 +1094,9 @@ export default function DialogManager({
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mt: 1 }}>
             <TextFieldWithCopy
               sx={{ flex: 2 }}
-              label="Button Name"
+              label={t("Button Name")}
               autoFocus={!editButton}
-              placeholder="Ctrl + Enter to submit"
+              placeholder={t("Ctrl + Enter to submit")}
               size="small"
               required
               value={buttonFormData.name}
@@ -1101,7 +1106,7 @@ export default function DialogManager({
             <FreeTextField
               sx={{ flex: 1 }}
               size="small"
-              label="Button Group"
+              label={t("Button Group")}
               placeholder={DEFAULT_BUTTON_GROUP}
               options={groups}
               value={buttonFormData.group}
@@ -1112,7 +1117,7 @@ export default function DialogManager({
           <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1 }}>
             <TextField
               select
-              label="Button Type"
+              label={t("Button Type")}
               size="small"
               value={buttonFormData.type}
               onChange={(e) =>
@@ -1140,7 +1145,7 @@ export default function DialogManager({
               ))}
             </TextField>
             <TextFieldWithCopy
-              label="Order"
+              label={t("Order")}
               type="number"
               size="small"
               value={buttonFormData.order}
@@ -1152,12 +1157,12 @@ export default function DialogManager({
 
           <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1 }}>
             <TextFieldWithCopy
-              label="Shortcut"
+              label={t("Shortcut")}
               type="search"
               size="small"
               value={buttonFormData.shortcut}
               onChange={(e) => setButtonFormData({ ...buttonFormData, shortcut: e.target.value })}
-              placeholder="Press keys or input, e.g. 'ctrl+shift+m', modifiers in ctrl,alt,shift,meta order"
+              placeholder={t("Press keys or input, e.g. 'ctrl+shift+m', modifiers in ctrl,alt,shift,meta order")}
               onKeyDown={(e) => {
                 if (e.ctrlKey || e.altKey || e.metaKey || (e.key.length > 1 && e.key !== "Shift")) {
                   e.preventDefault();
@@ -1168,7 +1173,7 @@ export default function DialogManager({
               sx={{ flexGrow: 1 }}
             />
             <FormControlLabel
-              title="Enable shortcut only if the button group is currently the active button group"
+              title={t("Enable shortcut only if the button group is currently the active button group")}
               sx={{ flexShrink: 0, mr: 0, ml: 0, whiteSpace: "nowrap" }}
               control={
                 <Checkbox
@@ -1179,13 +1184,15 @@ export default function DialogManager({
                   size="small"
                 />
               }
-              label={<Typography variant="body2">Local shortcut</Typography>}
+              label={<Typography variant="body2">{t("Local shortcut")}</Typography>}
             />
             {(buttonFormData.type === "run_script" || buttonFormData.type === "open_terminal") && (
               <FormControlLabel
-                title={`Automatically ${
-                  buttonFormData.type === "run_script" ? "run this script" : "open this terminal"
-                } when the page loads`}
+                title={
+                  buttonFormData.type === "run_script"
+                    ? t("Automatically run this script when the page loads")
+                    : t("Automatically open this terminal when the page loads")
+                }
                 sx={{ flexShrink: 0, mr: 0, ml: 0, whiteSpace: "nowrap" }}
                 control={
                   <Checkbox
@@ -1194,12 +1201,12 @@ export default function DialogManager({
                     size="small"
                   />
                 }
-                label={<Typography variant="body2">Autorun</Typography>}
+                label={<Typography variant="body2">{t("Autorun")}</Typography>}
               />
             )}
             {buttonFormData.type === "send_string" && (
               <FormControlLabel
-                title="Treat payload as LiquidJS template and enable Liquid highlight extension"
+                title={t("Treat payload as LiquidJS template and enable Liquid highlight extension")}
                 sx={{ flexShrink: 0, mr: 0, ml: 0, whiteSpace: "nowrap" }}
                 control={
                   <Checkbox
@@ -1229,7 +1236,7 @@ export default function DialogManager({
                 >
                   <CodeMirror
                     value={buttonFormData.payload}
-                    placeholder="LiquidJS template. Ctrl + Enter to submit"
+                    placeholder={t("LiquidJS template. Ctrl + Enter to submit")}
                     height="200px"
                     theme="light"
                     extensions={[liquid(), EditorView.lineWrapping]}
@@ -1239,7 +1246,7 @@ export default function DialogManager({
                   />
                 </Box>
                 <Typography variant="subtitle2" color="text.secondary">
-                  Learn more about&nbsp;
+                  {t("Learn more about")}&nbsp;
                   <a
                     href="https://liquidjs.com/tutorials/intro-to-liquid.html"
                     target="_blank"
@@ -1250,7 +1257,7 @@ export default function DialogManager({
                   </a>
                 </Typography>
                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.8 }}>
-                  <b>Available System Variables</b>:&nbsp;
+                  <b>{t("Available System Variables")}</b>:&nbsp;
                   <Chip
                     color="success"
                     label="shellIntegration"
@@ -1322,7 +1329,7 @@ export default function DialogManager({
                 value={buttonFormData.payload}
                 onChange={(e) => setButtonFormData({ ...buttonFormData, payload: e.target.value })}
                 onKeyDown={handleEditButtonFormKeyDown}
-                placeholder="String to send to terminal, <ctrl-x> style syntax supported. Ctrl + Enter to submit"
+                placeholder={t("String to send to terminal, <ctrl-x> style syntax supported. Ctrl + Enter to submit")}
               />
             )
           ) : buttonFormData.type === "terminal_function" ? (
@@ -1369,9 +1376,9 @@ export default function DialogManager({
             >
               <FreeTextField
                 fullWidth
-                label="Server / Address"
+                label={t("Server / Address")}
                 size="small"
-                placeholder="e.g. local, production-db, root@192.168.1.1"
+                placeholder={t("e.g. local, production-db, root@192.168.1.1")}
                 options={[LOCAL_NAME, ...hosts.map((h) => h.name)]}
                 value={buttonFormData.payload}
                 onChange={(newValue) => {
@@ -1460,9 +1467,9 @@ export default function DialogManager({
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setEditButtonDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => setEditButtonDialogOpen(false)}>{t("Cancel")}</Button>
           <Button variant="contained" onClick={handleSaveButton} disabled={buttonFormSubmitDisabled}>
-            Save
+            {t("Save")}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1476,7 +1483,9 @@ export default function DialogManager({
         maxWidth="md"
       >
         <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span>Terminal Input (Current pane: {activePane?.host ?? "<none>"})</span>
+          <span>
+            {t("Terminal Input")} ({t("Current pane")}: {activePane?.host ?? t("<none>")})
+          </span>
           {!inputLiquid && (
             <IconButton disabled={!inputValue} onClick={() => navigator.clipboard.writeText(inputValue)} size="small">
               <ContentCopyIcon fontSize="small" />
@@ -1539,7 +1548,7 @@ export default function DialogManager({
                     sx={{ py: 0, px: 1, minWidth: 0, fontSize: "typography.caption.fontSize", textTransform: "none" }}
                     onClick={() => navigator.clipboard.writeText(inputValue)}
                   >
-                    Copy
+                    {t("Copy")}
                   </Button>
                 </Box>
                 <TextField
@@ -1578,7 +1587,7 @@ export default function DialogManager({
                   slotProps={{ input: { sx: { fontFamily: "monospace", fontSize: "typography.body2.fontSize" } } }}
                 />
                 <Typography variant="subtitle2" color="text.secondary">
-                  System Variables
+                  {t("System Variables")}
                 </Typography>
                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.8 }}>
                   <Chip
@@ -1620,7 +1629,7 @@ export default function DialogManager({
               </Box>
               <Box sx={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
                 <Typography variant="subtitle2" color="text.secondary">
-                  Variables
+                  {t("Variables")}
                 </Typography>
                 <Box
                   sx={{
@@ -1678,14 +1687,14 @@ export default function DialogManager({
                   ))}
                   {varsList.length === 0 && (
                     <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic", m: "auto" }}>
-                      No variables to display
+                      {t("No variables to display")}
                     </Typography>
                   )}
                 </Box>
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                   <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <Typography variant="subtitle2" color="text.secondary">
-                      Rendered Preview
+                      {t("Rendered Preview")}
                     </Typography>
                     <Button
                       size="small"
@@ -1697,7 +1706,7 @@ export default function DialogManager({
                         }
                       }}
                     >
-                      Copy
+                      {t("Copy")}
                     </Button>
                   </Box>
                   <TextField
@@ -1729,7 +1738,7 @@ export default function DialogManager({
                     size="small"
                   />
                 }
-                label={<Typography variant="body2">Send to all panes</Typography>}
+                label={<Typography variant="body2">{t("Send to all panes")}</Typography>}
               />
             )}
             <FormControlLabel
@@ -1740,7 +1749,7 @@ export default function DialogManager({
                   size="small"
                 />
               }
-              label={<Typography variant="body2">Send to all</Typography>}
+              label={<Typography variant="body2">{t("Send to all tabs")}</Typography>}
             />
             <FormControlLabel
               control={
@@ -1762,7 +1771,7 @@ export default function DialogManager({
               handleCloseInputDialog(true);
             }}
           >
-            Send
+            {t("Send")}
           </Button>
         </DialogActions>
       </Dialog>

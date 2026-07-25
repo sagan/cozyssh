@@ -127,6 +127,7 @@ import {
   parseSSHConfigBlock,
   remoteCommandOptions,
   searchStringAny,
+  t,
 } from "./common";
 import { dialogs } from "./Dialogs";
 import {
@@ -2199,7 +2200,7 @@ export default function Sidebar({
               onRefresh();
             }}
           >
-            Refresh
+            {t("Refresh")}
           </MenuItem>
           <MenuItem
             id="main-menu-dashboard"
@@ -2211,7 +2212,7 @@ export default function Sidebar({
               }
             }}
           >
-            Dashboard
+            {t("Dashboard")}
           </MenuItem>
           <MenuItem
             id="main-menu-open-scratchpad"
@@ -2220,7 +2221,7 @@ export default function Sidebar({
               onOpenScratchpad();
             }}
           >
-            Open Scratchpad
+            {t("Open Scratchpad")}
           </MenuItem>
           <ExtraMenu
             extraMenu={extraMainMenu}
@@ -2238,7 +2239,7 @@ export default function Sidebar({
               logout(true);
             }}
           >
-            Logout
+            {t("Logout")}
           </MenuItem>
           <MenuItem
             id="main-menu-logout-all"
@@ -2248,7 +2249,7 @@ export default function Sidebar({
               logoutAll(true);
             }}
           >
-            Logout All
+            {t("Logout All")}
           </MenuItem>
         </Menu>
       </Toolbar>
@@ -2260,7 +2261,7 @@ export default function Sidebar({
             autoComplete="off"
             type="search"
             id="sidebar-filter"
-            placeholder="Filter hosts or #tag..."
+            placeholder={t("Filter hosts or #tag...")}
             title="<Alt + I>"
             value={filterStr}
             onChange={(e) => setFilterStr(e.target.value)}
@@ -2369,7 +2370,7 @@ export default function Sidebar({
               <ListItemIcon>
                 <ComputerIcon />
               </ListItemIcon>
-              <ListItemText primary="Local Shell" />
+              <ListItemText primary={t("Local Shell")} />
             </ListItemButton>
           </ListItem>
 
@@ -2400,7 +2401,8 @@ export default function Sidebar({
                   variant="caption"
                   sx={{ fontWeight: 700, color: "text.secondary", letterSpacing: "0.08em" }}
                 >
-                  FAVOURITES{filteredHosts.favourite.length > 0 && ` (${filteredHosts.favourite.length})`}
+                  {t("FAVOURITES")}
+                  {filteredHosts.favourite.length > 0 && ` (${filteredHosts.favourite.length})`}
                 </Typography>
               </Box>
               <Collapse in={!!favExpanded} timeout={0} unmountOnExit>
@@ -2464,7 +2466,8 @@ export default function Sidebar({
                 <ChevronRightIcon fontSize="small" sx={{ mr: 0.5, opacity: 0.7 }} />
               )}
               <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary", letterSpacing: "0.08em" }}>
-                ALL{groupHostCounts[""] > 0 && ` (${groupHostCounts[""]})`}
+                {t("ALL")}
+                {groupHostCounts[""] > 0 && ` (${groupHostCounts[""]})`}
               </Typography>
             </Box>
             <IconButton
@@ -2524,7 +2527,8 @@ export default function Sidebar({
                   variant="caption"
                   sx={{ fontWeight: 700, color: "text.secondary", letterSpacing: "0.08em" }}
                 >
-                  AUTO{filteredHosts.auto.length > 0 && ` (${filteredHosts.auto.length})`}
+                  {t("AUTO")}
+                  {filteredHosts.auto.length > 0 && ` (${filteredHosts.auto.length})`}
                 </Typography>
               </Box>
               <Collapse in={!!autoExpanded} timeout={0} unmountOnExit>
@@ -2565,7 +2569,7 @@ export default function Sidebar({
               setMobileOpen(false);
             }}
           >
-            {shell.name + (idx === 0 ? " (Default)" : idx === 1 ? " (Alternative)" : "")}
+            {shell.name + (idx === 0 ? " " + t("(Default)") : idx === 1 ? " " + t("(Alternative)") : "")}
           </MenuItem>
         ))}
       </Menu>
@@ -2635,7 +2639,7 @@ export default function Sidebar({
             navigator.clipboard.writeText(getSSHCommand(target));
           }}
         >
-          Copy SSH Command
+          {t("Copy SSH Command")}
         </MenuItem>
         <MenuItem
           id="host-menu-copy-upload-identity-command"
@@ -2654,7 +2658,7 @@ export default function Sidebar({
             );
           }}
         >
-          Copy Upload Identity Command
+          {t("Copy Upload Identity Command")}
         </MenuItem>
         <MenuItem
           id="host-menu-copy-ssh-config-block"
@@ -2667,10 +2671,10 @@ export default function Sidebar({
             navigator.clipboard.writeText(getSSHConfigBlock(target));
           }}
         >
-          Copy SSH Config Block
+          {t("Copy SSH Config Block")}
         </MenuItem>
         <MenuItem id="host-menu-run-ssh-copy-id" onClick={handleRunCopyID}>
-          Run ssh-copy-id
+          {t("Run ssh-copy-id")}
         </MenuItem>
         <MenuItem id="host-menu-favourite" onClick={handleToggleFavourite}>
           {contextMenu?.target.isFavourite ? "Remove From Favourite" : "Add To Favourite"}
@@ -2702,7 +2706,7 @@ export default function Sidebar({
               await moveServer(target.name, dstGroup || null, null);
             }}
           >
-            Move to Group
+            {t("Move to Group")}
           </MenuItem>
         )}
         {contextMenu?.target && (
@@ -2710,12 +2714,12 @@ export default function Sidebar({
         )}
         {contextMenu?.target.source === "config" && (
           <MenuItem id="host-menu-delete" onClick={handleDelete} sx={{ color: "error.main" }}>
-            Delete Host
+            {t("Delete Host")}
           </MenuItem>
         )}
         {contextMenu?.target.source === "known_hosts" && (
           <MenuItem id="host-menu-delete" onClick={handleDeleteKnownHost} sx={{ color: "error.main" }}>
-            Delete Known Host
+            {t("Delete Known Host")}
           </MenuItem>
         )}
       </Menu>
@@ -2727,16 +2731,16 @@ export default function Sidebar({
         anchorEl={tagContextMenu?.element}
       >
         <MenuItem id="tag-menu-open-all" onClick={handleOpenAllServers}>
-          Open All ({tagContextMenu?.tag})
+          {t("Open All")} ({tagContextMenu?.tag})
         </MenuItem>
         <MenuItem id="tag-menu-open-split" onClick={handleOpenSplitServers}>
-          Open All (Split Screen)
+          {t("Open All (Split Screen)")}
         </MenuItem>
         <MenuItem id="tag-menu-open-new-window" onClick={handleOpenAllServersInNewWindow}>
-          Open All (New Window)
+          {t("Open All (New Window)")}
         </MenuItem>
         <MenuItem id="tag-menu-copy-url" onClick={handleCopyTagUrl}>
-          Copy URL
+          {t("Copy URL")}
         </MenuItem>
         {!!tagContextMenu && (
           <ExtraMenu
@@ -2759,26 +2763,26 @@ export default function Sidebar({
         {!!groupContextMenu?.path && (
           <>
             <MenuItem id="group-menu-open-all" onClick={handleOpenGroupAll}>
-              Open All ({groupContextMenu?.path})
+              {t("Open All")} ({groupContextMenu?.path})
             </MenuItem>
             <MenuItem id="group-menu-open-new-window" onClick={handleOpenGroupAllInNewWindow}>
-              Open All (New Window)
+              {t("Open All (New Window)")}
             </MenuItem>
             <MenuItem id="group-menu-open-split" onClick={handleOpenGroupAllSplitScreen}>
-              Open All (Split Screen)
+              {t("Open All (Split Screen)")}
             </MenuItem>
           </>
         )}
         <MenuItem id="group-menu-expand-collapse-all" onClick={handleToggleExpandAll}>
-          Expand/Collapse All
+          {t("Expand/Collapse All")}
         </MenuItem>
         {!!groupContextMenu?.path && (
           <>
             <MenuItem id="group-menu-add-sub-group" onClick={handleAddSubGroupClick}>
-              Add Sub-Group
+              {t("Add Sub-Group")}
             </MenuItem>
             <MenuItem id="group-menu-rename-group" onClick={handleRenameGroupClick}>
-              Rename Group
+              {t("Rename Group")}
             </MenuItem>
             <ExtraMenu
               extraMenu={extraGroupMenu}
@@ -2788,7 +2792,7 @@ export default function Sidebar({
               }}
             />
             <MenuItem id="group-menu-delete" onClick={handleDeleteGroupClick} sx={{ color: "error.main" }}>
-              Delete Group
+              {t("Delete Group")}
             </MenuItem>
           </>
         )}
@@ -2807,7 +2811,7 @@ export default function Sidebar({
         maxWidth="lg"
         sx={{ "& .MuiDialog-paper": { overflow: "hidden" } }}
       >
-        <DialogTitle>Dashboard</DialogTitle>
+        <DialogTitle>{t("Dashboard")}</DialogTitle>
         <Box sx={{ borderBottom: 1, borderColor: "divider", px: 3 }}>
           <Tabs
             value={settingsTab}
@@ -2816,15 +2820,15 @@ export default function Sidebar({
             scrollButtons="auto"
             allowScrollButtonsMobile
           >
-            <Tab label="Sessions" />
-            <Tab label="Tunnels" />
-            <Tab label="Passwords" />
-            <Tab label="Settings" />
-            <Tab label="Sync" />
-            <Tab label="Import" />
-            <Tab label="Export" />
-            <Tab label="Shortcuts" />
-            <Tab label="About" />
+            <Tab label={t("Sessions")} />
+            <Tab label={t("Tunnels")} />
+            <Tab label={t("Passwords")} />
+            <Tab label={t("Settings")} />
+            <Tab label={t("Sync")} />
+            <Tab label={t("Import")} />
+            <Tab label={t("Export")} />
+            <Tab label={t("Shortcuts")} />
+            <Tab label={t("About")} />
           </Tabs>
         </Box>
         <DialogContent sx={{ p: 0 }}>
@@ -2849,7 +2853,7 @@ export default function Sidebar({
                       <ListItemText primary={ps.title} secondary={`${ps.host} (Listeners: ${ps.listenerCount})`} />
                       {canAttach && (
                         <Button size="small" variant="outlined" onClick={() => onAttach(ps)}>
-                          Attach
+                          {t("Attach")}
                         </Button>
                       )}
                     </ListItem>
@@ -2857,7 +2861,7 @@ export default function Sidebar({
                 })}
                 {pinnedSessions.length === 0 && (
                   <ListItem>
-                    <ListItemText primary="No pinned sessions" />
+                    <ListItemText primary={t("No pinned sessions")} />
                   </ListItem>
                 )}
               </List>
@@ -2870,7 +2874,7 @@ export default function Sidebar({
                   gutterBottom
                   sx={{ fontSize: "typography.body1.fontSize", fontWeight: "bold" }}
                 >
-                  Active Port Forwarding Tunnels
+                  {t("Active Port Forwarding Tunnels")}
                 </Typography>
                 {activeTunnels.length > 0 ? (
                   <TableContainer
@@ -2886,10 +2890,10 @@ export default function Sidebar({
                     <Table size="small" stickyHeader>
                       <TableHead>
                         <TableRow>
-                          <TableCell sx={{ fontWeight: "bold" }}>SSH Host</TableCell>
-                          <TableCell sx={{ fontWeight: "bold" }}>Type</TableCell>
-                          <TableCell sx={{ fontWeight: "bold" }}>Local Address</TableCell>
-                          <TableCell sx={{ fontWeight: "bold" }}>Remote Host:Port</TableCell>
+                          <TableCell sx={{ fontWeight: "bold" }}>{t("SSH Host")}</TableCell>
+                          <TableCell sx={{ fontWeight: "bold" }}>{t("Type")}</TableCell>
+                          <TableCell sx={{ fontWeight: "bold" }}>{t("Local Address")}</TableCell>
+                          <TableCell sx={{ fontWeight: "bold" }}>{t("Remote Host:Port")}</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -2930,7 +2934,7 @@ export default function Sidebar({
               <>
                 <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
                   <Typography variant="subtitle2" sx={{ fontSize: "typography.body1.fontSize", fontWeight: "bold" }}>
-                    Saved Passwords
+                    {t("Saved Passwords")}
                   </Typography>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                     {!passwordsState.locked && !useKeyring && (
@@ -2948,7 +2952,7 @@ export default function Sidebar({
                           height: 24,
                         }}
                       >
-                        Lock
+                        {t("Lock")}
                       </Button>
                     )}
                     <Chip
@@ -2974,10 +2978,10 @@ export default function Sidebar({
                     <Table size="small" stickyHeader>
                       <TableHead>
                         <TableRow>
-                          <TableCell sx={{ fontWeight: "bold" }}>Key</TableCell>
-                          <TableCell sx={{ fontWeight: "bold" }}>Password</TableCell>
+                          <TableCell sx={{ fontWeight: "bold" }}>{t("Key")}</TableCell>
+                          <TableCell sx={{ fontWeight: "bold" }}>{t("Password")}</TableCell>
                           <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                            Actions
+                            {t("Actions")}
                           </TableCell>
                         </TableRow>
                       </TableHead>
@@ -3038,7 +3042,7 @@ export default function Sidebar({
                   <Box
                     sx={{ py: 4, textAlign: "center", border: "1px dashed", borderColor: "divider", borderRadius: 1 }}
                   >
-                    <Typography color="text.secondary">No passwords saved in the store.</Typography>
+                    <Typography color="text.secondary">{t("No passwords saved in the store.")}</Typography>
                   </Box>
                 )}
               </>
@@ -3050,71 +3054,71 @@ export default function Sidebar({
                   <code>Service Worker:</code>
                   <Chip label={swStatus} color={swStatus === "active" ? "success" : "default"} variant="outlined" />
                   <Button variant="outlined" color="error" size="small" onClick={handleClearCache}>
-                    Force Update
+                    {t("Force Update")}
                   </Button>
                 </Typography>
                 <Divider sx={{ my: 1 }} />
                 <Typography variant="subtitle2" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }} gutterBottom>
-                  <code>Config Dir:</code>
+                  <code>{t("Config Dir")}:</code>
                   <ChipCopy label={sysConfigDir} />
                 </Typography>
                 <Typography variant="subtitle2" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }} gutterBottom>
-                  <code>SSH Dir:</code>
+                  <code>{t("SSH Dir")}:</code>
                   <ChipCopy label={sysSshDir} />
                 </Typography>
                 <Typography variant="subtitle2" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }} gutterBottom>
-                  <code>Default Identity Path:</code>
+                  <code>{t("Default Identity Path")}:</code>
                   {sysDefaultIdentityPath ? (
                     <ChipCopy label={sysDefaultIdentityPath} />
                   ) : (
                     <>
-                      (none). Generate one use: <ChipCopy label="ssh-keygen -t ed25519" />
+                      {t("(none)")}. {t("Generate one use:")} <ChipCopy label="ssh-keygen -t ed25519" />
                     </>
                   )}
                 </Typography>
                 <Typography variant="subtitle2" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }} gutterBottom>
-                  <code>Default Identity Public Key:</code>
+                  <code>{t("Default Identity Public Key")}:</code>
                   <ChipCopy label={sysDefaultIdentityPublicKey} />
                 </Typography>
                 <Typography variant="subtitle2" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }} gutterBottom>
-                  <code>OS Username:</code>
+                  <code>{t("OS Username")}:</code>
                   <ChipCopy label={sysUsername} />
                 </Typography>
                 <Typography variant="subtitle2" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }} gutterBottom>
-                  <code>Sitename:</code>
+                  <code>{t("Sitename")}:</code>
                   <ChipCopy label={sysSitename} />
                   <Button variant="text" size="small" onClick={handleChangeSitename}>
-                    Change
+                    {t("Change")}
                   </Button>
                 </Typography>
                 <Divider sx={{ my: 1 }} />
                 <Typography variant="subtitle2" gutterBottom>
-                  Save Password Setting
+                  {t("Save Password Setting")}
                 </Typography>
                 <ButtonGroup fullWidth size="small" sx={{ mt: 1, mb: 1 }}>
                   <Button
                     variant={savePassword === "ask" ? "contained" : "outlined"}
                     onClick={() => updateConfig({ savePassword: "ask" })}
                   >
-                    ask (default)
+                    {t("ask")} ({t("default")})
                   </Button>
                   <Button
                     variant={savePassword === "always" ? "contained" : "outlined"}
                     onClick={() => updateConfig({ savePassword: "always" })}
                   >
-                    always
+                    {t("always")}
                   </Button>
                   <Button
                     variant={savePassword === "never" ? "contained" : "outlined"}
                     onClick={() => updateConfig({ savePassword: "never" })}
                   >
-                    never
+                    {t("never")}
                   </Button>
                 </ButtonGroup>
                 <Divider sx={{ my: 1 }} />
                 <Typography variant="subtitle2" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }} gutterBottom>
-                  <code title="Use system keyring to save app password">Use System Keyring:</code>
-                  <Chip color={useKeyring ? "success" : "default"} label={useKeyring ? "Enabled" : "Disabled"} />
+                  <code title={t("Use system keyring to save app password")}>{t("Use System Keyring")}:</code>
+                  <Chip color={useKeyring ? "success" : "default"} label={useKeyring ? t("Enabled") : t("Disabled")} />
                   <Button
                     variant="text"
                     size="small"
@@ -3160,15 +3164,15 @@ export default function Sidebar({
                       updateConfig({ appPassword, useKeyring: !useKeyring });
                     }}
                   >
-                    {useKeyring ? "Toggle Off" : "Toggle On"}
+                    {useKeyring ? t("Toggle Off") : t("Toggle On")}
                   </Button>
                 </Typography>
                 <Typography variant="subtitle2" gutterBottom>
-                  Change App Password
+                  {t("Change App Password")}
                 </Typography>
                 <TextField
                   fullWidth
-                  label="New Password"
+                  label={t("New Password")}
                   type="password"
                   size="small"
                   margin="dense"
@@ -3177,7 +3181,7 @@ export default function Sidebar({
                 />
                 <TextField
                   fullWidth
-                  label="Confirm Password"
+                  label={t("Confirm Password")}
                   type="password"
                   size="small"
                   margin="dense"
@@ -3191,7 +3195,7 @@ export default function Sidebar({
                   sx={{ mt: 2 }}
                   disableElevation
                 >
-                  Save Password
+                  {t("Save Password")}
                 </Button>
               </>
             )}
@@ -3232,7 +3236,7 @@ export default function Sidebar({
                   >
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
                       <Typography variant="body2" color="text.secondary" sx={{ fontWeight: "bold" }}>
-                        Sync Status:
+                        {t("Sync Status")}:
                       </Typography>
                       <Chip
                         label={syncStatus.toUpperCase()}
@@ -3260,7 +3264,7 @@ export default function Sidebar({
                         disabled={!currentWebdavUrl}
                         sx={{ textTransform: "none" }}
                       >
-                        {webdavEnabled ? "Disable Sync" : "Enable Sync"}
+                        {webdavEnabled ? t("Disable Sync") : t("Enable Sync")}
                       </Button>
                       <Button
                         variant="outlined"
@@ -3269,7 +3273,7 @@ export default function Sidebar({
                         size="small"
                         sx={{ textTransform: "none" }}
                       >
-                        {syncStatus === "syncing" ? "Syncing..." : "Sync Now"}
+                        {syncStatus === "syncing" ? t("Syncing...") : t("Sync Now")}
                       </Button>
                     </Box>
                   </Box>
@@ -3289,25 +3293,25 @@ export default function Sidebar({
                     </Box>
                   )}
                   <Typography variant="body2" color="text.secondary">
-                    Last Synced: {syncTime ? new Date(syncTime).toLocaleString() : "Never"}
+                    {t("Last Synced")} {syncTime ? new Date(syncTime).toLocaleString() : t("Never")}
                   </Typography>
                 </Box>
                 <Divider sx={{ my: 1 }} />
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: "bold" }}>
-                  WebDAV Server Configuration
+                  {t("WebDAV Server Configuration")}
                 </Typography>
                 <TextFieldWithCopy
                   fullWidth
-                  label="Current Server URL"
+                  label={t("Current Server URL")}
                   size="small"
                   margin="dense"
-                  value={currentWebdavUrl || "(Not configured)"}
+                  value={currentWebdavUrl || "(" + t("Not configured") + ")"}
                   disabled
                   copyDisabled={!currentWebdavUrl}
                 />
                 <TextFieldWithCopy
                   fullWidth
-                  label="WebDAV Server URL"
+                  label={t("WebDAV Server URL")}
                   size="small"
                   margin="dense"
                   placeholder="https://example.com/dav/"
@@ -3317,7 +3321,7 @@ export default function Sidebar({
                 />
                 <TextFieldWithCopy
                   fullWidth
-                  label="WebDAV Username"
+                  label={t("WebDAV Username")}
                   size="small"
                   margin="dense"
                   value={webdavUser}
@@ -3326,10 +3330,10 @@ export default function Sidebar({
                 />
                 <TextFieldWithCopy
                   fullWidth
-                  label="WebDAV Password"
+                  label={t("WebDAV Password")}
                   size="small"
                   margin="dense"
-                  placeholder="WebDAV password"
+                  placeholder={t("WebDAV password")}
                   value={webdavPassword}
                   onChange={(e) => setWebdavPassword(e.target.value)}
                   disabled={isTestingWebdav}
@@ -3344,9 +3348,9 @@ export default function Sidebar({
                   }
                   label={
                     <Box>
-                      <Typography variant="body2">Enable End-to-End Encryption (E2EE)</Typography>
+                      <Typography variant="body2">{t("Enable End-to-End Encryption (E2EE)")}</Typography>
                       <Typography variant="caption" color="text.secondary">
-                        Encrypt data before uploading to WebDAV server.
+                        {t("Encrypt data before uploading to WebDAV server.")}
                       </Typography>
                     </Box>
                   }
@@ -3362,9 +3366,9 @@ export default function Sidebar({
                   }
                   label={
                     <Box>
-                      <Typography variant="body2">Upload local SSH data</Typography>
+                      <Typography variant="body2">{t("Upload local SSH data")}</Typography>
                       <Typography variant="caption" color="text.secondary">
-                        Allow uploading this device's local SSH config and known_hosts.
+                        {t("Allow uploading this device's local SSH config and known_hosts.")}
                       </Typography>
                     </Box>
                   }
@@ -3373,13 +3377,13 @@ export default function Sidebar({
                 {useEncryption && !!masterKey && (
                   <TextFieldWithCopy
                     fullWidth
-                    label="WebDAV Master Key (Base64)"
+                    label={t("WebDAV Master Key (Base64)")}
                     size="small"
                     margin="dense"
                     value={masterKey}
                     onChange={(e) => setMasterKey(e.target.value)}
                     disabled={true}
-                    helperText="Save this key. You will need it to setup encrypted sync session on other devices."
+                    helperText={t("Save this key. You will need it to setup encrypted sync session on other devices.")}
                   />
                 )}
                 <Typography sx={{ display: "flex", gap: 1 }}>
@@ -3399,10 +3403,10 @@ export default function Sidebar({
                     disableElevation
                   >
                     {isTestingWebdav
-                      ? "Verifying & Saving..."
+                      ? t("Verifying & Saving...")
                       : urlChanged
-                        ? "Verify & Save Sync Settings"
-                        : "Save Sync Settings"}
+                        ? t("Verify & Save Sync Settings")
+                        : t("Save Sync Settings")}
                   </Button>
                   <Button
                     variant="contained"
@@ -3411,7 +3415,7 @@ export default function Sidebar({
                     sx={{ mt: 1, textTransform: "none" }}
                     disableElevation
                   >
-                    Clear Sync Settings
+                    {t("Clear Sync Settings")}
                   </Button>
                 </Typography>
               </>
@@ -3473,7 +3477,7 @@ export default function Sidebar({
                   <br />
                   <b>Ctrl + Alt + Shift + L</b> : Toggle Lock/Unlock current tab
                   <br />
-                  <b>Alt + I</b> : Focus sidebar search filter and clear current value, use <b>↑ ↓</b> to select,{" "}
+                  <b>Alt + I</b> : Focus sidebar search filter and clear current value, use <b>↑ ↓</b> to select,&nbsp;
                   <b>Enter</b> to open (or toggle group expandness),&nbsp;
                   <b>Alt + Enter</b> to open in current tab, <b>Ctrl + Enter</b> to open in new window (or toggle group
                   and all sub-groups expandness),&nbsp;
@@ -3608,7 +3612,7 @@ export default function Sidebar({
         fullWidth
       >
         <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pr: 1.5 }}>
-          <span>{editHostName ? `Edit Host ${editHostName}` : "Add Host"}</span>
+          <span>{editHostName ? t("Edit Host") + " " + editHostName : t("Add Host")}</span>
           <IconButton
             aria-label="more"
             id="edit-button-form-menu-button"
@@ -3632,38 +3636,38 @@ export default function Sidebar({
             disabled={!hostFormData.hostname}
             onClick={handleCopySSHCommand}
           >
-            Copy SSH Command
+            {t("Copy SSH Command")}
           </MenuItem>
           <MenuItem
             id="edit-host-form-menu-copy-upload-identity-command"
             disabled={!hostFormData.hostname}
             onClick={handleCopyUploadIdentityCommand}
           >
-            Copy Upload Identity Command
+            {t("Copy Upload Identity Command")}
           </MenuItem>
           <MenuItem
             id="edit-host-form-menu-copy-ssh-copy-id-command"
             disabled={!hostFormData.hostname}
             onClick={handleCopySSHCopyIdCommand}
           >
-            Copy ssh-copy-id Command
+            {t("Copy ssh-copy-id Command")}
           </MenuItem>
           <MenuItem
             id="edit-host-form-menu-copy-ssh-config-block"
             disabled={!hostFormData.hostname}
             onClick={handleCopySshConfigBlock}
           >
-            Copy SSH Config Block
+            {t("Copy SSH Config Block")}
           </MenuItem>
           <MenuItem
             id="edit-host-form-menu-run-ssh-copy-id"
             disabled={!hostFormData.hostname}
             onClick={handleRunSSHCopyId}
           >
-            Run ssh-copy-id
+            {t("Run ssh-copy-id")}
           </MenuItem>
           <MenuItem id="edit-host-form-menu-paste-ssh-config-block" onClick={handlePasteSshConfigBlock}>
-            Paste SSH Config Block
+            {t("Paste SSH Config Block")}
           </MenuItem>
           <ExtraMenu
             extraMenu={extraHostFormMenu}
@@ -3682,7 +3686,7 @@ export default function Sidebar({
               deleteHost(editHostName);
             }}
           >
-            Delete Host
+            {t("Delete Host")}
           </MenuItem>
           <MenuItem
             id="edit-host-form-menu-reset"
@@ -3695,14 +3699,14 @@ export default function Sidebar({
               }
             }}
           >
-            Reset Form
+            {t("Reset Form")}
           </MenuItem>
         </Menu>
         <DialogContent>
           <Box sx={{ mt: 1, display: "flex", flexDirection: "column", gap: 2 }}>
             <TextFieldWithCopy
               fullWidth
-              label="Alias Name"
+              label={t("Alias Name")}
               size="small"
               type="search"
               value={hostFormData.name}
@@ -3712,10 +3716,10 @@ export default function Sidebar({
             />
             <TextFieldWithCopy
               fullWidth
-              label="HostName (IP / Domain)"
+              label={t("HostName (IP / Domain)")}
               size="small"
               type="search"
-              placeholder="Ctrl + Enter to submit"
+              placeholder={t("Ctrl + Enter to submit")}
               onKeyDown={handleEditHostFormKeyDown}
               value={hostFormData.hostname}
               onChange={(e) => setHostFormData({ ...hostFormData, hostname: e.target.value })}
@@ -3724,9 +3728,9 @@ export default function Sidebar({
             />
             <FreeTextField
               fullWidth
-              label="User"
+              label={t("User")}
               size="small"
-              placeholder="leave empty to use backend current user"
+              placeholder={t("leave empty to use backend current user")}
               options={["root", "ubuntu", "user", "administrator"]}
               onKeyDown={handleEditHostFormKeyDown}
               value={hostFormData.user}
@@ -3736,7 +3740,7 @@ export default function Sidebar({
             />
             <FreeTextField
               fullWidth
-              label="Port"
+              label={t("Port")}
               size="small"
               placeholder="22"
               options={["22", "222", "2222"]}
@@ -3748,13 +3752,13 @@ export default function Sidebar({
             />
             <TextFieldWithCopy
               fullWidth
-              label="Tags (Optional)"
+              label={t("Tags (Optional)")}
               size="small"
               type="search"
               value={hostFormData.tags}
               onChange={(e) => setHostFormData({ ...hostFormData, tags: e.target.value })}
               onKeyDown={handleEditHostFormKeyDown}
-              placeholder="e.g. production web"
+              placeholder={t("e.g. production web")}
             />
             <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
               {parsedTags.map((tag) => (
@@ -3796,7 +3800,7 @@ export default function Sidebar({
             </Box>
             <TextFieldWithCopy
               fullWidth
-              label="IdentityFile (Optional)"
+              label={t("IdentityFile (Optional)")}
               size="small"
               type="search"
               value={hostFormData.identityFile}
@@ -3806,7 +3810,7 @@ export default function Sidebar({
             />
             <TextField
               fullWidth
-              label="Password (Optional)"
+              label={t("Password (Optional)")}
               size="small"
               type="password"
               value={hostFormData.password || ""}
@@ -3829,7 +3833,7 @@ export default function Sidebar({
             />
             <TextFieldWithCopy
               fullWidth
-              label="ProxyJump (Optional)"
+              label={t("ProxyJump (Optional)")}
               size="small"
               type="search"
               value={hostFormData.proxyJump}
@@ -3839,7 +3843,7 @@ export default function Sidebar({
             />
             <FreeTextField
               fullWidth
-              label="AddressFamily (Optional)"
+              label={t("AddressFamily (Optional)")}
               size="small"
               placeholder="any / inet / inet6"
               options={["any", "inet", "inet6"]}
@@ -3851,7 +3855,7 @@ export default function Sidebar({
             />
             <FreeTextField
               fullWidth
-              label="UserKnownHostsFile (Optional)"
+              label={t("UserKnownHostsFile (Optional)")}
               size="small"
               placeholder="e.g. ~/.ssh/known_hosts_custom"
               options={["/dev/null", "NUL"]}
@@ -3875,7 +3879,7 @@ export default function Sidebar({
             />
             <FreeTextField
               fullWidth
-              label="StrictHostKeyChecking (Optional)"
+              label={t("StrictHostKeyChecking (Optional)")}
               size="small"
               placeholder="ask / yes / no"
               options={["ask", "yes", "no"]}
@@ -3890,7 +3894,7 @@ export default function Sidebar({
             />
             <FreeTextField
               fullWidth
-              label="HostKeyAlgorithms (Optional)"
+              label={t("HostKeyAlgorithms (Optional)")}
               size="small"
               placeholder="e.g. +ssh-rsa"
               options={["+ssh-rsa"]}
@@ -3900,10 +3904,10 @@ export default function Sidebar({
             />
             <FreeTextField
               fullWidth
-              label="VerifyHostKeyDNS (Optional)"
+              label={t("VerifyHostKeyDNS (Optional)")}
               size="small"
               placeholder="ask / yes / no"
-              helperText="Verify host key fingerprint via DNSSEC SSHFP records (RFC 4255)"
+              helperText={t("Verify host key fingerprint via DNSSEC SSHFP records (RFC 4255)")}
               options={["ask", "yes", "no"]}
               value={hostFormData.verifyHostKeyDns || ""}
               onChange={(newValue) => {
@@ -3916,10 +3920,10 @@ export default function Sidebar({
             />
             <FreeTextField
               fullWidth
-              label="SendEnv (Optional)"
+              label={t("SendEnv (Optional)")}
               size="small"
               placeholder="LANG LC_* COLORTERM NO_COLOR"
-              helperText="Send environment variables to remote host"
+              helperText={t("Send environment variables to remote host")}
               options={["LANG LC_* COLORTERM NO_COLOR"]}
               value={hostFormData.sendEnv || ""}
               onChange={(newValue) => setHostFormData({ ...hostFormData, sendEnv: newValue || "" })}
@@ -3927,9 +3931,9 @@ export default function Sidebar({
             />
             <FreeTextField
               fullWidth
-              label="RemoteCommand (Optional)"
+              label={t("RemoteCommand (Optional)")}
               size="small"
-              placeholder="Use %i for session id"
+              placeholder={t("Use %i for session id")}
               options={remoteCommandOptions as unknown as string[]}
               value={hostFormData.remoteCommand || ""}
               onChange={(newValue) => {
@@ -3939,7 +3943,7 @@ export default function Sidebar({
             />
             <TextFieldWithCopy
               fullWidth
-              label="LocalForward (Optional)"
+              label={t("LocalForward (Optional)")}
               size="small"
               multiline
               rows={2}
@@ -3950,7 +3954,7 @@ export default function Sidebar({
             />
             <TextFieldWithCopy
               fullWidth
-              label="RemoteForward (Optional)"
+              label={t("RemoteForward (Optional)")}
               size="small"
               multiline
               rows={2}
@@ -3961,32 +3965,32 @@ export default function Sidebar({
             />
             <TextFieldWithCopy
               fullWidth
-              label="DynamicForward (Optional)"
+              label={t("DynamicForward (Optional)")}
               size="small"
               multiline
               rows={2}
               value={hostFormData.dynamicForward || ""}
               onChange={(e) => setHostFormData({ ...hostFormData, dynamicForward: e.target.value })}
               onKeyDown={handleEditHostFormKeyDown}
-              placeholder="e.g. 1080 or 127.0.0.1:1080&#10;One port per line"
+              placeholder={t("e.g. 1080 or 127.0.0.1:1080\nOne port per line")}
             />
             <TextFieldWithCopy
               fullWidth
-              label="Comment (Optional)"
+              label={t("Comment (Optional)")}
               size="small"
               multiline
               rows={2}
               value={hostFormData.comment}
               onChange={(e) => setHostFormData({ ...hostFormData, comment: e.target.value })}
               onKeyDown={handleEditHostFormKeyDown}
-              placeholder="Host description..."
+              placeholder={t("Host description...")}
             />
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setEditHostDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => setEditHostDialogOpen(false)}>{t("Cancel")}</Button>
           <Button variant="contained" onClick={handleSaveHost} disabled={hostFormSubmitDisabled}>
-            Save
+            {t("Save")}
           </Button>
         </DialogActions>
       </Dialog>

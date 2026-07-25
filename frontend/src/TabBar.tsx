@@ -19,6 +19,7 @@ import {
   type ScratchpadSyncState,
   CS_EVENT_TERMINAL_CHANGE,
   getKeyCombination,
+  t,
 } from "./common";
 import {
   type TerminalRefMap,
@@ -455,7 +456,7 @@ export default function TabBar({
                 setTabs([]);
               }}
             >
-              Close All Tabs ({tabs.length})
+              {t("Close All Tabs")} ({tabs.length})
             </MenuItem>
             <MenuItem
               id="tab-bar-menu-save-all"
@@ -465,7 +466,7 @@ export default function TabBar({
                 openSaveTabsToButtonDialog();
               }}
             >
-              Save All to Button
+              {t("Save All to Button")}
             </MenuItem>
             <ExtraMenu
               extraMenu={extraTabBarMenu}

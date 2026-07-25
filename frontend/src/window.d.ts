@@ -177,6 +177,12 @@ declare global {
    */
   var __CS_RUNNING_SCRIPT__: Pick<ButtonData, "id" | "name" | "type" | "payload"> | undefined;
   /**
+   * The i18n language of CozySSH app. E.g. "en", "zh-CN".
+   * Note the i18n is done at frontend bundle/build time, so the value is static.
+   * CozySSH provides different language bundled Go program.
+   */
+  var __CS_LANG__: string;
+  /**
    * `0` - CozySSH is running as web app
    * `1` - CozySSH is running as Windows Desktop app (webview2)
    */

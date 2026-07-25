@@ -61,6 +61,7 @@ import {
   parseHostName,
   searchStringAny,
   shortcutLabel,
+  t,
 } from "./common";
 import {
   type NtdItem,
@@ -1498,7 +1499,7 @@ export default function NewTabDialog({
                     handleDeleteItem(contextMenu.item);
                   }}
                 >
-                  Delete (alt+d)
+                  {t("Delete")} (alt+d)
                 </MenuItem>
               )}
             </>

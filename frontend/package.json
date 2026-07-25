@@ -9,6 +9,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build-vite": "vite build",
+    "build-zh": "cross-env VITE_APP_LANG=zh-CN vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -59,6 +60,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
     "babel-plugin-react-compiler": "^1.0.0",
+    "cross-env": "^10.1.0",
     "dts-bundle-generator": "^9.5.1",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",

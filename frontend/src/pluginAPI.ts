@@ -105,7 +105,8 @@ window.__CS_CUSTOM_SHORTCUTS__ = {};
 window.__CS_TOAST_KEY_MUTE_SET__ = toastKeyMuteSet;
 window.__CS_MAC_MODIFIER_SWAP__ = macModifierSwap;
 window.__CS_ENV__ = window.appToggleFullscreen ? 1 : 0;
-document.documentElement.dataset.csEnv = `${window.__CS_ENV__}`;
+window.__CS_LANG__ = import.meta.env.VITE_APP_LANG || "en";
+document.documentElement.dataset.csEnv = `${__CS_ENV__}`;
 document.documentElement.dataset.csVersion = PACKAGE_JSON_VERSION;
 
 if (__CS_ENV__ === 1) {

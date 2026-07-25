@@ -1823,3 +1823,12 @@ export function getEventSource(e: PointerEvent): "mouse" | "pen" | "touch" | "ke
   }
   return source;
 }
+
+/**
+ * Stub i18n translate function. Used only to fulfill TypeScript & IDE autocomplete.
+ * All t instances will be replaced with the actual translation by vite plugin at compile/build time.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function t(key: string, _variables?: Record<string, string | number | boolean>): string {
+  return key;
+}
