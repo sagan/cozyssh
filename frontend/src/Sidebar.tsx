@@ -3655,7 +3655,7 @@ export default function Sidebar({
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setSettingsOpen(false)}>Close</Button>
+          <Button onClick={() => setSettingsOpen(false)}>{t("Close")}</Button>
         </DialogActions>
       </Dialog>
 

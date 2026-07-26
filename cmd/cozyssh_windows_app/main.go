@@ -218,10 +218,28 @@ func saveAppConfig(cfgDir string, ac *AppConfig) {
 	})
 }
 
+var i18n map[string]string
+
+// Translate i18n. The translations is load from embedded frontend/dist/i18n.app.json
+func t(tag string) string {
+	if i18n == nil {
+		return tag
+	}
+	if str, ok := i18n[tag]; ok {
+		return str
+	}
+	return tag
+}
+
 // ---- Main -----------------------------------------------------------------
 
 func main() {
 	common.IsApp = true
+
+	if i18nFile, err := cozyssh.FrontendFS.Open("frontend/dist/i18n.app.json"); err == nil {
+		json.NewDecoder(i18nFile).Decode(&i18n)
+		i18nFile.Close()
+	}
 
 	flags := cozyssh.ParseFlags(os.Args[1:])
 	if flags.DoResetPassword || flags.Err == flag.ErrHelp {
@@ -516,22 +534,22 @@ func setupSystemTrayAndHook(w webview2.WebView, hwnd uintptr, cfg *config.Config
 			activateWindow(hwnd)
 		})
 	}
-	menu.Add("Open "+constants.APP_NAME, onClick)
-	menu.Add("Open Data Dir", func() {
+	menu.Add(t("Open")+" "+constants.APP_NAME, onClick)
+	menu.Add(t("Open Data Dir"), func() {
 		exec.Command("explorer", cfg.ConfigDir).Run()
 	})
-	menu.Add("Open SSH Dir", func() {
+	menu.Add(t("Open SSH Dir"), func() {
 		exec.Command("explorer", cfg.AbsSSHDir).Run()
 	})
-	menu.Add("Open App.exe Dir", func() {
+	menu.Add(t("Open App.exe Dir"), func() {
 		path, _ := os.Executable()
 		dir := filepath.Dir(path)
 		exec.Command("explorer", dir).Run()
 	})
-	menu.Add("Check update", func() {
+	menu.Add(t("Check Update"), func() {
 		go checkAppUpdate(hwnd)
 	})
-	menu.Add("Quit ("+cozyssh.Version+")", func() {
+	menu.Add(t("Quit")+" ("+cozyssh.Version+")", func() {
 		w.Terminate()
 	})
 	trayInstance.SetMenu(menu)

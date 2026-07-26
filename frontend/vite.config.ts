@@ -4,95 +4,103 @@ import { defineConfig } from "vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import babel from "@rolldown/plugin-babel";
 import { VitePWA } from "vite-plugin-pwa";
+import { viteStaticCopy } from "vite-plugin-static-copy";
 import jsonStringify from "json-stable-stringify";
+import { walk } from "estree-walker";
+import MagicString from "magic-string";
 
 import { CACHE_API_DATA, CACHE_MANIFEST } from "./src/constants";
 
 const debug = false;
+
 process.env.VITE_APP_LANG = process.env.VITE_APP_LANG || "en";
+let translations: Record<string, string> | undefined;
+const localePath = path.resolve(__dirname, `./i18n/${process.env.VITE_APP_LANG}.json`);
+if (process.env.VITE_APP_LANG !== "en") {
+  // Let the build fail if the locale file doesn't exist
+  translations = JSON.parse(fs.readFileSync(localePath, "utf-8"));
+}
 
-function compileTimeI18nPlugin() {
-  const lang = process.env.VITE_APP_LANG;
-  const localePath = path.resolve(__dirname, `./i18n/${lang}.json`);
-  let translations: Record<string, string> | undefined;
-
-  if (lang !== "en") {
-    // Let the build fail if the locale file doesn't exist
-    translations = JSON.parse(fs.readFileSync(localePath, "utf-8"));
-  }
+function compileTimeI18n() {
+  let fileMutated = false;
 
   return {
     name: "vite-plugin-compile-i18n",
-    enforce: "pre" as const,
-
     transform(code: string, id: string) {
-      if (!/\.(t|j)sx?$/.test(id) || id.includes("node_modules")) {
-        return;
+      // Only process layout files (adjust extension filter as needed)
+      if (!id.endsWith(".tsx") && !id.endsWith(".jsx") && !id.endsWith(".ts")) {
+        return null;
+      }
+      if (id.includes("node_modules")) {
+        return null;
       }
 
-      // Matches: \bt(...)
-      // Group 1: The translation key
-      // Group 2: The optional variables object block (including nested braces)
-      const tRegex = /\bt\s*\(\s*['"`](.*?)['"`](?:\s*,\s*(\{[\s\S]*?\}))?\s*\)/g;
+      // 1. Parse code into AST using Vite/Rollup's built-in parser
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ast = (this as any).parse(code);
+      const magicString = new MagicString(code);
+      let hasChanges = false;
 
-      let fileMutated = false;
+      // 2. Walk the AST to find t("...") calls
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      walk(ast as any, {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        enter(node: any) {
+          if (node.type === "CallExpression" && node.callee.type === "Identifier" && node.callee.name === "t") {
+            const firstArg = node.arguments[0];
+            if (!firstArg) return;
 
-      const transformedCode = code.replace(tRegex, (match, key, varsObjectStr) => {
-        if (!translations) {
-          return JSON.stringify(key);
-        }
-        const translationTemplate = translations[key];
+            let originalText: string | null = null;
 
-        if (translationTemplate === undefined) {
-          // Detect placeholders in the runtime variable block to pre-populate them nicely
-          let placeholderPattern = "";
-          if (varsObjectStr) {
-            // Find key properties in the passed object to guess placeholder names
-            const propRegex = /([a-zA-Z0-9_]+)\s*:/g;
-            let matchProp;
-            const foundVars: string[] = [];
-            while ((matchProp = propRegex.exec(varsObjectStr)) !== null) {
-              foundVars.push(`{${matchProp[1]}}`);
+            // 1. Handle standard strings: t("Note") or t('Note')
+            if (firstArg.type === "Literal" && typeof firstArg.value === "string") {
+              originalText = firstArg.value;
             }
-            placeholderPattern = foundVars.length ? ` ${foundVars.join(" ")}` : "";
+            // 2. Handle template literals without variables: t(`OpenSSH...`)
+            else if (firstArg.type === "TemplateLiteral" && firstArg.expressions.length === 0) {
+              // 'quasis' holds the actual string segments
+              originalText = firstArg.quasis[0].value.cooked;
+            }
+
+            // 3. Replace if we found a valid static string
+            if (originalText) {
+              if (!translations) {
+                return originalText;
+              }
+
+              if (translations[originalText] === undefined) {
+                translations[originalText] = `__MISSING_TRANSLATION__[${originalText}]`;
+                fileMutated = true;
+                console.warn(
+                  `[i18n] Automatically injected missing key "${originalText}" into ${process.env.VITE_APP_LANG}.json`,
+                );
+              }
+
+              const translatedText = translations[originalText] || originalText;
+              magicString.overwrite(node.start, node.end, JSON.stringify(translatedText));
+              hasChanges = true;
+            }
           }
-
-          // Save the missing key with a fallback string value
-          translations[key] = `__MISSING_TRANSLATION__ [${key}]${placeholderPattern}`;
-          fileMutated = true;
-          console.warn(`[i18n] Automatically injected missing key "${key}" into ${lang}.json`);
-        }
-
-        // Case A: No variables provided. Return normal string literal.
-        if (!varsObjectStr) {
-          return JSON.stringify(translationTemplate);
-        }
-
-        // Case B: Variables provided. Convert "{variable}" into "${___}" template literal.
-        // We evaluate variables by looking up fields on the matching JS object string passed in.
-
-        // 1. Create a safe unique reference variable name for our runtime block
-        const varMapName = `_i18nVars`;
-
-        // 2. Turn "Welcome, {name}!" into a JS template string pattern
-        const templateLiteralStr = translationTemplate.replace(/\{([^}]+)\}/g, (_, varName) => {
-          return `\${${varMapName}.${varName.trim()}}`;
-        });
-
-        // 3. Output an Immediately Invoked Function Expression (IIFE) or block to execute it seamlessly in JSX
-        // Transforms into: ((_i18nVars) => `Welcome back, ${_i18nVars.name}!`)({ name: "John" })
-        return `((_${varMapName}) => \`${templateLiteralStr}\`)(${varsObjectStr})`;
+        },
       });
+
+      if (!hasChanges) {
+        return null;
+      }
 
       // Synchronize changes back to disk immediately after file transforms completes
       if (fileMutated) {
         fs.writeFileSync(localePath, jsonStringify(translations, { space: 2 })!, "utf-8");
       }
 
-      return { code: transformedCode, map: null };
+      return {
+        code: magicString.toString(),
+        map: magicString.generateMap({ hires: true }), // Keeps your sourcemaps perfect
+      };
     },
   };
 }
+
 // https://vite.dev/config/
 export default defineConfig({
   build: {
@@ -111,7 +119,7 @@ export default defineConfig({
       }
     : undefined,
   plugins: [
-    compileTimeI18nPlugin(),
+    compileTimeI18n(),
     react(),
     babel({ presets: [reactCompilerPreset()] }),
     VitePWA({
@@ -155,5 +163,17 @@ export default defineConfig({
       },
       manifest: false,
     }),
+    process.env.VITE_APP_LANG !== "en" &&
+      viteStaticCopy({
+        targets: [
+          {
+            // Path to the file you want to copy
+            src: `i18n/${process.env.VITE_APP_LANG}.app.json`,
+            // Target directory inside 'dist' (resolves to dist/)
+            dest: "",
+            rename: { stripBase: true, name: "i18n.app.json" },
+          },
+        ],
+      }),
   ],
 });

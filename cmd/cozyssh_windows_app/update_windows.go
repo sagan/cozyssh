@@ -80,9 +80,14 @@ func checkAppUpdate(hwnd uintptr) {
 		return
 	}
 
+	i18nSuffix := ""
+	if lang := t("$LANG"); lang != "" && lang != "en" {
+		i18nSuffix = "_" + lang
+	}
+
 	// 4. Download targeted architecture zip file
-	downloadURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/cozyssh-app-%s-windows-%s.zip",
-		GITHUB_REPO, release.TagName, release.TagName, runtime.GOARCH)
+	downloadURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/cozyssh-app-%s-windows-%s%s.zip",
+		GITHUB_REPO, release.TagName, release.TagName, runtime.GOARCH, i18nSuffix)
 
 	dlResp, err := client.Get(downloadURL)
 	if err != nil {

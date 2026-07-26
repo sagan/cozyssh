@@ -1,11 +1,6 @@
 version: 2
 project_name: cozyssh
 
-before:
-  hooks:
-    - npm --prefix frontend install
-    - npm --prefix frontend run build
-
 builds:
   - id: cozyssh
     env:
@@ -45,22 +40,28 @@ archives:
       - cozyssh
     format: zip
     name_template: >-
-      {{ .ProjectName }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}
+      {{ .ProjectName }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}{{ .Env.I18N_SUFFIX }}
 
   - id: cozyssh-app
     builds:
       - cozyssh-app
     format: zip
     name_template: >-
-      {{ .ProjectName }}-app-v{{ .Version }}-{{ .Os }}-{{ .Arch }}
+      {{ .ProjectName }}-app-v{{ .Version }}-{{ .Os }}-{{ .Arch }}{{ .Env.I18N_SUFFIX }}
 
 checksum:
-  name_template: "checksums.txt"
+  # Keeps checksum files separate so they don't overwrite each other
+  name_template: "checksums{{ .Env.I18N_SUFFIX }}.txt"
 
 snapshot:
   name_template: "{{ incpatch .Version }}-next"
 
+# Tells GoReleaser explicitly to keep existing notes on multi-pass uploads
+release:
+  mode: keep-existing
+
 changelog:
+  disable: "{{ .Env.DISABLE_CHANGELOG }}" # Dynamically skipped in pass 2
   sort: asc
   filters:
     exclude:

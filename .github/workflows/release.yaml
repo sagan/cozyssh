@@ -27,7 +27,16 @@ jobs:
         with:
           go-version: "1.22"
 
-      - name: Run GoReleaser
+      - name: Install Frontend Dependencies
+        run: npm --prefix frontend install
+
+      # ----------------------------------------------------
+      # Pass 1: Build & Publish English Version (Base)
+      # ----------------------------------------------------
+      - name: Build Frontend (English)
+        run: npm --prefix frontend run build
+
+      - name: Run GoReleaser (English)
         uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
@@ -35,3 +44,25 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          I18N_SUFFIX: "" # Leaves filename as base template
+          DISABLE_CHANGELOG: "false" # Generates the initial changelog
+
+      # ----------------------------------------------------
+      # Pass 2: Build & Publish Chinese Version (zh-CN)
+      # ----------------------------------------------------
+      - name: Build Frontend (zh-CN)
+        run: npm --prefix frontend run build
+        env:
+          VITE_APP_LANG: zh-CN
+
+      - name: Run GoReleaser (zh-CN)
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: latest
+          # --skip=changelog stops GoReleaser from overwriting original release notes
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          I18N_SUFFIX: "_zh-CN" # Appends _zh-CN to the zip filenames
+          DISABLE_CHANGELOG: "true" # Safely skips changelog generation entirely
