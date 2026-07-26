@@ -30,11 +30,10 @@ import {
   DEFAULT_BUTTON_GROUP,
   ID_INPUT_DIALOG_INPUT,
   LINK_COZYSSH_DOC_SCRIPTS,
+  LINK_COZYSSH_PLUGIN_MANAGER,
   LOCAL_NAME,
   METHOD_POST,
-  MISC_FUNCTIONS,
   PartialMatchHostKey,
-  TERMINAL_FUNCTIONS,
 } from "./constants";
 import {
   type ContextMenu,
@@ -108,6 +107,7 @@ import FreeTextField from "./components/FreeTextField";
 import TextFieldWithCopy from "./components/TextFieldWithCopy";
 import ExtraMenu from "./components/ExtraMenu";
 import { runScript } from "./pluginAPI";
+import { BUTTPN_TYPES, MISC_FUNCTIONS, TERMINAL_FUNCTIONS } from "./buttons";
 
 export interface DialogManagerProps {
   isMobile: boolean;
@@ -124,20 +124,6 @@ export interface DialogManagerProps {
     alternativeMode?: AltMode,
   ) => Promise<void>;
 }
-
-const PluginManagerUrl =
-  "https://raw.githubusercontent.com/sagan/cozyssh-plugins/refs/heads/master/CsPluginManager.tsx";
-
-/**
- * button type, label
- */
-const buttonTypes: [ButtonData["type"], string][] = [
-  ["send_string", "Send String"],
-  ["terminal_function", "Terminal Function"],
-  ["misc", "Misc"],
-  ["open_terminal", "Open Terminal"],
-  ["run_script", "Run Script"],
-];
 
 export default function DialogManager({
   isMobile,
@@ -464,7 +450,7 @@ export default function DialogManager({
   }, [importFromUrl]);
 
   const handleInstallPluginManager = useCallback(async () => {
-    await importFromUrl(PluginManagerUrl);
+    await importFromUrl(LINK_COZYSSH_PLUGIN_MANAGER);
   }, [importFromUrl]);
 
   const buttonFormDirty = useMemo(() => {
@@ -992,7 +978,7 @@ export default function DialogManager({
               : t("Add Button") + (buttonFormData.id ? " (" + buttonFormData.id + ")" : "")}
           </span>
           <IconButton
-            aria-label="more"
+            aria-label={t("More")}
             id="edit-button-form-menu-button"
             aria-controls={titleMenuAnchor ? "edit-button-form-menu" : undefined}
             aria-expanded={titleMenuAnchor ? "true" : undefined}
@@ -1146,7 +1132,7 @@ export default function DialogManager({
               slotProps={{ select: { native: true } }}
               sx={{ flexGrow: 1 }}
             >
-              {buttonTypes.map((v) => (
+              {BUTTPN_TYPES.map((v) => (
                 <option key={v[0]} value={v[0]}>
                   {v[1]}
                 </option>
@@ -1261,7 +1247,7 @@ export default function DialogManager({
                     rel="noopener noreferrer"
                     style={{ color: theme.palette.primary.main, textDecoration: "none" }}
                   >
-                    Liquid Template
+                    {t("Liquid Template")}
                   </a>
                 </Typography>
                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.8 }}>
@@ -1344,7 +1330,7 @@ export default function DialogManager({
             <TextField
               select
               fullWidth
-              label="Function"
+              label={t("Function")}
               size="small"
               value={buttonFormData.payload}
               onChange={(e) => setButtonFormData({ ...buttonFormData, payload: e.target.value })}
@@ -1360,7 +1346,7 @@ export default function DialogManager({
             <TextField
               select
               fullWidth
-              label="Action"
+              label={t("Function")}
               size="small"
               value={buttonFormData.payload}
               onChange={(e) => setButtonFormData({ ...buttonFormData, payload: e.target.value })}
@@ -1508,8 +1494,13 @@ export default function DialogManager({
               variant="outlined"
               id={ID_INPUT_DIALOG_INPUT}
               placeholder={
-                "Type input to send to terminal. <ctrl-x> style syntax supported. Ctrl + Enter to send; Ctrl + Shift + Enter to send to all tabs" +
-                (activeTab && activeTab.panes.length > 1 ? " or Ctrl + Alt + Enter to send to all panes" : "")
+                t("Type input to send to terminal. <ctrl-x> style syntax supported.") +
+                " " +
+                (activeTab && activeTab.panes.length > 1
+                  ? t("Ctrl + Enter to send; Ctrl + Shift + Enter to send to all tabs")
+                  : t(
+                      "Ctrl + Enter to send; Ctrl + Shift + Enter to send to all tabs or Ctrl + Alt + Enter to send to all panes",
+                    ))
               }
               value={inputValue}
               onChange={(e) => {
@@ -1546,7 +1537,7 @@ export default function DialogManager({
                       rel="noopener noreferrer"
                       style={{ color: theme.palette.primary.main, textDecoration: "none" }}
                     >
-                      Liquid Template
+                      {t("Liquid Template")}
                     </a>
                   </Typography>
                   <Button
@@ -1565,8 +1556,13 @@ export default function DialogManager({
                   variant="outlined"
                   id={ID_INPUT_DIALOG_INPUT}
                   placeholder={
-                    "Type template/input to send to terminal. Ctrl + Enter to send; Ctrl + Shift + Enter to send to all tabs" +
-                    (activeTab && activeTab.panes.length > 1 ? " or Ctrl + Alt + Enter to send to all panes" : "")
+                    t("Type template/input to send to terminal.") +
+                    " " +
+                    (activeTab && activeTab.panes.length > 1
+                      ? t("Ctrl + Enter to send; Ctrl + Shift + Enter to send to all tabs")
+                      : t(
+                          "Ctrl + Enter to send; Ctrl + Shift + Enter to send to all tabs or Ctrl + Alt + Enter to send to all panes",
+                        ))
                   }
                   value={inputValue}
                   onChange={(e) => {
@@ -1670,8 +1666,8 @@ export default function DialogManager({
                       }}
                       placeholder={
                         activeTab && activeTab.panes.length > 1
-                          ? "Ctrl + Enter to send; +Alt/Shift for all panes/tabs"
-                          : "Ctrl + Enter to send; +Shift for all tabs"
+                          ? t("Ctrl + Enter to send; +Alt/Shift for all panes/tabs")
+                          : t("Ctrl + Enter to send; +Shift for all tabs")
                       }
                       onKeyDown={(e) => {
                         const key = getKeyCombination(e);
@@ -1734,7 +1730,7 @@ export default function DialogManager({
               control={
                 <Checkbox checked={appendNewLine} onChange={(e) => setAppendNewLine(e.target.checked)} size="small" />
               }
-              label={<Typography variant="body2">Append new line (\n)</Typography>}
+              label={<Typography variant="body2">{t("Append new line (\\n)")}</Typography>}
             />
             {activeTab && activeTab.panes.length > 1 && (
               <FormControlLabel
@@ -1767,7 +1763,7 @@ export default function DialogManager({
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => handleCloseInputDialog(true)}>Cancel</Button>
+          <Button onClick={() => handleCloseInputDialog(true)}>{t("Cancel")}</Button>
           <Button
             variant="contained"
             onClick={() => {

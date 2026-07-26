@@ -77,6 +77,7 @@ import {
   CACHE_MANIFEST,
   DEFAULT_BUTTON_GROUP,
   DEFAULT_FONT_SIZE,
+  DEFAULT_RECENT_BUTTONS,
   DEFAULT_TERMINAL_FONT_SIZE,
   DEFAULT_TOAST_NUMBER,
   DEFAULT_TOAST_TIMEOUT,
@@ -94,8 +95,9 @@ import {
   TOAST_KEY_FONT_SIZE,
   VAR_CS_FONT_SIZE,
   VAR_CS_TERMINAL_FONT_SIZE,
-  VAR_TOAST_NUMBER,
-  VAR_TOAST_TIMEOUT,
+  VAR_CS_RECENT_BUTTONS,
+  VAR_CS_TOAST_NUMBER,
+  VAR_CS_TOAST_TIMEOUT,
 } from "./constants";
 import { dialogs } from "./Dialogs";
 
@@ -524,13 +526,13 @@ export const notify = (msg: string, severity: Severity = "info", key?: string) =
     const newToasts = key
       ? [...prev.filter((t) => typeof t.id === "number" || !t.id.startsWith(key + "-")), newToast]
       : [...prev, newToast];
-    return newToasts.slice(-getIntVar(VAR_TOAST_NUMBER, DEFAULT_TOAST_NUMBER));
+    return newToasts.slice(-getIntVar(VAR_CS_TOAST_NUMBER, DEFAULT_TOAST_NUMBER));
   });
   setTimeout(
     () => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     },
-    getIntVar(VAR_TOAST_TIMEOUT, DEFAULT_TOAST_TIMEOUT),
+    getIntVar(VAR_CS_TOAST_TIMEOUT, DEFAULT_TOAST_TIMEOUT),
   );
 };
 
@@ -540,7 +542,7 @@ export const updateRecentButtonId = (id: string) => {
       return {};
     }
     const filtered = state.recentButtonIds.filter((i) => i !== id);
-    const updated = [id, ...filtered].slice(0, 10);
+    const updated = [id, ...filtered].slice(0, getIntVar(VAR_CS_RECENT_BUTTONS, DEFAULT_RECENT_BUTTONS));
     localStorage.setItem(BROWSER_STORAGE_KEY_RECENT_BUTTONS, JSON.stringify(updated));
     return { recentButtonIds: updated };
   });

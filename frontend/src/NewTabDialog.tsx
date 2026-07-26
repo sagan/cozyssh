@@ -32,7 +32,6 @@ import SmartButtonIcon from "@mui/icons-material/SmartButton";
 import { version as PACKAGE_JSON_VERSION } from "../package.json";
 import type { Session, ButtonData, HostData } from "./api";
 import {
-  BUILTIN_BUTTONS,
   DEFAULT_BUTTON_GROUP,
   DEFAULT_SCROLL_ITEMS,
   LOCAL_NAME,
@@ -46,6 +45,9 @@ import {
   ID_NEW_TAB_DIALOG_LIST,
   ID_NEW_TAB_DIALOG_CONTENT,
   RECENT_BUTTON_ID_PREFIX_CUSTOM_SHORTCUT,
+  VAR_CS_RECENT_HOSTS,
+  DEFAULT_RECENT_HOSTS,
+  APP_NAME,
 } from "./constants";
 import {
   assertUnreachable,
@@ -95,6 +97,7 @@ import {
 } from "./store";
 import TextFieldWithCopy from "./components/TextFieldWithCopy";
 import ExtraMenu from "./components/ExtraMenu";
+import { BUILTIN_BUTTONS } from "./buttons";
 
 interface DialogSection {
   title: string;
@@ -399,8 +402,8 @@ export default function NewTabDialog({
     return {
       type: "link",
       value: LINK_COZYSSH_GITHUB,
-      label: "About (GitHub)",
-      subtitle: `CozySSH ${PACKAGE_JSON_VERSION} (Backend: ${appVersion})`,
+      label: t("About (GitHub)"),
+      subtitle: `${APP_NAME} ${PACKAGE_JSON_VERSION} (${t("Backend")}: ${appVersion})`,
       tag: PACKAGE_JSON_VERSION,
     };
   }, [appVersion]);
@@ -478,10 +481,11 @@ export default function NewTabDialog({
       .filter((r) => r.host.toLowerCase().includes(f))
       .sort((a, b) => b.last_used - a.last_used);
 
+    const latestNum = getIntVar(VAR_CS_RECENT_HOSTS, DEFAULT_RECENT_HOSTS);
     if (f) {
-      return [matchedRecents.slice(0, 5), []];
+      return [matchedRecents.slice(0, latestNum), []];
     }
-    return [matchedRecents.slice(0, 5), matchedRecents.slice(5)];
+    return [matchedRecents.slice(0, latestNum), matchedRecents.slice(latestNum)];
   }, [f, viewMode, recents]);
 
   const filteredHosts = useMemo(() => {
@@ -729,7 +733,12 @@ export default function NewTabDialog({
           type: "local",
           value: shell !== defaultShell ? localShellHost(shell) : LOCAL_NAME,
           label:
-            shell.name + (shell === defaultShell ? " (Default)" : shell === alternativeShell ? " (Alternative)" : ""),
+            shell.name +
+            (shell === defaultShell
+              ? " " + t("(Default)")
+              : shell === alternativeShell
+                ? " " + t("(Alternative)")
+                : ""),
           subtitle: t("Local Shell") + " - " + shell.path,
           tag: shell === defaultShell ? "alt+n" : shell === alternativeShell ? "alt+shift+n" : "",
         });
@@ -1551,7 +1560,7 @@ export default function NewTabDialog({
                     handleDeleteItem(contextMenu.item);
                   }}
                 >
-                  {t("Delete")} (alt+d)
+                  {t("Delete")} (delete / alt+d)
                 </MenuItem>
               )}
             </>

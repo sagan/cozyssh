@@ -163,7 +163,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
         maxWidth="md"
       >
         <DialogTitle sx={{ pb: 1 }}>{config.message}</DialogTitle>
-        <DialogContent sx={{ whiteSpace: "pre" }}>
+        <DialogContent sx={{ whiteSpace: "break-spaces" }}>
           {config.detail && (
             <DialogContentText sx={{ mb: config.type === "prompt" || config.verification ? 2 : 0 }}>
               {config.detail}

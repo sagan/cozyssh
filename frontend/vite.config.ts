@@ -13,6 +13,8 @@ import { CACHE_API_DATA, CACHE_MANIFEST } from "./src/constants";
 
 const debug = false;
 
+const I18N_MISSING_TRANSLATION_PLACEHOLDER_PREFIX = "__MISSING_TRANSLATION__";
+
 process.env.VITE_APP_LANG = process.env.VITE_APP_LANG || "en";
 let translations: Record<string, string> | undefined;
 const localePath = path.resolve(__dirname, `./i18n/${process.env.VITE_APP_LANG}.json`);
@@ -69,11 +71,15 @@ function compileTimeI18n() {
               }
 
               if (translations[originalText] === undefined) {
-                translations[originalText] = `__MISSING_TRANSLATION__[${originalText}]`;
+                translations[originalText] = I18N_MISSING_TRANSLATION_PLACEHOLDER_PREFIX + originalText;
                 fileMutated = true;
                 console.warn(
                   `[i18n] Automatically injected missing key "${originalText}" into ${process.env.VITE_APP_LANG}.json`,
                 );
+              }
+
+              if (translations[originalText].startsWith(I18N_MISSING_TRANSLATION_PLACEHOLDER_PREFIX)) {
+                return originalText;
               }
 
               const translatedText = translations[originalText] || originalText;

@@ -104,7 +104,7 @@ import {
   SETTINGS_TAB_IDX_ABOUT,
   ID_SIDEBAR,
   ID_SIDEBAR_MAIN,
-  VAR_SIDEBAR_WIDTH,
+  VAR_CS_SIDEBAR_WIDTH,
   DEFAULT_SIDEBAR_WIDTH,
 } from "./constants";
 import {
@@ -2205,7 +2205,7 @@ export default function Sidebar({
     setDraggedItem(null);
   };
 
-  const sidebarWidth = getIntVar(VAR_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH);
+  const sidebarWidth = getIntVar(VAR_CS_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH);
 
   return (
     <Drawer
@@ -2970,7 +2970,7 @@ export default function Sidebar({
                   <Box
                     sx={{ py: 4, textAlign: "center", border: "1px dashed", borderColor: "divider", borderRadius: 1 }}
                   >
-                    <Typography color="text.secondary">No active port forwarding tunnels.</Typography>
+                    <Typography color="text.secondary">{t("No active port forwarding tunnels.")}</Typography>
                   </Box>
                 )}
               </>

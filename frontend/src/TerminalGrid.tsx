@@ -4,7 +4,7 @@ import MenuIcon from "@mui/icons-material/Menu";
 import AddIcon from "@mui/icons-material/Add";
 import ViewSidebarIcon from "@mui/icons-material/ViewSidebar";
 
-import { VAR_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN } from "./constants";
+import { VAR_CS_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN } from "./constants";
 import { type ScratchpadSyncState, genPaneId, t } from "./common";
 import {
   type PaneData,
@@ -137,7 +137,7 @@ export default function TerminalGrid({
       } else {
         handleSendKeyRef.current(diffY > 0 ? "\x1b[B" : "\x1b[A");
       }
-      window.navigator.vibrate?.(getIntVar(VAR_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN));
+      window.navigator.vibrate?.(getIntVar(VAR_CS_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN));
     };
 
     // CRITICAL FIX: Use { capture: true } so this outer wrapper intercepts the

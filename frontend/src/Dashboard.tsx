@@ -36,10 +36,8 @@ import {
   TOAST_KEY_API_FULLDATA,
   VAR_CS_NO_SANITIZE_HASH,
   TOAST_KEY_COPY,
-  TERMINAL_FUNCTIONS,
-  MISC_FUNCTIONS,
   TOAST_KEY_REFRESH,
-  VAR_VIBRATE_PATTERN,
+  VAR_CS_VIBRATE_PATTERN,
 } from "./constants";
 import {
   type ContextMenu,
@@ -126,6 +124,7 @@ import DialogManager from "./DialogManager";
 import AppletWrapper, { type AppletData } from "./AppletWrapper";
 import SideEffect from "./SideEffect";
 import { dialogs } from "./Dialogs";
+import type { MISC_FUNCTIONS, TERMINAL_FUNCTIONS } from "./buttons";
 
 interface DashboardProps {
   initialData?: FullData;
@@ -328,13 +327,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
         const currentIndex = tabs.findIndex((t) => t.id === activeTabId);
         if (diffX > 0 && currentIndex > 0) {
           const newTab = tabs[currentIndex - 1];
-          window.navigator.vibrate?.(getIntVar(VAR_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN));
+          window.navigator.vibrate?.(getIntVar(VAR_CS_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN));
           setActiveTabId(newTab.id);
           setActivePaneId(newTab.activePaneId);
           triggerFocus();
         } else if (diffX < 0 && currentIndex < tabs.length - 1) {
           const newTab = tabs[currentIndex + 1];
-          window.navigator.vibrate?.(getIntVar(VAR_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN));
+          window.navigator.vibrate?.(getIntVar(VAR_CS_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN));
           setActiveTabId(newTab.id);
           setActivePaneId(newTab.activePaneId);
           triggerFocus();
@@ -440,7 +439,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
         }
         return;
       }
-      window.navigator.vibrate?.(getIntVar(VAR_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN));
+      window.navigator.vibrate?.(getIntVar(VAR_CS_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN));
       let noFocus = false;
       switch (btn.type) {
         case "send_string": {

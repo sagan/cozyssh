@@ -1,0 +1,100 @@
+import type { ButtonData } from "./api";
+import { t } from "./common";
+
+/**
+ * button type, label
+ */
+export const BUTTPN_TYPES: [ButtonData["type"], string][] = [
+  ["send_string", t("Send String")],
+  ["terminal_function", t("Terminal Function")],
+  ["misc", t("Misc")],
+  ["open_terminal", t("Open Terminal")],
+  ["run_script", t("Run Script")],
+] as const;
+
+export const TERMINAL_FUNCTIONS = [
+  { value: "COPY", label: t("COPY (Buffer)") },
+  { value: "COPY_VISIBLE", label: t("COPY (Visible)") },
+  { value: "COPY_SELECTION", label: t("COPY (Selection)"), shortcut: "ctrl+shift+c" },
+  { value: "COPY_CWD", label: t("COPY (CWD)") },
+  { value: "COPY_CURRENT_CMDLINE", label: t("COPY (Current Cmdline)") },
+  { value: "COPY_LAST_COMMAND_OUTPUT", label: t("COPY (Last Cmd Output)") },
+  { value: "PASTE", label: t("PASTE (Clipboard)"), shortcut: "ctrl+shift+v" },
+  { value: "INPUT", label: t("INPUT (Prompt)"), shortcut: "alt+q" },
+  { value: "CLEAR", label: t("CLEAR (Screen)") },
+  { value: "RESET", label: t("RESET (Terminal)") },
+  { value: "RECONNECT", label: t("RECONNECT (Session)"), shortcut: "ctrl+shift+r" },
+  { value: "CLOSE", label: t("CLOSE (Pane)"), shortcut: "alt+w" },
+  { value: "CLOSE_TAB", label: t("CLOSE (Tab)"), shortcut: "alt+shift+w" },
+  { value: "SCROLL_TO_TOP", label: t("SCROLL (Top)"), shortcut: "ctrl+alt+k" },
+  { value: "SCROLL_TO_BOTTOM", label: t("SCROLL (Bottom)"), shortcut: "ctrl+alt+j" },
+  { value: "SCROLL_UP", label: t("SCROLL (Up)"), shortcut: "alt+k" },
+  { value: "SCROLL_DOWN", label: t("SCROLL (Down)"), shortcut: "alt+j" },
+  { value: "SCROLL_PAGE_UP", label: t("SCROLL (Page Up)"), shortcut: "alt+shift+k" },
+  { value: "SCROLL_PAGE_DOWN", label: t("SCROLL (Page Down)"), shortcut: "alt+shift+j" },
+  { value: "CLONE_SESSION", label: t("CLONE (Session)"), shortcut: "alt+c" },
+  { value: "CLONE_SESSION_IN_SAME_TAB", label: t("CLONE (Session In Same Tab)"), shortcut: "alt+shift+c" },
+  { value: "SEARCH", label: t("SEARCH (Buffer)"), shortcut: "ctrl+shift+f" },
+  { value: "LOCK_TAB", label: t("Lock (Tab)"), shortcut: "ctrl+alt+shift+l" },
+  { value: "UNLOCK_TAB", label: t("Unlock (Tab)"), shortcut: "ctrl+alt+shift+l" },
+  { value: "PIN_TAB", label: t("Pin (Tab)") },
+  { value: "UNPIN_TAB", label: t("Unpin (Tab)") },
+  { value: "HIDE_TAB", label: t("Hide (Tab)") },
+  { value: "RENAME_TAB", label: t("Rename (Tab)") },
+  { value: "ATTACH", label: t("Attach (Background Session)") },
+  { value: "EDIT_TAB_HOST", label: t("Edit (Tab Host)") },
+  { value: "SAVE_TAB", label: t("Save (Tab)") },
+  { value: "SAVE_ALL_TABS", label: t("Save (All Tabs)") },
+  { value: "CLEAR_UNREAD_TABS", label: t("Clear Unread Tabs") },
+  { value: "CLOSE_OTHER_TABS", label: t("Close Other Tabs"), shortcut: "ctrl+alt+shift+w" },
+  { value: "CLOSE_RIGHT_TABS", label: t("Close Tabs to the Right") },
+  { value: "CLOSE_ALL_TABS", label: t("Close All Tabs") },
+  { value: "MOVE_TAB_LEFT", label: t("Move Tab Left") },
+  { value: "MOVE_TAB_RIGHT", label: t("Move Tab Right") },
+] as const;
+
+export const MISC_FUNCTIONS = [
+  { value: "RESET_FONT_SIZE", label: t("Reset Font Size"), shortcut: "ctrl+alt+0" },
+  { value: "RESET_TERMINAL_FONT_SIZE", label: t("Reset Terminal Font Size") },
+  { value: "RESET_GLOBAL_FONT_SIZE", label: t("Reset Global Font Size") },
+  { value: "DECREASE_FONT_SIZE", label: t("Decrease Font Size"), shortcut: "alt+shift+-" },
+  { value: "DECREASE_TERMINAL_FONT_SIZE", label: t("Decrease Terminal Font Size"), shortcut: "alt+-" },
+  { value: "DECREASE_GLOBAL_FONT_SIZE", label: t("Decrease Global Font Size") },
+  { value: "INCREASE_FONT_SIZE", label: t("Increase Font Size"), shortcut: "alt+shift++" },
+  { value: "INCREASE_TERMINAL_FONT_SIZE", label: t("Increase Terminal Font Size"), shortcut: "alt++" },
+  { value: "INCREASE_GLOBAL_FONT_SIZE", label: t("Increase Global Font Size") },
+  { value: "TABS_SCROLL_LEFT", label: t("Tabs Scroll Left") },
+  { value: "TABS_SCROLL_RIGHT", label: t("Tabs Scroll Right") },
+  { value: "BUTTONS_SCROLL_LEFT", label: t("Buttons Scroll Left") },
+  { value: "BUTTONS_SCROLL_RIGHT", label: t("Buttons Scroll Right") },
+  { value: "NEXT_BUTTON_GROUP", label: t("Next Button Group"), shortcut: "alt+v" },
+  { value: "PREV_BUTTON_GROUP", label: t("Prev Button Group"), shortcut: "alt+shift+v" },
+  { value: "TOGGLE_SIDEBAR_TAGS", label: t("Toggle Sidebar Tags"), shortcut: "ctrl+alt+backquote" },
+  { value: "TOGGLE_SIDEBAR_FAV", label: t("Toggle Sidebar Fav"), shortcut: "ctrl+alt+1" },
+  { value: "TOGGLE_SIDEBAR_ALL", label: t("Toggle Sidebar All"), shortcut: "ctrl+alt+2" },
+  { value: "TOGGLE_SIDEBAR_AUTO", label: t("Toggle Sidebar Auto"), shortcut: "ctrl+alt+3" },
+  { value: "TOGGLE_SIDEBAR_GROUPS", label: t("Toggle Sidebar Groups"), shortcut: "ctrl+alt+g" },
+  { value: "OPEN_SCRATCHPAD", label: t("Open Scratchpad"), shortcut: "alt+s" },
+  { value: "OPEN_DASHBOARD_DIALOG", label: t("Open Dashboard Dialog") },
+  { value: "OPEN_NEW_HOST_DIALOG", label: t("Open New Host Dialog") },
+  { value: "OPEN_NEW_BUTTON_DIALOG", label: t("Open New Button Dialog") },
+  { value: "REFRESH", label: t("Refresh Data"), shortcut: "ctrl+alt+r" },
+  { value: "NONE", label: t("None (Do Nothing)") },
+] as const;
+
+export const BUILTIN_BUTTONS = [
+  ...TERMINAL_FUNCTIONS.map((f) => ({
+    id: `builtin-${f.value}`,
+    name: f.label,
+    type: "terminal_function" as const,
+    payload: f.value,
+    shortcut: "shortcut" in f ? f.shortcut : undefined,
+  })),
+  ...MISC_FUNCTIONS.map((f) => ({
+    id: `builtin-${f.value}`,
+    name: f.label,
+    type: "misc" as const,
+    payload: f.value,
+    shortcut: "shortcut" in f ? f.shortcut : undefined,
+  })),
+] as const;

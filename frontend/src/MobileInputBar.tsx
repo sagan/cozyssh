@@ -24,7 +24,7 @@ import SouthIcon from "@mui/icons-material/South";
 import WestIcon from "@mui/icons-material/West";
 import EastIcon from "@mui/icons-material/East";
 
-import { HASH_MOBILE_INPUT_PANEL, VAR_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN } from "./constants";
+import { HASH_MOBILE_INPUT_PANEL, VAR_CS_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN } from "./constants";
 import type { TerminalRefMap } from "./store";
 import { getIntVar, getStore } from "./store";
 
@@ -229,7 +229,7 @@ export default function MobileInputBar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [extraKeysOpen]);
 
-  const vibe = () => window.navigator.vibrate?.(getIntVar(VAR_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN));
+  const vibe = () => window.navigator.vibrate?.(getIntVar(VAR_CS_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN));
 
   const startCoords = useRef<{ x: number; y: number } | null>(null);
 

@@ -52,16 +52,18 @@ export const VAR_CS_NO_PASTE_ON_CONTEXTMENU = "cs_no_paste_on_contextmenu";
 export const VAR_CS_REMAP_CTRL_L = "cs_remap_ctrl_l";
 export const VAR_CS_TERMINAL_FONT_SIZE = "cs_terminal_font_size";
 export const VAR_CS_FONT_SIZE = "cs_font_size";
-export const VAR_VIBRATE_PATTERN = "cs_vibrate_pattern";
+export const VAR_CS_VIBRATE_PATTERN = "cs_vibrate_pattern";
 /**
  * The keeped toasts number
  */
-export const VAR_TOAST_NUMBER = "cs_toast_number";
+export const VAR_CS_TOAST_NUMBER = "cs_toast_number";
 /**
  * The toast timeout in ms
  */
-export const VAR_TOAST_TIMEOUT = "cs_toast_timeout";
-export const VAR_SIDEBAR_WIDTH = "cs_sidebar_width";
+export const VAR_CS_TOAST_TIMEOUT = "cs_toast_timeout";
+export const VAR_CS_SIDEBAR_WIDTH = "cs_sidebar_width";
+export const VAR_CS_RECENT_HOSTS = "cs_recent_hosts";
+export const VAR_CS_RECENT_BUTTONS = "cs_recent_buttons";
 
 export const VAR_NOAUTOLOAD = "noautoload";
 export const VAR_NOAUTORUN = "noautorun";
@@ -74,105 +76,18 @@ export const DEFAULT_VIBRATE_PATTERN = 100;
 export const DEFAULT_TOAST_NUMBER = 3;
 export const DEFAULT_TOAST_TIMEOUT = 4000;
 export const DEFAULT_SIDEBAR_WIDTH = 260;
+export const DEFAULT_RECENT_HOSTS = 5;
+export const DEFAULT_RECENT_BUTTONS = 10;
+export const DEFAULT_SCROLL_LINES = 3;
+/**
+ * xterm.js default fontSize
+ */
+export const DEFAULT_TERMINAL_FONT_SIZE = 15;
 
 export const COZYSSH_TOKEN_PREFIX = "cozytoken.";
 export const WS_PROTOCOL_QUERY_PREFIX = "query.";
 export const WS_PROTOCOL_IDENTITY_PREFIX = "identity.";
 export const WS_PROTOCOL_DUMMY = "dummy";
-
-export const TERMINAL_FUNCTIONS = [
-  { value: "COPY", label: "COPY (Buffer)" },
-  { value: "COPY_VISIBLE", label: "COPY (Visible)" },
-  { value: "COPY_SELECTION", label: "COPY (Selection)", shortcut: "ctrl+shift+c" },
-  { value: "COPY_CWD", label: "COPY (CWD)" },
-  { value: "COPY_CURRENT_CMDLINE", label: "COPY (Current Cmdline)" },
-  { value: "COPY_LAST_COMMAND_OUTPUT", label: "COPY (Last Cmd Output)" },
-  { value: "PASTE", label: "PASTE (Clipboard)", shortcut: "ctrl+shift+v" },
-  { value: "INPUT", label: "INPUT (Prompt)", shortcut: "alt+q" },
-  { value: "CLEAR", label: "CLEAR (Screen)" },
-  { value: "RESET", label: "RESET (Terminal)" },
-  { value: "RECONNECT", label: "RECONNECT (Session)", shortcut: "ctrl+shift+r" },
-  { value: "CLOSE", label: "CLOSE (Pane)", shortcut: "alt+w" },
-  { value: "CLOSE_TAB", label: "CLOSE (Tab)", shortcut: "alt+shift+w" },
-  { value: "SCROLL_TO_TOP", label: "SCROLL (Top)", shortcut: "ctrl+alt+k" },
-  { value: "SCROLL_TO_BOTTOM", label: "SCROLL (Bottom)", shortcut: "ctrl+alt+j" },
-  { value: "SCROLL_UP", label: "SCROLL (Up)", shortcut: "alt+k" },
-  { value: "SCROLL_DOWN", label: "SCROLL (Down)", shortcut: "alt+j" },
-  { value: "SCROLL_PAGE_UP", label: "SCROLL (Page Up)", shortcut: "alt+shift+k" },
-  { value: "SCROLL_PAGE_DOWN", label: "SCROLL (Page Down)", shortcut: "alt+shift+j" },
-  { value: "CLONE_SESSION", label: "CLONE (Session)", shortcut: "alt+c" },
-  { value: "CLONE_SESSION_IN_SAME_TAB", label: "CLONE (Session In Same Tab)", shortcut: "alt+shift+c" },
-  { value: "SEARCH", label: "SEARCH (Buffer)", shortcut: "ctrl+shift+f" },
-  { value: "LOCK_TAB", label: "Lock (Tab)", shortcut: "ctrl+alt+shift+l" },
-  { value: "UNLOCK_TAB", label: "Unlock (Tab)", shortcut: "ctrl+alt+shift+l" },
-  { value: "PIN_TAB", label: "Pin (Tab)" },
-  { value: "UNPIN_TAB", label: "Unpin (Tab)" },
-  { value: "HIDE_TAB", label: "Hide (Tab)" },
-  { value: "RENAME_TAB", label: "Rename (Tab)" },
-  { value: "ATTACH", label: "Attach (Background Session)" },
-  { value: "EDIT_TAB_HOST", label: "Edit (Tab Host)" },
-  { value: "SAVE_TAB", label: "Save (Tab)" },
-  { value: "SAVE_ALL_TABS", label: "Save (All Tabs)" },
-  { value: "CLEAR_UNREAD_TABS", label: "Clear Unread Tabs" },
-  { value: "CLOSE_OTHER_TABS", label: "Close Other Tabs", shortcut: "ctrl+alt+shift+w" },
-  { value: "CLOSE_RIGHT_TABS", label: "Close Tabs to the Right" },
-  { value: "CLOSE_ALL_TABS", label: "Close All Tabs" },
-  { value: "MOVE_TAB_LEFT", label: "Move Tab Left" },
-  { value: "MOVE_TAB_RIGHT", label: "Move Tab Right" },
-] as const;
-
-export const MISC_FUNCTIONS = [
-  { value: "RESET_FONT_SIZE", label: "Reset Font Size", shortcut: "ctrl+alt+0" },
-  { value: "RESET_TERMINAL_FONT_SIZE", label: "Reset Terminal Font Size" },
-  { value: "RESET_GLOBAL_FONT_SIZE", label: "Reset Global Font Size" },
-  { value: "DECREASE_FONT_SIZE", label: "Decrease Font Size", shortcut: "alt+shift+-" },
-  { value: "DECREASE_TERMINAL_FONT_SIZE", label: "Decrease Terminal Font Size", shortcut: "alt+-" },
-  { value: "DECREASE_GLOBAL_FONT_SIZE", label: "Decrease Global Font Size" },
-  { value: "INCREASE_FONT_SIZE", label: "Increase Font Size", shortcut: "alt+shift++" },
-  { value: "INCREASE_TERMINAL_FONT_SIZE", label: "Increase Terminal Font Size", shortcut: "alt++" },
-  { value: "INCREASE_GLOBAL_FONT_SIZE", label: "Increase Global Font Size" },
-  { value: "TABS_SCROLL_LEFT", label: "Tabs Scroll Left" },
-  { value: "TABS_SCROLL_RIGHT", label: "Tabs Scroll Right" },
-  { value: "BUTTONS_SCROLL_LEFT", label: "Buttons Scroll Left" },
-  { value: "BUTTONS_SCROLL_RIGHT", label: "Buttons Scroll Right" },
-  { value: "NEXT_BUTTON_GROUP", label: "Next Button Group", shortcut: "alt+v" },
-  { value: "PREV_BUTTON_GROUP", label: "Prev Button Group", shortcut: "alt+shift+v" },
-  { value: "TOGGLE_SIDEBAR_TAGS", label: "Toggle Sidebar Tags", shortcut: "ctrl+alt+backquote" },
-  { value: "TOGGLE_SIDEBAR_FAV", label: "Toggle Sidebar Fav", shortcut: "ctrl+alt+1" },
-  { value: "TOGGLE_SIDEBAR_ALL", label: "Toggle Sidebar All", shortcut: "ctrl+alt+2" },
-  { value: "TOGGLE_SIDEBAR_AUTO", label: "Toggle Sidebar Auto", shortcut: "ctrl+alt+3" },
-  { value: "TOGGLE_SIDEBAR_GROUPS", label: "Toggle Sidebar Groups", shortcut: "ctrl+alt+g" },
-  { value: "OPEN_SCRATCHPAD", label: "Open Scratchpad", shortcut: "alt+s" },
-  { value: "OPEN_DASHBOARD_DIALOG", label: "Open Dashboard Dialog" },
-  { value: "OPEN_NEW_HOST_DIALOG", label: "Open New Host Dialog" },
-  { value: "OPEN_NEW_BUTTON_DIALOG", label: "Open New Button Dialog" },
-  { value: "REFRESH", label: "Refresh Data", shortcut: "ctrl+alt+r" },
-  { value: "NONE", label: "None (Do Nothing)" },
-] as const;
-
-export const BUILTIN_BUTTONS = [
-  ...TERMINAL_FUNCTIONS.map((f) => ({
-    id: `builtin-${f.value}`,
-    name: f.label,
-    type: "terminal_function" as const,
-    payload: f.value,
-    shortcut: "shortcut" in f ? f.shortcut : undefined,
-  })),
-  ...MISC_FUNCTIONS.map((f) => ({
-    id: `builtin-${f.value}`,
-    name: f.label,
-    type: "misc" as const,
-    payload: f.value,
-    shortcut: "shortcut" in f ? f.shortcut : undefined,
-  })),
-] as const;
-
-export const DEFAULT_SCROLL_LINES = 3;
-
-/**
- * xterm.js default fontSize
- */
-export const DEFAULT_TERMINAL_FONT_SIZE = 15;
 
 export const TOAST_KEY_FONT_SIZE = "cs-font-size";
 export const TOAST_KEY_PASTE_SSH_CONFIG_BLOCK = "cs-paste-ssh-config-block";
@@ -234,6 +149,8 @@ export const LINK_COZYSSH_GITHUB = "https://github.com/sagan/cozyssh";
 export const LINK_COZYSSH_DOC_DATA = "https://github.com/sagan/cozyssh/blob/master/docs/DATA.md";
 export const LINK_COZYSSH_DOC_SCRIPTS = "https://github.com/sagan/cozyssh/blob/master/docs/SCRIPTS.md";
 export const LINK_COZYSSH_DOC_PLUGINS = "https://github.com/sagan/cozyssh-plugins";
+export const LINK_COZYSSH_PLUGIN_MANAGER =
+  "https://raw.githubusercontent.com/sagan/cozyssh-plugins/refs/heads/master/CsPluginManager.tsx";
 
 export const SETTINGS_TABS = 9;
 
