@@ -51,11 +51,13 @@ import {
   TOAST_KEY_COPY,
 } from "./constants";
 import {
+  AltModeKey,
   assertUnreachable,
   cutString,
   filterArrayByText,
   filterHosts,
   forceReload,
+  getAltMode,
   getKeyCombination,
   isModifier,
   isValidHostname,
@@ -95,10 +97,11 @@ import {
   type NtdItemHelp,
   type NtdItemCustomShortcut,
   type NtdItemLink,
+  getStore,
 } from "./store";
 import TextFieldWithCopy from "./components/TextFieldWithCopy";
 import ExtraMenu from "./components/ExtraMenu";
-import { BUILTIN_BUTTONS, buttonTypeLabel } from "./buttons";
+import { BUILTIN_BUTTONS, BUTTPN_TYPES } from "./buttons";
 
 interface DialogSection {
   title: string;
@@ -268,6 +271,10 @@ function itemLabel(item: NtdItem, altMode: AltMode): string {
           return t("Edit");
         case 3:
           return t("Open In New Window");
+        case 4:
+          return t("Input this host");
+        default:
+          return "";
       }
       break;
     case "builtin_button":
@@ -287,6 +294,13 @@ function itemLabel(item: NtdItem, altMode: AltMode): string {
           if (item.btn.type === "send_string") {
             return t("Send"); // open Terminal Input dialog to send
           }
+          return "";
+        case 4:
+          if (item.btn.type === "open_terminal") {
+            return t("Input this host");
+          }
+          return "";
+        default:
           return "";
       }
       break;
@@ -645,7 +659,7 @@ export default function NewTabDialog({
               t("Group:") +
               ` ${btn.group || DEFAULT_BUTTON_GROUP} | ` +
               +t("Type:") +
-              ` ${buttonTypeLabel(btn.type)}${
+              ` ${BUTTPN_TYPES[btn.type]}${
                 btn.type !== "send_string" && btn.type !== "run_script" ? " | " + t("Payload:") + " " + btn.payload : ""
               }`,
             tooltip: btn.type !== "run_script" ? btn.payload : undefined,
@@ -663,7 +677,7 @@ export default function NewTabDialog({
               type: "builtin_button",
               value: id,
               label: btn.name,
-              subtitle: t("Built-in Button") + ` | ` + t("Type:") + " " + buttonTypeLabel(btn.type),
+              subtitle: t("Built-in Button") + ` | ` + t("Type:") + " " + BUTTPN_TYPES[btn.type],
               tooltip: undefined,
               btn: btn,
               tag: btn.shortcut ? shortcutLabel(btn.shortcut) : undefined,
@@ -892,7 +906,7 @@ export default function NewTabDialog({
           t("Group:") +
           ` ${b.group || DEFAULT_BUTTON_GROUP} | ` +
           t("Type:") +
-          ` ${buttonTypeLabel(b.type)}${
+          ` ${BUTTPN_TYPES[b.type]}${
             b.type !== "send_string" && b.type !== "run_script" ? " | " + t("Payload:") + " " + b.payload : ""
           }`;
         if (f && b.type === "send_string" && b.payload) {
@@ -924,7 +938,7 @@ export default function NewTabDialog({
           t("Group:") +
           ` ${b.group || DEFAULT_BUTTON_GROUP} | ` +
           t("Type:") +
-          ` ${buttonTypeLabel(b.type)}${
+          ` ${BUTTPN_TYPES[b.type]}${
             b.type !== "send_string" && b.type !== "run_script" ? " | " + t("Payload:") + " " + b.payload : ""
           }`;
         if (f && b.type === "send_string" && b.payload) {
@@ -951,8 +965,7 @@ export default function NewTabDialog({
         type: "builtin_button",
         value: b.id,
         label: b.name,
-        subtitle:
-          t("Built-in") + ` | ` + t("Type:") + ` ${buttonTypeLabel(b.type)} | ` + t("Payload:") + ` ${b.payload}`,
+        subtitle: t("Built-in") + ` | ` + t("Type:") + ` ${BUTTPN_TYPES[b.type]} | ` + t("Payload:") + ` ${b.payload}`,
         btn: b,
         tag: b.shortcut ? shortcutLabel(b.shortcut) : undefined,
       }));
@@ -1074,6 +1087,11 @@ export default function NewTabDialog({
           if (item.btn.id && altMode === 0) {
             updateRecentButtonId(item.btn.id);
           }
+          if (item.btn.type === "open_terminal" && altMode === 4) {
+            setNewTabDialogFilter(item.btn.payload);
+            inputRef.current?.focus();
+            break;
+          }
           onExecuteButton(item.btn, altMode);
           onClose();
           break;
@@ -1123,6 +1141,11 @@ export default function NewTabDialog({
         case "recent":
         case "local":
         case "direct":
+          if (altMode === 4) {
+            setNewTabDialogFilter(item.value);
+            inputRef.current?.focus();
+            break;
+          }
           onSelect(item.value, altMode);
           onClose();
           break;
@@ -1184,11 +1207,11 @@ export default function NewTabDialog({
         e.stopPropagation();
         e.preventDefault();
         changeNewTabDialogViewMode();
-      } else if (keycb === "enter" || keycb === "ctrl+enter" || keycb === "shift+enter" || keycb === "alt+enter") {
+      } else if (e.key === "Enter") {
         e.preventDefault();
         e.stopPropagation();
         if (items[selectedIndex]) {
-          handleSelect(items[selectedIndex], isModifier(e, "ctrl") ? 3 : e.shiftKey ? 2 : isModifier(e, "alt") ? 1 : 0);
+          handleSelect(items[selectedIndex], getAltMode(e));
         }
       } else if (keycb === "delete" || keycb === "alt+d") {
         // Remove from recents only when:
@@ -1202,6 +1225,12 @@ export default function NewTabDialog({
           e.stopPropagation();
           handleDeleteItem(item);
         }
+      } else if (keycb === "alt+backspace") {
+        e.preventDefault();
+        e.stopPropagation();
+        const newTabDialogFilter = getStore().newTabDialogFilter;
+        const [viewMode] = parseNewTabDialogFilter(newTabDialogFilter);
+        setNewTabDialogFilter(viewMode === "servers" ? "" : newTabDialogFilter.slice(0, 1));
       } else if (keycb === "escape") {
         onClose();
       }
@@ -1275,7 +1304,9 @@ export default function NewTabDialog({
     }
     const item = contextMenu.item;
     const elements: React.ReactNode[] = [];
-    const altModes: AltMode[] = ["recent", "host", "direct", "local"].includes(item.type) ? [0, 1, 3, 2] : [0, 1, 2, 3];
+    const altModes: AltMode[] = ["recent", "host", "direct", "local"].includes(item.type)
+      ? [0, 1, 3, 2, 4]
+      : [0, 1, 2, 3, 4];
     for (const altMode of altModes) {
       const label = itemLabel(item, altMode);
       if (!label) {
@@ -1294,7 +1325,7 @@ export default function NewTabDialog({
         >
           {label}
           {altMode === 0 ? ` (${item.label})` : ""}
-          &nbsp;({altMode === 0 ? "enter" : altMode === 1 ? "alt+enter" : altMode === 2 ? "shift+enter" : "ctrl+enter"})
+          &nbsp;({AltModeKey[altMode]})
         </MenuItem>,
       );
     }
@@ -1425,9 +1456,7 @@ export default function NewTabDialog({
                   onContextMenu={handleContextMenu}
                   selected={selectedIndex === item.flatIndex}
                   ref={selectedIndex === item.flatIndex ? selectedItemRef : null}
-                  onClick={(e) =>
-                    handleSelect(item, isModifier(e, "ctrl") ? 3 : e.shiftKey ? 2 : isModifier(e, "alt") ? 1 : 0)
-                  }
+                  onClick={(e) => handleSelect(item, getAltMode(e))}
                   title={item.tooltip}
                   data-type={item.type}
                   data-label={item.label}

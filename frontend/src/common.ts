@@ -1833,3 +1833,29 @@ export function getEventSource(e: PointerEvent): "mouse" | "pen" | "touch" | "ke
 export function t(key: string, _variables?: Record<string, string | number | boolean>): string {
   return key;
 }
+
+export function getAltMode(e: React.MouseEvent | React.KeyboardEvent): AltMode {
+  const isAlt = isModifier(e, "alt");
+  if (isModifier(e, "ctrl")) {
+    if (e.shiftKey) {
+      return isAlt ? 7 : 6;
+    } else {
+      return isAlt ? 5 : 3;
+    }
+  }
+  if (e.shiftKey) {
+    return isAlt ? 4 : 2;
+  }
+  return isAlt ? 1 : 0;
+}
+
+export const AltModeKey: Record<AltMode, string> = {
+  0: "enter",
+  1: "alt+enter",
+  2: "shift+enter",
+  3: "ctrl+enter",
+  4: "alt+shift+enter",
+  5: "ctrl+alt+enter",
+  6: "ctrl+shift+enter",
+  7: "ctrl+alt+shift+enter",
+};

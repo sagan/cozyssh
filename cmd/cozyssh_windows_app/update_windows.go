@@ -81,7 +81,7 @@ func checkAppUpdate(hwnd uintptr) {
 	}
 
 	i18nSuffix := ""
-	if lang := t("$LANG"); lang != "" && lang != "en" {
+	if lang := t("$LANG"); lang != "" && lang != "$LANG" && lang != "en" {
 		i18nSuffix = "_" + lang
 	}
 

@@ -301,6 +301,7 @@
   "Increase Font Size": "增大字体大小",
   "Increase Global Font Size": "增大全局字体大小",
   "Increase Terminal Font Size": "增大终端字体大小",
+  "Input this host": "输入这个主机",
   "Invalid app password, can't unlock password store.": "应用密码无效，无法解锁密码库。",
   "Invalid hostname or name": "无效的主机名或名称",
   "It contains all of your configured host aliases, hostnames, usernames, ports, and custom directives.": "它包含了您所有已配置的主机别名、主机名、用户名、端口和自定义指令。",

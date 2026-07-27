@@ -2188,13 +2188,17 @@ export interface CsExecResult {
 declare global {
 	type Modifier = "alt" | "ctrl" | "meta" | "shift";
 	/**
-	 * Defines the trigger way of the script button
+	 * Defines the trigger way of a click or interaction
 	 * - 0 / undefined : normal / default (Click / Enter)
 	 * - 1 : Alt + Mouse Click, or Alt + Enter
 	 * - 2 : Shift + Mouse Click, or Shift + Enter
 	 * - 3 : Ctrl + Mouse Click, or Ctrl + Enter
+	 * - 4 : Alt + Shift + Click/Enter
+	 * - 5 : Alt + Ctrl + Click/Enter
+	 * - 6 : Shift + Ctrl + Click/Enter
+	 * - 7 : Alt + Shift + Ctrl + Click/Enter
 	 */
-	type AltMode = 0 | 1 | 2 | 3;
+	type AltMode = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 	interface CsChooseAction {
 		value: string; // The unique value returned when clicked (e.g., 'discard')
 		label?: string; // The text displayed on the button (e.g., 'Save as Draft'), default to id

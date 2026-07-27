@@ -1,5 +1,5 @@
 import type { ButtonData } from "./api";
-import { assertUnreachable, t } from "./common";
+import { t } from "./common";
 
 /**
  * button type => label
@@ -98,20 +98,3 @@ export const BUILTIN_BUTTONS = [
     shortcut: "shortcut" in f ? f.shortcut : undefined,
   })),
 ] as const;
-
-export function buttonTypeLabel(buttonType: ButtonData["type"]): string {
-  switch (buttonType) {
-    case "misc":
-      return t("Misc");
-    case "terminal_function":
-      return t("Terminal Function");
-    case "run_script":
-      return t("Run Script");
-    case "open_terminal":
-      return t("Open Terminal");
-    case "send_string":
-      return t("Send String");
-    default:
-      assertUnreachable(buttonType);
-  }
-}

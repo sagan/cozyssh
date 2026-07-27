@@ -3496,8 +3496,10 @@ export default function Sidebar({
                   <b>Alt + O</b> : {t("Open new tab dialog.")} Use <b>← →</b> (or <b>Alt + H/L</b>) to switch
                   view,&nbsp;
                   <b>↓ ↑</b> (or <b>Alt + J/K</b>) to select, <b>Enter</b> to open, <b>Alt + Enter</b> to open in
-                  current tab, <b>Ctrl + Enter</b> to open in new window, <b>Shift + Enter</b> to edit selected host.
-                  Use <b>Alt + ↓↑</b> (or&nbsp;
+                  current tab, <b>Ctrl + Enter</b> to open in new window, <b>Shift + Enter</b> to edit selected
+                  host,&nbsp;
+                  <b>Alt + Shift + Enter</b> to input selected host into filter. Use <b>Delete</b> or <b>Alt + D</b> to
+                  delete a recent item; <b>Alt + Backspace</b> to clear the filter. Use <b>Alt + ↓↑</b> (or&nbsp;
                   <b>Alt + Shift + J/K</b>) to jump through items quickly; Hold <b>Ctrl</b> to jump to top/bottom.&nbsp;
                   <b>Ctrl/Alt/Shift + Mouse Click</b> is same as <b>Clt/Alt/Shift + Enter</b>
                   <br />

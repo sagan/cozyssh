@@ -14,10 +14,10 @@ import {
 } from "./store";
 import { useShallow } from "zustand/react/shallow";
 import { DEFAULT_BUTTON_GROUP } from "./constants";
-import { isModifier, t } from "./common";
+import { getAltMode, t } from "./common";
 import ExtraMenu from "./components/ExtraMenu";
 import { dialogs } from "./Dialogs";
-import { buttonTypeLabel } from "./buttons";
+import { BUTTPN_TYPES } from "./buttons";
 
 const buttonStyleBorder: Record<ButtonData["type"], string> = {
   run_script: "2px dashed",
@@ -170,9 +170,7 @@ export default function ButtonBar({ groups, handleButtonClick, isMobile, isTouch
                 btn.shortcut ? " (" + btn.shortcut.toUpperCase() + ")" : ""
               }${btn.type !== "run_script" ? ": " + btn.payload : ""}`}
               component="div"
-              onClick={(e) =>
-                handleButtonClick(btn, isModifier(e, "ctrl") ? 3 : e.shiftKey ? 2 : isModifier(e, "alt") ? 1 : 0)
-              }
+              onClick={(e) => handleButtonClick(btn, getAltMode(e))}
               onContextMenu={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -288,7 +286,7 @@ export default function ButtonBar({ groups, handleButtonClick, isMobile, isTouch
               if (!shortcut && !btn.autorun) {
                 continue;
               }
-              text += `${btn.name}: ${shortcut || t("<none>")} (${t("Type:")} ${buttonTypeLabel(btn.type)})${
+              text += `${btn.name}: ${shortcut || t("<none>")} (${t("Type:")} ${BUTTPN_TYPES[btn.type]})${
                 btn.autorun ? `  [${t("Autorun")}]` : ""
               }\n`;
             }
@@ -306,7 +304,7 @@ export default function ButtonBar({ groups, handleButtonClick, isMobile, isTouch
               }
               text += `${btn.name}: ${shortcut || t("<none>")} (${t("Group:")} ${
                 btn.group || DEFAULT_BUTTON_GROUP
-              }, ${t("Type:")} ${buttonTypeLabel(btn.type)})${btn.autorun ? `  [${t("Autorun")}]` : ""}\n`;
+              }, ${t("Type:")} ${BUTTPN_TYPES[btn.type]})${btn.autorun ? `  [${t("Autorun")}]` : ""}\n`;
             }
             text += "\n";
 
