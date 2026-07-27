@@ -1136,7 +1136,7 @@ export function resetFontSize(terminalFontSize: boolean, globalFontSize: boolean
     }
     if (DEFAULT_TERMINAL_FONT_SIZE !== (__CS_TERMINAL_OPTIONS__.fontSize || DEFAULT_TERMINAL_FONT_SIZE)) {
       csSetVar(varName, DEFAULT_TERMINAL_FONT_SIZE.toString());
-      msg += `Terminal font size reset to ${DEFAULT_TERMINAL_FONT_SIZE}`;
+      msg += t("Terminal font size reset to:") + " " + DEFAULT_TERMINAL_FONT_SIZE;
     }
   }
 
@@ -1151,7 +1151,7 @@ export function resetFontSize(terminalFontSize: boolean, globalFontSize: boolean
       if (msg) {
         msg += `; `;
       }
-      msg += `Global font size reset to ${DEFAULT_FONT_SIZE}`;
+      msg += t("Global font size reset to:") + " " + DEFAULT_FONT_SIZE;
     }
   }
 
@@ -1173,7 +1173,7 @@ export function decreseFontSize(terminalFontSize: boolean, globalFontSize: boole
     const fontSize = prevTerminalFontSize(__CS_TERMINAL_OPTIONS__.fontSize || DEFAULT_TERMINAL_FONT_SIZE);
     if (fontSize !== (__CS_TERMINAL_OPTIONS__.fontSize || DEFAULT_TERMINAL_FONT_SIZE)) {
       csSetVar(varName, fontSize.toString());
-      msg += `Terminal font size: ${fontSize.toFixed(1).padStart(4, "0")}`;
+      msg += t("Terminal font size:") + " " + fontSize.toFixed(1).padStart(4, "0");
     }
   }
 
@@ -1189,7 +1189,7 @@ export function decreseFontSize(terminalFontSize: boolean, globalFontSize: boole
       if (msg) {
         msg += "; ";
       }
-      msg += `Global font size: ${fontSize}`;
+      msg += t("Global font size:") + " " + fontSize;
     }
   }
   if (msg && !noToast) {
@@ -1210,7 +1210,7 @@ export function increaseFontSize(terminalFontSize: boolean, globalFontSize: bool
     const fontSize = nextTerminalFontSize(__CS_TERMINAL_OPTIONS__.fontSize || DEFAULT_TERMINAL_FONT_SIZE);
     if (fontSize !== (__CS_TERMINAL_OPTIONS__.fontSize || DEFAULT_TERMINAL_FONT_SIZE)) {
       csSetVar(varName, fontSize.toString());
-      msg += `Terminal font size: ${fontSize.toFixed(1).padStart(4, "0")}`;
+      msg += t("Terminal font size:") + " " + fontSize.toFixed(1).padStart(4, "0");
     }
   }
 
@@ -1226,7 +1226,7 @@ export function increaseFontSize(terminalFontSize: boolean, globalFontSize: bool
       if (msg) {
         msg += "; ";
       }
-      msg += `Global font size: ${fontSize}`;
+      msg += t("Global font size:") + " " + fontSize;
     }
   }
   if (msg && !noToast) {

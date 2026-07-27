@@ -114,7 +114,7 @@ export default function TextEditor({ fileName, initialContent, onSave, onClose, 
               whiteSpace: "nowrap",
             }}
           >
-            Editing: {fileName}
+            {t("Editing:")} {fileName}
           </Typography>
           <Button
             variant="contained"
@@ -124,7 +124,7 @@ export default function TextEditor({ fileName, initialContent, onSave, onClose, 
             onClick={() => onSave(content)}
             disabled={!hasChanged || isSaving}
           >
-            {isSaving ? "Saving..." : "Save"}
+            {isSaving ? t("Saving...") : t("Save")}
           </Button>
           <IconButton edge="end" color="inherit" onClick={handleClose}>
             <CloseIcon />

@@ -48,6 +48,7 @@ import {
   VAR_CS_RECENT_HOSTS,
   DEFAULT_RECENT_HOSTS,
   APP_NAME,
+  TOAST_KEY_COPY,
 } from "./constants";
 import {
   assertUnreachable,
@@ -97,7 +98,7 @@ import {
 } from "./store";
 import TextFieldWithCopy from "./components/TextFieldWithCopy";
 import ExtraMenu from "./components/ExtraMenu";
-import { BUILTIN_BUTTONS } from "./buttons";
+import { BUILTIN_BUTTONS, buttonTypeLabel } from "./buttons";
 
 interface DialogSection {
   title: string;
@@ -295,6 +296,8 @@ function itemLabel(item: NtdItem, altMode: AltMode): string {
       return altMode === 0 ? t("Switch To") : "";
     case "tunnel":
       return altMode === 0 ? t("Copy Entrypoint") : "";
+    case "link":
+      return altMode === 0 ? t("Open") : altMode === 1 ? t("Copy Link") : "";
     case "action":
     case "custom_shortcut":
       return altMode === 0 ? t("Execute") : "";
@@ -642,7 +645,7 @@ export default function NewTabDialog({
               t("Group:") +
               ` ${btn.group || DEFAULT_BUTTON_GROUP} | ` +
               +t("Type:") +
-              ` ${btn.type}${
+              ` ${buttonTypeLabel(btn.type)}${
                 btn.type !== "send_string" && btn.type !== "run_script" ? " | " + t("Payload:") + " " + btn.payload : ""
               }`,
             tooltip: btn.type !== "run_script" ? btn.payload : undefined,
@@ -660,7 +663,7 @@ export default function NewTabDialog({
               type: "builtin_button",
               value: id,
               label: btn.name,
-              subtitle: t("Built-in Button") + ` | ` + t("Type:") + " " + btn.type,
+              subtitle: t("Built-in Button") + ` | ` + t("Type:") + " " + buttonTypeLabel(btn.type),
               tooltip: undefined,
               btn: btn,
               tag: btn.shortcut ? shortcutLabel(btn.shortcut) : undefined,
@@ -889,7 +892,7 @@ export default function NewTabDialog({
           t("Group:") +
           ` ${b.group || DEFAULT_BUTTON_GROUP} | ` +
           t("Type:") +
-          ` ${b.type}${
+          ` ${buttonTypeLabel(b.type)}${
             b.type !== "send_string" && b.type !== "run_script" ? " | " + t("Payload:") + " " + b.payload : ""
           }`;
         if (f && b.type === "send_string" && b.payload) {
@@ -921,7 +924,7 @@ export default function NewTabDialog({
           t("Group:") +
           ` ${b.group || DEFAULT_BUTTON_GROUP} | ` +
           t("Type:") +
-          ` ${b.type}${
+          ` ${buttonTypeLabel(b.type)}${
             b.type !== "send_string" && b.type !== "run_script" ? " | " + t("Payload:") + " " + b.payload : ""
           }`;
         if (f && b.type === "send_string" && b.payload) {
@@ -948,7 +951,8 @@ export default function NewTabDialog({
         type: "builtin_button",
         value: b.id,
         label: b.name,
-        subtitle: `Built-in | Type: ${b.type} | Payload: ${b.payload}`,
+        subtitle:
+          t("Built-in") + ` | ` + t("Type:") + ` ${buttonTypeLabel(b.type)} | ` + t("Payload:") + ` ${b.payload}`,
         btn: b,
         tag: b.shortcut ? shortcutLabel(b.shortcut) : undefined,
       }));
@@ -1101,7 +1105,14 @@ export default function NewTabDialog({
           onClose();
           break;
         case "link":
-          window.open(item.value);
+          if (altMode === 1) {
+            navigator.clipboard
+              .writeText(item.value)
+              .then(() => notify(t("Link copied to clipboard:") + " " + item.value, "info", TOAST_KEY_COPY))
+              .catch(() => {});
+          } else {
+            window.open(item.value);
+          }
           onClose();
           break;
         case "action":

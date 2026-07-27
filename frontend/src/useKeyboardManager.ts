@@ -69,6 +69,7 @@ import {
   setSettingsTab,
   refreshData,
   notify,
+  useStore,
 } from "./store";
 
 export interface KeyboardManagerOptions {
@@ -351,7 +352,8 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
           return;
         }
 
-        case "alt+q": {
+        case "alt+q":
+        case "alt+shift+q": {
           e.preventDefault();
           const inputEl = document.getElementById(ID_INPUT_DIALOG_INPUT);
           if (inputEl) {
@@ -362,7 +364,11 @@ export function useKeyboardManager(options: KeyboardManagerOptions): void {
               inputEl.focus();
             }
           } else {
-            openInputDialog();
+            if (e.shiftKey) {
+              useStore.setState({ inputDialogOpen: true, newTabDialogOpen: false });
+            } else {
+              openInputDialog();
+            }
           }
           return;
         }

@@ -148,6 +148,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - `Alt + G` : Focus active terminal session
   - `Alt + Shift + G` : Focus the first pane of the active tab
   - `Alt + Q` : Open input dialog
+  - `Alt + Shift + Q` : Open input dialog and preserve last form values
   - `Alt + V / Alt + Shift + V` : Switch to next / previous group in button bar. Hold `Ctrl` to include hidden groups
   - `Alt + Shift + 1-9,0` : Click the button in button bar
   - `Alt + J / Alt + K` : Scroll terminal down / up by a few lines

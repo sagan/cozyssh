@@ -17,6 +17,7 @@ import { DEFAULT_BUTTON_GROUP } from "./constants";
 import { isModifier, t } from "./common";
 import ExtraMenu from "./components/ExtraMenu";
 import { dialogs } from "./Dialogs";
+import { buttonTypeLabel } from "./buttons";
 
 const buttonStyleBorder: Record<ButtonData["type"], string> = {
   run_script: "2px dashed",
@@ -287,7 +288,7 @@ export default function ButtonBar({ groups, handleButtonClick, isMobile, isTouch
               if (!shortcut && !btn.autorun) {
                 continue;
               }
-              text += `${btn.name}: ${shortcut || t("<none>")} (${t("Type:")} ${btn.type})${
+              text += `${btn.name}: ${shortcut || t("<none>")} (${t("Type:")} ${buttonTypeLabel(btn.type)})${
                 btn.autorun ? `  [${t("Autorun")}]` : ""
               }\n`;
             }
@@ -305,7 +306,7 @@ export default function ButtonBar({ groups, handleButtonClick, isMobile, isTouch
               }
               text += `${btn.name}: ${shortcut || t("<none>")} (${t("Group:")} ${
                 btn.group || DEFAULT_BUTTON_GROUP
-              }, ${t("Type:")} ${btn.type})${btn.autorun ? `  [${t("Autorun")}]` : ""}\n`;
+              }, ${t("Type:")} ${buttonTypeLabel(btn.type)})${btn.autorun ? `  [${t("Autorun")}]` : ""}\n`;
             }
             text += "\n";
 

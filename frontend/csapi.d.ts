@@ -1980,6 +1980,9 @@ export interface TerminalHandle {
 	 * Only works while the shell is at an interactive prompt (not mid-execution).
 	 */
 	replaceCmdLine: (newText: string) => void;
+	getBuffer: () => string;
+	getAddon(): Record<string, ITerminalAddon>;
+	getAddon(name: string): ITerminalAddon | undefined;
 }
 export interface ScratchpadHandle {
 	focus: () => void;

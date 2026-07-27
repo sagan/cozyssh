@@ -672,7 +672,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
                     direction={sortField === "name" ? sortOrder : "asc"}
                     onClick={() => handleSort("name")}
                   >
-                    Name
+                    {t("Name")}
                   </TableSortLabel>
                 </TableCell>
                 <TableCell width={100}>
@@ -681,7 +681,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
                     direction={sortField === "size" ? sortOrder : "asc"}
                     onClick={() => handleSort("size")}
                   >
-                    Size
+                    {t("Size")}
                   </TableSortLabel>
                 </TableCell>
                 <TableCell width={160}>
@@ -690,7 +690,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
                     direction={sortField === "modTime" ? sortOrder : "asc"}
                     onClick={() => handleSort("modTime")}
                   >
-                    Modified
+                    {t("Modified")}
                   </TableSortLabel>
                 </TableCell>
                 <TableCell width={60}></TableCell>
@@ -743,6 +743,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
       </TableContainer>
 
       <Menu
+        id="file-browser-item-menu"
         open={contextMenu !== null}
         onClose={() => setContextMenu(null)}
         anchorReference="anchorPosition"
@@ -750,18 +751,36 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
       >
         {!(contextMenu?.file.isDir && /^[a-zA-Z]:\\?$/.test(contextMenu.file.name)) && (
           <>
-            <MenuItem onClick={() => contextMenu && handleRename(contextMenu.file)}>Rename</MenuItem>
-            <MenuItem onClick={() => contextMenu && handleDelete(contextMenu.file)} sx={{ color: "error.main" }}>
-              Delete
+            <MenuItem id="file-browser-item-menu-rename" onClick={() => contextMenu && handleRename(contextMenu.file)}>
+              {t("Rename")}
+            </MenuItem>
+            <MenuItem
+              id="file-browser-item-menu-delete"
+              onClick={() => contextMenu && handleDelete(contextMenu.file)}
+              sx={{ color: "error.main" }}
+            >
+              {t("Delete")}
             </MenuItem>
           </>
         )}
-        <MenuItem onClick={() => contextMenu && handleCopyPath(contextMenu.file)}>Copy Path</MenuItem>
+        <MenuItem id="file-browser-item-menu-copy-path" onClick={() => contextMenu && handleCopyPath(contextMenu.file)}>
+          {t("Copy Path")}
+        </MenuItem>
         {!contextMenu?.file.isDir && (
-          <MenuItem onClick={() => contextMenu && handleDownload(contextMenu.file.name)}>Download</MenuItem>
+          <MenuItem
+            id="file-browser-item-menu-download"
+            onClick={() => contextMenu && handleDownload(contextMenu.file.name)}
+          >
+            {t("Download")}
+          </MenuItem>
         )}
         {!contextMenu?.file.isDir && contextMenu?.file.size !== undefined && contextMenu.file.size <= 1048576 && (
-          <MenuItem onClick={() => contextMenu && handleEditAsText(contextMenu.file)}>Edit as text</MenuItem>
+          <MenuItem
+            id="file-browser-item-menu-edit-as-text"
+            onClick={() => contextMenu && handleEditAsText(contextMenu.file)}
+          >
+            {t("Edit as text")}
+          </MenuItem>
         )}
       </Menu>
 

@@ -343,6 +343,7 @@ export const appShortcuts = new Set([
   "alt+l",
   "alt+shift+l",
   "alt+q",
+  "alt+shift+q",
   "alt+w",
   "ctrl+alt+shift+w",
   "ctrl+alt+shift+l",

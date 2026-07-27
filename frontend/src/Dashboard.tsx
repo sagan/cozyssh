@@ -492,19 +492,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
           }
           switch (payload) {
             case "COPY": {
-              const xterm = term.getXterm();
-              if (!xterm) {
-                return;
-              }
-              const buffer = xterm.buffer.active;
-              let text = "";
-              for (let i = 0; i < xterm.rows; i++) {
-                const line = buffer.getLine(i);
-                if (line) {
-                  text += line.translateToString(true) + "\n";
-                }
-              }
-              text = text.trim();
+              const text = term.getBuffer();
               if (text) {
                 navigator.clipboard.writeText(text);
               }

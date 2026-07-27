@@ -3486,144 +3486,156 @@ export default function Sidebar({
             {settingsTab === SETTINGS_TAB_IDX_SHORTCUTS && (
               <>
                 <Typography variant="subtitle2" gutterBottom>
-                  Keyboard Shortcuts (Note: in Mac, by default <b>Command</b> key (JavaScript KeyboardEvent&nbsp;
-                  <code>ev.metaKey</code>) is recognized as <b>Alt</b> (Originally the <b>Option</b> key); and vice
-                  versa)
+                  {t("Keyboard Shortcuts")} (
+                  {t(
+                    "Note: in Mac, by default `Command` key (JavaScript KeyboardEvent `ev.metaKey`) is recognized as `Alt` (Originally the `Option` key); and vice versa",
+                  )}
+                  )
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }} gutterBottom>
-                  <b>Alt + O</b> : Open new tab dialog, use <b>← →</b> (or <b>Alt + H/L</b>) to switch view,&nbsp;
+                  <b>Alt + O</b> : {t("Open new tab dialog.")} Use <b>← →</b> (or <b>Alt + H/L</b>) to switch
+                  view,&nbsp;
                   <b>↓ ↑</b> (or <b>Alt + J/K</b>) to select, <b>Enter</b> to open, <b>Alt + Enter</b> to open in
                   current tab, <b>Ctrl + Enter</b> to open in new window, <b>Shift + Enter</b> to edit selected host.
                   Use <b>Alt + ↓↑</b> (or&nbsp;
                   <b>Alt + Shift + J/K</b>) to jump through items quickly; Hold <b>Ctrl</b> to jump to top/bottom.&nbsp;
                   <b>Ctrl/Alt/Shift + Mouse Click</b> is same as <b>Clt/Alt/Shift + Enter</b>
                   <br />
-                  <b>Alt + A</b> : Open new tab dialog - tabs view
+                  <b>Alt + A</b> : {t("Open new tab dialog - tabs view")}
                   <br />
-                  <b>Alt + E / Ctrl + Shift + P</b> : Open new tab dialog - buttons view
+                  <b>Alt + E / Ctrl + Shift + P</b> : {t("Open new tab dialog - buttons view")}
                   <br />
-                  <b>Alt + P</b> : Open new tab dialog - tags view
+                  <b>Alt + P</b> : {t("Open new tab dialog - tags view")}
                   <br />
-                  <b>Alt + :</b> : Open new tab dialog - tunnels view
+                  <b>Alt + :</b> : {t("Open new tab dialog - tunnels view")}
                   <br />
-                  <b>Alt + ?</b> : Open new tab dialog - all view
+                  <b>Alt + ?</b> : {t("Open new tab dialog - all view")}
                   <br />
-                  <b>Shift</b> holded with <b>Alt + O/A/E/P/:/?</b> : Same as <b>Alt + O/A/E/P/:/?</b> but preserve last
-                  input filter value
+                  <b>Alt + Shift + O/A/E/P/:/?</b> :&nbsp;
+                  {t("Same as Alt + O/A/E/P/:/? but preserve last input filter value")}
                   <br />
-                  <b>Alt + N</b> : Open new default local shell tab; Hold <b>Ctrl</b> to open in current tab
+                  <b>Alt + N</b> : {t("Open new default local shell tab")}; <b>Ctrl + Alt + N</b>:&nbsp;
+                  {t("Open default shell in current tab")}
                   <br />
-                  <b>Alt + Shift + N</b> : Open new alternative local shell tab; Hold <b>Ctrl</b> to open in current tab
+                  <b>Alt + Shift + N</b> : {t("Open new alternative local shell tab")}; <b>Ctrl + Alt + Shift + N</b>
+                  :&nbsp;
+                  {t("Open alternative shell in current tab")}
                   <br />
-                  <b>Alt + S</b> : Open scratchpad
+                  <b>Alt + S</b> : {t("Open scratchpad")}
                   <br />
-                  <b>Alt + H / Alt + L</b> : Switch to previous / next pane
+                  <b>Alt + H / Alt + L</b> : {t("Switch to previous / next pane")}
                   <br />
-                  <b>Alt + Shift + H / Alt + Shift + L</b> : Switch to previous / next tab
+                  <b>Alt + Shift + H / Alt + Shift + L</b> : {t("Switch to previous / next tab")}
                   <br />
-                  <b>Alt + 1-9,0</b> : Switch to tab 1-9, last tab
+                  <b>Alt + 1-9,0</b> : {t("Switch to tab 1-9, last tab")}
                   <br />
-                  <b>Alt + C</b> : Clone active pane in new tab
+                  <b>Alt + C</b> : {t("Clone active pane in new tab")}
                   <br />
-                  <b>Alt + Shift + C</b> : Clone active pane in same tab (Max 4 panes per tab)
+                  <b>Alt + Shift + C</b> : {t("Clone active pane in same tab (Max 4 panes per tab)")}
                   <br />
-                  <b>Alt + W</b> : Close active pane
+                  <b>Alt + W</b> : {t("Close active pane")}
                   <br />
-                  <b>Alt + Shift + W</b> : Close active tab
+                  <b>Alt + Shift + W</b> : {t("Close active tab")}
                   <br />
-                  <b>Ctrl + Alt + Shift + W</b> : Close other tabs
+                  <b>Ctrl + Alt + Shift + W</b> : {t("Close other tabs")}
                   <br />
-                  <b>Ctrl + Alt + Shift + L</b> : Toggle Lock/Unlock current tab
+                  <b>Ctrl + Alt + Shift + L</b> : {t("Toggle Lock/Unlock current tab")}
                   <br />
-                  <b>Alt + I</b> : Focus sidebar search filter and clear current value, use <b>↑ ↓</b> to select,&nbsp;
+                  <b>Alt + I</b> : {t("Focus sidebar search filter and clear current value.")} Use <b>↑ ↓</b> to
+                  select,&nbsp;
                   <b>Enter</b> to open (or toggle group expandness),&nbsp;
                   <b>Alt + Enter</b> to open in current tab, <b>Ctrl + Enter</b> to open in new window (or toggle group
                   and all sub-groups expandness),&nbsp;
                   <b>Shift + Enter</b> to open context menu. <b>Ctrl/Alt + Mouse Click</b> is same as&nbsp;
                   <b>Ctrl/Alt + Enter</b>, <b>Shift + Mouse Click</b> to edit host.
                   <br />
-                  <b>Alt + Shift + I</b> : Focus sidebar search filter but preserve current value
+                  <b>Alt + Shift + I</b> : {t("Focus sidebar search filter but preserve current value")}
                   <br />
-                  <b>Ctrl + Alt + Backquote</b> : Toggle sidebar tags section expandness
+                  <b>Ctrl + Alt + Backquote</b> : {t("Toggle sidebar tags section expandness")}
                   <br />
-                  <b>Ctrl + Alt + 1/2/3</b> : Toggle sidebar fav/all/auto section expandness
+                  <b>Ctrl + Alt + 1/2/3</b> : {t("Toggle sidebar fav/all/auto section expandness")}
                   <br />
-                  <b>Ctrl + Alt + G</b> : Toggle sidebar all groups expandness
+                  <b>Ctrl + Alt + G</b> : {t("Toggle sidebar all groups expandness")}
                   <br />
-                  <b>Alt + G</b> : Focus active terminal session
+                  <b>Alt + G</b> : {t("Focus active terminal session")}
                   <br />
-                  <b>Alt + Shift + G</b> : Focus the first pane of the active tab
+                  <b>Alt + Shift + G</b> : {t("Focus the first pane of the active tab")}
                   <br />
-                  <b>Alt + Q</b> : Open input dialog
+                  <b>Alt + Q</b> : {t("Open input dialog")}
                   <br />
-                  <b>Alt + V / Alt + Shift + V</b> : Switch to next / previous group in button bar. Hold <b>Ctrl</b> to
-                  include hidden groups
+                  <b>Alt + Shift + Q</b> : {t("Open input dialog and preserve last form values")}
                   <br />
-                  <b>Alt + Shift + 1-9,0</b> : Click the button in button bar
+                  <b>Alt + V / Alt + Shift + V</b> : {t("Switch to next / previous group in button bar.")}&nbsp;
+                  <b>Ctrl + Alt + V / Ctrl + Alt + Shift + V</b> :&nbsp;
+                  {t("Switch to next / previous group in button bar, include hidden groups")}
                   <br />
-                  <b>Alt + J / Alt + K</b> : Scroll terminal down / up by a few lines
+                  <b>Alt + Shift + 1-9,0</b> : {t("Click the button in button bar")}
                   <br />
-                  <b>Alt + Shift + J / Alt + Shift + K</b> : Scroll terminal down / up by a page
+                  <b>Alt + J / Alt + K</b> : {t("Scroll terminal down / up by a few lines")}
                   <br />
-                  <b>Ctrl + Alt + J / Ctrl + Alt + K</b> : Scroll terminal to bottom / top
+                  <b>Alt + Shift + J / Alt + Shift + K</b> : {t("Scroll terminal down / up by a page")}
                   <br />
-                  <b>Alt + Enter</b> : Toggle fullscreen of main terminal area
+                  <b>Ctrl + Alt + J / Ctrl + Alt + K</b> : {t("Scroll terminal to bottom / top")}
                   <br />
-                  <b>Alt + Backquote</b> : Close any modal (Dialog / Menu / Popover). Similar to <b>Escape</b> but works
-                  even if terminal is in fullscreen mode
+                  <b>Alt + Enter</b> : {t("Toggle fullscreen of main terminal area")}
                   <br />
-                  <b>Alt + Shift + Backquote</b> : Force close all modals. Also close all toasts.
+                  <b>Alt + Backquote</b> : {t("Close any modal (Dialog / Menu / Popover).")}&nbsp;
+                  {t("Similar to `Escape` but works even if terminal is in fullscreen mode")}
                   <br />
-                  <b>Alt + - / Alt + +</b> : Decrease / increase terminal font size
+                  <b>Alt + Shift + Backquote</b> : {t("Force close all modals. Also close all toasts.")}
                   <br />
-                  <b>Alt + Shift + - / Alt + Shift + +</b> : Decrease / increase global & terminal font size
+                  <b>Alt + - / Alt + +</b> : {t("Decrease / increase terminal font size")}
                   <br />
-                  <b>Ctrl + Alt + 0</b> : Reset to default global / terminal font size (14 / 15px)
+                  <b>Alt + Shift + - / Alt + Shift + +</b> : {t("Decrease / increase global & terminal font size")}
                   <br />
-                  <b>Ctrl + Shift + F</b> : Open terminal search box
+                  <b>Ctrl + Alt + 0</b> : {t("Reset to default global / terminal font size (14 / 15px)")}
                   <br />
-                  <b>Ctrl + Shift + R</b> : Reconnect current terminal
+                  <b>Ctrl + Shift + F</b> : {t("Open terminal search box")}
                   <br />
-                  <b>Ctrl + Shift + C</b> : Copy selected text in terminal
+                  <b>Ctrl + Shift + R</b> : {t("Reconnect current terminal")}
                   <br />
-                  <b>Ctrl + Shift + V (Windows) / Cmd + V (Mac)</b> : Paste into terminal
+                  <b>Ctrl + Shift + C</b> : {t("Copy selected text in terminal")}
                   <br />
-                  <b>Ctrl + Alt + R</b> : Refresh data from backend
+                  <b>Ctrl + Shift + V (Windows) / Cmd + V (Mac)</b> : {t("Paste into terminal")}
                   <br />
-                  <b>Ctrl + Alt + Shift + R</b> : Force clear service worker, cache and reload
+                  <b>Ctrl + Alt + R</b> : {t("Refresh data from backend")}
                   <br />
-                  <b>Mouse Select</b> in terminal to copy
+                  <b>Ctrl + Alt + Shift + R</b> : {t("Force clear service worker, cache and reload")}
                   <br />
-                  <b>Mouse Right Click</b> in terminal to paste
+                  <b>Mouse Select</b> {t("in terminal")} : {t("copy")}
                   <br />
-                  <b>Mouse Middle Click</b> on a tab to close it
+                  <b>Mouse Right Click</b> {t("in terminal")} : {t("paste")}
                   <br />
-                  <b>Alt + Mouse Wheel</b> in terminal to fast scroll up / down
+                  <b>Mouse Middle Click</b> {t("on a tab")} : {t("close it")}
                   <br />
-                  <b>Shift + Mouse Click</b> on a button in button bar to edit it; <b>Ctrl/Alt + Mouse Click</b> on a
-                  "Open Terminal" type button to open it in new window / current tab; <b>Ctrl + Mouse Click</b> on a
-                  "Send String" type button to open it in "Terminal Input" dialog, <b>Alt + Mouse Click</b> on it to
-                  copy contents to clipboard
+                  <b>Alt + Mouse Wheel</b> {t("in terminal")} : {t("fast scroll up / down")}
                   <br />
-                  <b>Ctrl + Mouse Click</b> on backdrop of modal dialog to force close it
+                  <b>Shift + Mouse Click</b> {t("on a button in button bar")} : {t("edit it")};&nbsp;
+                  <b>Ctrl/Alt + Mouse Click</b> {t("on a 'Open Terminal' type button")} :&nbsp;
+                  {t("open it in new window / current tab")};&nbsp;
+                  <b>Ctrl + Mouse Click</b> {t("on a 'Send String' type button")} :&nbsp;
+                  {t("open it in 'Terminal Input' dialog")};&nbsp;
+                  <b>Alt + Mouse Click</b> {t("on a 'Send String' type button")} : {t("copy contents to clipboard")}
+                  <br />
+                  <b>Ctrl + Mouse Click</b> {t("on backdrop of modal dialog")} : {t("force close it")}
                 </Typography>
                 {__CS_ENV__ === 1 && (
                   <>
                     <Typography variant="subtitle2" gutterBottom>
-                      Windows App Keyboard Shortcuts (Same as Browser)
+                      {t("Windows App Keyboard Shortcuts (Same as Browser)")}
                     </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }} gutterBottom>
-                      <b>Ctl + -</b> & <b>Ctrl + +</b> : Change zoom level
+                      <b>Ctl + -</b> & <b>Ctrl + +</b> : {t("Change zoom level")}
                       <br />
-                      <b>Alt + F4</b> : Close window
+                      <b>Alt + F4</b> : {t("Close window")}
                       <br />
-                      <b>F5</b> : Refresh page
+                      <b>F5</b> : {t("Refresh page")}
                       <br />
-                      <b>F11</b> : Toggle full screen
+                      <b>F11</b> : {t("Toggle full screen")}
                       <br />
-                      <b>F12</b> : Open Web DevTools
+                      <b>F12</b> : {t("Open Web DevTools")}
                       <br />
-                      <b>Ctrl + Tab / Ctrl + Shift + Tab</b> : Next / prev tab (only works in desktop app)
+                      <b>Ctrl + Tab / Ctrl + Shift + Tab</b> : {t("Next / prev tab (only works in desktop app)")}
                     </Typography>
                   </>
                 )}
@@ -3765,6 +3777,7 @@ export default function Sidebar({
             <TextFieldWithCopy
               fullWidth
               label={t("Alias Name")}
+              autoComplete="off"
               size="small"
               type="search"
               value={hostFormData.name}
@@ -3841,7 +3854,7 @@ export default function Sidebar({
                   <TextField
                     {...params}
                     label={t("Add Tag")}
-                    placeholder="Select tag or type new one and press Enter"
+                    placeholder={t("Select tag or type new one and press Enter")}
                     size="small"
                   />
                 )}
@@ -3887,7 +3900,7 @@ export default function Sidebar({
                   e.target.select();
                 }
               }}
-              placeholder="Optional SSH server password"
+              placeholder={t("Optional SSH server password")}
             />
             <TextFieldWithCopy
               fullWidth
@@ -4008,7 +4021,7 @@ export default function Sidebar({
               value={hostFormData.localForward || ""}
               onChange={(e) => setHostFormData({ ...hostFormData, localForward: e.target.value })}
               onKeyDown={handleEditHostFormKeyDown}
-              placeholder="e.g. 8080 localhost:80&#10;One rule per line"
+              placeholder={t("e.g. 8080 localhost:80\nOne rule per line")}
             />
             <TextFieldWithCopy
               fullWidth
@@ -4019,7 +4032,7 @@ export default function Sidebar({
               value={hostFormData.remoteForward || ""}
               onChange={(e) => setHostFormData({ ...hostFormData, remoteForward: e.target.value })}
               onKeyDown={handleEditHostFormKeyDown}
-              placeholder="e.g. 8080 localhost:80&#10;One rule per line"
+              placeholder={t("e.g. 8080 localhost:80\nOne rule per line")}
             />
             <TextFieldWithCopy
               fullWidth

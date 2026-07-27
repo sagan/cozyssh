@@ -1,16 +1,16 @@
 import type { ButtonData } from "./api";
-import { t } from "./common";
+import { assertUnreachable, t } from "./common";
 
 /**
- * button type, label
+ * button type => label
  */
-export const BUTTPN_TYPES: [ButtonData["type"], string][] = [
-  ["send_string", t("Send String")],
-  ["terminal_function", t("Terminal Function")],
-  ["misc", t("Misc")],
-  ["open_terminal", t("Open Terminal")],
-  ["run_script", t("Run Script")],
-] as const;
+export const BUTTPN_TYPES: Record<ButtonData["type"], string> = {
+  send_string: t("Send String"),
+  terminal_function: t("Terminal Function"),
+  misc: t("Misc"),
+  open_terminal: t("Open Terminal"),
+  run_script: t("Run Script"),
+} as const;
 
 export const TERMINAL_FUNCTIONS = [
   { value: "COPY", label: t("COPY (Buffer)") },
@@ -98,3 +98,20 @@ export const BUILTIN_BUTTONS = [
     shortcut: "shortcut" in f ? f.shortcut : undefined,
   })),
 ] as const;
+
+export function buttonTypeLabel(buttonType: ButtonData["type"]): string {
+  switch (buttonType) {
+    case "misc":
+      return t("Misc");
+    case "terminal_function":
+      return t("Terminal Function");
+    case "run_script":
+      return t("Run Script");
+    case "open_terminal":
+      return t("Open Terminal");
+    case "send_string":
+      return t("Send String");
+    default:
+      assertUnreachable(buttonType);
+  }
+}

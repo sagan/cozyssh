@@ -429,7 +429,7 @@ function SSHConfigImportView({
           <ArrowBackIcon fontSize="small" />
         </IconButton>
         <Typography variant="subtitle2" sx={{ fontWeight: "bold", mr: 1 }}>
-          Import from: <span style={{ fontFamily: "monospace" }}>{device.deviceName}</span>
+          {t("Import from:")} <span style={{ fontFamily: "monospace" }}>{device.deviceName}</span>
         </Typography>
 
         <FormControlLabel
@@ -448,7 +448,7 @@ function SSHConfigImportView({
         />
         <TextField
           size="small"
-          placeholder="Filter hosts..."
+          placeholder={t("Filter hosts...")}
           value={filterText}
           onChange={(e) => setFilterText(e.target.value)}
           sx={{

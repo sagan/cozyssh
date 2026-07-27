@@ -453,18 +453,23 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
 
       {/* Context Menu */}
       <Menu
+        id="scratchpad-page-menu"
         open={contextMenu !== null}
         onClose={() => setContextMenu(null)}
         anchorReference="anchorPosition"
         anchorPosition={contextMenu ? { top: contextMenu.mouseY, left: contextMenu.mouseX } : undefined}
       >
-        <MenuItem onClick={handleRename}>Rename</MenuItem>
-        <MenuItem onClick={handleToggleLock}>
-          {data.pages.find((p) => p.id === contextMenu?.pageId)?.locked ? "Unlock" : "Lock"}
+        <MenuItem id="scratchpad-page-menu-rename" onClick={handleRename}>
+          {t("Rename")}
         </MenuItem>
-        <MenuItem onClick={handleCopy}>Copy Contents</MenuItem>
-        <MenuItem onClick={handleDelete} sx={{ color: "error.main" }}>
-          Delete
+        <MenuItem id="scratchpad-page-menu-toggle-lock" onClick={handleToggleLock}>
+          {data.pages.find((p) => p.id === contextMenu?.pageId)?.locked ? t("Unlock") : t("Lock")}
+        </MenuItem>
+        <MenuItem id="scratchpad-page-menu-copy-contents" onClick={handleCopy}>
+          {t("Copy Contents")}
+        </MenuItem>
+        <MenuItem id="scratchpad-page-menu-delete" onClick={handleDelete} sx={{ color: "error.main" }}>
+          {t("Delete")}
         </MenuItem>
       </Menu>
     </Box>

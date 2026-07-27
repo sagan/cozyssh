@@ -363,7 +363,7 @@ export default function TabBar({
               <TextFieldWithCopy
                 id={ID_TERMINAL_SEARCH_INPUT}
                 size="small"
-                placeholder="Find"
+                placeholder={t("Find")}
                 value={searchQuery}
                 autoComplete="off"
                 onFocus={(e) => e.target.select()}

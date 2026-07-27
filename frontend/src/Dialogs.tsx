@@ -198,7 +198,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
               margin="dense"
               fullWidth
               variant="outlined"
-              placeholder={`Type "${config.verification}" to confirm`}
+              placeholder={t("Type the below string to confirm:") + " " + config.verification}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={(e) => {

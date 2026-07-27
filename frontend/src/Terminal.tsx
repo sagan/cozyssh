@@ -1,9 +1,10 @@
-import { useEffect, useRef, useImperativeHandle, forwardRef } from "react";
-import { Terminal, type IMarker } from "@xterm/xterm";
+import { useEffect, useRef, useImperativeHandle, forwardRef, useCallback } from "react";
+import { Terminal, type IMarker, type ITerminalAddon } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { ImageAddon } from "@xterm/addon-image";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { SerializeAddon } from "@xterm/addon-serialize";
 import { type ISearchOptions, SearchAddon } from "@xterm/addon-search";
 import { Box } from "@mui/material";
 import "@xterm/xterm/css/xterm.css";
@@ -81,6 +82,9 @@ export interface TerminalHandle {
    * Only works while the shell is at an interactive prompt (not mid-execution).
    */
   replaceCmdLine: (newText: string) => void;
+  getBuffer: () => string;
+  getAddon(): Record<string, ITerminalAddon>;
+  getAddon(name: string): ITerminalAddon | undefined;
 }
 
 interface TerminalProps {
@@ -128,9 +132,11 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
     },
     ref,
   ) => {
+    const addons = useRef<Record<string, ITerminalAddon>>({});
     const terminalRef = useRef<HTMLDivElement>(null);
     const xtermRef = useRef<Terminal | null>(null);
     const fitAddonRef = useRef<FitAddon | null>(null);
+    const serializeAddonRef = useRef<SerializeAddon | null>(null);
     const searchAddonRef = useRef<SearchAddon | null>(null);
     const wsRef = useRef<WebSocket | null>(null);
     const ctrlRef = useRef(isCtrlActive);
@@ -140,6 +146,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
     const forceReconnectRef = useRef(false);
     const shellIntegrationRef = useRef<ShellIntegration>({});
     const markersRef = useRef<{ start?: IMarker; end?: IMarker }>({});
+
     /**
      * Cursor position recorded at OSC 133;B (right after the prompt, where user
      * input starts). Used to extract the live cmdline from the xterm buffer.
@@ -182,6 +189,23 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
     useEffect(() => {
       altRef.current = isAltActive;
     }, [isAltActive]);
+
+    const fit = useCallback(() => {
+      if (!xtermRef.current) {
+        return;
+      }
+      fitAddonRef.current?.fit();
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(
+          JSON.stringify({
+            type: "resize",
+            cols: xtermRef.current.cols,
+            rows: xtermRef.current.rows,
+          } satisfies WsResizeMsg),
+        );
+      }
+    }, []);
 
     useImperativeHandle(ref, () => ({
       sendData: (data: string | BufferSource | Blob) => {
@@ -240,9 +264,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       clearSearchActiveDecoration: () => {
         searchAddonRef.current?.clearActiveDecoration();
       },
-      fit: () => {
-        fitAddonRef.current?.fit();
-      },
+      fit,
       getLastCommandOutput: () => {
         const { start, end } = markersRef.current;
         const buffer = xtermRef.current?.buffer.active;
@@ -283,6 +305,21 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
           textarea.inputMode = mode;
         }
       },
+      getBuffer: () => {
+        const rawOutput = serializeAddonRef.current?.serialize() || "";
+        // 1. Strips OSC sequences: \x1b\] ... (\x07 or \x1b\\)
+        // 2. Strips CSI sequences (like [?2004h): \x1b\[ [\d;?]* [a-zA-Z]
+        const cleanText = rawOutput
+          // eslint-disable-next-line no-control-regex
+          .replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, "")
+          // eslint-disable-next-line no-control-regex
+          .replace(/\x1b\[[\d;?]*[a-zA-Z]/g, "");
+        return cleanText;
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      getAddon: (name?: string): any => {
+        return name ? addons.current[name] : addons.current;
+      },
       replaceCmdLine: (newText: string) => {
         const ws = wsRef.current;
         if (ws && ws.readyState === WebSocket.OPEN) {
@@ -309,10 +346,17 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       const fitAddon = new FitAddon();
       term.loadAddon(fitAddon);
       fitAddonRef.current = fitAddon;
+      addons.current.fitAddon = fitAddon;
+
+      const serializeAddon = new SerializeAddon();
+      term.loadAddon(serializeAddon);
+      serializeAddonRef.current = serializeAddon;
+      addons.current.serializeAddon = serializeAddon;
 
       const searchAddon = new SearchAddon();
       term.loadAddon(searchAddon);
       searchAddonRef.current = searchAddon;
+      addons.current.searchAddon = searchAddon;
 
       term.open(terminalRef.current!);
       xtermRef.current = term;
@@ -338,9 +382,12 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       if (getIntVar(VAR_CS_NOIMAGE) !== 1) {
         const imageAddon = new ImageAddon();
         term.loadAddon(imageAddon);
+        addons.current.imageAddon = imageAddon;
       }
       if (getIntVar(VAR_CS_NOWEBLINKS) !== 1) {
-        term.loadAddon(new WebLinksAddon());
+        const webLinksAddon = new WebLinksAddon();
+        term.loadAddon(webLinksAddon);
+        addons.current.webLinksAddon = webLinksAddon;
       }
 
       // Load WebGL Addon
@@ -351,14 +398,13 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
             webglAddon?.dispose();
           });
           term.loadAddon(webglAddon);
+          addons.current.webglAddon = webglAddon;
         } catch (e) {
           console.warn("WebGL addon failed to load, falling back to canvas", e);
         }
       }
 
-      document.fonts.ready.then(() => {
-        fitAddonRef.current?.fit();
-      });
+      document.fonts.ready.then(fit);
 
       term.parser.registerOscHandler(7, (data) => {
         try {
@@ -720,13 +766,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       // Use ResizeObserver for more reliable fitting
       const resizeObserver = new ResizeObserver(() => {
         if (terminalRef.current && terminalRef.current.offsetWidth > 0) {
-          requestAnimationFrame(() => {
-            fitAddon.fit();
-            const ws = wsRef.current;
-            if (ws && ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows } satisfies WsResizeMsg));
-            }
-          });
+          requestAnimationFrame(fit);
         }
       });
       resizeObserver.observe(terminalRef.current);

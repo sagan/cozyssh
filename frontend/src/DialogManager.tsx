@@ -332,7 +332,7 @@ export default function DialogManager({
         });
 
         setImportTip({
-          msg: "Successfully loaded button data from JSON! Review the fields and click 'Save' to confirm.",
+          msg: t("Successfully loaded button data from JSON! Review the fields and click 'Save' to confirm."),
           severity: "success",
         });
       } else {
@@ -399,7 +399,7 @@ export default function DialogManager({
         });
 
         setImportTip({
-          msg: "Successfully loaded script data! Review the fields and click 'Save' to confirm.",
+          msg: t("Successfully loaded script data! Review the fields and click 'Save' to confirm."),
           severity: "success",
         });
       }
@@ -1090,6 +1090,7 @@ export default function DialogManager({
               sx={{ flex: 2 }}
               label={t("Button Name")}
               autoFocus={!editButton}
+              autoComplete="off"
               placeholder={t("Ctrl + Enter to submit")}
               size="small"
               required
@@ -1132,9 +1133,9 @@ export default function DialogManager({
               slotProps={{ select: { native: true } }}
               sx={{ flexGrow: 1 }}
             >
-              {BUTTPN_TYPES.map((v) => (
-                <option key={v[0]} value={v[0]}>
-                  {v[1]}
+              {Object.entries(BUTTPN_TYPES).map(([type, label]) => (
+                <option key={type} value={type}>
+                  {label}
                 </option>
               ))}
             </TextField>
@@ -1154,6 +1155,7 @@ export default function DialogManager({
               label={t("Shortcut")}
               type="search"
               size="small"
+              autoComplete="off"
               value={buttonFormData.shortcut}
               onChange={(e) => setButtonFormData({ ...buttonFormData, shortcut: e.target.value })}
               placeholder={t("Press keys or input, e.g. 'ctrl+shift+m', modifiers in ctrl,alt,shift,meta order")}

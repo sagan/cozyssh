@@ -49,6 +49,7 @@ import {
   apiReqHeaders,
   macModifierSwap,
   sendKeyDown,
+  t,
 } from "./common";
 import {
   type CsScriptModule,
@@ -492,9 +493,9 @@ export async function runScript({ button, background, altMode: alternativeMode }
     });
     try {
       scriptCode = transform(scriptCode, { transforms: ["typescript", "jsx"] }).code;
-    } catch (e) {
-      console.error(`Script ${button.name} Transform Error:`, e);
-      notify(`Script ${button.name} Transform Error: ${e}`, "error", TOAST_KEY_SCRIPT);
+    } catch (err: unknown) {
+      console.error(`Script ${button.name} Transform Error:`, err);
+      notify(t("Script Transform Error:") + ` name=${button.name}, err=${err}`, "error", TOAST_KEY_SCRIPT);
       __CS_RUNNING_SCRIPT__ = undefined;
       return;
     }
@@ -503,9 +504,9 @@ export async function runScript({ button, background, altMode: alternativeMode }
     const url = URL.createObjectURL(blob);
     try {
       moduleObj = await import(url);
-    } catch (e) {
-      console.error(`Script ${button.name} Import Error:`, e);
-      notify(`Script ${button.name} Import Error: ${e}`, "error", TOAST_KEY_SCRIPT);
+    } catch (err: unknown) {
+      console.error(`Script ${button.name} Import Error:`, err);
+      notify(t("Script Import Error:") + ` name=${button.name}, err=${err}`, "error", TOAST_KEY_SCRIPT);
       __CS_RUNNING_SCRIPT__ = undefined;
       return;
     } finally {
@@ -534,13 +535,14 @@ export async function runScript({ button, background, altMode: alternativeMode }
   if (moduleObj.default?.run) {
     try {
       await moduleObj.default.run({ button, background, altMode: alternativeMode });
-    } catch (e) {
-      console.error(`Script ${button.name} run() Error:`, e);
-      notify(`Script ${button.name} run() Error: ${e}`, "error", TOAST_KEY_SCRIPT);
+    } catch (err: unknown) {
+      console.error(`Script ${button.name} run() Error:`, err);
+      notify(t("Script run() Error:") + ` name=${button.name}, err=${err}`, "error", TOAST_KEY_SCRIPT);
     }
   } else if (cached) {
     notify(
-      `Script ${button.name} is already imported & cached, and has no run function. Reload the page to clear the cache`,
+      t("Script is already imported & cached, and has no run function. Reload the page to clear the cache:") +
+        ` name=${button.name}`,
       "info",
       TOAST_KEY_SCRIPT,
     );
