@@ -2330,11 +2330,8 @@ export async function updateConfig(config: ConfigRequest): Promise<boolean> {
     if (!res.ok) {
       throw new Error(`status=${res.status}, msg=${await res.text()}`);
     }
-    const sysinfo: Partial<Sysinfo> = {
-      sitename: config.sitename,
-      savePassword: config.savePassword,
-      useKeyring: config.useKeyring,
-    };
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { appPassword, ...sysinfo } = config;
     setSysinfo(sysinfo);
     notify(t("Settings saved"), "success", TOAST_KEY_API_SETTINGS);
     return true;

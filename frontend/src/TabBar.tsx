@@ -176,7 +176,11 @@ export default function TabBar({
                   data-is-locked={tab.isLocked ? "1" : "0"}
                   key={tab.id}
                   value={tab.id}
-                  title={tab.type === "terminal" ? `Hosts: ${tab.panes.map((p) => p.host).join(", ")}` : "Scratchpad"}
+                  title={
+                    tab.type === "terminal"
+                      ? t("Hosts:") + ` ${tab.panes.map((p) => p.host).join(", ")}`
+                      : t("Scratchpad")
+                  }
                   onContextMenu={(e) => handleContextMenu(e, tab.id)}
                   onAuxClick={(e) => {
                     // mouse middle key

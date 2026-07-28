@@ -332,6 +332,7 @@ export default function Sidebar({
   const [currentMasterKey, setCurrentMasterKey] = useState("");
   const [uploadSSHData, setUploadSSHData] = useState(false);
   const [currentUploadSSHData, setCurrentUploadSSHData] = useState(false);
+  const [passwordsFilter, setPasswordsFilter] = useState("");
 
   const fetchWebdavStatus = useCallback(async (onlyStatus = false) => {
     try {
@@ -3024,7 +3025,19 @@ export default function Sidebar({
                     <Table size="small" stickyHeader>
                       <TableHead>
                         <TableRow>
-                          <TableCell sx={{ fontWeight: "bold" }}>{t("Key")}</TableCell>
+                          <TableCell sx={{ fontWeight: "bold" }}>
+                            {t("Identifier")}&nbsp;
+                            <TextFieldWithCopy
+                              size="small"
+                              autoComplete="off"
+                              autoFocus={true}
+                              type="search"
+                              id="passwords-filter"
+                              placeholder={t("Filter")}
+                              value={passwordsFilter}
+                              onChange={(e) => setPasswordsFilter(e.target.value)}
+                            />
+                          </TableCell>
                           <TableCell sx={{ fontWeight: "bold" }}>{t("Password")}</TableCell>
                           <TableCell align="right" sx={{ fontWeight: "bold" }}>
                             {t("Actions")}
@@ -3032,7 +3045,10 @@ export default function Sidebar({
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {passwordsState.keys.map((key) => {
+                        {(passwordsFilter
+                          ? passwordsState.keys.filter((k) => k.toLowerCase().includes(passwordsFilter.toLowerCase()))
+                          : passwordsState.keys
+                        ).map((key) => {
                           const isRevealed = key in revealedPasswords;
                           const displayVal = isRevealed ? revealedPasswords[key] : PASSWORD_PLACEHOLDER;
                           return (
@@ -3040,7 +3056,7 @@ export default function Sidebar({
                               <TableCell sx={{ fontFamily: "monospace" }}>{key}</TableCell>
                               <TableCell sx={{ fontFamily: "monospace" }}>{displayVal}</TableCell>
                               <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
-                                <Tooltip title={isRevealed ? "Hide" : "Reveal"}>
+                                <Tooltip title={isRevealed ? t("Hide") : t("Reveal")}>
                                   <IconButton
                                     size="small"
                                     onClick={() => {
@@ -3269,7 +3285,7 @@ export default function Sidebar({
                   &nbsp;
                   {t("Reference link:")}&nbsp;
                   <a target="_blank" rel="noopener noreferrer" href={LINK_COZYSSH_DOC_DATA + "#sync"}>
-                    CozySSH Data doccument
+                    {t("CozySSH Data doccument")}
                   </a>
                 </Typography>
                 <Box

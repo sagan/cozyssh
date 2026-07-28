@@ -1368,6 +1368,10 @@ export default function DialogManager({
                 )}
                 <br />- <b>id</b> :&nbsp;
                 {t("The terminal pane id. If the same id pane exists, switch to it instead of opening a new one.")}
+                <br />- <b>sessionId</b> : {t("The terminal session id.")}&nbsp;
+                {t(
+                  "If the same session id already exists in backend, it will attach the target session instead of creating a new one.",
+                )}
                 <br />- <b>title</b> : {t("The opened tab title.")}
                 <br />- <b>remoteCommand</b> :&nbsp;
                 {t("Remote shell command to execute on connected. It works on `local` shell too.")}
@@ -1424,15 +1428,31 @@ export default function DialogManager({
                   borderColor: "divider",
                 }}
               >
-                <Typography variant="caption" color="text.secondary">
-                  {t("Check scripts help:")}&nbsp;
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap" }}
+                >
+                  <span>
+                    {t("Check scripts help:")}&nbsp;
+                    <a
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: "#1976d2" }}
+                      href={LINK_COZYSSH_DOC_SCRIPTS}
+                    >
+                      SCRIPTS
+                    </a>
+                  </span>
                   <a
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    href="#"
                     style={{ color: "#1976d2" }}
-                    href={LINK_COZYSSH_DOC_SCRIPTS}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      navigator.clipboard.writeText(buttonFormData.payload);
+                    }}
                   >
-                    SCRIPTS
+                    {t("Copy")}
                   </a>
                 </Typography>
               </Box>

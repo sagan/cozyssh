@@ -202,35 +202,35 @@ const handleKeyDown = (e: KeyboardEvent) => {
     case "alt+o":
     case "alt+shift+o":
       e.preventDefault();
-      changeNewTabDialogViewMode("servers", !e.shiftKey);
+      changeNewTabDialogViewMode("servers", !e.shiftKey && !getStore().newTabDialogOpen);
       setNewTabDialogOpen(true);
       return;
 
     case "alt+p":
     case "alt+shift+p":
       e.preventDefault();
-      changeNewTabDialogViewMode("tags", !e.shiftKey);
+      changeNewTabDialogViewMode("tags", !e.shiftKey && !getStore().newTabDialogOpen);
       setNewTabDialogOpen(true);
       return;
 
     case "alt+;":
     case "alt+shift+:":
       e.preventDefault();
-      changeNewTabDialogViewMode("tunnels", !e.shiftKey);
+      changeNewTabDialogViewMode("tunnels", !e.shiftKey && !getStore().newTabDialogOpen);
       setNewTabDialogOpen(true);
       return;
 
     case "alt+/":
     case "alt+shift+?":
       e.preventDefault();
-      changeNewTabDialogViewMode("help", !e.shiftKey);
+      changeNewTabDialogViewMode("help", !e.shiftKey && !getStore().newTabDialogOpen);
       setNewTabDialogOpen(true);
       return;
 
     case "alt+a":
     case "alt+shift+a":
       e.preventDefault();
-      changeNewTabDialogViewMode("tabs", !e.shiftKey);
+      changeNewTabDialogViewMode("tabs", !e.shiftKey && !getStore().newTabDialogOpen);
       setNewTabDialogOpen(true);
       return;
 
@@ -238,7 +238,7 @@ const handleKeyDown = (e: KeyboardEvent) => {
     case "alt+shift+e":
     case "ctrl+shift+p":
       e.preventDefault();
-      changeNewTabDialogViewMode("buttons", keycomb !== "alt+shift+e");
+      changeNewTabDialogViewMode("buttons", keycomb !== "alt+shift+e" && !getStore().newTabDialogOpen);
       setNewTabDialogOpen(true);
       return;
 
