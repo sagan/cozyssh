@@ -8,11 +8,11 @@ import { VAR_CS_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN } from "./constants";
 import { type ScratchpadSyncState, genPaneId, t } from "./common";
 import {
   type PaneData,
-  type TerminalRefMap,
   activatePane,
   addUnreadTabId,
   getIntVar,
   getStore,
+  handleSendKey,
   setActivePaneId,
   setMobileAppletsOpen,
   setMobileOpen,
@@ -22,13 +22,13 @@ import {
   setTabs,
   useStore,
 } from "./store";
-import Scratchpad from "./Scratchpad";
-import TerminalComponent from "./Terminal";
+import Scratchpad, { type ScratchpadHandle } from "./Scratchpad";
+import TerminalComponent, { type TerminalHandle } from "./Terminal";
 import FileBrowser from "./FileBrowser";
 import MobileInputBar from "./MobileInputBar";
 
 export interface TerminalGridProps {
-  terminalRefs: React.MutableRefObject<TerminalRefMap>;
+  terminalRefs: React.RefObject<Record<string, TerminalHandle | ScratchpadHandle | null>>;
   onTerminalFocus: () => void;
   onTerminalBlur: () => void;
   scratchpadSyncState: ScratchpadSyncState;
@@ -37,7 +37,6 @@ export interface TerminalGridProps {
   hasSidebarApplet: boolean;
   handleTouchStart: (e: React.TouchEvent) => void;
   handleTouchEnd: (e: React.TouchEvent) => void;
-  handleSendKey: (key: string) => void;
   gestureMode: boolean;
   onGestureModeChange: (v: boolean) => void;
   extraKeysOpen: boolean;
@@ -54,7 +53,6 @@ export default function TerminalGrid({
   hasSidebarApplet,
   handleTouchStart,
   handleTouchEnd,
-  handleSendKey,
   gestureMode,
   onGestureModeChange,
   extraKeysOpen,
@@ -83,13 +81,9 @@ export default function TerminalGrid({
   // must use native listeners to block the browser scroll while in gesture mode.
   const termAreaRef = useRef<HTMLDivElement>(null);
   const gestureModeRef = useRef(gestureMode);
-  const handleSendKeyRef = useRef(handleSendKey);
   useEffect(() => {
     gestureModeRef.current = gestureMode;
   }, [gestureMode]);
-  useEffect(() => {
-    handleSendKeyRef.current = handleSendKey;
-  }, [handleSendKey]);
 
   useEffect(() => {
     const el = termAreaRef.current;
@@ -133,9 +127,9 @@ export default function TerminalGrid({
       }
       const isHoriz = Math.abs(diffX) > Math.abs(diffY);
       if (isHoriz) {
-        handleSendKeyRef.current(diffX > 0 ? "\x1b[C" : "\x1b[D");
+        handleSendKey(diffX > 0 ? "\x1b[C" : "\x1b[D");
       } else {
-        handleSendKeyRef.current(diffY > 0 ? "\x1b[B" : "\x1b[A");
+        handleSendKey(diffY > 0 ? "\x1b[B" : "\x1b[A");
       }
       window.navigator.vibrate?.(getIntVar(VAR_CS_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN));
     };
@@ -157,9 +151,9 @@ export default function TerminalGrid({
   // Note it must not depend on any state other then focusTrigger to avoid re-rendering.
   useEffect(() => {
     if (focusTrigger > 0) {
-      terminalRefs.current[getStore().activePaneId]?.focus();
+      __CS_TERMINALS__.current[getStore().activePaneId]?.focus();
     }
-  }, [focusTrigger, terminalRefs]);
+  }, [focusTrigger]);
 
   return (
     <>
@@ -439,12 +433,10 @@ export default function TerminalGrid({
       </Box>
 
       <MobileInputBar
-        terminalRefs={terminalRefs}
         isCtrlActive={isCtrlActive}
         setIsCtrlActive={setIsCtrlActive}
         isAltActive={isAltActive}
         setIsAltActive={setIsAltActive}
-        handleSendKey={handleSendKey}
         gestureMode={gestureMode}
         onGestureModeChange={onGestureModeChange}
         extraKeysOpen={extraKeysOpen}

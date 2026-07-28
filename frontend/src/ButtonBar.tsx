@@ -5,6 +5,7 @@ import AddIcon from "@mui/icons-material/Add";
 import type { ButtonData } from "./api";
 import {
   getStore,
+  runButton,
   openAddButtonDialog,
   reorderButtons,
   setActiveGroup,
@@ -65,13 +66,9 @@ export interface ButtonBarProps {
   groups: string[];
   isMobile: boolean;
   isTouch: boolean;
-  handleButtonClick: (
-    btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">,
-    alternativeMode?: AltMode,
-  ) => void;
 }
 
-export default function ButtonBar({ groups, handleButtonClick, isMobile, isTouch }: ButtonBarProps) {
+export default function ButtonBar({ groups, isMobile, isTouch }: ButtonBarProps) {
   const activeGroup = useStore((state) => state.activeGroup);
   const filteredButtons = useStore(
     useShallow((state) => state.buttons.filter((b) => (b.group || DEFAULT_BUTTON_GROUP) === state.activeGroup)),
@@ -170,7 +167,7 @@ export default function ButtonBar({ groups, handleButtonClick, isMobile, isTouch
                 btn.shortcut ? " (" + btn.shortcut.toUpperCase() + ")" : ""
               }${btn.type !== "run_script" ? ": " + btn.payload : ""}`}
               component="div"
-              onClick={(e) => handleButtonClick(btn, getAltMode(e))}
+              onClick={(e) => runButton(btn, getAltMode(e))}
               onContextMenu={(e) => {
                 e.preventDefault();
                 e.stopPropagation();

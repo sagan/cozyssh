@@ -25,16 +25,13 @@ import WestIcon from "@mui/icons-material/West";
 import EastIcon from "@mui/icons-material/East";
 
 import { HASH_MOBILE_INPUT_PANEL, VAR_CS_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN } from "./constants";
-import type { TerminalRefMap } from "./store";
-import { getIntVar, getStore } from "./store";
+import { getIntVar, getStore, handleSendKey } from "./store";
 
 export interface MobileInputBarProps {
-  terminalRefs: React.MutableRefObject<TerminalRefMap>;
   isCtrlActive: boolean;
   setIsCtrlActive: (v: boolean) => void;
   isAltActive: boolean;
   setIsAltActive: (v: boolean) => void;
-  handleSendKey: (key: string) => void;
   gestureMode: boolean;
   onGestureModeChange: (v: boolean) => void;
   extraKeysOpen: boolean;
@@ -191,12 +188,10 @@ const PANEL_BTN_SX = (wide?: boolean) =>
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function MobileInputBar({
-  terminalRefs,
   isCtrlActive,
   setIsCtrlActive,
   isAltActive,
   setIsAltActive,
-  handleSendKey,
   gestureMode,
   onGestureModeChange,
   extraKeysOpen,
@@ -273,7 +268,7 @@ export default function MobileInputBar({
   // restore inputMode and focus the textarea first (which triggers the keyboard
   // to open), then wait for the visual viewport to shrink before removing it.
   const performClose = useCallback(() => {
-    const term = terminalRefs.current[getStore().activePaneId];
+    const term = __CS_TERMINALS__.current[getStore().activePaneId];
     if (term && "getXterm" in term) {
       const textarea = term.getXterm()?.textarea;
       if (textarea) textarea.inputMode = "";
@@ -308,7 +303,7 @@ export default function MobileInputBar({
       // No visualViewport API — fall back to a simple delay
       setTimeout(() => onExtraKeysOpenChange(false), 300);
     }
-  }, [onExtraKeysOpenChange, terminalRefs]);
+  }, [onExtraKeysOpenChange]);
 
   // Listen for popstate (Android back gesture or history.back() calls).
   useEffect(() => {
@@ -327,7 +322,7 @@ export default function MobileInputBar({
       // ── Opening the extra-keys panel ──────────────────────────────────────
       // Suppress system keyboard immediately, then show the panel.
       onExtraKeysOpenChange(true);
-      const term = terminalRefs.current[getStore().activePaneId];
+      const term = __CS_TERMINALS__.current[getStore().activePaneId];
       if (term && "getXterm" in term) {
         const textarea = term.getXterm()?.textarea;
         if (textarea) {
@@ -346,7 +341,7 @@ export default function MobileInputBar({
         performClose();
       }
     }
-  }, [extraKeysOpen, onExtraKeysOpenChange, performClose, terminalRefs]);
+  }, [extraKeysOpen, onExtraKeysOpenChange, performClose]);
 
   const activeKbHeight = keyboardHeight > 60 ? keyboardHeight : lastKeyboardHeight;
   const panelHeight = activeKbHeight > 60 ? activeKbHeight + 40 : Math.floor(window.innerHeight * 0.38);

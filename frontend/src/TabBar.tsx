@@ -22,7 +22,6 @@ import {
   t,
 } from "./common";
 import {
-  type TerminalRefMap,
   deleteUnreadTabId,
   setActivePaneId,
   setActiveTabId,
@@ -37,29 +36,26 @@ import {
   activatePane,
   openSaveTabsToButtonDialog,
   getStore,
+  handleCloseSearch,
 } from "./store";
 import { APP_NAME, ID_TERMINAL_SEARCH_INPUT, LOCAL_NAME } from "./constants";
 import TextFieldWithCopy from "./components/TextFieldWithCopy";
 import ExtraMenu from "./components/ExtraMenu";
 
 export interface TabBarProps {
-  terminalRefs: React.MutableRefObject<TerminalRefMap>;
   isMobile: boolean;
   isTouch: boolean;
   hasSidebarApplet: boolean;
   scratchpadSyncState: ScratchpadSyncState;
   handleContextMenu: (e: React.MouseEvent, tabId: string) => void;
-  handleCloseSearch: () => void;
 }
 
 export default function TabBar({
-  terminalRefs,
   isMobile,
   isTouch,
   hasSidebarApplet,
   scratchpadSyncState,
   handleContextMenu,
-  handleCloseSearch,
 }: TabBarProps) {
   const focusSearchInputTrigger = useStore((state) => state.focusSearchInputTrigger);
   const tabs = useStore((state) => state.tabs);
@@ -368,7 +364,7 @@ export default function TabBar({
                 autoComplete="off"
                 onFocus={(e) => e.target.select()}
                 onBlur={() => {
-                  const term = terminalRefs.current[activePaneId];
+                  const term = __CS_TERMINALS__.current[activePaneId];
                   if (term && "getXterm" in term) {
                     term.clearSearchActiveDecoration();
                   }
@@ -376,7 +372,7 @@ export default function TabBar({
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
                   if (e.target.value) {
-                    const term = terminalRefs.current[activePaneId];
+                    const term = __CS_TERMINALS__.current[activePaneId];
                     if (term && "getXterm" in term) {
                       term.findNext(e.target.value, { incremental: true });
                     }
@@ -387,7 +383,7 @@ export default function TabBar({
                   if (kb === "enter") {
                     e.preventDefault();
                     e.stopPropagation();
-                    const term = terminalRefs.current[activePaneId];
+                    const term = __CS_TERMINALS__.current[activePaneId];
                     if (term && "getXterm" in term) {
                       if (e.shiftKey) {
                         term.findPrevious(searchQuery);
@@ -408,7 +404,7 @@ export default function TabBar({
               <IconButton
                 size="small"
                 onClick={() => {
-                  const term = terminalRefs.current[activePaneId];
+                  const term = __CS_TERMINALS__.current[activePaneId];
                   if (term && "getXterm" in term) {
                     term.findPrevious(searchQuery);
                   }
@@ -420,7 +416,7 @@ export default function TabBar({
               <IconButton
                 size="small"
                 onClick={() => {
-                  const term = terminalRefs.current[activePaneId];
+                  const term = __CS_TERMINALS__.current[activePaneId];
                   if (term && "getXterm" in term) {
                     term.findNext(searchQuery);
                   }

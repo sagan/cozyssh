@@ -30,7 +30,7 @@ import TagIcon from "@mui/icons-material/Tag";
 import SmartButtonIcon from "@mui/icons-material/SmartButton";
 
 import { version as PACKAGE_JSON_VERSION } from "../package.json";
-import type { Session, ButtonData, HostData } from "./api";
+import type { Session, HostData } from "./api";
 import {
   DEFAULT_BUTTON_GROUP,
   DEFAULT_SCROLL_ITEMS,
@@ -49,20 +49,25 @@ import {
   DEFAULT_RECENT_HOSTS,
   APP_NAME,
   TOAST_KEY_COPY,
+  PartialMatchHostKey,
+  METHOD_POST,
 } from "./constants";
 import {
   AltModeKey,
+  apiReqHeaders,
   assertUnreachable,
   cutString,
   filterArrayByText,
   filterHosts,
   forceReload,
   getAltMode,
+  getCanonicalHostString,
   getKeyCombination,
   isModifier,
   isValidHostname,
   localShellHost,
   matchButton,
+  openHostInNewWindow,
   parseHostName,
   searchStringAny,
   shortcutLabel,
@@ -98,6 +103,17 @@ import {
   type NtdItemCustomShortcut,
   type NtdItemLink,
   getStore,
+  runButton,
+  attachSession,
+  setActiveTabId,
+  setActivePaneId,
+  triggerFocus,
+  fetchHosts,
+  updateTabTitles,
+  openEditHostDialog,
+  openHost,
+  openAddHostDialog,
+  closeNewTabDialog,
 } from "./store";
 import TextFieldWithCopy from "./components/TextFieldWithCopy";
 import ExtraMenu from "./components/ExtraMenu";
@@ -111,12 +127,6 @@ interface DialogSection {
 interface NewTabDialogProps {
   isMobile: boolean;
   isTouch: boolean;
-  open: boolean;
-  onClose: () => void;
-  onSelect: (host: string, altMode?: AltMode) => void;
-  onSelectTab: (tabId: string) => void;
-  onAttachPinned: (session: Session, altMode?: AltMode) => void;
-  onExecuteButton: (btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">, altMode?: AltMode) => void;
 }
 
 const modes = [
@@ -381,16 +391,7 @@ function itemIcon(item: NtdItem, selectedIndex: number) {
   }
 }
 
-export default function NewTabDialog({
-  isMobile,
-  isTouch,
-  open,
-  onClose,
-  onSelect,
-  onSelectTab,
-  onAttachPinned,
-  onExecuteButton,
-}: NewTabDialogProps) {
+export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
   const tabs = useStore((state) => state.tabs);
   const hosts = useStore((state) => state.hosts);
   const buttons = useStore((state) => state.buttons);
@@ -402,6 +403,7 @@ export default function NewTabDialog({
   const recents = useStore((state) => state.recents);
   const appVersion = useStore((state) => state.sysinfo.version);
   const extraNtdMenu = useStore((state) => state.extraNtdMenu);
+  const newTabDialogOpen = useStore((state) => state.newTabDialogOpen);
 
   const defaultShell = shells[0];
   const alternativeShell = shells[1];
@@ -469,12 +471,12 @@ export default function NewTabDialog({
   }, [viewMode]);
 
   useEffect(() => {
-    if (open) {
+    if (newTabDialogOpen) {
       fetchSessions(true)
         .then((data) => setLocalPinned(data))
         .catch((e) => console.error(e));
     }
-  }, [open]);
+  }, [newTabDialogOpen]);
 
   const filteredActiveTunnels = useMemo(() => {
     if (viewMode !== "tunnels") {
@@ -1070,96 +1072,136 @@ export default function NewTabDialog({
     }, 0);
   }, []);
 
-  const handleSelect = useCallback(
-    (item: (typeof items)[number], altMode: AltMode = 0) => {
-      switch (item.type) {
-        case "tab":
-          onSelectTab(item.tab.id);
-          onClose();
+  const handleSelect = useCallback((item: (typeof items)[number], altMode: AltMode = 0) => {
+    switch (item.type) {
+      case "tab": {
+        setActiveTabId(item.tab.id);
+        const t = getStore().tabs.find((x) => x.id === item.tab.id);
+        if (t) {
+          setActivePaneId(t.activePaneId);
+          triggerFocus();
+        }
+        closeNewTabDialog();
+        break;
+      }
+      case "pinned_tab":
+        attachSession(item.session);
+        closeNewTabDialog();
+        break;
+      case "button":
+      case "other_button":
+      case "builtin_button":
+        if (item.btn.id && altMode === 0) {
+          updateRecentButtonId(item.btn.id);
+        }
+        if (item.btn.type === "open_terminal" && altMode === 4) {
+          setNewTabDialogFilter(item.btn.payload);
+          inputRef.current?.focus();
           break;
-        case "pinned_tab":
-          onAttachPinned(item.session, altMode);
-          onClose();
-          break;
-        case "button":
-        case "other_button":
-        case "builtin_button":
-          if (item.btn.id && altMode === 0) {
-            updateRecentButtonId(item.btn.id);
-          }
-          if (item.btn.type === "open_terminal" && altMode === 4) {
-            setNewTabDialogFilter(item.btn.payload);
-            inputRef.current?.focus();
-            break;
-          }
-          onExecuteButton(item.btn, altMode);
-          onClose();
-          break;
-        case "tag":
-          setNewTabDialogFilter("#" + item.value + " ");
-          setSelectedIndex(0);
-          setTimeout(() => {
-            inputRef.current?.focus();
-          }, 0);
-          break;
-        case "help":
-          setNewTabDialogFilter(item.value);
-          setSelectedIndex(0);
-          setTimeout(() => {
-            inputRef.current?.focus();
-          }, 0);
-          break;
-        case "tunnel":
+        }
+        runButton(item.btn, altMode);
+        closeNewTabDialog();
+        break;
+      case "tag":
+        setNewTabDialogFilter("#" + item.value + " ");
+        setSelectedIndex(0);
+        setTimeout(() => {
+          inputRef.current?.focus();
+        }, 0);
+        break;
+      case "help":
+        setNewTabDialogFilter(item.value);
+        setSelectedIndex(0);
+        setTimeout(() => {
+          inputRef.current?.focus();
+        }, 0);
+        break;
+      case "tunnel":
+        navigator.clipboard
+          .writeText(item.value)
+          .then(() =>
+            notify(
+              t("Tunnel entrypoint copied to clipboard:") + " " + item.value,
+              "info",
+              TOAST_KEY_COPY_TUNNEL_ENTRYPOINT,
+            ),
+          )
+          .catch(() => {});
+        closeNewTabDialog();
+        break;
+      case "link":
+        if (altMode === 1) {
           navigator.clipboard
             .writeText(item.value)
-            .then(() =>
-              notify(
-                t("Tunnel entrypoint copied to clipboard:") + " " + item.value,
-                "info",
-                TOAST_KEY_COPY_TUNNEL_ENTRYPOINT,
-              ),
-            )
+            .then(() => notify(t("Link copied to clipboard:") + " " + item.value, "info", TOAST_KEY_COPY))
             .catch(() => {});
-          onClose();
+        } else {
+          window.open(item.value);
+        }
+        closeNewTabDialog();
+        break;
+      case "action":
+        item.action();
+        closeNewTabDialog();
+        break;
+      case "host":
+      case "recent":
+      case "local":
+      case "direct": {
+        if (altMode === 4) {
+          setNewTabDialogFilter(item.value);
+          inputRef.current?.focus();
           break;
-        case "link":
-          if (altMode === 1) {
-            navigator.clipboard
-              .writeText(item.value)
-              .then(() => notify(t("Link copied to clipboard:") + " " + item.value, "info", TOAST_KEY_COPY))
-              .catch(() => {});
-          } else {
-            window.open(item.value);
+        }
+        const [hostname, query] = cutString(item.value, "?");
+        let hostStr = hostname;
+        let parsedHost: HostData | undefined;
+        if (hostname !== LOCAL_NAME) {
+          // Check if it's a direct connection and not in known hosts
+          const existingHost = getHost(hostname);
+          parsedHost = getHost(hostname);
+          if (!existingHost.source && !existingHost[PartialMatchHostKey]) {
+            (async () => {
+              await fetch("/api/hosts", {
+                method: METHOD_POST,
+                headers: apiReqHeaders(),
+                // don't save password from direct connect string
+                body: JSON.stringify({ ...parsedHost, password: undefined } satisfies HostData),
+              });
+              await fetchHosts();
+              updateTabTitles(parsedHost.name);
+            })();
           }
-          onClose();
-          break;
-        case "action":
-          item.action();
-          onClose();
-          break;
-        case "host":
-        case "recent":
-        case "local":
-        case "direct":
-          if (altMode === 4) {
-            setNewTabDialogFilter(item.value);
-            inputRef.current?.focus();
-            break;
+          hostStr = parsedHost.source === "config" ? parsedHost.name : getCanonicalHostString(parsedHost, "root");
+        }
+        if (query) {
+          hostStr += "?" + query;
+        }
+        if (altMode === 3) {
+          openHostInNewWindow(hostStr);
+        } else if (altMode === 2) {
+          if (parsedHost) {
+            if (parsedHost.source) {
+              openEditHostDialog(parsedHost);
+            } else {
+              openAddHostDialog(parsedHost);
+            }
           }
-          onSelect(item.value, altMode);
-          onClose();
-          break;
-        case "custom_shortcut":
-          updateRecentButtonId(RECENT_BUTTON_ID_PREFIX_CUSTOM_SHORTCUT + item.shortcut.shortcut);
-          item.shortcut.action(item.shortcut);
-          onClose();
-          break;
-        default:
-          assertUnreachable(item);
+        } else {
+          openHost(hostStr, { target: altMode ? "_self" : undefined });
+        }
+        closeNewTabDialog();
+        break;
       }
-    },
-    [onAttachPinned, onClose, onExecuteButton, onSelect, onSelectTab],
-  );
+      case "custom_shortcut":
+        updateRecentButtonId(RECENT_BUTTON_ID_PREFIX_CUSTOM_SHORTCUT + item.shortcut.shortcut);
+        item.shortcut.action(item.shortcut);
+        closeNewTabDialog();
+        break;
+      default:
+        assertUnreachable(item);
+    }
+  }, []);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -1232,10 +1274,10 @@ export default function NewTabDialog({
         const [viewMode] = parseNewTabDialogFilter(newTabDialogFilter);
         setNewTabDialogFilter(viewMode === "servers" ? "" : newTabDialogFilter.slice(0, 1));
       } else if (keycb === "escape") {
-        onClose();
+        closeNewTabDialog();
       }
     },
-    [f, handleDeleteItem, handleSelect, items, onClose, selectedIndex],
+    [f, handleDeleteItem, handleSelect, items, selectedIndex],
   );
 
   useEffect(() => {
@@ -1337,8 +1379,8 @@ export default function NewTabDialog({
     <Dialog
       id="new-tab-dialog"
       data-view={viewMode}
-      open={open}
-      onClose={onClose}
+      open={newTabDialogOpen}
+      onClose={closeNewTabDialog}
       disableRestoreFocus
       fullWidth
       maxWidth="md"
@@ -1587,7 +1629,7 @@ export default function NewTabDialog({
                 before={() => {
                   setContextMenuOpen(false);
                 }}
-                after={onClose}
+                after={closeNewTabDialog}
               />
               {contextMenu.item.isDeletable && (
                 <MenuItem

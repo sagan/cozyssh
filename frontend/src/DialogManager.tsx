@@ -24,7 +24,7 @@ import { EditorView } from "@codemirror/view";
 import { javascript } from "@codemirror/lang-javascript";
 import { liquid } from "@codemirror/lang-liquid";
 
-import type { HostData, ButtonData } from "./api";
+import type { ButtonData } from "./api";
 import {
   CLASS_HIDE_DESKTOP,
   DEFAULT_BUTTON_GROUP,
@@ -33,26 +33,22 @@ import {
   LINK_COZYSSH_PLUGIN_MANAGER,
   LOCAL_NAME,
   METHOD_POST,
-  PartialMatchHostKey,
 } from "./constants";
 import {
   type ContextMenu,
   type ToastData,
   getKeyCombination,
   ButtonDataSchema,
-  getCanonicalHostString,
   getTemplateVariables,
   liquidEngine,
   openHostInNewWindow,
-  cutString,
   apiReqHeaders,
   t,
 } from "./common";
 import {
   type TabData,
+  type PaneData,
   getStore,
-  setActivePaneId,
-  setActiveTabId,
   setButtonFormData,
   setEditButton,
   setEditButtonDialogOpen,
@@ -67,7 +63,6 @@ import {
   setSearchOpen,
   triggerFocusSearchInput,
   activatePane,
-  closeNewTabDialog,
   closeOtherTabs,
   closeRightTabs,
   openInputDialog,
@@ -75,7 +70,6 @@ import {
   setInputDialogDirty,
   openHost,
   cloneSession,
-  attachSession,
   unpinTab,
   pinTab,
   unlockTab,
@@ -85,11 +79,9 @@ import {
   deleteButton,
   moveButton,
   openSaveTabToButtonDialog,
-  openEditHostDialog,
   closeTabOrPane,
   closeTab,
   hideTab,
-  openAddHostDialog,
   getHost,
   getPane,
   openEditHost,
@@ -97,16 +89,14 @@ import {
   moveTabRight,
   setBtnContextMenuOpen,
   unloadButton,
-  type PaneData,
-  fetchHosts,
-  updateTabTitles,
+  runScript,
+  handleReconnectTab,
 } from "./store";
 import NewTabDialog from "./NewTabDialog";
 import { dialogs } from "./Dialogs";
 import FreeTextField from "./components/FreeTextField";
 import TextFieldWithCopy from "./components/TextFieldWithCopy";
 import ExtraMenu from "./components/ExtraMenu";
-import { runScript } from "./pluginAPI";
 import { BUTTPN_TYPES, MISC_FUNCTIONS, TERMINAL_FUNCTIONS } from "./buttons";
 
 export interface DialogManagerProps {
@@ -117,12 +107,7 @@ export interface DialogManagerProps {
   contextMenu: ContextMenu | null;
   handleCloseMenu: () => void;
   handleToggleFiles: () => void;
-  handleReconnectTab: (id: string) => void;
   sendParsedString: (s: string, isLiquid?: boolean, userVars?: Record<string, string>) => void;
-  handleButtonClick: (
-    btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">,
-    alternativeMode?: AltMode,
-  ) => Promise<void>;
 }
 
 export default function DialogManager({
@@ -133,8 +118,6 @@ export default function DialogManager({
   contextMenu,
   handleCloseMenu,
   handleToggleFiles,
-  handleReconnectTab,
-  handleButtonClick,
   sendParsedString,
 }: DialogManagerProps) {
   const hosts = useStore((state) => state.hosts);
@@ -146,7 +129,6 @@ export default function DialogManager({
   const newTabDialogOpen = useStore((state) => state.newTabDialogOpen);
   const tabs = useStore((state) => state.tabs);
   const activeTabId = useStore((state) => state.activeTabId);
-  const buttons = useStore((state) => state.buttons);
   const inputDialogOpen = useStore((state) => state.inputDialogOpen);
   const inputValue = useStore((state) => state.inputValue);
   const sendScope = useStore((state) => state.sendScope);
@@ -275,137 +257,132 @@ export default function DialogManager({
     setTitleMenuAnchor(null);
   }, []);
 
-  const importFromData = useCallback(
-    async (text: string, filename?: string) => {
-      let isJson = false;
-      let data: unknown = null;
+  const importFromData = useCallback(async (text: string, filename?: string) => {
+    let isJson = false;
+    let data: unknown = null;
 
-      try {
-        data = JSON.parse(text);
-        if (data && typeof data === "object" && !Array.isArray(data)) {
-          isJson = true;
-        }
-      } catch {
-        /* empty */
+    try {
+      data = JSON.parse(text);
+      if (data && typeof data === "object" && !Array.isArray(data)) {
+        isJson = true;
+      }
+    } catch {
+      /* empty */
+    }
+
+    if (isJson) {
+      const result = ButtonDataSchema.safeParse(data);
+      if (!result.success) {
+        const errorMsg = result.error.issues.map((err) => `${err.path.join(".") || "root"}: ${err.message}`).join(", ");
+        setImportTip({
+          msg: `Not a valid ButtonData object. Validation errors: ${errorMsg}`,
+          severity: "error",
+        });
+        return;
       }
 
-      if (isJson) {
-        const result = ButtonDataSchema.safeParse(data);
-        if (!result.success) {
-          const errorMsg = result.error.issues
-            .map((err) => `${err.path.join(".") || "root"}: ${err.message}`)
-            .join(", ");
-          setImportTip({
-            msg: `Not a valid ButtonData object. Validation errors: ${errorMsg}`,
-            severity: "error",
-          });
+      const validatedData = result.data;
+
+      if (validatedData.id) {
+        const btn = getStore().buttons.find((b) => b.id === validatedData.id);
+        if (
+          btn &&
+          !(await dialogs.confirm(
+            t("Same id button already exists.") +
+              " " +
+              t("Existing button:") +
+              ` name=${btn.name}, group=${btn.group}. ` +
+              t("Overwrite it?"),
+          ))
+        ) {
           return;
         }
-
-        const validatedData = result.data;
-
-        if (validatedData.id) {
-          const btn = buttons.find((b) => b.id === validatedData.id);
-          if (
-            btn &&
-            !(await dialogs.confirm(
-              t("Same id button already exists.") +
-                " " +
-                t("Existing button:") +
-                ` name=${btn.name}, group=${btn.group}. ` +
-                t("Overwrite it?"),
-            ))
-          ) {
-            return;
-          }
-        }
-
-        setButtonFormData({
-          id: validatedData.id,
-          name: validatedData.name,
-          type: validatedData.type,
-          payload: validatedData.payload,
-          group: validatedData.group || getStore().buttonFormData.group || DEFAULT_BUTTON_GROUP,
-          autorun: validatedData.autorun,
-          order: validatedData.order,
-          shortcut: validatedData.shortcut,
-        });
-
-        setImportTip({
-          msg: t("Successfully loaded button data from JSON! Review the fields and click 'Save' to confirm."),
-          severity: "success",
-        });
-      } else {
-        // Treat as a direct script/text file URL
-        let buttonName = "";
-        let buttonId = "";
-        let group = "";
-        let autorun = 0;
-        const jsDocMatch = text.match(/^\s*\/\*\*([\s\S]*?)\*\//);
-        if (jsDocMatch) {
-          const content = jsDocMatch[1];
-          const moduleMatch = content.match(/@module\s+([^\r\n]+)/);
-          if (moduleMatch) {
-            buttonName = moduleMatch[1].trim();
-          }
-          const idMatch = content.match(/@id\s+([^\r\n]+)/);
-          if (idMatch) {
-            buttonId = idMatch[1].trim();
-          }
-          const groupMatch = content.match(/@group\s+([^\r\n]+)/);
-          if (groupMatch) {
-            group = groupMatch[1].trim();
-          }
-          const autorunMatch = content.match(/@autorun\s+([^\r\n]+)/);
-          if (autorunMatch && autorunMatch[1].trim() === "1") {
-            autorun = 1;
-          }
-        }
-
-        if (buttonId) {
-          const btn = buttons.find((b) => b.id === buttonId);
-          if (
-            btn &&
-            !(await dialogs.confirm(
-              t("Same id button already exists.") +
-                " " +
-                t("Existing button:") +
-                ` name=${btn.name}, group=${btn.group}. ` +
-                t("Overwrite it?"),
-            ))
-          ) {
-            return;
-          }
-        }
-
-        if (!buttonName) {
-          if (filename) {
-            const pathParts = filename.split("/");
-            const lastPart = pathParts[pathParts.length - 1] || "";
-            buttonName = lastPart.replace(/\.(ts|tsx|js|jsx|txt)$/i, "");
-          }
-          buttonName = buttonName || "Imported Script";
-        }
-
-        setButtonFormData({
-          id: buttonId,
-          name: buttonName,
-          type: "run_script",
-          payload: text,
-          group: group || getStore().buttonFormData.group || DEFAULT_BUTTON_GROUP,
-          autorun,
-          order: getStore().buttonFormData.order || 0,
-          shortcut: "",
-        });
-
-        setImportTip({
-          msg: t("Successfully loaded script data! Review the fields and click 'Save' to confirm."),
-          severity: "success",
-        });
       }
-    },
-    [buttons],
-  );
+
+      setButtonFormData({
+        id: validatedData.id,
+        name: validatedData.name,
+        type: validatedData.type,
+        payload: validatedData.payload,
+        group: validatedData.group || getStore().buttonFormData.group || DEFAULT_BUTTON_GROUP,
+        autorun: validatedData.autorun,
+        order: validatedData.order,
+        shortcut: validatedData.shortcut,
+      });
+
+      setImportTip({
+        msg: t("Successfully loaded button data from JSON! Review the fields and click 'Save' to confirm."),
+        severity: "success",
+      });
+    } else {
+      // Treat as a direct script/text file URL
+      let buttonName = "";
+      let buttonId = "";
+      let group = "";
+      let autorun = 0;
+      const jsDocMatch = text.match(/^\s*\/\*\*([\s\S]*?)\*\//);
+      if (jsDocMatch) {
+        const content = jsDocMatch[1];
+        const moduleMatch = content.match(/@module\s+([^\r\n]+)/);
+        if (moduleMatch) {
+          buttonName = moduleMatch[1].trim();
+        }
+        const idMatch = content.match(/@id\s+([^\r\n]+)/);
+        if (idMatch) {
+          buttonId = idMatch[1].trim();
+        }
+        const groupMatch = content.match(/@group\s+([^\r\n]+)/);
+        if (groupMatch) {
+          group = groupMatch[1].trim();
+        }
+        const autorunMatch = content.match(/@autorun\s+([^\r\n]+)/);
+        if (autorunMatch && autorunMatch[1].trim() === "1") {
+          autorun = 1;
+        }
+      }
+
+      if (buttonId) {
+        const btn = getStore().buttons.find((b) => b.id === buttonId);
+        if (
+          btn &&
+          !(await dialogs.confirm(
+            t("Same id button already exists.") +
+              " " +
+              t("Existing button:") +
+              ` name=${btn.name}, group=${btn.group}. ` +
+              t("Overwrite it?"),
+          ))
+        ) {
+          return;
+        }
+      }
+
+      if (!buttonName) {
+        if (filename) {
+          const pathParts = filename.split("/");
+          const lastPart = pathParts[pathParts.length - 1] || "";
+          buttonName = lastPart.replace(/\.(ts|tsx|js|jsx|txt)$/i, "");
+        }
+        buttonName = buttonName || "Imported Script";
+      }
+
+      setButtonFormData({
+        id: buttonId,
+        name: buttonName,
+        type: "run_script",
+        payload: text,
+        group: group || getStore().buttonFormData.group || DEFAULT_BUTTON_GROUP,
+        autorun,
+        order: getStore().buttonFormData.order || 0,
+        shortcut: "",
+      });
+
+      setImportTip({
+        msg: t("Successfully loaded script data! Review the fields and click 'Save' to confirm."),
+        severity: "success",
+      });
+    }
+  }, []);
 
   const importFromUrl = useCallback(
     async (url: string) => {
@@ -679,6 +656,7 @@ export default function DialogManager({
                     <MenuItem
                       id="tab-menu-reconnect"
                       onClick={() => {
+                        handleCloseMenu();
                         handleReconnectTab(memoTabId);
                         triggerFocus();
                       }}
@@ -1382,39 +1360,47 @@ export default function DialogManager({
                 }}
               />
               <Typography variant="body2" color="text.secondary">
-                Server name or <b>[username[:password]@]hostname[:port]</b>. Use <b>local</b> for local shell.
+                {t("Server name")} {t("or")} <b>[username[:password]@]hostname[:port]</b>.&nbsp;
+                {t("Use `local` for local shell.")}
                 <br />
-                Append <b>?id=abc&title=Local</b> style query string to set optional session-scope parameters (URL
-                Encoded):
-                <br />- <b>id</b> : The terminal pane id. If the same id pane exists, switch to it instead of opening a
-                new one.
-                <br />- <b>title</b> : The opened tab title.
-                <br />- <b>remoteCommand</b> : Remote shell command to execute on connected. It works on&nbsp;
-                <code>local</code> shell too.
-                <br />- <b>proxyJump</b> : Proxy jump server.
-                <br />- <b>target</b> : The tab id. If the same id tab exists, the new terminal will be opened in the
-                target tab, use <code>_self</code> for current tab.
-                <br />- <b>exec</b> : Only valid for <code>local</code> host. If set to <code>1</code>, it treats&nbsp;
-                <code>remoteCommand</code> as a single program with args and execute it directly instead of executing it
-                using system shell.
-                <br />- <b>localForward</b> & <b>remoteForward</b> & <b>dynamicForward</b> : OpenSSH syntax SSH tunnel
-                rules. Use&nbsp;
-                <code>%0A</code> (\n) to seperate multiple rules.
-                <br />- <b>env</b>: Environment variables to send to SSH server. Format: <code>NAME=value</code>.&nbsp;
-                Use&nbsp;
-                <code>%0A</code> (\n) to seperate multiple variables.
-                <br />- <b>state</b>: Set the initial state of the opened terminal session: 0=normal, 1=pinned,
-                2=locked, 3=hidden.
-                <br />- <b>tabStyle</b> : JSON Object. Set the terminal tab bar tab CSS style. E.g.&nbsp;
-                <code>{`{"background":"red"}`}</code>.
-                <br />- <b>terminalStyle</b> : JSON Object. Set the terminal area CSS Style.
-                <br />- <b>tabClass</b> : The class name to add to the terminal tab.
-                <br />- <b>terminalClass</b> : The class name to add to the terminal wrap element.
-                <br /> It's possible to set multiple (up to 4) comma-separated servers to open them in split screen.
-                <br /> E.b. <b>local?title=Local</b> . More examples:
+                {t(
+                  "Append `?id=abc&title=Local` style (URL Encoded) query string to set optional session-scope parameters:",
+                )}
+                <br />- <b>id</b> :&nbsp;
+                {t("The terminal pane id. If the same id pane exists, switch to it instead of opening a new one.")}
+                <br />- <b>title</b> : {t("The opened tab title.")}
+                <br />- <b>remoteCommand</b> :&nbsp;
+                {t("Remote shell command to execute on connected. It works on `local` shell too.")}
+                <br />- <b>proxyJump</b> : {t("Proxy jump server.")}
+                <br />- <b>target</b> :&nbsp;
+                {t(
+                  "The tab id. If the same id tab exists, the new terminal will be opened in the target tab, use `_self` for current tab.",
+                )}
+                <br />- <b>exec</b> :&nbsp;
+                {t(
+                  "Only valid for `local` host. If set to `1`, it treats `remoteCommand` as a single program with args and execute it directly instead of executing it using system shell.",
+                )}
+                <br />- <b>localForward</b> & <b>remoteForward</b> & <b>dynamicForward</b> :&nbsp;
+                {t("OpenSSH syntax SSH tunnel rules. Use \\n to seperate multiple rules.")}
+                <br />- <b>env</b> :&nbsp;
+                {t(
+                  "Environment variables to send to SSH server. Format: `NAME=value`. Use \\n to seperate multiple variables.",
+                )}
+                <br />- <b>state</b> :&nbsp;
+                {t("Set the initial state of the opened terminal session: 0=normal, 1=pinned, 2=locked, 3=hidden.")}
+                <br />- <b>tabStyle</b> :&nbsp;
+                {t(`JSON Object. Set the terminal tab bar tab CSS style. E.g. '{"background":"red"}'.`)}
+                <br />- <b>terminalStyle</b> : {t("JSON Object. Set the terminal area CSS Style.")}
+                <br />- <b>tabClass</b> : {t("The class name to add to the terminal tab.")}
+                <br />- <b>terminalClass</b> : {t("The class name to add to the terminal wrap element.")}
+                <br />
+                {t("It's possible to set multiple (up to 4) comma-separated servers to open them in split screen.")}
+                <br />
+                {t("E.g.")} <b>local?title=Local</b>. {t("More examples:")}
                 <br />- <b>local?id=local-abc&title=Local&remoteCommand=tmux attach || tmux new</b>
-                <br />- <b>local?remoteCommand=python&title=Python</b> : Start Python REPL.
-                <br />- <b>192.168.1.1?title=server1,192.168.1.2?title=server2</b> : Open two terminals in split screen.
+                <br />- <b>local?remoteCommand=python&title=Python</b> : {t("Start Python REPL.")}
+                <br />- <b>192.168.1.1?title=server1,192.168.1.2?title=server2</b> :&nbsp;
+                {t("Open two terminals in split screen.")}
               </Typography>
             </Box>
           ) : (
@@ -1780,67 +1766,7 @@ export default function DialogManager({
           </Button>
         </DialogActions>
       </Dialog>
-
-      <NewTabDialog
-        isMobile={isMobile}
-        isTouch={isTouch}
-        key={newTabDialogOpen ? "open" : "closed"}
-        open={newTabDialogOpen}
-        onClose={closeNewTabDialog}
-        onExecuteButton={handleButtonClick}
-        onSelectTab={(tabId) => {
-          setActiveTabId(tabId);
-          const t = tabs.find((x) => x.id === tabId);
-          if (t) {
-            setActivePaneId(t.activePaneId);
-            triggerFocus();
-          }
-        }}
-        onAttachPinned={(session) => {
-          attachSession(session);
-          closeNewTabDialog();
-        }}
-        onSelect={async (host, altMode: AltMode = 0) => {
-          const [hostname, query] = cutString(host, "?");
-          let hostStr = hostname;
-          let parsedHost: HostData | undefined;
-          if (hostname !== LOCAL_NAME) {
-            // Check if it's a direct connection and not in known hosts
-            const existingHost = getHost(hostname);
-            parsedHost = getHost(hostname);
-            if (!existingHost.source && !existingHost[PartialMatchHostKey]) {
-              (async () => {
-                await fetch("/api/hosts", {
-                  method: METHOD_POST,
-                  headers: apiReqHeaders(),
-                  // don't save password from direct connect string
-                  body: JSON.stringify({ ...parsedHost, password: undefined } satisfies HostData),
-                });
-                await fetchHosts();
-                updateTabTitles(parsedHost.name);
-              })();
-            }
-            hostStr = parsedHost.source === "config" ? parsedHost.name : getCanonicalHostString(parsedHost, "root");
-          }
-          if (query) {
-            hostStr += "?" + query;
-          }
-
-          if (altMode === 3) {
-            openHostInNewWindow(hostStr);
-          } else if (altMode === 2) {
-            if (parsedHost) {
-              if (parsedHost.source) {
-                openEditHostDialog(parsedHost);
-              } else {
-                openAddHostDialog(parsedHost);
-              }
-            }
-          } else {
-            openHost(hostStr, { target: altMode ? "_self" : undefined });
-          }
-        }}
-      />
+      <NewTabDialog isMobile={isMobile} isTouch={isTouch} key={newTabDialogOpen ? "open" : "closed"} />
       <Box
         id="toasts"
         sx={{

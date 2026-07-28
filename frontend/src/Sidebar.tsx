@@ -3493,15 +3493,20 @@ export default function Sidebar({
                   )
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }} gutterBottom>
-                  <b>Alt + O</b> : {t("Open new tab dialog.")} Use <b>← →</b> (or <b>Alt + H/L</b>) to switch
-                  view,&nbsp;
-                  <b>↓ ↑</b> (or <b>Alt + J/K</b>) to select, <b>Enter</b> to open, <b>Alt + Enter</b> to open in
-                  current tab, <b>Ctrl + Enter</b> to open in new window, <b>Shift + Enter</b> to edit selected
-                  host,&nbsp;
-                  <b>Alt + Shift + Enter</b> to input selected host into filter. Use <b>Delete</b> or <b>Alt + D</b> to
-                  delete a recent item; <b>Alt + Backspace</b> to clear the filter. Use <b>Alt + ↓↑</b> (or&nbsp;
-                  <b>Alt + Shift + J/K</b>) to jump through items quickly; Hold <b>Ctrl</b> to jump to top/bottom.&nbsp;
-                  <b>Ctrl/Alt/Shift + Mouse Click</b> is same as <b>Clt/Alt/Shift + Enter</b>
+                  <b>Alt + O</b> : {t("Open new tab dialog.")}&nbsp;
+                  {t("In dialog:")}&nbsp;
+                  <b>← →</b> {t("or")} <b>Alt + H/L</b>: {t("switch view")};&nbsp;
+                  <b>↓ ↑</b> {t("or")} <b>Alt + J/K</b>: {t("select item")};&nbsp;
+                  <b>Enter</b>: {t("open")};&nbsp;
+                  <b>Alt + Enter</b>: {t("open in current tab")};&nbsp;
+                  <b>Ctrl + Enter</b>: {t("open in new window")};&nbsp;
+                  <b>Shift + Enter</b>: {t("edit selected host")};&nbsp;
+                  <b>Alt + Shift + Enter</b>: {t("input selected host into filter")};&nbsp;
+                  <b>Delete</b> {t("or")} <b>Alt + D</b>: {t("delete a recent item")};&nbsp;
+                  <b>Alt + Backspace</b>: {t("clear the filter")};&nbsp;
+                  <b>Alt + ↓↑</b> {t("or")} <b>Alt + Shift + J/K</b>: {t("jump through items quickly")};&nbsp;
+                  <b>Ctrl + Alt + J/K</b>: {t("jump to top/bottom")};&nbsp;
+                  <b>Ctrl/Alt/Shift + Mouse Click</b>: {t("the same as `Ctrl/Alt/Shift + Enter`")}
                   <br />
                   <b>Alt + A</b> : {t("Open new tab dialog - tabs view")}
                   <br />
@@ -3514,7 +3519,7 @@ export default function Sidebar({
                   <b>Alt + ?</b> : {t("Open new tab dialog - all view")}
                   <br />
                   <b>Alt + Shift + O/A/E/P/:/?</b> :&nbsp;
-                  {t("Same as Alt + O/A/E/P/:/? but preserve last input filter value")}
+                  {t("Same as `Alt + O/A/E/P/:/?` but preserve last input filter value")}
                   <br />
                   <b>Alt + N</b> : {t("Open new default local shell tab")}; <b>Ctrl + Alt + N</b>:&nbsp;
                   {t("Open default shell in current tab")}
@@ -3543,13 +3548,15 @@ export default function Sidebar({
                   <br />
                   <b>Ctrl + Alt + Shift + L</b> : {t("Toggle Lock/Unlock current tab")}
                   <br />
-                  <b>Alt + I</b> : {t("Focus sidebar search filter and clear current value.")} Use <b>↑ ↓</b> to
-                  select,&nbsp;
-                  <b>Enter</b> to open (or toggle group expandness),&nbsp;
-                  <b>Alt + Enter</b> to open in current tab, <b>Ctrl + Enter</b> to open in new window (or toggle group
-                  and all sub-groups expandness),&nbsp;
-                  <b>Shift + Enter</b> to open context menu. <b>Ctrl/Alt + Mouse Click</b> is same as&nbsp;
-                  <b>Ctrl/Alt + Enter</b>, <b>Shift + Mouse Click</b> to edit host.
+                  <b>Alt + I</b> : {t("Focus sidebar search filter and clear current value.")}&nbsp;
+                  {t("When the search filter is focused:")}&nbsp;
+                  <b>↑ ↓</b>: {t("select item")};&nbsp;
+                  <b>Enter</b>: {t("open (or toggle group expandness)")};&nbsp;
+                  <b>Alt + Enter</b>: {t("open in current tab")};&nbsp;
+                  <b>Ctrl + Enter</b>: {t("open in new window (or toggle group and all sub-groups expandness)")};&nbsp;
+                  <b>Shift + Enter</b>: {t("open context menu")};&nbsp;
+                  <b>Ctrl/Alt + Mouse Click</b>: {t("the same as `Ctrl/Alt + Enter`")};&nbsp;
+                  <b>Shift + Mouse Click</b>: {t("edit selected host")}
                   <br />
                   <b>Alt + Shift + I</b> : {t("Focus sidebar search filter but preserve current value")}
                   <br />
@@ -3567,7 +3574,8 @@ export default function Sidebar({
                   <br />
                   <b>Alt + Shift + Q</b> : {t("Open input dialog and preserve last form values")}
                   <br />
-                  <b>Alt + V / Alt + Shift + V</b> : {t("Switch to next / previous group in button bar.")}&nbsp;
+                  <b>Alt + V / Alt + Shift + V</b> : {t("Switch to next / previous group in button bar")}
+                  <br />
                   <b>Ctrl + Alt + V / Ctrl + Alt + Shift + V</b> :&nbsp;
                   {t("Switch to next / previous group in button bar, include hidden groups")}
                   <br />

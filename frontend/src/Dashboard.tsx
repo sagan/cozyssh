@@ -18,24 +18,20 @@ import CloseIcon from "@mui/icons-material/Close";
 import ViewSidebarIcon from "@mui/icons-material/ViewSidebar";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 
-import type { FullData, ButtonData } from "./api";
+import type { FullData } from "./api";
 import {
-  DEFAULT_SCROLL_LINES,
   BROWSER_STORAGE_KEY_TOKEN,
   DEFAULT_BUTTON_GROUP,
   LOCAL_NAME,
   VAR_CS_NOAUTOLOAD,
   VAR_CS_NOAUTORUN,
-  VAR_CS_SCROLL_LINES,
   VAR_NOAUTOLOAD,
   VAR_NOAUTORUN,
   DEFAULT_VIBRATE_PATTERN,
-  ID_TERMINAL_SEARCH_INPUT,
   TAG_GROUP_PREFIX,
   TAG_FAV,
   TOAST_KEY_API_FULLDATA,
   VAR_CS_NO_SANITIZE_HASH,
-  TOAST_KEY_COPY,
   TOAST_KEY_REFRESH,
   VAR_CS_VIBRATE_PATTERN,
 } from "./constants";
@@ -45,13 +41,9 @@ import {
   defaultThemeOptions,
   genTabId,
   genPaneId,
-  getTemplateVariables,
-  liquidEngine,
   apiReqHeaders,
   cutString,
-  openHostInNewWindow,
   hostSorter,
-  assertUnreachable,
   getCanonicalHostString,
   t,
 } from "./common";
@@ -66,54 +58,19 @@ import {
   notify,
   setMobileOpen,
   setMobileAppletsOpen,
-  setSearchOpen,
-  resetFontSize,
-  decreseFontSize,
-  increaseFontSize,
-  prevButtonGroup,
-  nextButtonGroup,
-  closeOtherTabs,
-  closeRightTabs,
-  openInputDialog,
   openHostsAsSplit,
   openHost,
-  cloneSession,
   attachSession,
-  closeTabOrPane,
   openScratchpad,
   openHostsAsSplit2,
   getIntVar,
   refreshData,
-  lockTab,
-  unlockTab,
-  pinTab,
-  unpinTab,
-  renameTab,
-  openSaveTabToButtonDialog,
-  setTagsExpanded,
-  setAllExpanded,
-  setAutoExpanded,
-  setFavExpanded,
-  toggleExpandAllGroups,
-  openEditTabHost,
-  openEditButtonDialog,
-  openAddButtonDialog,
-  hideTab,
-  fetchSessions,
   startupParams,
-  type PaneData,
-  getPane,
-  getTab,
-  getHost,
-  setUnreadTabIds,
-  openAddHostDialog,
-  setSettingsOpen,
-  moveTabLeft,
-  moveTabRight,
-  openSaveTabsToButtonDialog,
+  sendParsedString,
+  runScript,
 } from "./store";
-import { setupPluginAPI, runScript } from "./pluginAPI";
-import { useKeyboardManager } from "./useKeyboardManager";
+import "./pluginAPI";
+import "./useKeyboardManager";
 import Sidebar from "./Sidebar";
 import type { TerminalHandle } from "./Terminal";
 import type { ScratchpadHandle } from "./Scratchpad";
@@ -124,7 +81,6 @@ import DialogManager from "./DialogManager";
 import AppletWrapper, { type AppletData } from "./AppletWrapper";
 import SideEffect from "./SideEffect";
 import { dialogs } from "./Dialogs";
-import type { MISC_FUNCTIONS, TERMINAL_FUNCTIONS } from "./buttons";
 
 interface DashboardProps {
   initialData?: FullData;
@@ -145,9 +101,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
 
   // ── UI-only state (stays in React) ────────────────────────────────────
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
-  // terminalRefs is kept as a local ref for all Dashboard-internal usage,
-  // and also written into the store so pluginAPI / useKeyboardManager can read it.
-  const terminalRefs = useRef<{ [key: string]: TerminalHandle | ScratchpadHandle | null }>({});
+  // terminalRefs is kept as a local ref for all Dashboard-internal usage
+  const terminalRefs = useRef<Record<string, TerminalHandle | ScratchpadHandle | null>>({});
   const [viewportHeight, setViewportHeight] = useState("100dvh");
   const [scratchpadSyncState, setScratchpadSyncState] = useState<ScratchpadSyncState>("offline");
   const [memoTabId, setMemoTabId] = useState<string | null>(null);
@@ -167,137 +122,23 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const isTouch = useMediaQuery("(pointer: coarse)");
+  const hasSidebarApplet = useMemo(() => !!applets.find((a) => a.position === "sidebar"), [applets]);
+  const [muiTheme, setMuiTheme] = useState(() => createTheme(defaultThemeOptions({ fontSize: __CS_FONT_SIZE__ })));
 
+  useEffect(() => {
+    window.__CS_APPLETS__ = appletRefs;
+    window.__CS_TERMINALS__ = terminalRefs;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    window.csSetTheme = (options: any, ...args: any[]) => setMuiTheme(createTheme(options, ...args));
+    window.csSetApplets = setApplets;
+    window.__CS_MAX_ZINDEX__ = maxZIndexRef;
+  }, []);
   useEffect(() => {
     appletRefs.current = applets;
   }, [applets]);
-
-  const hasSidebarApplet = useMemo(() => !!applets.find((a) => a.position === "sidebar"), [applets]);
-
-  const [muiTheme, setMuiTheme] = useState(() => createTheme(defaultThemeOptions({ fontSize: __CS_FONT_SIZE__ })));
-
-  const handleCloseSearch = useCallback(() => {
-    setSearchOpen(false);
-    const term = terminalRefs.current[getStore().activePaneId];
-    if (term && "getXterm" in term) {
-      term.clearSearchDecorations();
-      term.focus();
-    }
-  }, []);
-
-  const handleSendKey = useCallback((key: string) => {
-    const term = terminalRefs.current[getStore().activePaneId];
-    if (term && "getXterm" in term) {
-      term.sendData(key);
-      term.focus();
-    }
-  }, []);
-
-  const sendParsedString = useCallback(async (input: string, isLiquid?: boolean, userVars?: Record<string, string>) => {
-    const { sendScope, tabs } = getStore();
-    let targetPanes: PaneData[] = [];
-    if (sendScope === 2) {
-      targetPanes = tabs.flatMap((t) => t.panes);
-    } else if (sendScope === 1) {
-      const currentTab = getTab();
-      targetPanes = currentTab ? currentTab.panes : [];
-    } else {
-      const pane = getPane();
-      targetPanes = pane ? [pane] : [];
-    }
-
-    let hasShellIntegration = false;
-    if (isLiquid) {
-      try {
-        const parsedTemplate = liquidEngine.parse(input);
-        const allVars = liquidEngine.variablesSync(parsedTemplate);
-        hasShellIntegration = allVars.includes("shellIntegration");
-      } catch (e) {
-        console.error("Failed to parse liquid template: ", e);
-      }
-    }
-
-    let clipboard = "";
-    try {
-      clipboard = await navigator.clipboard.readText();
-    } catch {
-      /* empty */
-    }
-
-    if (isLiquid && hasShellIntegration) {
-      // Execute template independently for each terminal pane
-      for (const pane of targetPanes) {
-        try {
-          const { vars, localVars, shellIntegrations } = getStore();
-          const context = {
-            shellIntegration: shellIntegrations[pane.id] || {},
-            vars: vars || {},
-            localVars: localVars || {},
-            host: getHost(pane.host),
-            clipboard,
-            ...(userVars || {}),
-          };
-          const rendered = await liquidEngine.parseAndRender(input, context);
-
-          // send this rendered string to pid
-          const parts = rendered.split(/(<ctrl-[!-~]>)/g);
-          for (const part of parts) {
-            if (!part) continue;
-            const ctrlMatch = part.match(/<ctrl-([!-~])>/);
-            const dataToSend = ctrlMatch ? String.fromCharCode(ctrlMatch[1].charCodeAt(0) & 0x1f) : part;
-
-            if (terminalRefs.current[pane.id]) {
-              const term = terminalRefs.current[pane.id];
-              if (term && "getXterm" in term) {
-                term.sendData(dataToSend);
-              }
-            }
-            await new Promise((r) => setTimeout(r, ctrlMatch ? 50 : 10));
-          }
-        } catch (e) {
-          console.error(`Failed to render liquid template for pane ${pane.id} - ${pane.host}:`, e);
-        }
-      }
-    } else {
-      // Normal execution flow (rendered once or not liquid)
-      let renderedInput = input;
-      if (isLiquid) {
-        try {
-          const { vars, localVars, shellIntegrations, activePaneId } = getStore();
-          const context = {
-            shellIntegration: shellIntegrations[activePaneId] || {},
-            vars: vars || {},
-            localVars: localVars || {},
-            host: getHost(activePaneId),
-            clipboard,
-            ...(userVars || {}),
-          };
-          renderedInput = await liquidEngine.parseAndRender(input, context);
-        } catch (e) {
-          console.error("Failed to render liquid template:", e);
-        }
-      }
-
-      const parts = renderedInput.split(/(<ctrl-[!-~]>)/g);
-      for (const part of parts) {
-        if (!part) {
-          continue;
-        }
-        const ctrlMatch = part.match(/<ctrl-([!-~])>/);
-        const dataToSend = ctrlMatch ? String.fromCharCode(ctrlMatch[1].charCodeAt(0) & 0x1f) : part;
-
-        for (const pane of targetPanes) {
-          if (terminalRefs.current[pane.id]) {
-            const term = terminalRefs.current[pane.id];
-            if (term && "getXterm" in term) {
-              term.sendData(dataToSend);
-            }
-          }
-        }
-        await new Promise((r) => setTimeout(r, ctrlMatch ? 50 : 10));
-      }
-    }
-  }, []);
+  useEffect(() => {
+    window.__CS_IS_MOBILE__ = isMobile;
+  }, [isMobile]);
 
   const handleTouchStart = useCallback(
     (e: React.TouchEvent) => {
@@ -424,416 +265,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
     const t = setTimeout(applyMode, 350);
     return () => clearTimeout(t);
   }, [extraKeysOpen]);
-
-  const handleButtonClick = useCallback(
-    async (btn: Pick<ButtonData, "id" | "name" | "type" | "payload" | "liquidjs">, altMode: AltMode = 0) => {
-      if (altMode === 2) {
-        let button: ButtonData | undefined;
-        if (btn.id) {
-          button = getStore().buttons.find((b) => b.id === btn.id);
-        }
-        if (button) {
-          openEditButtonDialog(button);
-        } else {
-          openAddButtonDialog({ ...btn, shortcut: undefined });
-        }
-        return;
-      }
-      window.navigator.vibrate?.(getIntVar(VAR_CS_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN));
-      let noFocus = false;
-      switch (btn.type) {
-        case "send_string": {
-          if (altMode === 1) {
-            navigator.clipboard.writeText(btn.payload);
-            notify(t("Copied"), "info", TOAST_KEY_COPY);
-            triggerFocus();
-          } else {
-            const openDialog = altMode === 3 || (!!btn.liquidjs && getTemplateVariables(btn.payload).length > 0);
-            if (openDialog) {
-              openInputDialog({
-                inputValue: btn.payload,
-                inputLiquid: !!btn.liquidjs,
-                sendScope: 0,
-                appendNewLine: false,
-              });
-            } else {
-              await sendParsedString(btn.payload);
-              triggerFocus();
-            }
-          }
-          break;
-        }
-
-        case "open_terminal": {
-          if (altMode === 3) {
-            openHostInNewWindow(btn.payload);
-          } else {
-            const hosts = btn.payload.split(/\s*,\s*/);
-            openHostsAsSplit2(hosts, { target: altMode === 1 ? "_self" : undefined });
-          }
-          break;
-        }
-
-        case "terminal_function": {
-          const payload = btn.payload as (typeof TERMINAL_FUNCTIONS)[number]["value"];
-          if (payload === "ATTACH") {
-            (async () => {
-              const sessions = await fetchSessions(true);
-              const session = sessions.find((s) => !s.isHidden);
-              if (session) {
-                attachSession(session);
-              }
-            })();
-            return;
-          }
-          const term = terminalRefs.current[getStore().activePaneId];
-          if (!term || !("getXterm" in term)) {
-            return;
-          }
-          switch (payload) {
-            case "COPY": {
-              const text = term.getBuffer();
-              if (text) {
-                navigator.clipboard.writeText(text);
-              }
-              term.focus();
-              break;
-            }
-
-            case "COPY_VISIBLE": {
-              const xterm = term.getXterm();
-              if (!xterm) {
-                return;
-              }
-              const buffer = xterm.buffer.active;
-              const start = buffer.viewportY;
-              const end = start + xterm.rows;
-              let text = "";
-              for (let i = start; i < end; i++) {
-                const line = buffer.getLine(i);
-                if (line) {
-                  text += line.translateToString(true) + "\n";
-                }
-              }
-              text = text.trim();
-              if (text) {
-                navigator.clipboard.writeText(text);
-              }
-              term.focus();
-              break;
-            }
-
-            case "COPY_SELECTION": {
-              const text = term.getSelection();
-              if (text) {
-                navigator.clipboard.writeText(text);
-              }
-              term.focus();
-              break;
-            }
-
-            case "COPY_CWD": {
-              const shellIntegration = getStore().shellIntegrations[getStore().activePaneId];
-              if (shellIntegration?.cwd) {
-                navigator.clipboard.writeText(shellIntegration.cwd);
-              }
-              term.focus();
-              break;
-            }
-
-            case "COPY_CURRENT_CMDLINE": {
-              const shellIntegration = getStore().shellIntegrations[getStore().activePaneId];
-              if (shellIntegration?.currentCmdLine) {
-                navigator.clipboard.writeText(shellIntegration.currentCmdLine);
-              }
-              term.focus();
-              break;
-            }
-
-            case "COPY_LAST_COMMAND_OUTPUT": {
-              const text = term.getLastCommandOutput();
-              if (text) {
-                navigator.clipboard.writeText(text);
-              }
-              term.focus();
-              break;
-            }
-
-            case "PASTE": {
-              const text = await navigator.clipboard.readText();
-              if (text) {
-                term.sendData(text);
-              }
-              term.focus();
-              break;
-            }
-
-            case "INPUT":
-              openInputDialog();
-              break;
-
-            case "CLEAR":
-              term.clear();
-              term.focus();
-              break;
-
-            case "RESET":
-              term.reset();
-              term.focus();
-              break;
-
-            case "RECONNECT":
-              term.reconnect();
-              term.focus();
-              break;
-
-            case "CLOSE":
-              closeTabOrPane();
-              break;
-
-            case "CLOSE_TAB": {
-              closeTabOrPane(getStore().activeTabId);
-              break;
-            }
-
-            case "SCROLL_TO_TOP":
-              term.scrollToTop();
-              term.focus();
-              break;
-
-            case "SCROLL_TO_BOTTOM":
-              term.scrollToBottom();
-              term.focus();
-              break;
-
-            case "SCROLL_UP": {
-              const scrollLines = getIntVar(VAR_CS_SCROLL_LINES, DEFAULT_SCROLL_LINES);
-              term.scrollLines(-scrollLines);
-              term.focus();
-              break;
-            }
-
-            case "SCROLL_DOWN": {
-              const scrollLines = getIntVar(VAR_CS_SCROLL_LINES, DEFAULT_SCROLL_LINES);
-              term.scrollLines(scrollLines);
-              term.focus();
-              break;
-            }
-
-            case "SCROLL_PAGE_UP":
-              term.scrollPages(-1);
-              term.focus();
-              break;
-
-            case "SCROLL_PAGE_DOWN":
-              term.scrollPages(1);
-              term.focus();
-              break;
-
-            case "CLONE_SESSION":
-              cloneSession(getStore().activePaneId);
-              break;
-
-            case "CLONE_SESSION_IN_SAME_TAB":
-              cloneSession(getStore().activePaneId, true);
-              break;
-
-            case "SEARCH":
-              setSearchOpen(true);
-              setTimeout(() => document.getElementById(ID_TERMINAL_SEARCH_INPUT)?.focus(), 100);
-              break;
-
-            case "LOCK_TAB": {
-              lockTab();
-              break;
-            }
-
-            case "UNLOCK_TAB": {
-              unlockTab();
-              break;
-            }
-
-            case "PIN_TAB": {
-              pinTab();
-              break;
-            }
-
-            case "UNPIN_TAB": {
-              unpinTab();
-              break;
-            }
-
-            case "HIDE_TAB": {
-              hideTab();
-              break;
-            }
-
-            case "RENAME_TAB": {
-              noFocus = true;
-              renameTab();
-              break;
-            }
-
-            case "EDIT_TAB_HOST": {
-              noFocus = true;
-              openEditTabHost();
-              break;
-            }
-
-            case "SAVE_TAB": {
-              noFocus = true;
-              openSaveTabToButtonDialog();
-              break;
-            }
-
-            case "SAVE_ALL_TABS": {
-              noFocus = true;
-              openSaveTabsToButtonDialog();
-              break;
-            }
-
-            case "CLEAR_UNREAD_TABS": {
-              setUnreadTabIds(new Set());
-              break;
-            }
-            case "MOVE_TAB_LEFT": {
-              moveTabLeft();
-              break;
-            }
-            case "MOVE_TAB_RIGHT": {
-              moveTabRight();
-              break;
-            }
-            case "CLOSE_OTHER_TABS":
-              closeOtherTabs();
-              break;
-            case "CLOSE_RIGHT_TABS":
-              closeRightTabs();
-              break;
-            case "CLOSE_ALL_TABS":
-              setTabs([]);
-              break;
-            default: {
-              return assertUnreachable(payload);
-            }
-          }
-          if (!noFocus) {
-            triggerFocus();
-          }
-          break;
-        }
-
-        case "misc": {
-          const payload = btn.payload as (typeof MISC_FUNCTIONS)[number]["value"];
-          switch (payload) {
-            case "RESET_FONT_SIZE":
-              resetFontSize(true, true);
-              break;
-            case "RESET_TERMINAL_FONT_SIZE":
-              resetFontSize(true, false);
-              break;
-            case "RESET_GLOBAL_FONT_SIZE":
-              resetFontSize(false, true);
-              break;
-            case "DECREASE_FONT_SIZE":
-              decreseFontSize(true, true);
-              break;
-            case "DECREASE_TERMINAL_FONT_SIZE":
-              decreseFontSize(true, false);
-              break;
-            case "DECREASE_GLOBAL_FONT_SIZE":
-              decreseFontSize(false, true);
-              break;
-            case "INCREASE_FONT_SIZE":
-              increaseFontSize(true, true);
-              break;
-            case "INCREASE_TERMINAL_FONT_SIZE":
-              increaseFontSize(true, false);
-              break;
-            case "INCREASE_GLOBAL_FONT_SIZE":
-              increaseFontSize(false, true);
-              break;
-            case "TABS_SCROLL_LEFT":
-              (document.querySelector("#tab-bar .MuiTabScrollButton-root:first-of-type") as HTMLElement)?.click();
-              break;
-            case "TABS_SCROLL_RIGHT":
-              (document.querySelector("#tab-bar .MuiTabScrollButton-root:last-of-type") as HTMLElement)?.click();
-              break;
-            case "BUTTONS_SCROLL_LEFT":
-              (document.querySelector("#button-bar .MuiTabScrollButton-root:first-of-type") as HTMLElement)?.click();
-              break;
-            case "BUTTONS_SCROLL_RIGHT":
-              (document.querySelector("#button-bar .MuiTabScrollButton-root:last-of-type") as HTMLElement)?.click();
-              break;
-            case "NEXT_BUTTON_GROUP": {
-              nextButtonGroup();
-              break;
-            }
-            case "PREV_BUTTON_GROUP": {
-              prevButtonGroup();
-              break;
-            }
-            case "TOGGLE_SIDEBAR_TAGS": {
-              setTagsExpanded();
-              break;
-            }
-            case "TOGGLE_SIDEBAR_FAV": {
-              setFavExpanded();
-              break;
-            }
-            case "TOGGLE_SIDEBAR_ALL": {
-              setAllExpanded();
-              break;
-            }
-            case "TOGGLE_SIDEBAR_AUTO": {
-              setAutoExpanded();
-              break;
-            }
-            case "TOGGLE_SIDEBAR_GROUPS": {
-              toggleExpandAllGroups();
-              break;
-            }
-            case "OPEN_SCRATCHPAD":
-              openScratchpad();
-              break;
-            case "OPEN_DASHBOARD_DIALOG":
-              setSettingsOpen(true);
-              break;
-            case "OPEN_NEW_HOST_DIALOG":
-              openAddHostDialog();
-              break;
-            case "OPEN_NEW_BUTTON_DIALOG":
-              openAddButtonDialog();
-              break;
-            case "REFRESH":
-              try {
-                await refreshData({ sync: 2 });
-                notify(t("Data refreshed"), "success", TOAST_KEY_REFRESH);
-              } catch (err: unknown) {
-                notify(t("Data refresh failure:") + ` ${err}`, "error", TOAST_KEY_REFRESH);
-              }
-              break;
-            case "NONE":
-              break;
-            default: {
-              return assertUnreachable(payload);
-            }
-          }
-          if (!noFocus) {
-            triggerFocus();
-          }
-          break;
-        }
-        case "run_script":
-          await runScript({ button: btn, altMode: altMode });
-          break;
-
-        default:
-          return assertUnreachable(btn.type);
-      }
-    },
-    [sendParsedString],
-  );
 
   useEffect(() => {
     const autorun = getIntVar(VAR_CS_NOAUTORUN) !== 1 && startupParams.get(VAR_NOAUTORUN) !== "1";
@@ -1063,20 +494,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleReconnectTab = useCallback((id: string) => {
-    setContextMenu(null);
-    const targetTab = getStore().tabs.find((t) => t.id === id);
-    if (!targetTab) {
-      return;
-    }
-    targetTab.panes.forEach((p) => {
-      const term = terminalRefs.current[p.id];
-      if (term && "getXterm" in term) {
-        term.reconnect();
-      }
-    });
-  }, []);
-
   const handleToggleFiles = useCallback(() => {
     if (!contextMenu) {
       return;
@@ -1094,28 +511,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, []);
 
   const handleCloseMenu = useCallback(() => setContextMenu(null), []);
-
-  const getTerminalRefs = useCallback(() => terminalRefs.current, []);
-  const getApplets = useCallback(() => appletRefs.current, []);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const setTheme = useCallback((options: any, ...args: any[]) => setMuiTheme(createTheme(options, ...args)), []);
-
-  useEffect(() => {
-    return setupPluginAPI({
-      setTheme,
-      setApplets,
-      isMobile,
-      maxZIndexRef,
-      getTerminalRefs,
-      getApplets,
-    });
-  }, [isMobile, getTerminalRefs, getApplets, setTheme]);
-
-  // ── Keyboard shortcuts (reads fresh state from store — tiny stable dep array) ──
-  useKeyboardManager({
-    handleButtonClick,
-    getTerminalRefs,
-  });
 
   const [lastKeyboardHeight, setLastKeyboardHeight] = useState(0);
 
@@ -1199,13 +594,11 @@ export default function Dashboard({ initialData }: DashboardProps) {
           }}
         >
           <TabBar
-            terminalRefs={terminalRefs}
             isMobile={isMobile}
             isTouch={isTouch}
             hasSidebarApplet={hasSidebarApplet}
             scratchpadSyncState={scratchpadSyncState}
             handleContextMenu={handleContextMenu}
-            handleCloseSearch={handleCloseSearch}
           />
           <TerminalGrid
             terminalRefs={terminalRefs}
@@ -1217,14 +610,13 @@ export default function Dashboard({ initialData }: DashboardProps) {
             hasSidebarApplet={hasSidebarApplet}
             handleTouchStart={handleTouchStart}
             handleTouchEnd={handleTouchEnd}
-            handleSendKey={handleSendKey}
             gestureMode={gestureMode}
             onGestureModeChange={setGestureMode}
             extraKeysOpen={extraKeysOpen}
             onExtraKeysOpenChange={setExtraKeysOpen}
             keyboardHeight={keyboardHeight}
           />
-          <ButtonBar groups={groups} handleButtonClick={handleButtonClick} isMobile={isMobile} isTouch={isTouch} />
+          <ButtonBar groups={groups} isMobile={isMobile} isTouch={isTouch} />
           <Box
             id="mobile-keyboard-spacer"
             sx={{
@@ -1408,10 +800,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
         handleCloseMenu={handleCloseMenu}
         memoTabId={memoTabId}
         handleToggleFiles={handleToggleFiles}
-        handleReconnectTab={handleReconnectTab}
         groups={groups}
         sendParsedString={sendParsedString}
-        handleButtonClick={handleButtonClick}
       />
       <SideEffect />
     </ThemeProvider>

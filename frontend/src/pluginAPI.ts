@@ -9,16 +9,8 @@
  *   useEffect(() => setupPluginAPI(callbacks), []);  // empty dep array — always stable
  */
 
-import React from "react";
-import { transform } from "sucrase";
-
-// Expose those modules to custom scripts
-import * as react from "react";
-import * as dompurify from "dompurify";
-import * as marked from "marked";
-
-import type { HostData, ButtonData, ExecRequest, ExecResult } from "./api";
 import { version as PACKAGE_JSON_VERSION } from "../package.json";
+import type { HostData, ButtonData, ExecRequest, ExecResult } from "./api";
 import {
   BROWSER_STORAGE_KEY_TOKEN,
   HEADER_AUTHORIZATION,
@@ -35,7 +27,6 @@ import {
   LOCAL_VAR_PREFIX,
   DEFAULT_FONT_SIZE,
   VAR_CS_FONT_SIZE,
-  TOAST_KEY_SCRIPT,
 } from "./constants";
 import {
   defaultThemeOptions,
@@ -49,11 +40,8 @@ import {
   apiReqHeaders,
   macModifierSwap,
   sendKeyDown,
-  t,
 } from "./common";
 import {
-  type CsScriptModule,
-  type TerminalRefMap,
   activatePane,
   attachSession,
   closeTabOrPane,
@@ -85,9 +73,9 @@ import {
   setExtraTabBarMenu,
   setExtraNtdMenu,
   setExtraButtonBarMenu,
+  runButton,
 } from "./store";
 import { dialogs } from "./Dialogs";
-import type { AppletData } from "./AppletWrapper";
 import type { ITerminalOptions } from "@xterm/xterm";
 import { openMenu } from "./DynamicMenu";
 import { moduleCache } from "./store";
@@ -95,7 +83,6 @@ import { moduleCache } from "./store";
 window.__CS_REMAP_CTRL_L__ = undefined;
 window.__CS_AUTORUN_DONE__ = undefined;
 window.__CS_MODULECACHE__ = moduleCache;
-window.__CS_VERSION__ = PACKAGE_JSON_VERSION;
 window.__CS_USE_STORE__ = useStore;
 window.__CS_PASSTHROUGH_SHORTCUTS__ = passthroughKeyShortcuts;
 window.__CS_DISABLE_SHORTCUTS__ = disableShortcuts;
@@ -106,6 +93,7 @@ window.__CS_SHORTCUT_BUTTONS__ = {};
 window.__CS_CUSTOM_SHORTCUTS__ = {};
 window.__CS_TOAST_KEY_MUTE_SET__ = toastKeyMuteSet;
 window.__CS_MAC_MODIFIER_SWAP__ = macModifierSwap;
+window.__CS_VERSION__ = PACKAGE_JSON_VERSION;
 window.__CS_ENV__ = window.appToggleFullscreen ? 1 : 0;
 window.__CS_LANG__ = import.meta.env.VITE_APP_LANG || "en";
 document.documentElement.dataset.csEnv = `${__CS_ENV__}`;
@@ -330,7 +318,7 @@ window.csConfirm = dialogs.confirm;
 window.csPrompt = dialogs.prompt;
 window.csPromptPassword = dialogs.promptPassword;
 window.csChoose = dialogs.choose;
-window.csRunScript = runScript;
+window.csRunButton = runButton;
 window.csNotify = notify;
 window.csOpen = openHostsAsSplit2;
 window.csOpenMenu = openMenu;
@@ -413,170 +401,10 @@ window.csGetVar = ((name?: string) => {
   return { ...vars, ...localVars };
 }) as typeof window.csGetVar;
 
-export interface CsExecResult {
-  error: unknown;
-  stdout: string;
-  stderr: string;
-}
-
-const exposeModules = {
-  react: react,
-  dompurify: dompurify,
-  marked: marked,
-};
-
-// Generate Blob URLs for each exposed module
-const virtualModules: Record<string, string> = {};
-
-for (const [moduleName, moduleObj] of Object.entries(exposeModules)) {
-  // Attach safely to window
-  const safeName = `__plugin_expose_${moduleName.replace(/[^a-zA-Z0-9]/g, "_")}`;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (window as any)[safeName] = moduleObj;
-
-  // Identify named exports (everything except 'default')
-  const namedExports = Object.keys(moduleObj).filter((k) => k !== "default");
-
-  // Determine what the 'default' export should be
-  // If the module already has a .default, use that. Otherwise, use the whole object.
-  const shimCode = `
-  const mod = window["${safeName}"];
-
-  // Export the named members
-  export const { ${namedExports.join(", ")} } = mod;
-
-  // Export the default member
-  // If 'default' exists in the namespace, export that, otherwise the namespace itself
-  const defaultExport = mod.default !== undefined ? mod.default : mod;
-  export default defaultExport;
-`;
-
-  // Turn it into a Blob URL
-  const blob = new Blob([shimCode], { type: "application/javascript" });
-  virtualModules[moduleName] = URL.createObjectURL(blob);
-}
-
-const escapeRegExp = (string: string) => {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-};
-
-const virtualModulesImportRegex = (() => {
-  const moduleNames = Object.keys(virtualModules).map(escapeRegExp).join("|");
-  return new RegExp(
-    `((?:from|import)\\s+['"])(${moduleNames})(['"])|(import\\s*\\(\\s*['"])(${moduleNames})(['"]\\))`,
-    "g",
-  );
-})();
-
-export async function runScript({ button, background, altMode: alternativeMode }: CsRunScriptPayload) {
-  let moduleObj: CsScriptModule;
-  let cached = false;
-
-  __CS_RUNNING_SCRIPT__ = button;
-
-  if (!button.id || !moduleCache[button.id]) {
-    let scriptCode = button.payload;
-    // Do a single replace pass
-    scriptCode = scriptCode.replace(virtualModulesImportRegex, (match, p1, p2, p3, p4, p5, p6) => {
-      // Determine which capture group caught the module name
-      const matchedModule = p2 || p5;
-      const blobUrl = virtualModules[matchedModule];
-
-      // Reconstruct the string using the mapped Blob URL
-      if (p1 && p3) {
-        return `${p1}${blobUrl}${p3}`; // Standard & Side-effect import
-      }
-      if (p4 && p6) {
-        return `${p4}${blobUrl}${p6}`; // Dynamic import
-      }
-      return match; // Fallback
-    });
-    try {
-      scriptCode = transform(scriptCode, { transforms: ["typescript", "jsx"] }).code;
-    } catch (err: unknown) {
-      console.error(`Script ${button.name} Transform Error:`, err);
-      notify(t("Script Transform Error:") + ` name=${button.name}, err=${err}`, "error", TOAST_KEY_SCRIPT);
-      __CS_RUNNING_SCRIPT__ = undefined;
-      return;
-    }
-    const blob = new Blob([scriptCode], { type: "application/javascript" });
-    // Create a temporary URL pointing to that Blob
-    const url = URL.createObjectURL(blob);
-    try {
-      moduleObj = await import(url);
-    } catch (err: unknown) {
-      console.error(`Script ${button.name} Import Error:`, err);
-      notify(t("Script Import Error:") + ` name=${button.name}, err=${err}`, "error", TOAST_KEY_SCRIPT);
-      __CS_RUNNING_SCRIPT__ = undefined;
-      return;
-    } finally {
-      // Always clean up the URL to prevent memory leaks
-      URL.revokeObjectURL(url);
-    }
-    if (button.id && moduleObj.default?.cache) {
-      moduleCache[button.id] = moduleObj;
-    }
-    if (moduleObj.default?.shortcuts) {
-      for (const s of moduleObj.default.shortcuts) {
-        if (!s.key) {
-          s.key = `${button.id}-${s.shortcut}`;
-        }
-        if (!s.name) {
-          s.name = `${s.shortcut} (${button.name})`;
-        }
-        __CS_CUSTOM_SHORTCUTS__[s.shortcut] = s;
-      }
-    }
-  } else {
-    moduleObj = moduleCache[button.id];
-    cached = true;
-  }
-
-  if (moduleObj.default?.run) {
-    try {
-      await moduleObj.default.run({ button, background, altMode: alternativeMode });
-    } catch (err: unknown) {
-      console.error(`Script ${button.name} run() Error:`, err);
-      notify(t("Script run() Error:") + ` name=${button.name}, err=${err}`, "error", TOAST_KEY_SCRIPT);
-    }
-  } else if (cached) {
-    notify(
-      t("Script is already imported & cached, and has no run function. Reload the page to clear the cache:") +
-        ` name=${button.name}`,
-      "info",
-      TOAST_KEY_SCRIPT,
-    );
-    __CS_RUNNING_SCRIPT__ = undefined;
-    return;
-  }
-
-  __CS_RUNNING_SCRIPT__ = undefined;
-
-  if (!moduleObj.default?.noFocus) {
-    triggerFocus();
-  }
-}
-
 window.csGetShellIntegration = (paneId?: string) => {
   const { shellIntegrations, activePaneId } = getStore();
   return shellIntegrations[paneId ?? activePaneId];
 };
-
-// ── Types ──────────────────────────────────────────────────────────────────────
-
-export interface PluginAPICallbacks {
-  /** Apply a new MUI theme */
-  setTheme: (options: unknown, ...args: unknown[]) => void;
-  /** React state setter for applets */
-  setApplets: React.Dispatch<React.SetStateAction<AppletData[]>>;
-  /** Whether we're in mobile layout */
-  isMobile: boolean;
-  /** Ref for the next z-index to assign to a widget applet */
-  maxZIndexRef: React.MutableRefObject<number>;
-  /** Getter for the live terminal ref map (avoids store coupling) */
-  getTerminalRefs: () => TerminalRefMap;
-  getApplets: () => AppletData[];
-}
 
 window.csSetVar = async (nameOrVars: string | Record<string, string | undefined>, value?: string | undefined) => {
   const { vars, localVars } = getStore();
@@ -715,141 +543,106 @@ window.csDeleteHost = async (name: string): Promise<void> => {
   }
 };
 
-// ── Dynamic API functions Setup / teardown ───────────────────────────────────────────────────────────
-
-/**
- * Installs all window.cs* functions using the provided stable callbacks.
- * Returns a teardown function that removes them all.
- *
- * Call once per Dashboard mount:
- *   useEffect(() => setupPluginAPI(callbacks), []);
- */
-export function setupPluginAPI(cb: PluginAPICallbacks): () => void {
-  window.csSetTheme = cb.setTheme;
-
-  window.csGetApplet = ((name?: string) => {
-    const applets = cb.getApplets();
-    return name ? applets.find((a) => a.name === name) : applets;
-  }) as typeof window.csGetApplet;
-
-  window.csGetTerminal = (paneId?: string) => {
-    const { activePaneId } = getStore();
-    const refs = cb.getTerminalRefs();
-    const term = refs[paneId ?? activePaneId];
-    return term && "getXterm" in term ? term.getXterm() : undefined;
+window.csGetAll = () => {
+  const { activeTabId, activePaneId, shellIntegrations, tabs, hosts, buttons, vars, localVars } = getStore();
+  return {
+    activeTabId,
+    activePaneId,
+    terminals: __CS_TERMINALS__.current,
+    shellIntegrations,
+    tabs,
+    hosts,
+    buttons,
+    vars,
+    localVars,
   };
+};
 
-  window.csGetTerminalHandle = (paneId?: string) => {
-    const { activePaneId } = getStore();
-    const refs = cb.getTerminalRefs();
-    const ref = refs[paneId ?? activePaneId];
-    return ref && "getXterm" in ref ? ref : undefined;
-  };
+window.csSendData = (data: string | BufferSource | Blob, paneId?: string) => {
+  const { activePaneId } = getStore();
+  const term = __CS_TERMINALS__.current[paneId ?? activePaneId];
+  if (term && "getXterm" in term) {
+    term.sendData(data);
+  }
+};
 
-  window.csGetAll = () => {
-    const { activeTabId, activePaneId, shellIntegrations, tabs, hosts, buttons, vars, localVars } = getStore();
-    return {
-      activeTabId,
-      activePaneId,
-      terminals: cb.getTerminalRefs(),
-      shellIntegrations,
-      tabs,
-      hosts,
-      buttons,
-      vars,
-      localVars,
-    };
-  };
+window.csGetTerminal = (paneId?: string) => {
+  const { activePaneId } = getStore();
+  const term = __CS_TERMINALS__.current[paneId ?? activePaneId];
+  return term && "getXterm" in term ? term.getXterm() : undefined;
+};
 
-  window.csSendData = (data: string | BufferSource | Blob, paneId?: string) => {
-    const { activePaneId } = getStore();
-    const refs = cb.getTerminalRefs();
-    const term = refs[paneId ?? activePaneId];
-    if (term && "getXterm" in term) {
-      term.sendData(data);
-    }
-  };
+window.csGetTerminalHandle = (paneId?: string) => {
+  const { activePaneId } = getStore();
+  const ref = __CS_TERMINALS__.current[paneId ?? activePaneId];
+  return ref && "getXterm" in ref ? ref : undefined;
+};
 
-  window.csGetTerminalContents = (lineCount = 100, paneId?: string) => {
-    const { activePaneId } = getStore();
-    const refs = cb.getTerminalRefs();
-    const term = refs[paneId ?? activePaneId];
-    if (!term || !("getXterm" in term)) {
-      return "";
-    }
-    const xterm = term.getXterm();
-    if (!xterm) {
-      return "";
-    }
+window.csGetTerminalContents = (lineCount = 100, paneId?: string) => {
+  const { activePaneId } = getStore();
+  const term = __CS_TERMINALS__.current[paneId ?? activePaneId];
+  if (!term || !("getXterm" in term)) {
+    return "";
+  }
+  const xterm = term.getXterm();
+  if (!xterm) {
+    return "";
+  }
 
-    const buffer = xterm.buffer.active;
-    const lines: string[] = [];
-    const end = buffer.baseY + buffer.cursorY;
-    const start = lineCount <= 0 ? 0 : Math.max(0, end - lineCount);
-    for (let i = start; i <= end; i++) {
-      const line = buffer.getLine(i);
-      if (line) {
-        lines.push(line.translateToString(true));
-      }
+  const buffer = xterm.buffer.active;
+  const lines: string[] = [];
+  const end = buffer.baseY + buffer.cursorY;
+  const start = lineCount <= 0 ? 0 : Math.max(0, end - lineCount);
+  for (let i = start; i <= end; i++) {
+    const line = buffer.getLine(i);
+    if (line) {
+      lines.push(line.translateToString(true));
     }
-    return lines.join("\n");
-  };
+  }
+  return lines.join("\n");
+};
 
-  window.csOpenApplet = (name, node, options = {}) => {
-    // eslint-disable-next-line prefer-const
-    let { position, ...opts } = options;
-    if (!position) {
-      if (cb.isMobile) {
-        position = "sidebar";
-      } else {
-        position = "widget";
-      }
-    }
-    if (!opts.zIndex) {
-      opts.zIndex = cb.maxZIndexRef.current++;
-    } else if (opts.zIndex > cb.maxZIndexRef.current) {
-      cb.maxZIndexRef.current = opts.zIndex;
-    }
-    if (cb.isMobile && position === "sidebar" && window.__CS_AUTORUN_DONE__) {
-      setMobileAppletsOpen(true);
-    }
-    cb.setApplets((prev) => {
-      const existing = prev.find((a) => a.name === name);
-      if (existing) {
-        return prev.map((a) =>
-          a.name === name ? { ...a, node, width: options.width ?? a.width, height: options.height ?? a.height } : a,
-        );
-      }
-      return [
-        ...prev,
-        {
-          name,
-          node,
-          position,
-          ...opts,
-        },
-      ];
-    });
-  };
+window.csGetApplet = ((name?: string) => {
+  return name ? __CS_APPLETS__.current.find((a) => a.name === name) : __CS_APPLETS__.current;
+}) as typeof window.csGetApplet;
 
-  window.csCloseApplet = (name?: string) => {
-    cb.setApplets(name ? (prev) => prev.filter((a) => a.name !== name) : []);
-  };
-
-  return () => {
-    const keys = [
-      "csGetTerminal",
-      "csGetTerminalHandle",
-      "csGetAll",
-      "csSendData",
-      "csGetTerminalContents",
-      "csSetTheme",
-      "csOpenApplet",
-      "csCloseApplet",
-      "csGetApplet",
-    ] as const;
-    for (const k of keys) {
-      delete (window as Partial<typeof globalThis>)[k];
+window.csOpenApplet = (name, node, options = {}) => {
+  // eslint-disable-next-line prefer-const
+  let { position, ...opts } = options;
+  if (!position) {
+    if (__CS_IS_MOBILE__) {
+      position = "sidebar";
+    } else {
+      position = "widget";
     }
-  };
-}
+  }
+  if (!opts.zIndex) {
+    opts.zIndex = __CS_MAX_ZINDEX__.current++;
+  } else if (opts.zIndex > __CS_MAX_ZINDEX__.current) {
+    __CS_MAX_ZINDEX__.current = opts.zIndex;
+  }
+  if (__CS_IS_MOBILE__ && position === "sidebar" && window.__CS_AUTORUN_DONE__) {
+    setMobileAppletsOpen(true);
+  }
+  csSetApplets((prev) => {
+    const existing = prev.find((a) => a.name === name);
+    if (existing) {
+      return prev.map((a) =>
+        a.name === name ? { ...a, node, width: options.width ?? a.width, height: options.height ?? a.height } : a,
+      );
+    }
+    return [
+      ...prev,
+      {
+        name,
+        node,
+        position,
+        ...opts,
+      },
+    ];
+  });
+};
+
+window.csCloseApplet = (name?: string) => {
+  csSetApplets(name ? (prev) => prev.filter((a) => a.name !== name) : []);
+};

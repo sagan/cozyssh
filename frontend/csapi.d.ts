@@ -1892,101 +1892,6 @@ declare const CS_EVENT_TERMINAL_RESIZE = "cs:terminal-resize";
 declare const CS_EVENT_TERMINAL_CHANGE = "cs:terminal-change";
 declare const CS_EVENT_SHELL_INTEGRATION = "cs:shell-integration";
 declare const CS_EVENT_VARS = "cs:vars";
-/**
- * Options for a search.
- */
-export interface ISearchOptions {
-	/**
-	 * Whether the search term is a regex.
-	 */
-	regex?: boolean;
-	/**
-	 * Whether to search for a whole word, the result is only valid if it's
-	 * surrounded in "non-word" characters such as `_`, `(`, `)` or space.
-	 */
-	wholeWord?: boolean;
-	/**
-	 * Whether the search is case sensitive.
-	 */
-	caseSensitive?: boolean;
-	/**
-	 * Whether to do an incremental search, this will expand the selection if it
-	 * still matches the term the user typed. Note that this only affects
-	 * `findNext`, not `findPrevious`.
-	 */
-	incremental?: boolean;
-	/**
-	 * When set, will highlight all instances of the word on search and show
-	 * them in the overview ruler if it's enabled.
-	 */
-	decorations?: ISearchDecorationOptions;
-}
-/**
- * Options for showing decorations when searching.
- */
-export interface ISearchDecorationOptions {
-	/**
-	 * The background color of a match, this must use #RRGGBB format.
-	 */
-	matchBackground?: string;
-	/**
-	 * The border color of a match.
-	 */
-	matchBorder?: string;
-	/**
-	 * The overview ruler color of a match.
-	 */
-	matchOverviewRuler: string;
-	/**
-	 * The background color for the currently active match, this must use #RRGGBB format.
-	 */
-	activeMatchBackground?: string;
-	/**
-	 * The border color of the currently active match.
-	 */
-	activeMatchBorder?: string;
-	/**
-	 * The overview ruler color of the currently active match.
-	 */
-	activeMatchColorOverviewRuler: string;
-}
-export interface TerminalHandle {
-	sendData: (data: string | BufferSource | Blob) => void;
-	focus: () => void;
-	getSelection: () => string;
-	selectAll: () => void;
-	clearSelection: () => void;
-	clear: () => void;
-	reset: () => void;
-	reconnect: () => void;
-	scrollLines: (amount: number) => void;
-	scrollToTop: () => void;
-	scrollToBottom: () => void;
-	scrollPages: (amount: number) => void;
-	findNext: (term: string, searchOptions?: ISearchOptions) => boolean;
-	findPrevious: (term: string, searchOptions?: ISearchOptions) => boolean;
-	clearSearchDecorations: () => void;
-	clearSearchActiveDecoration: () => void;
-	fit: () => void;
-	getLastCommandOutput: () => string;
-	getXterm: () => Terminal | null;
-	/** Set the inputMode on the hidden xterm textarea (e.g. 'none' to suppress system keyboard) */
-	setInputMode: (mode: string) => void;
-	/**
-	 * Atomically replace whatever the user has typed at the shell prompt with
-	 * `newText`, without executing it.
-	 *
-	 * Sends: Ctrl+E (go to end of line) → Ctrl+U (kill to beginning) → newText.
-	 * Only works while the shell is at an interactive prompt (not mid-execution).
-	 */
-	replaceCmdLine: (newText: string) => void;
-	getBuffer: () => string;
-	getAddon(): Record<string, ITerminalAddon>;
-	getAddon(name: string): ITerminalAddon | undefined;
-}
-export interface ScratchpadHandle {
-	focus: () => void;
-}
 export interface PaneData {
 	id: string;
 	sessionId?: string;
@@ -2010,7 +1915,6 @@ export interface TabData {
 	showFiles?: boolean;
 	type: "terminal" | "scratchpad";
 }
-export type TerminalRefMap = Record<string, TerminalHandle | ScratchpadHandle | null>;
 /**
  * The custom / extra menu. Used in scripting API.
  */
@@ -2170,6 +2074,101 @@ export interface CsScriptModule {
 }
 declare const useStore: import("zustand").UseBoundStore<import("zustand").StoreApi<Store>>;
 export type UseStore = typeof useStore;
+export interface ScratchpadHandle {
+	focus: () => void;
+}
+/**
+ * Options for a search.
+ */
+export interface ISearchOptions {
+	/**
+	 * Whether the search term is a regex.
+	 */
+	regex?: boolean;
+	/**
+	 * Whether to search for a whole word, the result is only valid if it's
+	 * surrounded in "non-word" characters such as `_`, `(`, `)` or space.
+	 */
+	wholeWord?: boolean;
+	/**
+	 * Whether the search is case sensitive.
+	 */
+	caseSensitive?: boolean;
+	/**
+	 * Whether to do an incremental search, this will expand the selection if it
+	 * still matches the term the user typed. Note that this only affects
+	 * `findNext`, not `findPrevious`.
+	 */
+	incremental?: boolean;
+	/**
+	 * When set, will highlight all instances of the word on search and show
+	 * them in the overview ruler if it's enabled.
+	 */
+	decorations?: ISearchDecorationOptions;
+}
+/**
+ * Options for showing decorations when searching.
+ */
+export interface ISearchDecorationOptions {
+	/**
+	 * The background color of a match, this must use #RRGGBB format.
+	 */
+	matchBackground?: string;
+	/**
+	 * The border color of a match.
+	 */
+	matchBorder?: string;
+	/**
+	 * The overview ruler color of a match.
+	 */
+	matchOverviewRuler: string;
+	/**
+	 * The background color for the currently active match, this must use #RRGGBB format.
+	 */
+	activeMatchBackground?: string;
+	/**
+	 * The border color of the currently active match.
+	 */
+	activeMatchBorder?: string;
+	/**
+	 * The overview ruler color of the currently active match.
+	 */
+	activeMatchColorOverviewRuler: string;
+}
+export interface TerminalHandle {
+	sendData: (data: string | BufferSource | Blob) => void;
+	focus: () => void;
+	getSelection: () => string;
+	selectAll: () => void;
+	clearSelection: () => void;
+	clear: () => void;
+	reset: () => void;
+	reconnect: () => void;
+	scrollLines: (amount: number) => void;
+	scrollToTop: () => void;
+	scrollToBottom: () => void;
+	scrollPages: (amount: number) => void;
+	findNext: (term: string, searchOptions?: ISearchOptions) => boolean;
+	findPrevious: (term: string, searchOptions?: ISearchOptions) => boolean;
+	clearSearchDecorations: () => void;
+	clearSearchActiveDecoration: () => void;
+	fit: () => void;
+	getLastCommandOutput: () => string;
+	getXterm: () => Terminal | null;
+	/** Set the inputMode on the hidden xterm textarea (e.g. 'none' to suppress system keyboard) */
+	setInputMode: (mode: string) => void;
+	/**
+	 * Atomically replace whatever the user has typed at the shell prompt with
+	 * `newText`, without executing it.
+	 *
+	 * Sends: Ctrl+E (go to end of line) → Ctrl+U (kill to beginning) → newText.
+	 * Only works while the shell is at an interactive prompt (not mid-execution).
+	 */
+	replaceCmdLine: (newText: string) => void;
+	getBuffer: () => string;
+	getAddon(): Record<string, ITerminalAddon>;
+	getAddon(name: string): ITerminalAddon | undefined;
+}
 export type AppletPosition = "widget" | "sidebar" | "dialog";
 export interface AppletData {
 	name: string;
@@ -2179,11 +2178,6 @@ export interface AppletData {
 	height?: number | string;
 	zIndex?: number;
 	fullScreen?: boolean;
-}
-export interface CsExecResult {
-	error: unknown;
-	stdout: string;
-	stderr: string;
 }
 declare global {
 	type Modifier = "alt" | "ctrl" | "meta" | "shift";
@@ -2206,17 +2200,22 @@ declare global {
 	}
 	interface CsRunScriptPayload {
 		/**
-		 * The script button object
+		 * The script button object. It must be a "run_script" type button.
 		 */
-		button: Pick<ButtonData, "id" | "type" | "name" | "payload">;
+		button: Pick<ButtonData, "type" | "payload"> & Partial<Pick<ButtonData, "id" | "name">>;
 		/**
-		 * If true, the script is executed in the backgrund (without user explicitly clicking the button)
+		 * If true, the script is executed in the backgrund (without user explicitly clicking the button).
 		 */
 		background?: boolean;
 		/**
 		 * The alternative mode. It defines the trigger way of the script.
 		 */
 		altMode?: AltMode;
+	}
+	interface CsExecResult {
+		error: unknown;
+		stdout: string;
+		stderr: string;
 	}
 	/**
 	 * Custom shortcut that can be imported by a script to register as additional shortcut.
@@ -2297,6 +2296,32 @@ declare global {
 	 */
 	var __CS_USE_STORE__: UseStore;
 	/**
+	 * Terminal Handles. Initialized in main React component useEffect
+	 */
+	var __CS_TERMINALS__: React.MutableRefObject<Record<string, TerminalHandle | ScratchpadHandle | null>>;
+	/**
+	 * Applets data. Initialized in main React component useEffect
+	 */
+	var __CS_APPLETS__: React.MutableRefObject<AppletData[]>;
+	/**
+	 * Initialized & updated in main React component useEffect
+	 */
+	var __CS_IS_MOBILE__: boolean;
+	/**
+	 * Initialized & updated in main React component useEffect
+	 */
+	var __CS_MAX_ZINDEX__: React.MutableRefObject<number>;
+	/**
+	 * Initialized in main React component useEffect
+	 */
+	var csSetApplets: React.Dispatch<React.SetStateAction<AppletData[]>>;
+	/**
+	 * Set the theme of the application. It accepts the same arguments as MUI `createTheme`,
+	 * see [Material UI document](https://mui.com/material-ui/customization/theming/).
+	 * Initialized in main React component useEffect
+	 */
+	var csSetTheme: (options: unknown, ...args: unknown[]) => void;
+	/**
 	 * The additional list of key combinations that should be passed through to the terminal if terminal has focus.
 	 * Each element is a key combination string such as `ctrl+shift+m`
 	 * (all lowercase, modifiers in `ctrl,alt,shift,meta` order).
@@ -2335,7 +2360,7 @@ declare global {
 	 * undefined when no script is running.
 	 * It's recommended to use the `payload.button` argument of `run(payload)` in the plugin API instead.
 	 */
-	var __CS_RUNNING_SCRIPT__: Pick<ButtonData, "id" | "name" | "type" | "payload"> | undefined;
+	var __CS_RUNNING_SCRIPT__: (Pick<ButtonData, "type" | "payload"> & Partial<Pick<ButtonData, "id" | "name">>) | undefined;
 	/**
 	 * The i18n language of CozySSH app. E.g. "en", "zh-CN".
 	 * Note the i18n is done at frontend bundle/build time, so the value is static.
@@ -2513,9 +2538,11 @@ declare global {
 	 */
 	function csGetShellIntegration(paneId?: string): ShellIntegration | undefined;
 	/**
-	 * Run a script button directly
+	 * Run a button directly
 	 */
-	function csRunScript(payload: CsRunScriptPayload): Promise<void>;
+	function csRunButton(btn: Pick<ButtonData, "type" | "payload" | "liquidjs"> & Partial<Pick<ButtonData, "id" | "name">>, altMode?: AltMode, options?: {
+		background?: boolean;
+	}): Promise<void>;
 	/**
 	 * Send input data to the terminal with the given pane id.
 	 * @param data Data to send. If string, it will first be converted to \r line breaks and encoded as UTF-8.
@@ -2529,7 +2556,7 @@ declare global {
 	function csGetAll(): {
 		activeTabId: string | undefined;
 		activePaneId: string | undefined;
-		terminals: TerminalRefMap;
+		terminals: Record<string, TerminalHandle | ScratchpadHandle | null>;
 		shellIntegrations: Record<string, ShellIntegration>;
 		tabs: TabData[];
 		hosts: HostData[];
@@ -2654,11 +2681,6 @@ declare global {
 		sync?: number;
 		refresh?: number;
 	}): Promise<void>;
-	/**
-	 * Set the theme of the application. It accepts the same arguments as MUI `createTheme`,
-	 * see [Material UI document](https://mui.com/material-ui/customization/theming/).
-	 */
-	function csSetTheme(options: unknown, ...args: unknown[]): void;
 	/**
 	 * Attach a new terminal to an existing tab.
 	 * @returns Returns the opened tab id
