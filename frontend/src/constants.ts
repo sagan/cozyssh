@@ -148,7 +148,15 @@ export const TAG_GROUP_PREFIX = "g-";
 
 export const TAG_ORDER_PREFIX = "o-";
 
+export const TAG_FLAG_PREFIX = "$";
+
 export const TAG_FAV = "fav";
+
+export const TAG_FLAG_SHELL_INTEGRATION = "$shellIntegration";
+
+export const TAG_FLAG_SHELL_INTEGRATION_DISABLED = "$shellIntegration=0";
+
+export const TAG_FLAG_SHELL_INTEGRATION_ENABLED = "$shellIntegration=1";
 
 export const LINK_COZYSSH_GITHUB = "https://github.com/sagan/cozyssh";
 export const LINK_COZYSSH_DOC_DATA = "https://github.com/sagan/cozyssh/blob/master/docs/DATA.md";

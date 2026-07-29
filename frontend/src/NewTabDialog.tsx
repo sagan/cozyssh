@@ -51,6 +51,7 @@ import {
   TOAST_KEY_COPY,
   PartialMatchHostKey,
   METHOD_POST,
+  TAG_FLAG_PREFIX,
 } from "./constants";
 import {
   AltModeKey,
@@ -62,6 +63,7 @@ import {
   forceReload,
   getAltMode,
   getCanonicalHostString,
+  getHostFlags,
   getKeyCombination,
   isModifier,
   isValidHostname,
@@ -430,7 +432,9 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
   const uniqueTags: { tag: string; count: number }[] = useMemo(() => {
     const set = new Map<string, number>();
     hosts.forEach((h) => {
-      h.tags?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX)).forEach((t) => set.set(t, (set.get(t) || 0) + 1));
+      h.tags
+        ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX) && !t.startsWith(TAG_FLAG_PREFIX))
+        .forEach((t) => set.set(t, (set.get(t) || 0) + 1));
     });
     return Array.from(set.entries())
       .map(([t, count]) => ({ tag: t, count }))
@@ -737,7 +741,7 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
           subtitle: knownHost ? `${knownHost.user || "root"}@${knownHost.hostname}` : undefined,
           tooltip: knownHost?.comment,
           tag: knownHost?.tags
-            ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX))
+            ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX) && !t.startsWith(TAG_FLAG_PREFIX))
             .map((t) => "#" + t)
             .join(" "),
           isDeletable: true,
@@ -775,7 +779,7 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
           subtitle: knownHost ? `${knownHost.user || "root"}@${knownHost.hostname}` : undefined,
           tooltip: knownHost?.comment,
           tag: knownHost?.tags
-            ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX))
+            ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX) && !t.startsWith(TAG_FLAG_PREFIX))
             .map((t) => "#" + t)
             .join(" "),
           isDeletable: true,
@@ -801,7 +805,7 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
           tooltip: h.comment,
           isFav: h.isFavourite,
           tag: h.tags
-            ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX))
+            ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX) && !t.startsWith(TAG_FLAG_PREFIX))
             .map((t) => "#" + t)
             .join(" "),
         });
@@ -826,7 +830,7 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
           tooltip: h.comment,
           isFav: h.isFavourite,
           tag: h.tags
-            ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX))
+            ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX) && !t.startsWith(TAG_FLAG_PREFIX))
             .map((t) => "#" + t)
             .join(" "),
         });
@@ -851,7 +855,7 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
           tooltip: h.comment,
           isFav: h.isFavourite,
           tag: h.tags
-            ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX))
+            ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX) && !t.startsWith(TAG_FLAG_PREFIX))
             .map((t) => "#" + t)
             .join(" "),
         });
@@ -1156,10 +1160,12 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
         const [hostname, query] = cutString(item.value, "?");
         let hostStr = hostname;
         let parsedHost: HostData | undefined;
+        let options: Record<string, string> | undefined;
         if (hostname !== LOCAL_NAME) {
           // Check if it's a direct connection and not in known hosts
           const existingHost = getHost(hostname);
           parsedHost = getHost(hostname);
+          options = { ...getHostFlags(parsedHost) };
           if (!existingHost.source && !existingHost[PartialMatchHostKey]) {
             (async () => {
               await fetch("/api/hosts", {
@@ -1188,7 +1194,7 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
             }
           }
         } else {
-          openHost(hostStr, { target: altMode ? "_self" : undefined });
+          openHost(hostStr, { target: altMode ? "_self" : undefined, options });
         }
         closeNewTabDialog();
         break;

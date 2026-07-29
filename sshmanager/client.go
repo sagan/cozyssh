@@ -15,6 +15,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -76,9 +77,47 @@ func (p *PooledClient) ServerVersion() string {
 	return string(p.Client.ServerVersion())
 }
 
-func (p *PooledClient) IsWindows() bool {
-	ver := strings.ToLower(p.ServerVersion())
-	return strings.Contains(ver, "windows") || strings.Contains(ver, "win32")
+// In modern Linux (systemd 258+) native OSC 3008 shell integration is ready out of the box, no need to inject custom shell integration script.
+var shellIntegrationNativeList = []*regexp.Regexp{
+	// Ubuntu 26.04+
+	regexp.MustCompile(`^SSH-2\.0-OpenSSH_(?:1[0-9]|[2-9][0-9])\.[0-9]+p[0-9]+\s+Ubuntu-(?:[2-9][0-9]|[1-9][0-9]{2,})ubuntu[0-9]+`),
+	// Debian 14+
+	regexp.MustCompile(`^SSH-2\.0-OpenSSH_(?:10\.[3-9]|1[1-9]\.[0-9]+|[2-9][0-9]\.[0-9]+)p[0-9]+\s+Debian-(?:[5-9]|[1-9][0-9]+)`),
+	// Fedora 44+
+	// Arch Linux (rolling-update)
+}
+
+var shellIntegrationServerWhitelist = []string{
+	"ubuntu",
+	"debian",
+}
+
+var shellIntegrationServerBlacklist = []string{
+	"windows",
+	"win32",
+	"dropbear",
+}
+
+// Return: 0 : unknown; 1 : unsupported; 2: possibly supported; 3 - native supported.
+// SSH Server banners:
+//   - SSH-2.0-OpenSSH_10.2  Alpine
+//   - SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13.18
+//   - SSH-2.0-OpenSSH_10.0p2.Debian-7+deb13u4 debian 13
+//   - SSH-2.0-OpenSSH_7.4 CentOS 7.9
+//   - SSH-2.0-dropbear Dropear (e.g. OpenWrt)
+func (p *PooledClient) ShellIntegrationType() int {
+	ver := p.ServerVersion()
+	if slices.ContainsFunc(shellIntegrationNativeList, func(s *regexp.Regexp) bool { return s.MatchString(ver) }) {
+		return 3
+	}
+	verLower := strings.ToLower(ver)
+	if slices.ContainsFunc(shellIntegrationServerBlacklist, func(s string) bool { return strings.Contains(verLower, s) }) {
+		return 1
+	}
+	if slices.ContainsFunc(shellIntegrationServerWhitelist, func(s string) bool { return strings.Contains(verLower, s) }) {
+		return 2
+	}
+	return 0
 }
 
 func getSSHConfigPath() string {

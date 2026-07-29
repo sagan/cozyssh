@@ -63,6 +63,7 @@ import {
   t,
   liquidEngine,
   openHostInNewWindow,
+  getHostFlags,
 } from "./common";
 import {
   APP_NAME,
@@ -1303,9 +1304,9 @@ export function openHostsAsSplit2(
   for (let targetHost of targetHosts) {
     if (typeof targetHost === "object") {
       hostNames.push(targetHost.name);
-      hostOptions.push(undefined);
+      hostOptions.push({ ...getHostFlags(targetHost) });
     } else if (typeof targetHost === "string") {
-      let option: Record<string, string> | undefined = undefined;
+      let option: Record<string, string> = {};
       const i = targetHost.lastIndexOf("?");
       if (i !== -1) {
         option = Object.fromEntries(new URLSearchParams(targetHost.slice(i)));
@@ -1329,6 +1330,7 @@ export function openHostsAsSplit2(
         } else {
           hostNames.push(targetHost);
         }
+        Object.assign(option, getHostFlags(known));
       }
     }
   }
@@ -1904,8 +1906,9 @@ export function getTabConnectionString(tab: TabData): string {
   const hostConnectionStrings: string[] = tab.panes.map((p, idx) => {
     let s = p.host;
     const params = new URLSearchParams(p.options);
-    for (const key of params.keys()) {
-      if (key.startsWith("_")) {
+    // the URLSearchParams.keys() result is live, deleting when iterating results in undefined behavior
+    for (const key of Array.from(params.keys())) {
+      if (key.startsWith("_") || key.startsWith("$")) {
         params.delete(key);
       }
     }

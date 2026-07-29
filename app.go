@@ -1514,19 +1514,10 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 		IdleTimeout:  120 * time.Second,
 	}
 
-	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-	defer stop() // Clears resources allocated by NotifyContext
-
 	go func() {
 		<-ctx.Done()
 		log.Printf("Shutting down cozyssh...")
-		shellIntegrationDir := localpty.ShellIntegrationDir(false)
-		if shellIntegrationDir != "" {
-			os.RemoveAll(shellIntegrationDir)
-		}
-		// don't waste time gracefully shutdown http server
-		// server.Shutdown(context.Background())
-		os.Exit(1)
+		server.Shutdown(context.Background())
 	}()
 
 	// CHANGE: Replace server.ListenAndServe() with split Listen and Serve steps
@@ -1575,4 +1566,17 @@ func isSecureRequest(r *http.Request) bool {
 	}
 
 	return false
+}
+
+// Run it with go routine
+func WaitExitAndClean() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	<-ctx.Done()
+	log.Printf("Exiting down cozyssh...")
+	shellIntegrationDir := localpty.ShellIntegrationDir(false)
+	if shellIntegrationDir != "" {
+		os.RemoveAll(shellIntegrationDir)
+	}
+	os.Exit(1)
 }

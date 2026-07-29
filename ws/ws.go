@@ -152,7 +152,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	sessionRemoteCommand := query.Get("remoteCommand")
 	execFlag := query.Get("exec") == "1"
 	noPublicKey := query.Get("noPublicKey") == "1"
-	shellIntegrationFlag := query.Get("shellIntegration") == "" || query.Get("shellIntegration") == "1"
+	shellIntegrationFlag := query.Get("shellIntegration")
 	localForwards := strings.Join(query["localForward"], "\n")
 	remoteForwards := strings.Join(query["remoteForward"], "\n")
 	dynamicForwards := strings.Join(query["dynamicForward"], "\n")
@@ -247,7 +247,9 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 
-				if shellIntegrationFlag && !pClient.IsWindows() {
+				shellIntegrationType := pClient.ShellIntegrationType()
+				if shellIntegrationFlag != "0" && shellIntegrationType != 1 &&
+					(shellIntegrationFlag == "1" || shellIntegrationType == 0 || shellIntegrationType == 2) {
 					stdout = localpty.InjectRemoteShellIntegration(stdin, stdout)
 				}
 			}

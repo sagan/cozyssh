@@ -106,12 +106,16 @@ import {
   ID_SIDEBAR_MAIN,
   VAR_CS_SIDEBAR_WIDTH,
   DEFAULT_SIDEBAR_WIDTH,
+  TAG_FLAG_PREFIX,
+  TAG_FLAG_SHELL_INTEGRATION_DISABLED,
+  TAG_FLAG_SHELL_INTEGRATION_ENABLED,
 } from "./constants";
 import {
   type ServiceWorkerStatus,
   apiReqHeaders,
   filterHosts,
   forceReload,
+  getHostFlags,
   getHostGroupPath,
   getHostOrder,
   getKeyCombination,
@@ -2102,7 +2106,10 @@ export default function Sidebar({
               } else if (e.shiftKey) {
                 openEditHostDialog(selectedItem.host);
               } else {
-                openHost(selectedItem.host.name, { target: isModifier(e, "alt") ? "_self" : undefined });
+                openHost(selectedItem.host.name, {
+                  target: isModifier(e, "alt") ? "_self" : undefined,
+                  options: { ...getHostFlags(selectedItem.host) },
+                });
               }
               document.getElementById(ID_SIDEBAR_FILTER)?.blur();
             }
@@ -2118,7 +2125,12 @@ export default function Sidebar({
     hosts.forEach((h) => {
       if (h.tags) {
         h.tags.forEach((t) => {
-          if (t !== TAG_FAV && !t.startsWith(TAG_GROUP_PREFIX) && !t.startsWith(TAG_ORDER_PREFIX)) {
+          if (
+            t !== TAG_FAV &&
+            !t.startsWith(TAG_GROUP_PREFIX) &&
+            !t.startsWith(TAG_ORDER_PREFIX) &&
+            !t.startsWith(TAG_FLAG_PREFIX)
+          ) {
             set.add(t);
           }
         });
@@ -3864,7 +3876,12 @@ export default function Sidebar({
               <Autocomplete
                 freeSolo
                 size="small"
-                options={["fav", ...uniqueTags].filter((t) => !parsedTags.includes(t))}
+                options={[
+                  TAG_FAV,
+                  TAG_FLAG_SHELL_INTEGRATION_DISABLED,
+                  TAG_FLAG_SHELL_INTEGRATION_ENABLED,
+                  ...uniqueTags,
+                ].filter((t) => !parsedTags.includes(t))}
                 value={tagInput}
                 onChange={(_, newValue) => {
                   if (newValue) {
@@ -4279,7 +4296,13 @@ function HostListItem({
               <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 0.25 }}>
                 {host.tags &&
                   host.tags
-                    .filter((t) => t !== TAG_FAV && !t.startsWith(TAG_GROUP_PREFIX) && !t.startsWith(TAG_ORDER_PREFIX))
+                    .filter(
+                      (t) =>
+                        t !== TAG_FAV &&
+                        !t.startsWith(TAG_GROUP_PREFIX) &&
+                        !t.startsWith(TAG_ORDER_PREFIX) &&
+                        !t.startsWith(TAG_FLAG_PREFIX),
+                    )
                     .map((tag) => (
                       <Typography
                         key={tag}
@@ -4594,7 +4617,13 @@ function TreeServerItem({
               <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 0.25 }}>
                 {host.tags &&
                   host.tags
-                    .filter((t) => t !== TAG_FAV && !t.startsWith(TAG_GROUP_PREFIX) && !t.startsWith(TAG_ORDER_PREFIX))
+                    .filter(
+                      (t) =>
+                        t !== TAG_FAV &&
+                        !t.startsWith(TAG_GROUP_PREFIX) &&
+                        !t.startsWith(TAG_ORDER_PREFIX) &&
+                        !t.startsWith(TAG_FLAG_PREFIX),
+                    )
                     .map((tag) => (
                       <Typography
                         key={tag}

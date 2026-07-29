@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -122,11 +123,8 @@ func GetShellIntegrationEnv(shellPath string) []string {
 
 	switch base {
 	case "bash":
-		scriptPath := filepath.ToSlash(filepath.Join(dir, "shellIntegration-bash.sh"))
 		return []string{
 			"VSCODE_INJECTION=1",
-			"VSCODE_SHELL_INTEGRATION=1",
-			"BASH_ENV=" + scriptPath,
 			"TERM_PROGRAM=vscode",
 		}
 
@@ -143,7 +141,6 @@ func GetShellIntegrationEnv(shellPath string) []string {
 		}
 		return []string{
 			"VSCODE_INJECTION=1",
-			"VSCODE_SHELL_INTEGRATION=1",
 			"TERM_PROGRAM=vscode",
 			"USER_ZDOTDIR=" + userZdotdir,
 			"ZDOTDIR=" + filepath.ToSlash(dir),
@@ -194,6 +191,14 @@ func ApplyShellIntegrationArgs(shellPath string, args []string) []string {
 		scriptPath := filepath.ToSlash(filepath.Join(dir, "shellIntegration.fish"))
 		// Fish supports --init-command to run code after config is loaded but before the prompt.
 		return append(args, "--init-command", "source "+scriptPath)
+
+	case "bash":
+		if i := slices.Index(args, "-l"); i != -1 {
+			args = slices.Delete(args, i, i+1)
+		}
+		scriptPath := filepath.ToSlash(filepath.Join(dir, "shellIntegration-bash.sh"))
+		args = append(args, "--init-file", scriptPath, "-")
+		return args
 	}
 
 	return args
@@ -265,7 +270,6 @@ func splitBase64Lines(s string) string {
 	sb.WriteString(s)
 	return sb.String()
 }
-
 
 // InjectRemoteShellIntegration writes the shell integration payload to stdin
 // and returns a wrapped stdout that discards all output until the end-of-injection
@@ -385,4 +389,3 @@ func (f *markerFilter) Read(p []byte) (int, error) {
 		}
 	}
 }
-

@@ -236,6 +236,8 @@ func t(tag string) string {
 func main() {
 	common.IsApp = true
 
+	go cozyssh.WaitExitAndClean()
+
 	if i18nFile, err := cozyssh.FrontendFS.Open("frontend/dist/i18n.app.json"); err == nil {
 		json.NewDecoder(i18nFile).Decode(&i18n)
 		i18nFile.Close()

@@ -6,5 +6,5 @@ import "embed"
 // From VS Code:
 // https://github.com/microsoft/vscode/tree/main/src/vs/workbench/contrib/terminal/common/scripts
 //
-//go:embed scripts
+//go:embed all:scripts
 var Scripts embed.FS

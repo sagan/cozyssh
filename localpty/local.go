@@ -18,11 +18,13 @@ type LocalSession struct {
 }
 
 type LocalShell struct {
-	Name             string   `json:"name"`                     // "Bash", "Zsh", "PowerShell", "CMD"
-	Path             string   `json:"path"`                     // "/bin/bash", "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
-	Args             []string `json:"args,omitempty"`           // ["-l"]
-	RunCmdlineArgs   []string `json:"runCmdlineArgs,omitempty"` // ["-l", "-c"]
-	ShellIntegration string   `json:"shellIntegration"`         // "" (default = auto), "0" (disable), "1" (enable)
+	Name           string   `json:"name"`                     // "Bash", "Zsh", "PowerShell", "CMD"
+	Path           string   `json:"path"`                     // "/bin/bash", "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+	Args           []string `json:"args,omitempty"`           // ["-l"]
+	RunCmdlineArgs []string `json:"runCmdlineArgs,omitempty"` // ["-l", "-c"]
+	// Whether inject custom shell integration script. "" (default = auto), "0" (disable), "1" (enable)
+	// Currently this value is sent by frontend back to backend when creating new terminal WebSocket.
+	ShellIntegration string `json:"shellIntegration"`
 }
 
 var (
@@ -93,7 +95,7 @@ func GetShells() []*LocalShell {
 	return shells.Load().([]*LocalShell)
 }
 
-func Start(initialCmd string, execFlag bool, shellIntegrationFlag bool, env []string) (*LocalSession, error) {
+func Start(initialCmd string, execFlag bool, shellIntegrationFlag string, env []string) (*LocalSession, error) {
 	var program string
 	var args []string
 
@@ -119,9 +121,10 @@ func Start(initialCmd string, execFlag bool, shellIntegrationFlag bool, env []st
 		args = append(args, initialCmd)
 	}
 
+	injectShellIntegration := shellIntegrationFlag == "" || shellIntegrationFlag == "1"
 	// Inject shell integration for interactive sessions only (no initialCmd means interactive).
 	// For exec/run-command invocations we skip injection to avoid polluting non-interactive shells.
-	if initialCmd == "" && shellIntegrationFlag {
+	if injectShellIntegration {
 		// Apply arg-based injection for shells that need it (e.g. PowerShell, Fish).
 		args = ApplyShellIntegrationArgs(program, args)
 	}
@@ -138,7 +141,7 @@ func Start(initialCmd string, execFlag bool, shellIntegrationFlag bool, env []st
 	cmd.Env = append(cmd.Env, env...)
 
 	// Inject shell integration env vars for interactive sessions.
-	if initialCmd == "" {
+	if injectShellIntegration {
 		if siEnv := GetShellIntegrationEnv(program); len(siEnv) > 0 {
 			cmd.Env = append(cmd.Env, siEnv...)
 		}

@@ -7,15 +7,83 @@ import (
 	"cozyssh/common"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 )
+
+const (
+	OS_ID_UBUNTU      = "ubuntu"
+	OS_ID_DEBIAN      = "debian"
+	OS_ID_OPENWRT     = "openwrt"
+	OS_ID_IMMORTALWRT = "immortalwrt"
+	OS_ID_ALPINE      = "alpine"
+)
+
+type OSInfo struct {
+	Id           string // "ubuntu", "debian", "alpine", "openwrt", "immortalwrt", "centos"
+	Version      string // "24.04"
+	MajorVersion int    // 24
+}
+
+func parseOSRelease() (*OSInfo, error) {
+	file, err := os.Open("/etc/os-release")
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	info := &OSInfo{}
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		key := parts[0]
+		value := parts[1]
+
+		if unquoted, err := strconv.Unquote(value); err == nil {
+			value = unquoted
+		}
+
+		switch key {
+		case "ID":
+			info.Id = value
+		case "VERSION_ID":
+			info.Version = value
+			major, _, _ := strings.Cut(value, ".")
+			info.MajorVersion, _ = strconv.Atoi(major)
+		}
+	}
+
+	return info, scanner.Err()
+}
 
 // getShells returns a list of local shells.
 // The first one is the current user's default shell.
 // It's guaranteed to return at least one shell.
 // It removes duplicates (e.g. /bin/sh and /usr/bin/sh is the same) and other not needed shells (e.g. screen, tmux)
 func getShells() []*LocalShell {
+	shellIntegration := ""
+	// Linux which doesn't support our shell integration script
+	blacklist := []string{OS_ID_ALPINE, OS_ID_OPENWRT, OS_ID_IMMORTALWRT}
+	if osInfo, err := parseOSRelease(); err == nil {
+		if slices.Contains(blacklist, osInfo.Id) ||
+			// Modern Linux support OSC 3008 natively, don't need to inject our custom shell integration script
+			osInfo.Id == OS_ID_UBUNTU && osInfo.MajorVersion >= 26 || osInfo.Id == OS_ID_DEBIAN && osInfo.MajorVersion >= 14 {
+			shellIntegration = "0"
+		}
+	}
+
 	var shells []*LocalShell
 	seenCanonicalPaths := make(map[string]bool)
 	currentShell := os.Getenv("SHELL")
@@ -38,10 +106,11 @@ func getShells() []*LocalShell {
 		for _, p := range fallbacks {
 			if common.FileExists(p) {
 				shells = append(shells, &LocalShell{
-					Name:           capitalize(filepath.Base(p)),
-					Path:           p,
-					Args:           args,
-					RunCmdlineArgs: runCmdlineArgs,
+					Name:             capitalize(filepath.Base(p)),
+					Path:             p,
+					Args:             args,
+					RunCmdlineArgs:   runCmdlineArgs,
+					ShellIntegration: shellIntegration,
 				})
 			}
 		}
@@ -78,10 +147,11 @@ func getShells() []*LocalShell {
 
 		seenCanonicalPaths[canonicalPath] = true
 		shells = append(shells, &LocalShell{
-			Name:           capitalize(baseName),
-			Path:           canonicalPath,
-			Args:           args,
-			RunCmdlineArgs: runCmdlineArgs,
+			Name:             capitalize(baseName),
+			Path:             canonicalPath,
+			Args:             args,
+			RunCmdlineArgs:   runCmdlineArgs,
+			ShellIntegration: shellIntegration,
 		})
 	}
 
@@ -92,10 +162,11 @@ func getShells() []*LocalShell {
 
 	if len(shells) == 0 {
 		shells = append(shells, &LocalShell{
-			Name:           "sh",
-			Path:           "sh",
-			Args:           args,
-			RunCmdlineArgs: runCmdlineArgs,
+			Name:             "sh",
+			Path:             "sh",
+			Args:             args,
+			RunCmdlineArgs:   runCmdlineArgs,
+			ShellIntegration: shellIntegration,
 		})
 	}
 

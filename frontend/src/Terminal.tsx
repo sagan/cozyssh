@@ -13,6 +13,8 @@ import type { WsResizeMsg, WsTerminalMessage } from "./api";
 import {
   BROWSER_STORAGE_KEY_TOKEN,
   DEFAULT_TERMINAL_RECENT_COMMANDS,
+  TAG_FLAG_PREFIX,
+  TAG_FLAG_SHELL_INTEGRATION,
   TOAST_KEY_TERMINAL,
   VAR_CS_NOIMAGE,
   VAR_CS_NOMODTEXTAREA,
@@ -600,9 +602,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       // Windows paths like C:\Users\root appear as C:\x5cUsers\x5croot.
       // -----------------------------------------------------------------------
       const decodeVscodeOscValue = (s: string): string =>
-        s.replace(/\\x([0-9a-fA-F]{2})/g, (_, hex) =>
-          String.fromCharCode(parseInt(hex, 16))
-        );
+        s.replace(/\\x([0-9a-fA-F]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 
       term.parser.registerOscHandler(633, (data) => {
         try {
@@ -630,8 +630,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
           } else if (type === "D") {
             // Command finished — optional exit code in parts[1]
             const exitCodeStr = parts[1];
-            const exitStatus =
-              exitCodeStr !== undefined && exitCodeStr !== "" ? parseInt(exitCodeStr, 10) : undefined;
+            const exitStatus = exitCodeStr !== undefined && exitCodeStr !== "" ? parseInt(exitCodeStr, 10) : undefined;
 
             markersRef.current.end = term.registerMarker(0);
 
@@ -932,9 +931,12 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
         if (options) {
           identity = options.identity;
           delete options.identity;
-          for (const [key, value] of Object.entries(options)) {
-            if (!terminalClientSideParams.has(key)) {
-              params.set(key, value);
+          const keys = Object.keys(options).sort(); // make variables in $foo, _foo, foo order
+          for (const key of keys) {
+            if (!key.startsWith(TAG_FLAG_PREFIX) && !terminalClientSideParams.has(key)) {
+              params.set(key, options[key]);
+            } else if (key === TAG_FLAG_SHELL_INTEGRATION) {
+              params.set(key.slice(1), options[key]);
             }
           }
         }

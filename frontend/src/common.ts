@@ -14,6 +14,7 @@ import {
   HEADER_CONTENT_TYPE,
   LOCAL_NAME,
   MIME_JSON,
+  TAG_FLAG_PREFIX,
   TAG_GROUP_PREFIX,
   TAG_ORDER_PREFIX,
   WS_PROTOCOL_DUMMY,
@@ -1197,6 +1198,29 @@ export const getHostGroupPath = (host: HostData): string | null => {
   Object.defineProperty(host, "_groupPath", { value: null, writable: false, enumerable: false });
   return null;
 };
+
+/**
+ * Flags are options which key starts with "$". Flags are stored in tags.
+ * For now, flag options are processed in frontend, this may change in the future.
+ */
+export function getHostFlags(host: HostData): Record<string, string> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if ((host as any)._options !== undefined) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (host as any)._options;
+  }
+  const options: Record<string, string> = {};
+  if (host.tags) {
+    for (const tag of host.tags) {
+      if (tag.startsWith(TAG_FLAG_PREFIX)) {
+        const [key, value] = cutString(tag, "=");
+        options[key] = value;
+      }
+    }
+  }
+  Object.defineProperty(host, "_options", { value: options, writable: false, enumerable: false });
+  return options;
+}
 
 export function hostSorterGroup(a: HostData, b: HostData): number {
   const groupA = getHostGroupPath(a);
