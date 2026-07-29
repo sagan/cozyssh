@@ -1752,7 +1752,8 @@ export interface LocalShell {
 	name: string;
 	path: string;
 	args?: string[];
-	run_cmdline_args?: string[];
+	runCmdlineArgs?: string[];
+	shellIntegration: string;
 }
 export interface WsTerminalMessage {
 	type: "historyStart" | "tabState" | "state";

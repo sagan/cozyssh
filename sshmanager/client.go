@@ -69,6 +69,18 @@ func (p *PooledClient) Release() {
 	p.Mu.Unlock()
 }
 
+func (p *PooledClient) ServerVersion() string {
+	if p == nil || p.Client == nil {
+		return ""
+	}
+	return string(p.Client.ServerVersion())
+}
+
+func (p *PooledClient) IsWindows() bool {
+	ver := strings.ToLower(p.ServerVersion())
+	return strings.Contains(ver, "windows") || strings.Contains(ver, "win32")
+}
+
 func getSSHConfigPath() string {
 	return filepath.Join(globalConfig.AbsSSHDir, "config")
 }

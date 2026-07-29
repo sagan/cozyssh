@@ -1141,7 +1141,9 @@ export function cutSuffix(s: string, suffix: string): [before: string, found: bo
  * Returns the host string for a local shell
  */
 export function localShellHost(shell: LocalShell): string {
-  return `${LOCAL_NAME}?title=${encodeURIComponent(shell.name)}&exec=1&remoteCommand=${encodeURIComponent(
+  return `${LOCAL_NAME}?title=${encodeURIComponent(
+    shell.name,
+  )}&exec=1&shellIntegration=${shell.shellIntegration}&remoteCommand=${encodeURIComponent(
     join([shell.path, ...(shell.args ?? [])]),
   )}`;
 }

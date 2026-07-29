@@ -64,6 +64,10 @@ export const VAR_CS_TOAST_TIMEOUT = "cs_toast_timeout";
 export const VAR_CS_SIDEBAR_WIDTH = "cs_sidebar_width";
 export const VAR_CS_RECENT_HOSTS = "cs_recent_hosts";
 export const VAR_CS_RECENT_BUTTONS = "cs_recent_buttons";
+/**
+ * Shell Integration keeped recent commands number for each terminal
+ */
+export const VAR_CS_TERMINAL_RECENT_COMMANDS = "cs_terminal_recent_commands";
 
 export const VAR_NOAUTOLOAD = "noautoload";
 export const VAR_NOAUTORUN = "noautorun";
@@ -79,6 +83,7 @@ export const DEFAULT_SIDEBAR_WIDTH = 260;
 export const DEFAULT_RECENT_HOSTS = 5;
 export const DEFAULT_RECENT_BUTTONS = 10;
 export const DEFAULT_SCROLL_LINES = 3;
+export const DEFAULT_TERMINAL_RECENT_COMMANDS = 100;
 /**
  * xterm.js default fontSize
  */

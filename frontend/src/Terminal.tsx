@@ -12,6 +12,7 @@ import "@xterm/xterm/css/xterm.css";
 import type { WsResizeMsg, WsTerminalMessage } from "./api";
 import {
   BROWSER_STORAGE_KEY_TOKEN,
+  DEFAULT_TERMINAL_RECENT_COMMANDS,
   TOAST_KEY_TERMINAL,
   VAR_CS_NOIMAGE,
   VAR_CS_NOMODTEXTAREA,
@@ -19,6 +20,7 @@ import {
   VAR_CS_NOWEBLINKS,
   VAR_CS_NO_PASTE_ON_CONTEXTMENU,
   VAR_CS_NO_SELECT_TO_COPY,
+  VAR_CS_TERMINAL_RECENT_COMMANDS,
   WS_PROTOCOL_DUMMY,
   WS_PROTOCOL_IDENTITY_PREFIX,
   WS_PROTOCOL_QUERY_PREFIX,
@@ -107,8 +109,6 @@ interface TerminalProps {
   cloneFrom?: string;
 }
 
-const RECENT_COMMANDS_NUM = 10;
-
 const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
   (
     {
@@ -169,9 +169,8 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       );
     };
 
-    const unescapeOsc3008 = (s: string): string => {
-      return s.replace(/\\x5c/g, "\\").replace(/\\x3b/g, ";");
-    };
+    const unescapeOsc3008 = (s: string): string =>
+      s.replace(/\\x([0-9a-fA-F]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 
     useEffect(() => {
       isActiveRef.current = isActive;
@@ -553,7 +552,10 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
               };
 
               const oldHistory = shellIntegrationRef.current.recentCommands || [];
-              updates.recentCommands = [entry, ...oldHistory].slice(0, RECENT_COMMANDS_NUM);
+              updates.recentCommands = [entry, ...oldHistory].slice(
+                0,
+                getIntVar(VAR_CS_TERMINAL_RECENT_COMMANDS, DEFAULT_TERMINAL_RECENT_COMMANDS),
+              );
 
               updates.exitStatus = exitStatus;
               if (info.signal) {
@@ -579,12 +581,96 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
         updateShellIntegration(titleUpdates);
       });
 
+      // -------------------------------------------------------------------------
+      // OSC 633 - VS Code shell integration (superset of OSC 133)
+      //
+      //   OSC 633 ; A ST           - Prompt start  (same as OSC 133;A)
+      //   OSC 633 ; B ST           - Command start (same as OSC 133;B)
+      //   OSC 633 ; C ST           - Output start  (same as OSC 133;C)
+      //   OSC 633 ; D [; exitCode] - Command done  (same as OSC 133;D)
+      //   OSC 633 ; E ; cmd [; nonce] - Command text (VS Code specific)
+      //   OSC 633 ; P ; key=value  - Property (e.g. Cwd=, IsWindows=, Prompt=)
+      // -------------------------------------------------------------------------
+      // -----------------------------------------------------------------------
+      // Helper: decode the \xHH hex-escaping used by VS Code shell integration
+      // scripts (__VSCode-Escape-Value / __vsc_escape_value).
+      //
+      // The scripts escape: control chars (0x00-0x1f), backslash (0x5c),
+      // semicolons (0x3b), and newlines as \x<hex> sequences.  Without decoding,
+      // Windows paths like C:\Users\root appear as C:\x5cUsers\x5croot.
+      // -----------------------------------------------------------------------
+      const decodeVscodeOscValue = (s: string): string =>
+        s.replace(/\\x([0-9a-fA-F]{2})/g, (_, hex) =>
+          String.fromCharCode(parseInt(hex, 16))
+        );
+
       term.parser.registerOscHandler(633, (data) => {
         try {
           const parts = data.split(";");
           const type = parts[0];
-          if (type === "E" && parts[1]) {
-            updateShellIntegration({ command: parts[1] });
+
+          if (type === "A") {
+            // Prompt start — shell is idle, new prompt being drawn
+            updateShellIntegration({ promptPhase: "prompt", isExecuting: false });
+          } else if (type === "B") {
+            // Command input starting — cursor is right after the prompt
+            const buf = term.buffer.active;
+            promptEndRef.current = {
+              col: buf.cursorX,
+              absLine: buf.cursorY + buf.baseY,
+            };
+            updateShellIntegration({ promptPhase: "input" });
+          } else if (type === "C") {
+            // Output starting — command is now running
+            markersRef.current.start?.dispose();
+            markersRef.current.end?.dispose();
+            markersRef.current.start = term.registerMarker(0);
+            promptEndRef.current = null;
+            updateShellIntegration({ promptPhase: "output", isExecuting: true, currentCmdLine: undefined });
+          } else if (type === "D") {
+            // Command finished — optional exit code in parts[1]
+            const exitCodeStr = parts[1];
+            const exitStatus =
+              exitCodeStr !== undefined && exitCodeStr !== "" ? parseInt(exitCodeStr, 10) : undefined;
+
+            markersRef.current.end = term.registerMarker(0);
+
+            const updates: Partial<ShellIntegration> = {
+              promptPhase: "finished",
+              isExecuting: false,
+            };
+
+            if (exitStatus !== undefined && !isNaN(exitStatus)) {
+              updates.exitStatus = exitStatus;
+
+              const entry: CommandHistoryEntry = {
+                commandId: shellIntegrationRef.current.commandId || String(Date.now()),
+                command: shellIntegrationRef.current.command,
+                exitStatus,
+                timestamp: Date.now(),
+              };
+              const oldHistory = shellIntegrationRef.current.recentCommands || [];
+              updates.recentCommands = [entry, ...oldHistory].slice(
+                0,
+                getIntVar(VAR_CS_TERMINAL_RECENT_COMMANDS, DEFAULT_TERMINAL_RECENT_COMMANDS),
+              );
+            }
+
+            promptEndRef.current = null;
+            updateShellIntegration(updates);
+          } else if (type === "E" && parts[1]) {
+            // Command text — parts[1] is the command (escaped), parts[2] is an optional nonce (ignored)
+            updateShellIntegration({ command: decodeVscodeOscValue(parts[1]) });
+          } else if (type === "P" && parts[1]) {
+            // Property — key=value pairs (Cwd, IsWindows, Prompt, HasRichCommandDetection, …)
+            const eqIdx = parts[1].indexOf("=");
+            if (eqIdx !== -1) {
+              const key = parts[1].substring(0, eqIdx);
+              const value = decodeVscodeOscValue(parts[1].substring(eqIdx + 1));
+              if (key === "Cwd" && value) {
+                updateShellIntegration({ cwd: value });
+              }
+            }
           }
         } catch (e) {
           console.error("Error parsing OSC 633:", e);
@@ -651,7 +737,10 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
                 timestamp: Date.now(),
               };
               const oldHistory = shellIntegrationRef.current.recentCommands || [];
-              updates.recentCommands = [entry, ...oldHistory].slice(0, RECENT_COMMANDS_NUM);
+              updates.recentCommands = [entry, ...oldHistory].slice(
+                0,
+                getIntVar(VAR_CS_TERMINAL_RECENT_COMMANDS, DEFAULT_TERMINAL_RECENT_COMMANDS),
+              );
             }
 
             promptEndRef.current = null;

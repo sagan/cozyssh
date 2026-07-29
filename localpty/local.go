@@ -1,6 +1,7 @@
 package localpty
 
 import (
+	"encoding/json"
 	"os"
 	"slices"
 	"strings"
@@ -17,10 +18,11 @@ type LocalSession struct {
 }
 
 type LocalShell struct {
-	Name           string   `json:"name"`                       // "Bash", "Zsh", "PowerShell", "CMD"
-	Path           string   `json:"path"`                       // "/bin/bash", "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
-	Args           []string `json:"args,omitempty"`             // ["-l"]
-	RunCmdlineArgs []string `json:"run_cmdline_args,omitempty"` // ["-l", "-c"]
+	Name             string   `json:"name"`                     // "Bash", "Zsh", "PowerShell", "CMD"
+	Path             string   `json:"path"`                     // "/bin/bash", "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+	Args             []string `json:"args,omitempty"`           // ["-l"]
+	RunCmdlineArgs   []string `json:"runCmdlineArgs,omitempty"` // ["-l", "-c"]
+	ShellIntegration string   `json:"shellIntegration"`         // "" (default = auto), "0" (disable), "1" (enable)
 }
 
 var (
@@ -40,42 +42,42 @@ func Load(configShells []string) {
 				continue
 			} else if strings.HasPrefix(configShell, "-") {
 				blacklist[strings.TrimSpace(configShell[1:])] = true
-			} else if strings.HasPrefix(configShell, "+") {
-				if tokens, err := shlex.Split(configShell[1:]); err == nil && len(tokens) > 2 {
-					var args []string
-					var runCmdlineArgs []string
-					if len(tokens) > 2 {
-						args, _ = shlex.Split(tokens[2])
-					}
-					if len(tokens) > 3 {
-						runCmdlineArgs, _ = shlex.Split(tokens[3])
-					}
-					newShells = append(newShells, &LocalShell{
-						Name:           tokens[0],
-						Path:           tokens[1],
-						Args:           args,
-						RunCmdlineArgs: runCmdlineArgs,
-					})
-					orders[tokens[1]] = i + 1
+			} else if strings.HasPrefix(configShell, "{") {
+				var newShell *LocalShell
+				if err := json.Unmarshal([]byte(configShell), &newShell); err != nil {
+					continue
 				}
+				newShells = append(newShells, newShell)
+				orders[newShell.Name] = i + 1
 			} else {
 				orders[strings.TrimSpace(configShell)] = i + 1
 			}
 		}
 		if !removeAll {
 			for _, shell := range localShells {
-				if !blacklist[shell.Path] {
+				if !blacklist[shell.Name] && !blacklist[shell.Path] {
 					newShells = append(newShells, shell)
 				}
 			}
 		}
 		slices.SortStableFunc(newShells, func(a, b *LocalShell) int {
-			if orders[a.Path] > 0 && orders[b.Path] == 0 {
+			var orderA, orderB int
+			if orders[a.Name] > 0 {
+				orderA = orders[a.Name]
+			} else {
+				orderA = orders[a.Path]
+			}
+			if orders[b.Name] > 0 {
+				orderB = orders[b.Name]
+			} else {
+				orderB = orders[b.Path]
+			}
+			if orderA > 0 && orderB == 0 {
 				return -1
-			} else if orders[a.Path] == 0 && orders[b.Path] > 0 {
+			} else if orderA == 0 && orderB > 0 {
 				return 1
 			} else {
-				return orders[a.Path] - orders[b.Path]
+				return orderA - orderB
 			}
 		})
 		if len(newShells) > 0 {
@@ -91,7 +93,7 @@ func GetShells() []*LocalShell {
 	return shells.Load().([]*LocalShell)
 }
 
-func Start(initialCmd string, execFlag bool, env []string) (*LocalSession, error) {
+func Start(initialCmd string, execFlag bool, shellIntegrationFlag bool, env []string) (*LocalSession, error) {
 	var program string
 	var args []string
 
@@ -99,7 +101,7 @@ func Start(initialCmd string, execFlag bool, env []string) (*LocalSession, error
 
 	if initialCmd == "" {
 		program = shells[0].Path
-		args = shells[0].Args
+		args = append(args, shells[0].Args...) // copy to avoid mutating LocalShell.Args
 	} else if execFlag {
 		var err error
 		args, err = shlex.Split(initialCmd)
@@ -117,6 +119,13 @@ func Start(initialCmd string, execFlag bool, env []string) (*LocalSession, error
 		args = append(args, initialCmd)
 	}
 
+	// Inject shell integration for interactive sessions only (no initialCmd means interactive).
+	// For exec/run-command invocations we skip injection to avoid polluting non-interactive shells.
+	if initialCmd == "" && shellIntegrationFlag {
+		// Apply arg-based injection for shells that need it (e.g. PowerShell, Fish).
+		args = ApplyShellIntegrationArgs(program, args)
+	}
+
 	p, err := pty.New()
 	if err != nil {
 		return nil, err
@@ -127,6 +136,13 @@ func Start(initialCmd string, execFlag bool, env []string) (*LocalSession, error
 	// Set standard xterm env
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
 	cmd.Env = append(cmd.Env, env...)
+
+	// Inject shell integration env vars for interactive sessions.
+	if initialCmd == "" {
+		if siEnv := GetShellIntegrationEnv(program); len(siEnv) > 0 {
+			cmd.Env = append(cmd.Env, siEnv...)
+		}
+	}
 
 	// Force explicitly working out of home dir
 	if home, err := os.UserHomeDir(); err == nil {

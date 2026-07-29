@@ -152,6 +152,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	sessionRemoteCommand := query.Get("remoteCommand")
 	execFlag := query.Get("exec") == "1"
 	noPublicKey := query.Get("noPublicKey") == "1"
+	shellIntegrationFlag := query.Get("shellIntegration") == "" || query.Get("shellIntegration") == "1"
 	localForwards := strings.Join(query["localForward"], "\n")
 	remoteForwards := strings.Join(query["remoteForward"], "\n")
 	dynamicForwards := strings.Join(query["dynamicForward"], "\n")
@@ -187,7 +188,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	s := session.GlobalManager.Get(sessionID)
 	if s == nil {
 		if host == "" || host == constants.LOCAL_NAME {
-			ls, err := localpty.Start(sessionRemoteCommand, execFlag, env)
+			ls, err := localpty.Start(sessionRemoteCommand, execFlag, shellIntegrationFlag, env)
 			if err != nil {
 				return
 			}
@@ -244,6 +245,10 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 				if err := sshSession.Shell(); err != nil {
 					pClient.Release()
 					return
+				}
+
+				if shellIntegrationFlag && !pClient.IsWindows() {
+					stdout = localpty.InjectRemoteShellIntegration(stdin, stdout)
 				}
 			}
 			s = session.NewSession(sessionID, host, stdout, stdin, func() error {

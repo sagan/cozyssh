@@ -700,6 +700,7 @@
   "WebDAV settings saved successfully": "WebDAV 设置保存成功",
   "Welcome to CozySSH Desktop App": "欢迎使用 CozySSH 桌面应用",
   "When the search filter is focused:": "当搜索筛选器获得焦点时：",
+  "Whether to enable shell integration on the opened terminal: \"\"(empty string, default) = auto; 0 = disable; 1 = enable.": "是否在打开的终端上启用 Shell 集成：\"\"（空字符串，默认）= 自动；0 = 禁用；1 = 启用。",
   "Will Delete page:": "将删除页面：",
   "Will delete the password of this key:": "将删除此密钥的密码：",
   "Will delete this button:": "将删除此按钮：",

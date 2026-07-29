@@ -42,9 +42,11 @@ type Config struct {
 	SavePassword          string               `json:"save_password,omitempty" ts_type:"\"ask\" | \"always\" | \"never\""`
 	SessionSecret         string               `json:"session_secret,omitempty"`
 	Dns                   string               `json:"dns,omitempty"`
-	// Control local shells order. Each item is shell path. Use "-<path>" to exclude a shell.
-	// Use "+<name> <path> [args [run_cmdline_args]]" to add a new shell.
-	// Each segment should be quoted if it contain space.
+	// Custom local shells. Each item could be any of:
+	//   - "-*" : Exclude all auto-discovered local shells
+	//   - "-<shell>" : Exclude a shell from auto-discovered shells. `<shell>` is the shell name (e.g. "bash") or full path (e.g. "/bin/bash") to exclude
+	//   - "{}" : Define a new shell by providing a LocalShell type json object.
+	//   - "<shell>" : Define the orders of auto-discovered shells (according to their appearance order). `<shell>` is the shell name or full path.
 	Shells []string `json:"shells,omitempty"`
 	// WebDAV Settings
 	WebdavUrl               string `json:"webdav_url,omitempty"`

@@ -18,9 +18,11 @@ import (
 	"net/http/pprof"
 	"os"
 	os_exec "os/exec"
+	"os/signal"
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/go-http-utils/headers"
@@ -1512,10 +1514,19 @@ func RunWithFlags(ctx context.Context, flags *CozysshFlags, ready chan<- string)
 		IdleTimeout:  120 * time.Second,
 	}
 
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	defer stop() // Clears resources allocated by NotifyContext
+
 	go func() {
 		<-ctx.Done()
 		log.Printf("Shutting down cozyssh...")
-		server.Shutdown(context.Background())
+		shellIntegrationDir := localpty.ShellIntegrationDir(false)
+		if shellIntegrationDir != "" {
+			os.RemoveAll(shellIntegrationDir)
+		}
+		// don't waste time gracefully shutdown http server
+		// server.Shutdown(context.Background())
+		os.Exit(1)
 	}()
 
 	// CHANGE: Replace server.ListenAndServe() with split Listen and Serve steps
