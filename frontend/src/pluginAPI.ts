@@ -32,7 +32,7 @@ import {
   defaultThemeOptions,
   DefaultXtermOptions,
   generatePassword,
-  isMuiModalOpen,
+  getActiveMuiModal,
   liquidEngine,
   passthroughKeyShortcuts,
   blackholeShortcuts,
@@ -331,7 +331,7 @@ window.csSetSidebarFilter = setFilterStr;
 window.csSendKeyDown = sendKeyDown;
 
 window.csFocus = (tabOrPaneId?: string) => {
-  if (isMuiModalOpen()) {
+  if (getActiveMuiModal()) {
     return;
   }
   if (tabOrPaneId) {

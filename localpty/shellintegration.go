@@ -111,17 +111,13 @@ func ShellIntegrationDir(autoCreate bool) string {
 //   - PowerShell / pwsh: The caller must prepend extra arguments instead of env
 //     vars, so this function returns nil for PowerShell shells.  The args are
 //     injected separately in Start().
-func GetShellIntegrationEnv(shellPath string) []string {
+func GetShellIntegrationEnv(shellName string) []string {
 	dir := ShellIntegrationDir(true)
 	if dir == "" {
 		return nil
 	}
 
-	base := strings.ToLower(filepath.Base(shellPath))
-	// Strip common Windows executable extension
-	base = strings.TrimSuffix(base, ".exe")
-
-	switch base {
+	switch shellName {
 	case "bash":
 		return []string{
 			"VSCODE_INJECTION=1",
@@ -161,16 +157,13 @@ func GetShellIntegrationEnv(shellPath string) []string {
 // shell integration for shells that require argument-based injection.
 // It returns the (possibly new) args slice.
 // For all other shells this is a no-op and returns args unchanged.
-func ApplyShellIntegrationArgs(shellPath string, args []string) []string {
+func ApplyShellIntegrationArgs(shellName string, args []string) []string {
 	dir := ShellIntegrationDir(true)
 	if dir == "" {
 		return args
 	}
 
-	base := strings.ToLower(filepath.Base(shellPath))
-	base = strings.TrimSuffix(base, ".exe")
-
-	switch base {
+	switch shellName {
 	case "pwsh", "powershell":
 		scriptPath := filepath.Join(dir, "shellIntegration.ps1")
 		// Build a clean arg list: keep -NoLogo if present, then add -NoExit
@@ -242,13 +235,14 @@ func GetRemoteShellIntegrationPayload() string {
 		// error from the eval'd script without preventing the `echo marker` that
 		// follows from running.
 		remotePayload = fmt.Sprintf(
-			"{ if [ -n \"$ZSH_VERSION\" ]; then eval \"$(base64 -d 2>/dev/null <<'__COZYSSH_ZSH__'\n"+
+			"set +o history;\r "+
+				"{ if [ -n \"$ZSH_VERSION\" ]; then eval \"$(base64 -d 2>/dev/null <<'__COZYSSH_ZSH__'\n"+
 				"%s\n"+
 				"__COZYSSH_ZSH__\n"+
 				")\"; elif [ -n \"$BASH_VERSION\" ]; then eval \"$(base64 -d 2>/dev/null <<'__COZYSSH_BASH__'\n"+
 				"%s\n"+
 				"__COZYSSH_BASH__\n"+
-				")\"; fi; } 2>/dev/null",
+				")\"; fi; set -o history; } >/dev/null 2>&1",
 			zshB64, bashB64,
 		)
 	})

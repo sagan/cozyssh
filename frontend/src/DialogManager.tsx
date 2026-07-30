@@ -1377,7 +1377,7 @@ export default function DialogManager({
                 {t("Remote shell command to execute on connected. It works on `local` shell too.")}
                 <br />- <b>shellIntegration</b>:&nbsp;
                 {t(
-                  `Whether to enable shell integration on the opened terminal: ""(empty string, default) = auto; 0 = disable; 1 = enable.`,
+                  `Whether to inject shell integration script to the new session: ""(empty string, default) = auto; 0 = disable (don't inject); 1 = enable (inject unless it's detected that the injection may not work); 2 = force enable (always inject).`,
                 )}
                 <br />- <b>proxyJump</b> : {t("Proxy jump server.")}
                 <br />- <b>target</b> :&nbsp;

@@ -12,6 +12,7 @@ import {
   DEFAULT_BUTTON_GROUP,
   DEFAULT_SCROLL_LINES,
   ID_INPUT_DIALOG_INPUT,
+  ID_SIDEBAR,
   ID_SIDEBAR_FILTER,
   LOCAL_NAME,
   SETTINGS_TABS,
@@ -25,7 +26,7 @@ import {
   forceReload,
   getKeyCombination,
   isModifier,
-  isMuiModalOpen,
+  getActiveMuiModal,
   localShellHost,
   t,
 } from "./common";
@@ -67,6 +68,7 @@ import {
   notify,
   useStore,
   runButton,
+  setMobileOpen,
 } from "./store";
 
 const handleKeyDown = (e: KeyboardEvent) => {
@@ -264,16 +266,24 @@ const handleKeyDown = (e: KeyboardEvent) => {
       return;
 
     case "alt+i":
-    case "alt+shift+i":
-      if (!isMuiModalOpen()) {
+    case "alt+shift+i": {
+      const modal = getActiveMuiModal();
+      if (!modal || modal.id === ID_SIDEBAR) {
         e.preventDefault();
         if (!e.shiftKey) {
           csSetSidebarFilter("");
         }
-        document.getElementById(ID_SIDEBAR_FILTER)?.focus();
+        if (__CS_IS_MOBILE__ && !getStore().mobileOpen) {
+          setMobileOpen(true);
+          setTimeout(() => {
+            document.getElementById(ID_SIDEBAR_FILTER)?.focus();
+          }, 0);
+        } else {
+          document.getElementById(ID_SIDEBAR_FILTER)?.focus();
+        }
       }
       return;
-
+    }
     case "ctrl+shift+tab":
     case "alt+h":
     case "alt+shift+h": {
@@ -476,7 +486,7 @@ const handleKeyDown = (e: KeyboardEvent) => {
     case "ctrl+shift+f": {
       const { activePaneId } = getStore();
       if (
-        !isMuiModalOpen() &&
+        !getActiveMuiModal() &&
         __CS_TERMINALS__.current[activePaneId] &&
         "clear" in __CS_TERMINALS__.current[activePaneId]!
       ) {

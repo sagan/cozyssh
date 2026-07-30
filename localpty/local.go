@@ -3,6 +3,7 @@ package localpty
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -101,9 +102,14 @@ func Start(initialCmd string, execFlag bool, shellIntegrationFlag string, env []
 
 	shells := GetShells()
 
+	shellName := ""
+	isShell := false
+
 	if initialCmd == "" {
 		program = shells[0].Path
 		args = append(args, shells[0].Args...) // copy to avoid mutating LocalShell.Args
+		shellName = strings.TrimSuffix(strings.ToLower(filepath.Base(program)), ".exe")
+		isShell = true
 	} else if execFlag {
 		var err error
 		args, err = shlex.Split(initialCmd)
@@ -115,18 +121,29 @@ func Start(initialCmd string, execFlag bool, shellIntegrationFlag string, env []
 			args = append(args, shells[0].RunCmdlineArgs...)
 			args = append(args, initialCmd)
 		}
+		if shellIntegrationFlag != "0" {
+			shellName, isShell = DetectShell(initialCmd)
+		}
 	} else {
 		program = shells[0].Path
 		args = append(args, shells[0].RunCmdlineArgs...)
 		args = append(args, initialCmd)
+		// in force inject case use shell name extracted from initialCmd even if exec is false
+		if shellIntegrationFlag == "2" {
+			shellName, _ = DetectShell(initialCmd)
+		}
 	}
 
-	injectShellIntegration := shellIntegrationFlag == "" || shellIntegrationFlag == "1"
-	// Inject shell integration for interactive sessions only (no initialCmd means interactive).
-	// For exec/run-command invocations we skip injection to avoid polluting non-interactive shells.
-	if injectShellIntegration {
-		// Apply arg-based injection for shells that need it (e.g. PowerShell, Fish).
-		args = ApplyShellIntegrationArgs(program, args)
+	doInjection := false
+	switch shellIntegrationFlag {
+	case "2": // force inject
+		doInjection = true
+	case "", "1": // auto, inject
+		doInjection = isShell
+	}
+	if doInjection {
+		// Apply arg-based injection for shells that need it (e.g. powershell, fish).
+		args = ApplyShellIntegrationArgs(shellName, args)
 	}
 
 	p, err := pty.New()
@@ -141,8 +158,8 @@ func Start(initialCmd string, execFlag bool, shellIntegrationFlag string, env []
 	cmd.Env = append(cmd.Env, env...)
 
 	// Inject shell integration env vars for interactive sessions.
-	if injectShellIntegration {
-		if siEnv := GetShellIntegrationEnv(program); len(siEnv) > 0 {
+	if doInjection {
+		if siEnv := GetShellIntegrationEnv(shellName); len(siEnv) > 0 {
 			cmd.Env = append(cmd.Env, siEnv...)
 		}
 	}

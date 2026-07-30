@@ -89,16 +89,18 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
 - **Modern UI**: A sleek, concise, yet full-fledged UI based on React and [Material UI](https://github.com/mui/material-ui).
   - **High-contrast Light Theme**: Designed for readability.
   - **Multi-Tab Interface**: Run multiple concurrent SSH sessions and local shells in a single browser tab.
-  - **Split Screen Window**: Display multiple ssh servers of a `#tag` in single split-screen tab. View up to 4 terminal panes in a single tab.
-  - **New Tab Dialog** : Powerful "New Tab Dialog" (shortcut: `Alt + O`) to quickly create new session, navigate opened tabs, or execute custom button. Inspired by Notion New Tab dialog.
+  - **Split Screen Window**: Display multiple ssh servers in single split-screen tab. View up to 4 terminal panes in a single tab.
+  - **New Tab Dialog**: Powerful "New Tab Dialog" (shortcut: `Alt + O`) to quickly create new session, navigate opened tabs, or execute custom button. Inspired by Notion New Tab dialog.
   - **Button Bar**: A scrollable toolbar at the bottom of the terminal window for quickly sending string to terminal or executing custom function. Inspired by [SecureCRT Button Bar](https://www.vandyke.com/support/tips/button_bar.html).
-    - **Custom Snippets**: Send custom string to current terminal.
-    - **Special Syntax**: Full support for control keys via `<ctrl-x>` syntax (e.g., `<ctrl-c>` for SIGINT), which are sent with precise timing to ensure they reach the shell correctly.
-    - **Management**: Add, edit, delete, and reorder buttons directly from the UI context menu.
-    - **Hover Tooltips**: Instant preview of the command payload.
-    - **Common Terminal Functions**: Custom the button function to common terminal action, like copy terminal buffer, paste to terminal.
-    - **Shortcut Invocation** : Use `<alt + shift + 1-9,0>` keyboard shortcut to invoke button directly.
-    - **Custom Shortcut** : Set custom keyboard shortcut (e.g. `ctrl+shift+m`) for any button.
+    - **Button Types**: Button can be configured to any of the below functions.
+      - **Send String**: Send custom string to current terminal. Support sending control keys via `<ctrl-x>` syntax (e.g., `<ctrl-c>` for SIGINT), which are sent with precise timing to ensure they reach the shell correctly.
+      - **Built-in Functions**: Lots of pre-defined actions to control the terminal or the frontend.
+      - **Open Terminal**: Open specific terminal(s), optionally with custom parameters & options.
+      - **Run Script**: Run custom script to archive any desired effect. See [Scripts Documentation](docs/SCRIPTS.md).
+    - **Full Shortcut Support**: Buttons support keyboard shortcut invocation.
+      - **Direct Shortcut** : Built-in `alt + shift + 1-9,0` shortcut to invoke the first 10 buttons of current button group.
+      - **Custom Shortcut** : Assign arbitrary custom shortcut (e.g. `ctrl+shift+m`) for any button.
+    - **Autorun**: `Open Terminal` and `Run Script` button can be set to auto-run on frontend page load.
   - **Mobile-Friendly**: All features can be accessed seamlessly from mobile browser.
     - **Responsive sidebar and layout**.
     - **Mobile Input Toolbar**: Quick access to `Ctrl`, `Alt`, `Esc`, `Tab`, `Arrow keys` on mobile device. Click `...` to access more special chars from on-screen keyboard area.
@@ -109,16 +111,7 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - **SFTP & Local File Browser**: Browse, upload, download, filter or edit files directly from your terminal tabs.
   - **Split View**: Access the file browser via the terminal tab's context menu without losing your shell session.
   - **Text File Editor**: Edit text file of SFTP / local server directly in Browser.
-- **Shell Integration**: Built-in Shell Integration features like cwd detection. An button in File Browser to navigate to shell cwd (`$PWD`) directly. It works best for newer Linux systems (Ubuntu 26.04+) out of the box using OSC 3008 sequence detection. For older Linux systems, you can add OSC 7 escape sequence to `~/.bashrc` to enable basic feature:
-
-  ```sh
-  # Standard OSC 7 (Recommended for most cases)
-  export PS1="$PS1"'\[\e]7;file://$HOSTNAME$PWD\a\]'
-
-  # Alternative OSC 7 (Used by some older terminal software)
-  export PS1="$PS1\[\e]7;CurrentDir="'$(pwd)\a\]'
-  ```
-
+- **Shell Integration**: Built-in Shell Integration features including cwd detection, cmd history, copy last command output and more. An button in File Browser to navigate to shell cwd (`$PWD`) directly. In newer Linux systems (Ubuntu 26.04+ / Debian 14+) it uses the OS scope systemd 158+ OSC 3008 sequence; For older Linux systems, it automatically injects VS Code compatible OSC 633 shell integration script into the session on connected. So everything should just works.
 - **Full keyboard Shortcuts**: It supports a complete set of keyboard shortcuts.
   - Note: in Mac, by default `Command` key (JavaScript KeyboardEvent `ev.metaKey`) is recognized as `Alt` (Originally the `Option` key); and vice versa. So press `Command + O` in Mac is recognized as `Alt + O` shortcut.
   - `Alt + O` : Open new tab dialog, use `← →` (or `Alt + H/L`) to switch view, `↓ ↑` (or `Alt + J/K`) to select, `Enter` to open, `Alt + Enter` to open in current tab, `Ctrl + Enter` to open in new window, `Shift + Enter` to edit selected host, `Alt + Shift + Enter` to input selected host into filter. Use `Delete` or `Alt + D` to delete a recent item; `Alt + Backspace` to clear the filter. Use `Alt + ↓↑` (or `Alt + Shift + J/K`) to jump through items quickly; Hold `Ctrl` to jump to top/bottom. `Ctrl/Alt + Mouse Click` is same as `Clt/Alt/Shift + Enter`
@@ -169,36 +162,37 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - `Mouse Select` in terminal to copy
   - `Mouse Right Click` in terminal to paste
   - `Mouse Middle Click` on a tab to close it
+  - `Alt + Mouse Click` in terminal to move cursor to mouse position
   - `Alt + Mouse Wheel` in terminal to fast scroll up / down
   - `Shift + Mouse Click` on a button in button bar to edit it; `Ctrl/Alt + Mouse Click` on a "Open Terminal" type button to open it in new window / current tab; `Ctrl + Mouse Click` on a "Send String" type button to open it in "Terminal Input" dialog, `Alt + Mouse Click` on it to copy contents to clipboard
   - `Ctrl + Mouse Click` on backdrop of modal dialog to force close it
 - **Advanced SSH Management**: 🔑
   - **ProxyJump Support**: Full support for OpenSSH standard `ProxyJump` configuration, allowing you to connect to hosts via intermediate jump servers.
   - **RemoteCommand Support**: Support ssh_config `RemoteCommand` configuration, execute a custom command on the remote ssh server after successfully connecting to it.
+  - **Tunnels Support** : Support ssh_config `LocalForward`, `RemoteForward` & `DynamicForward` tunnels configuration.
   - **Tagging System**: Organize your hosts using `### #tag` comments in your `~/.ssh/config`. Tags are fully filterable in the sidebar.
-  - **Tag Context Menu**: Right-click any sidebar tag to **"Open All"** hosts associated with that tag simultaneously.
-  - **Sidebar Tooltips**: General `###` comments in your config are automatically displayed as tooltips when hovering over hosts in the sidebar.
-  - **Heartbeat & Keep-Alive**: Background heartbeat (`keepalive@openssh.com`) every 30 seconds ensures stable connections and prevents idle timeouts.
-  - **Interactive Verification**: Full support for interactive Host Key verification and Keyboard-Interactive (Password) authentication.
-  - **Smart Resize logic**: Optimized terminal resizing that preserves shell prompt integrity when switching between multiple active tabs.
-- **Local Shell**: Open local shell tab. It automatically discovers and displays list of local system installed / available shells.
+  - **Grouping System**: It uses special `g-foo/bar` syntax tag to organize hosts by nestable groups. The sidebar display grouped servers in tree view.
+- **Local Shells**: Open local shell tab. It automatically discovers and displays list of local system installed / available shells.
 - **Terminal UX Enhancements**:
+  - **Heartbeat & Keep-Alive**: Automatic SSH session background heartbeat (`keepalive@openssh.com`) every 30 seconds ensures stable connections and prevents idle timeouts.
   - **Manual Reconnection**: If a terminal session is lost or "stolen" by another browser instance, simply press **Enter** to instantly reconnect.
   - **Auto-copy**: Selected text is automatically copied to your clipboard.
   - **Right-click Paste**: Quickly paste clipboard contents into any active terminal session.
   - **Selection Highlighting**: Clear visual feedback for selected text.
-- **Tab Pinning & Persistence**:
-  - **Persistent Sessions**: Right-click any tab and select **"Pin Tab"** to keep the terminal session (PTY or SSH) running in the background even if you close your browser or navigate away.
-  - **Output Buffering**: Pinned sessions maintain a circular output buffer (approx. 50KB), ensuring you see the most recent activity immediately upon reconnection.
-  - **Usage-Aware Auto-Restore**: Pinned tabs automatically resume when you re-open CozySSH, but only in the primary window to prevent duplicate UI clutter.
-  - **Lock Tab**: Tabs can be locked, which works similar to pinning but also prevent accidental closing.
+  - **Interactive Verification**: Full support for interactive Host Key verification and Keyboard-Interactive (Password) authentication.
+  - **Smart Resize logic**: Optimized terminal resizing that preserves shell prompt integrity when switching between multiple active tabs.
+  - **Tab Pinning & Persistence**:
+    - **Persistent Sessions**: Right-click any tab and select **"Pin Tab"** to keep the terminal session (PTY or SSH) running in the background even if you close your browser or navigate away.
+    - **Output Buffering**: Pinned sessions maintain a circular output buffer (approx. 50KB), ensuring you see the most recent activity immediately upon reconnection.
+    - **Usage-Aware Auto-Restore**: Pinned tabs automatically resume when you re-open CozySSH, but only in the primary window to prevent duplicate UI clutter.
+    - **Lock Tab**: Tabs can be locked, which works similar to pinning but also prevent accidental closing.
 - **Scratchpad feature**: Open a "Scratchpad" text editor tab to write your notes or paste some configuration commands or other text. All data is auto-saving and cached in browser localStorage and automatically synced with and persisted in backend.
 - **Secure by Default**:
   - **Stateless Authentication**: HMAC-SHA256 token-based authentication with a simple App Password.
   - **Non-Local Restriction**: Automatically blocks access from non-local, non-HTTPS environments to prevent credential sniffing.
   - **Password Management**: Reset your application password anytime via the CLI using the `-do-reset-password` flag.
 - **Custom Scripting**: Fully programmable / extendable via a built-in powerful & TypeScript-capable scripting engine. See [Scripts Documentation](docs/SCRIPTS.md). It also has a [Plugins Repository][CozySSH Plugins] which includes many official scripts/plugins that can be installed directly from CozySSH frontend.
-- **Self-Hosted**: Distributed as a single Go binary that embeds the entire React frontend.
+- **Self-Hosted & Easy to deploy**: Distributed as a single Go binary that embeds the entire React frontend.
 
 ## Guide
 

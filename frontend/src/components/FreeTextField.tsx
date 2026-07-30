@@ -1,5 +1,7 @@
 import Autocomplete from "@mui/material/Autocomplete";
-import TextField, { type TextFieldProps } from "@mui/material/TextField";
+import { type TextFieldProps, IconButton, InputAdornment, TextField } from "@mui/material";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import { t } from "../common";
 
 // 1. Define the props, extending standard MUI TextField props for maximum flexibility
 interface FreeTextFieldProps extends Omit<TextFieldProps, "onChange"> {
@@ -26,6 +28,26 @@ export default function FreeTextField({ value, onChange, options, label, sx, ...
           label={label}
           // Catches raw manual typing
           onChange={(e) => onChange(e.target.value)}
+          slotProps={{
+            ...params.slotProps,
+            input: {
+              ...params.slotProps.input,
+              endAdornment: (
+                <>
+                  {params.slotProps.input.endAdornment}
+                  <InputAdornment position="end">
+                    <IconButton
+                      title={t("Copy")}
+                      disabled={!value}
+                      onClick={() => navigator.clipboard.writeText(`${value}`)}
+                    >
+                      <ContentCopyIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                </>
+              ),
+            },
+          }}
         />
       )}
     />

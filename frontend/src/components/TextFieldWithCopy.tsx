@@ -1,5 +1,6 @@
 import { type TextFieldProps, IconButton, InputAdornment, TextField } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import { t } from "../common";
 
 export default function TextFieldWithCopy({
   value,
@@ -13,7 +14,11 @@ export default function TextFieldWithCopy({
         input: {
           endAdornment: (
             <InputAdornment position="end">
-              <IconButton disabled={copyDisabled || !value} onClick={() => navigator.clipboard.writeText(`${value}`)}>
+              <IconButton
+                title={t("Copy")}
+                disabled={copyDisabled || !value}
+                onClick={() => navigator.clipboard.writeText(`${value}`)}
+              >
                 <ContentCopyIcon fontSize="small" />
               </IconButton>
             </InputAdornment>

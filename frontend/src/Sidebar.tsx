@@ -3646,6 +3646,8 @@ export default function Sidebar({
                   <br />
                   <b>Mouse Middle Click</b> {t("on a tab")} : {t("close it")}
                   <br />
+                  <b>Alt + Mouse Click</b> {t("in terminal")} : {t("Move cursor to mouse position")}
+                  <br />
                   <b>Alt + Mouse Wheel</b> {t("in terminal")} : {t("fast scroll up / down")}
                   <br />
                   <b>Shift + Mouse Click</b> {t("on a button in button bar")} : {t("edit it")};&nbsp;

@@ -426,7 +426,7 @@ export default function TerminalGrid({
               )}
             </Box>
             <Typography color="text.secondary" variant="body1" sx={{ maxWidth: 400, fontWeight: 500 }}>
-              {t("Select a server from the sidebar or open a new tab to start.")}
+              {t("Select a server from the sidebar (alt+i) or open a new tab (alt+o) to start.")}
             </Typography>
           </Box>
         )}

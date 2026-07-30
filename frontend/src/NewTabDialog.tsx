@@ -683,7 +683,9 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
               type: "builtin_button",
               value: id,
               label: btn.name,
-              subtitle: t("Built-in Button") + ` | ` + t("Type:") + " " + BUTTPN_TYPES[btn.type],
+              subtitle: `${t("Built-in Function")} | ${t("Type:")} ${
+                BUTTPN_TYPES[btn.type]
+              } | ${t("Payload:")} ${btn.payload}`,
               tooltip: undefined,
               btn: btn,
               tag: btn.shortcut ? shortcutLabel(btn.shortcut) : undefined,
@@ -971,7 +973,7 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
         type: "builtin_button",
         value: b.id,
         label: b.name,
-        subtitle: t("Built-in") + ` | ` + t("Type:") + ` ${BUTTPN_TYPES[b.type]} | ` + t("Payload:") + ` ${b.payload}`,
+        subtitle: `${t("Built-in Function")} | ${t("Type:")} ${BUTTPN_TYPES[b.type]} | ${t("Payload:")} ${b.payload}`,
         btn: b,
         tag: b.shortcut ? shortcutLabel(b.shortcut) : undefined,
       }));

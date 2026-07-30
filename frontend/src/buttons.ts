@@ -14,10 +14,12 @@ export const BUTTPN_TYPES: Record<ButtonData["type"], string> = {
 
 export const TERMINAL_FUNCTIONS = [
   { value: "COPY", label: t("COPY (Buffer)") },
+  { value: "COPY_FROM_LAST_CLEAR", label: t("COPY (From Last Clear)") },
   { value: "COPY_VISIBLE", label: t("COPY (Visible)") },
   { value: "COPY_SELECTION", label: t("COPY (Selection)"), shortcut: "ctrl+shift+c" },
   { value: "COPY_CWD", label: t("COPY (CWD)") },
   { value: "COPY_CURRENT_CMDLINE", label: t("COPY (Current Cmdline)") },
+  { value: "CLEAR_CURRENT_CMDLINE", label: t("Clear Current Cmdline") },
   { value: "COPY_LAST_COMMAND_OUTPUT", label: t("COPY (Last Cmd Output)") },
   { value: "PASTE", label: t("PASTE (Clipboard)"), shortcut: "ctrl+shift+v" },
   { value: "INPUT", label: t("INPUT (Prompt)"), shortcut: "alt+q" },

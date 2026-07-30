@@ -54,7 +54,26 @@ import {
   terminalClientSideParams,
   t,
 } from "./common";
-import { type PaneData, notify, getIntVar } from "./store";
+import { type PaneData, notify, getIntVar, getTerminalContents } from "./store";
+
+export type TerminalMarkers = {
+  /**
+   * Last command output start
+   */
+  $start?: IMarker;
+  /**
+   * Last command output end
+   */
+  $end?: IMarker;
+  /**
+   * Last position a clear screen (Ctrl + L) is sent
+   */
+  $lastClear?: IMarker;
+  /**
+   * Custom / dynamic markers
+   */
+  [key: string]: IMarker | undefined;
+};
 
 export interface TerminalHandle {
   sendData: (data: string | BufferSource | Blob) => void;
@@ -74,7 +93,13 @@ export interface TerminalHandle {
   clearSearchDecorations: () => void;
   clearSearchActiveDecoration: () => void;
   fit: () => void;
-  getLastCommandOutput: () => string;
+  /**
+   * Return registered xterm.js Terminal instance markers.
+   * It always returns the same object during the lifespan of the terminal.
+   * It's OK to manually register new marker (using xterm.js API) and add it to the returned object.
+   */
+  getMarkers: () => TerminalMarkers | null;
+  getBuffer: (start?: IMarker, end?: IMarker) => string;
   getXterm: () => Terminal | null;
   /** Set the inputMode on the hidden xterm textarea (e.g. 'none' to suppress system keyboard) */
   setInputMode: (mode: string) => void;
@@ -86,7 +111,6 @@ export interface TerminalHandle {
    * Only works while the shell is at an interactive prompt (not mid-execution).
    */
   replaceCmdLine: (newText: string) => void;
-  getBuffer: () => string;
   getAddon(): Record<string, ITerminalAddon>;
   getAddon(name: string): ITerminalAddon | undefined;
 }
@@ -147,7 +171,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
     const reconnectFuncRef = useRef<(() => void) | null>(null);
     const forceReconnectRef = useRef(false);
     const shellIntegrationRef = useRef<ShellIntegration>({});
-    const markersRef = useRef<{ start?: IMarker; end?: IMarker }>({});
+    const markersRef = useRef<TerminalMarkers>({});
 
     /**
      * Cursor position recorded at OSC 133;B (right after the prompt, where user
@@ -208,6 +232,24 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       }
     }, []);
 
+    const getBuffer = useCallback((start?: IMarker, end?: IMarker) => {
+      if (!xtermRef.current) {
+        return "";
+      }
+      if (!start && !end) {
+        const rawOutput = serializeAddonRef.current?.serialize() || "";
+        // 1. Strips OSC sequences: \x1b\] ... (\x07 or \x1b\\)
+        // 2. Strips CSI sequences (like [?2004h): \x1b\[ [\d;?]* [a-zA-Z]
+        const cleanText = rawOutput
+          // eslint-disable-next-line no-control-regex
+          .replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, "")
+          // eslint-disable-next-line no-control-regex
+          .replace(/\x1b\[[\d;?]*[a-zA-Z]/g, "");
+        return cleanText.trimEnd();
+      }
+      return getTerminalContents(xtermRef.current, start, end);
+    }, []);
+
     useImperativeHandle(ref, () => ({
       sendData: (data: string | BufferSource | Blob) => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -266,56 +308,14 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
         searchAddonRef.current?.clearActiveDecoration();
       },
       fit,
-      getLastCommandOutput: () => {
-        const { start, end } = markersRef.current;
-        const buffer = xtermRef.current?.buffer.active;
-
-        if (!buffer || !start || !end || start.isDisposed || end.isDisposed) {
-          console.warn("Cannot copy: markers are missing or have scrolled out of the buffer.");
-          return "";
-        }
-
-        const outputLines: string[] = [];
-
-        // Fix: The start marker is placed exactly where the output begins.
-        // The end marker is placed on the line where the new shell prompt is drawn.
-        const startLine = start.line;
-        const endLine = end.line - 1; // Exclude the new prompt line
-
-        for (let i = startLine; i <= endLine; i++) {
-          const line = buffer.getLine(i);
-          if (line) {
-            // translateToString(true) trims right-side whitespace from the line
-            outputLines.push(line.translateToString(true));
-          }
-        }
-
-        // Remove any trailing empty lines caused by the cursor resting on a new line
-        while (outputLines.length > 0 && outputLines[outputLines.length - 1] === "") {
-          outputLines.pop();
-        }
-
-        const textToCopy = outputLines.join("\n");
-
-        return textToCopy;
-      },
+      getMarkers: () => markersRef.current,
+      getBuffer,
       getXterm: () => xtermRef.current,
       setInputMode: (mode: string) => {
         const textarea = xtermRef.current?.textarea;
         if (textarea) {
           textarea.inputMode = mode;
         }
-      },
-      getBuffer: () => {
-        const rawOutput = serializeAddonRef.current?.serialize() || "";
-        // 1. Strips OSC sequences: \x1b\] ... (\x07 or \x1b\\)
-        // 2. Strips CSI sequences (like [?2004h): \x1b\[ [\d;?]* [a-zA-Z]
-        const cleanText = rawOutput
-          // eslint-disable-next-line no-control-regex
-          .replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, "")
-          // eslint-disable-next-line no-control-regex
-          .replace(/\x1b\[[\d;?]*[a-zA-Z]/g, "");
-        return cleanText;
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       getAddon: (name?: string): any => {
@@ -491,9 +491,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
               updates.command = info.cmd || "";
 
               // <-- Dispose old markers and set the start marker right before command runs
-              markersRef.current.start?.dispose();
-              markersRef.current.end?.dispose();
-              markersRef.current.start = term.registerMarker(0);
+              markersRef.current.$start?.dispose();
+              markersRef.current.$end?.dispose();
+              markersRef.current.$start = term.registerMarker(0);
 
               // Fallback: if no command string provided via OSC, try to read from buffer
               if (!updates.command) {
@@ -542,7 +542,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
               promptEndRef.current = null;
 
               // <-- Set the end marker right after the command finishes, before the new prompt
-              markersRef.current.end = term.registerMarker(0);
+              markersRef.current.$end = term.registerMarker(0);
 
               const exitStatus = info.status ? parseInt(info.status) : info.exit === "success" ? 0 : 1;
               const entry: CommandHistoryEntry = {
@@ -622,9 +622,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
             updateShellIntegration({ promptPhase: "input" });
           } else if (type === "C") {
             // Output starting — command is now running
-            markersRef.current.start?.dispose();
-            markersRef.current.end?.dispose();
-            markersRef.current.start = term.registerMarker(0);
+            markersRef.current.$start?.dispose();
+            markersRef.current.$end?.dispose();
+            markersRef.current.$start = term.registerMarker(0);
             promptEndRef.current = null;
             updateShellIntegration({ promptPhase: "output", isExecuting: true, currentCmdLine: undefined });
           } else if (type === "D") {
@@ -632,7 +632,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
             const exitCodeStr = parts[1];
             const exitStatus = exitCodeStr !== undefined && exitCodeStr !== "" ? parseInt(exitCodeStr, 10) : undefined;
 
-            markersRef.current.end = term.registerMarker(0);
+            markersRef.current.$end = term.registerMarker(0);
 
             const updates: Partial<ShellIntegration> = {
               promptPhase: "finished",
@@ -706,10 +706,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
             updateShellIntegration({ promptPhase: "input" });
           } else if (subCmd === "C") {
             // Output starting - command is now running and producing output
-            // Place the start marker here so getLastCommandOutput() captures from this point
-            markersRef.current.start?.dispose();
-            markersRef.current.end?.dispose();
-            markersRef.current.start = term.registerMarker(0);
+            markersRef.current.$start?.dispose();
+            markersRef.current.$end?.dispose();
+            markersRef.current.$start = term.registerMarker(0);
             promptEndRef.current = null;
             updateShellIntegration({ promptPhase: "output", isExecuting: true, currentCmdLine: undefined });
           } else if (subCmd === "D") {
@@ -718,7 +717,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
             const exitStatus = exitCodeStr !== undefined && exitCodeStr !== "" ? parseInt(exitCodeStr, 10) : undefined;
 
             // Place end marker right here before the new prompt renders
-            markersRef.current.end = term.registerMarker(0);
+            markersRef.current.$end = term.registerMarker(0);
 
             const updates: Partial<ShellIntegration> = {
               promptPhase: "finished",
@@ -877,6 +876,8 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
           } else if (kcomb === "ctrl+shift+l" || kcomb === "ctrl+alt+l") {
             // we support both ctrl+shift+l & ctrl+alt+l because some browser extension (aka. Bitwarden) uses former
             term.clear();
+            markersRef.current.$lastClear?.dispose();
+            markersRef.current.$lastClear = term.registerMarker(0);
             return false;
           }
         }
@@ -913,6 +914,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       let isRestoringHistory = false;
       let deathType: "fatal" | "stolen" | null = null;
       let reconnectTimer: ReturnType<typeof setTimeout>;
+      // Set to true by the Ctrl+L key handler; consumed by onWriteParsed once the
+      // PTY's clear response has been fully parsed into the xterm buffer.
+      let pendingClearMarker = false;
 
       const connectWS = async () => {
         if (wsRef.current) {
@@ -1158,6 +1162,10 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       setTimeout(connectWS, 50);
 
       term.onData((data) => {
+        if (data === "\x0c") {
+          // \x0c is the ASCII Form Feed sent by Ctrl + L
+          pendingClearMarker = true;
+        }
         if (isRestoringHistory) {
           return;
         }
@@ -1282,6 +1290,16 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       };
 
       term.onWriteParsed(() => {
+        // Consume a pending Ctrl+L clear-marker request. We defer registration to
+        // here because Ctrl+L sends \x0c to the PTY asynchronously; by the time
+        // this callback fires the clear sequences have been fully applied to the
+        // buffer so registerMarker(0) correctly anchors to the new top of content.
+        if (pendingClearMarker) {
+          pendingClearMarker = false;
+          markersRef.current.$lastClear?.dispose();
+          markersRef.current.$lastClear = term.registerMarker(0);
+        }
+
         const phase = shellIntegrationRef.current.promptPhase;
         if (phase !== "prompt" && phase !== "input") {
           return;
@@ -1366,9 +1384,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
         }
 
         // <-- Dispose of markers
-        markersRef.current.start?.dispose();
+        markersRef.current.$start?.dispose();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        markersRef.current.end?.dispose();
+        markersRef.current.$end?.dispose();
 
         // Explicitly kill the WebGL addon first
         if (webglAddon) {

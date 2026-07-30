@@ -13,7 +13,7 @@ import {
   MenuItem,
 } from "@mui/material";
 import { notify, setAsyncDialogOpen, triggerFocus, useStore } from "./store";
-import { getKeyCombination, isMuiModalOpen, t } from "./common";
+import { getKeyCombination, getActiveMuiModal, t } from "./common";
 import { TOAST_KEY_COPY } from "./constants";
 
 export interface DialogApi {
@@ -108,7 +108,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
     // Backdrop click / ESC press or explicitly passing cancel states
     if (outcome === false || outcome === null) {
       setAsyncDialogOpen(false);
-      if (!isMuiModalOpen()) {
+      if (!getActiveMuiModal()) {
         triggerFocus();
       }
       resolveRef.current(config.type === "prompt" || config.type === "choose" ? null : false);
@@ -133,7 +133,7 @@ export const AsyncDialogProvider = ({ children }: { children: ReactNode }) => {
     }
 
     setAsyncDialogOpen(false);
-    if (!isMuiModalOpen()) {
+    if (!getActiveMuiModal()) {
       triggerFocus();
     }
     if (config.type === "prompt") {

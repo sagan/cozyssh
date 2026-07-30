@@ -138,6 +138,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, [applets]);
   useEffect(() => {
     window.__CS_IS_MOBILE__ = isMobile;
+    document.documentElement.dataset.csIsMobile = isMobile ? "1" : "0";
   }, [isMobile]);
 
   const handleTouchStart = useCallback(

@@ -51,7 +51,7 @@ import {
   getTemplateVariables,
   hostTitle,
   hostSorter,
-  isMuiModalOpen,
+  getActiveMuiModal,
   nextTerminalFontSize,
   openBackgroundTerminal,
   parseHostName,
@@ -115,6 +115,7 @@ import {
 } from "./constants";
 import { dialogs } from "./Dialogs";
 import type { MISC_FUNCTIONS, TERMINAL_FUNCTIONS } from "./buttons";
+import type { IMarker, Terminal } from "@xterm/xterm";
 
 export interface PaneData {
   id: string;
@@ -1109,7 +1110,7 @@ window.addEventListener("storage", (e) => {
 window.addEventListener("visibilitychange", () => {
   if (
     document.visibilityState === "visible" &&
-    !isMuiModalOpen() &&
+    !getActiveMuiModal() &&
     (!document.activeElement || !["INPUT", "TEXTAREA"].includes(document.activeElement.tagName))
   ) {
     triggerFocus();
@@ -3007,13 +3008,17 @@ export async function runButton(
       switch (payload) {
         case "COPY": {
           const text = term.getBuffer();
-          if (text) {
-            navigator.clipboard.writeText(text);
-          }
+          navigator.clipboard.writeText(text);
           term.focus();
           break;
         }
-
+        case "COPY_FROM_LAST_CLEAR": {
+          const markers = term.getMarkers();
+          const text = term.getBuffer(markers?.$lastClear);
+          navigator.clipboard.writeText(text);
+          term.focus();
+          break;
+        }
         case "COPY_VISIBLE": {
           const xterm = term.getXterm();
           if (!xterm) {
@@ -3030,45 +3035,42 @@ export async function runButton(
             }
           }
           text = text.trim();
-          if (text) {
-            navigator.clipboard.writeText(text);
-          }
+          navigator.clipboard.writeText(text);
           term.focus();
           break;
         }
 
         case "COPY_SELECTION": {
           const text = term.getSelection();
-          if (text) {
-            navigator.clipboard.writeText(text);
-          }
+          navigator.clipboard.writeText(text);
           term.focus();
           break;
         }
 
         case "COPY_CWD": {
           const shellIntegration = getStore().shellIntegrations[getStore().activePaneId];
-          if (shellIntegration?.cwd) {
-            navigator.clipboard.writeText(shellIntegration.cwd);
-          }
+          navigator.clipboard.writeText(shellIntegration.cwd || "");
           term.focus();
           break;
         }
 
         case "COPY_CURRENT_CMDLINE": {
           const shellIntegration = getStore().shellIntegrations[getStore().activePaneId];
-          if (shellIntegration?.currentCmdLine) {
-            navigator.clipboard.writeText(shellIntegration.currentCmdLine);
-          }
+          navigator.clipboard.writeText(shellIntegration.currentCmdLine || "");
+          term.focus();
+          break;
+        }
+
+        case "CLEAR_CURRENT_CMDLINE": {
+          term.replaceCmdLine("");
           term.focus();
           break;
         }
 
         case "COPY_LAST_COMMAND_OUTPUT": {
-          const text = term.getLastCommandOutput();
-          if (text) {
-            navigator.clipboard.writeText(text);
-          }
+          const markers = term.getMarkers();
+          const text = term.getBuffer(markers?.$start, markers?.$end);
+          navigator.clipboard.writeText(text);
           term.focus();
           break;
         }
@@ -3375,4 +3377,37 @@ export function handleReconnectTab(id: string) {
       term.reconnect();
     }
   });
+}
+
+export function getTerminalContents(
+  terminal: Terminal,
+  startMarker?: IMarker | null,
+  endMarker?: IMarker | null,
+): string {
+  const buffer = terminal.buffer.active;
+
+  // Resolve start line: use marker line if valid, otherwise default to 0
+  const startLine = startMarker && !startMarker.isDisposed && startMarker.line !== -1 ? startMarker.line : 0;
+
+  // Resolve end line: use marker line if valid, otherwise default to buffer length
+  const endLine = endMarker && !endMarker.isDisposed && endMarker.line !== -1 ? endMarker.line : buffer.length;
+
+  // Safeguard against inverted markers or out-of-bounds indices
+  if (startLine >= endLine) {
+    return "";
+  }
+
+  const content = [];
+  for (let i = startLine; i < endLine; i++) {
+    const line = buffer.getLine(i);
+    if (line) {
+      content.push(line.translateToString(true));
+    }
+  }
+  // Remove any trailing empty lines caused by the cursor resting on a new line
+  while (content.length > 0 && content[content.length - 1] === "") {
+    content.pop();
+  }
+
+  return content.join("\n");
 }

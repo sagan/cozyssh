@@ -2136,6 +2136,24 @@ export interface ISearchDecorationOptions {
 	 */
 	activeMatchColorOverviewRuler: string;
 }
+export type TerminalMarkers = {
+	/**
+	 * Last command output start
+	 */
+	$start?: IMarker;
+	/**
+	 * Last command output end
+	 */
+	$end?: IMarker;
+	/**
+	 * Last position a clear screen (Ctrl + L) is sent
+	 */
+	$lastClear?: IMarker;
+	/**
+	 * Custom / dynamic markers
+	 */
+	[key: string]: IMarker | undefined;
+};
 export interface TerminalHandle {
 	sendData: (data: string | BufferSource | Blob) => void;
 	focus: () => void;
@@ -2154,7 +2172,13 @@ export interface TerminalHandle {
 	clearSearchDecorations: () => void;
 	clearSearchActiveDecoration: () => void;
 	fit: () => void;
-	getLastCommandOutput: () => string;
+	/**
+	 * Return registered xterm.js Terminal instance markers.
+	 * It always returns the same object during the lifespan of the terminal.
+	 * It's OK to manually register new marker (using xterm.js API) and add it to the returned object.
+	 */
+	getMarkers: () => TerminalMarkers | null;
+	getBuffer: (start?: IMarker, end?: IMarker) => string;
 	getXterm: () => Terminal | null;
 	/** Set the inputMode on the hidden xterm textarea (e.g. 'none' to suppress system keyboard) */
 	setInputMode: (mode: string) => void;
@@ -2166,7 +2190,6 @@ export interface TerminalHandle {
 	 * Only works while the shell is at an interactive prompt (not mid-execution).
 	 */
 	replaceCmdLine: (newText: string) => void;
-	getBuffer: () => string;
 	getAddon(): Record<string, ITerminalAddon>;
 	getAddon(name: string): ITerminalAddon | undefined;
 }

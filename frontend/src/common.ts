@@ -842,11 +842,15 @@ export function nextTerminalFontSize(fontSize: number): number {
 }
 
 /**
- * Return true if there is any MUI modal open.
+ * Return the MUI modal currently displayed.
  * @param countDialog If true, count async alert / confirm / prompt dialogs as MUI modal.
  */
-export function isMuiModalOpen(countDialog = false): boolean {
-  return !!document.querySelector(countDialog ? ".MuiModal-root" : ".MuiModal-root:not(#async-modal-dialog)");
+export function getActiveMuiModal(countDialog = false): Element | null {
+  return document.querySelector(
+    countDialog
+      ? ".MuiModal-root:not(.MuiModal-hidden)"
+      : ".MuiModal-root:not(#async-modal-dialog):not(.MuiModal-hidden)",
+  );
 }
 
 /**
