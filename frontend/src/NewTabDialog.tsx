@@ -52,6 +52,7 @@ import {
   PartialMatchHostKey,
   METHOD_POST,
   TAG_FLAG_PREFIX,
+  SETTINGS_TAB_IDX_SHORTCUTS,
 } from "./constants";
 import {
   AltModeKey,
@@ -116,6 +117,8 @@ import {
   openHost,
   openAddHostDialog,
   closeNewTabDialog,
+  setSettingsOpen,
+  setSettingsTab,
 } from "./store";
 import TextFieldWithCopy from "./components/TextFieldWithCopy";
 import ExtraMenu from "./components/ExtraMenu";
@@ -198,6 +201,16 @@ const helpOptions: NtdItemHelp[] = [
 export type _checkModes = Expect<Equal<(typeof modes)[number]["type"], ViewMode>>;
 
 const helpLinks: (NtdItemLink | NtdItemAction)[] = [
+  {
+    type: "action",
+    value: "view_shortcuts",
+    label: t("Shortcuts Reference"),
+    subtitle: t("CozySSH keyboard shortcuts reference"),
+    action: () => {
+      setSettingsTab(SETTINGS_TAB_IDX_SHORTCUTS);
+      setSettingsOpen(true);
+    },
+  },
   {
     type: "link",
     value: LINK_COZYSSH_DOC_SCRIPTS,

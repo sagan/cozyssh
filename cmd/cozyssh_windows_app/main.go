@@ -20,6 +20,7 @@ import (
 	"unsafe"
 
 	"github.com/gogpu/systray"
+	"github.com/gonutz/w32/v2"
 	webview2 "github.com/jchv/go-webview2"
 	"golang.org/x/sys/windows"
 
@@ -351,6 +352,7 @@ func main() {
 
 	// 4. Directly hook system tray interface and window interceptions on the main loop thread
 	setupSystemTrayAndHook(w, hwnd, cfg)
+	setupWindowMenu(hwnd)
 
 	// Inject app bindings into the main window context
 	bindAppFunctions(w, hwnd, cfg)
@@ -492,6 +494,8 @@ func bindAppFunctions(w webview2.WebView, hwnd uintptr, cfg *config.Config) {
 
 			subHwnd := uintptr(subW.Window())
 
+			setupWindowMenu(subHwnd)
+
 			// Recursively bind app methods to the newly spawned window instance
 			bindAppFunctions(subW, subHwnd, cfg)
 
@@ -608,4 +612,91 @@ func activateWindow(hwnd uintptr) {
 		procShowWindow.Call(hwnd, uintptr(swShow))
 	}
 	procSetForegroundWindow.Call(hwnd)
+}
+
+var originalWindows = map[uintptr]uintptr{}
+
+const ID_MENU_ALWAYS_ON_TOP = 0x10
+const ID_MENU_TRANSPARENT_0 = 0x20
+const ID_MENU_TRANSPARENT_10 = 0x30
+const ID_MENU_TRANSPARENT_20 = 0x40
+const ID_MENU_TRANSPARENT_30 = 0x50
+const ID_MENU_TRANSPARENT_50 = 0x60
+const ID_MENU_TRANSPARENT_80 = 0x70
+
+var newWndProc = syscall.NewCallback(customWndProc)
+
+func setupWindowMenu(hwnd uintptr) {
+	menu := w32.GetSystemMenu(w32.HWND(hwnd), false)
+	if menu == 0 {
+		return
+	}
+	w32.AppendMenu(menu, w32.MF_STRING|w32.MF_UNCHECKED, ID_MENU_ALWAYS_ON_TOP, t("Always on Top"))
+	w32.AppendMenu(menu, w32.MF_STRING|w32.MF_CHECKED, ID_MENU_TRANSPARENT_0, t("Non-Transparent"))
+	w32.AppendMenu(menu, w32.MF_STRING|w32.MF_UNCHECKED, ID_MENU_TRANSPARENT_10, t("10% Transparent"))
+	w32.AppendMenu(menu, w32.MF_STRING|w32.MF_UNCHECKED, ID_MENU_TRANSPARENT_20, t("20% Transparent"))
+	w32.AppendMenu(menu, w32.MF_STRING|w32.MF_UNCHECKED, ID_MENU_TRANSPARENT_30, t("30% Transparent"))
+	w32.AppendMenu(menu, w32.MF_STRING|w32.MF_UNCHECKED, ID_MENU_TRANSPARENT_50, t("50% Transparent"))
+	w32.AppendMenu(menu, w32.MF_STRING|w32.MF_UNCHECKED, ID_MENU_TRANSPARENT_80, t("80% Transparent"))
+
+	// 4. Hook the window using SetWindowLongPtr and GWLP_WNDPROC (-4).
+	// This intercepts events before they hit go-webview2's internal handler.
+	originalWindows[hwnd] = w32.SetWindowLongPtr(w32.HWND(hwnd), w32.GWLP_WNDPROC, newWndProc)
+}
+
+// 6. Our custom window procedure (event handler)
+func customWndProc(hwnd w32.HWND, msg uint32, wParam, lParam uintptr) uintptr {
+	switch msg {
+	case w32.WM_DESTROY:
+		delete(originalWindows, uintptr(hwnd))
+	case w32.WM_SYSCOMMAND:
+		// Mask out the lower 4 bits used internally by the Windows OS
+		cmd := wParam & 0xFFF0
+		switch cmd {
+		case ID_MENU_ALWAYS_ON_TOP:
+			{
+				menu := w32.GetSystemMenu(hwnd, false)
+				exStyle := w32.GetWindowLongPtr(w32.HWND(hwnd), w32.GWL_EXSTYLE)
+				isTop := (exStyle & w32.WS_EX_TOPMOST) != 0
+				if isTop {
+					w32.SetWindowPos(hwnd, w32.HWND_NOTOPMOST, 0, 0, 0, 0, w32.SWP_NOMOVE|w32.SWP_NOSIZE)
+					w32.CheckMenuItem(menu, ID_MENU_ALWAYS_ON_TOP, w32.MF_BYCOMMAND|w32.MF_UNCHECKED)
+				} else {
+					w32.SetWindowPos(hwnd, w32.HWND_TOPMOST, 0, 0, 0, 0, w32.SWP_NOMOVE|w32.SWP_NOSIZE)
+					w32.CheckMenuItem(menu, ID_MENU_ALWAYS_ON_TOP, w32.MF_BYCOMMAND|w32.MF_CHECKED)
+				}
+			}
+		case ID_MENU_TRANSPARENT_0, ID_MENU_TRANSPARENT_10, ID_MENU_TRANSPARENT_20, ID_MENU_TRANSPARENT_30,
+			ID_MENU_TRANSPARENT_50, ID_MENU_TRANSPARENT_80:
+			{
+				menu := w32.GetSystemMenu(hwnd, false)
+				exStyle := w32.GetWindowLongPtr(w32.HWND(hwnd), w32.GWL_EXSTYLE)
+
+				alpha := uint8(255) // opatic (non-transparent)
+				switch cmd {
+				case ID_MENU_TRANSPARENT_10:
+					alpha = 230 // 255*0.9
+				case ID_MENU_TRANSPARENT_20:
+					alpha = 204 // 255*0.8
+				case ID_MENU_TRANSPARENT_30:
+					alpha = 179 // 255*0.7
+				case ID_MENU_TRANSPARENT_50:
+					alpha = 128 // 255*0.5
+				case ID_MENU_TRANSPARENT_80:
+					alpha = 77 // 255*0.3
+				}
+				if alpha == 255 {
+					w32.SetWindowLongPtr(hwnd, w32.GWL_EXSTYLE, exStyle & ^uintptr(w32.WS_EX_LAYERED))
+				} else {
+					w32.SetWindowLongPtr(hwnd, w32.GWL_EXSTYLE, exStyle|w32.WS_EX_LAYERED)
+					w32.SetLayeredWindowAttributes(hwnd, 0, alpha, w32.LWA_ALPHA)
+				}
+				w32.CheckMenuRadioItem(menu, ID_MENU_TRANSPARENT_0, ID_MENU_TRANSPARENT_80, uint(cmd), w32.MF_BYCOMMAND)
+			}
+		}
+	}
+
+	// CRITICAL: Always pass the message down to the original window procedure.
+	// If you forget this, the WebView will freeze, stop rendering, or refuse to close.
+	return w32.CallWindowProc(originalWindows[uintptr(hwnd)], hwnd, msg, wParam, lParam)
 }

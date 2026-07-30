@@ -440,6 +440,7 @@ export default function DialogManager({
   const handleSaveButton = useCallback(async () => {
     const { editButton, buttonFormData } = getStore();
     const editId = editButton?.id;
+
     const newBtn = await saveButton(buttonFormData, editId);
     setInitialBtnFormData(null);
     setEditButtonDialogOpen(false);
@@ -1379,7 +1380,7 @@ export default function DialogManager({
                 {t(
                   `Whether to inject shell integration script to the new session: ""(empty string, default) = auto; 0 = disable (don't inject); 1 = enable (inject unless it's detected that the injection may not work); 2 = force enable (always inject).`,
                 )}
-                <br />- <b>proxyJump</b> : {t("Proxy jump server.")}
+                <br />- <b>proxyJump</b> : {t("Proxy jump server.")} {t("E.g.")} <code>server-foo,server-bar</code>
                 <br />- <b>target</b> :&nbsp;
                 {t(
                   "The tab id. If the same id tab exists, the new terminal will be opened in the target tab, use `_self` for current tab.",
@@ -1389,7 +1390,9 @@ export default function DialogManager({
                   "Only valid for `local` host. If set to `1`, it treats `remoteCommand` as a single program with args and execute it directly instead of executing it using system shell.",
                 )}
                 <br />- <b>localForward</b> & <b>remoteForward</b> & <b>dynamicForward</b> :&nbsp;
-                {t("OpenSSH syntax SSH tunnel rules. Use \\n to seperate multiple rules.")}
+                {t("OpenSSH syntax SSH tunnel rules. Use \\n to seperate multiple rules.")} {t("E.g.")}&nbsp;
+                <code>8080 localhost:80</code> (localForward / remoteForward); <code>1080</code> {t("or")}&nbsp;
+                <code>127.0.0.1:1080</code> (dynamicForward)
                 <br />- <b>env</b> :&nbsp;
                 {t(
                   "Environment variables to send to SSH server. Format: `NAME=value`. Use \\n to seperate multiple variables.",
@@ -1403,6 +1406,8 @@ export default function DialogManager({
                 <br />- <b>terminalClass</b> : {t("The class name to add to the terminal wrap element.")}
                 <br />
                 {t("It's possible to set multiple (up to 4) comma-separated servers to open them in split screen.")}
+                &nbsp;
+                {t("If a parameter value contains special chars (e.g. `?&,\\n`) it must be URL encoded.")}
                 <br />
                 {t("E.g.")} <b>local?title=Local</b>. {t("More examples:")}
                 <br />- <b>local?id=local-abc&title=Local&remoteCommand=tmux attach || tmux new</b>

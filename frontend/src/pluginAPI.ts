@@ -98,6 +98,7 @@ window.__CS_ENV__ = window.appToggleFullscreen ? 1 : 0;
 window.__CS_LANG__ = import.meta.env.VITE_APP_LANG || "en";
 document.documentElement.dataset.csEnv = `${__CS_ENV__}`;
 document.documentElement.dataset.csVersion = PACKAGE_JSON_VERSION;
+document.documentElement.dataset.csIsMobile = "";
 document.documentElement.dataset.csAutorunDone = "";
 
 if (__CS_ENV__ === 1) {

@@ -374,7 +374,7 @@ export default function TerminalGrid({
             }}
           >
             <Box sx={{ display: "flex", justifyContent: "center", gap: 3, mb: 4 }}>
-              <Tooltip title={t("Open Sidebar")}>
+              <Tooltip title={t("Open Sidebar") + " (Alt+I)"}>
                 <IconButton
                   onClick={() => setMobileOpen(true)}
                   sx={{

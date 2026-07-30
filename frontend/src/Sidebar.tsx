@@ -1684,6 +1684,18 @@ export default function Sidebar({
       return;
     }
 
+    if (
+      !editHostName &&
+      getStore().hosts.find((h) => (h.name || h.hostname) === (payload.name || payload.hostname)) &&
+      !(await dialogs.confirm(
+        t(
+          "The same name host already exists. If you continue the new added host will override the existing one. Are you sure?",
+        ) + ` (${payload.name || payload.hostname})`,
+      ))
+    ) {
+      return;
+    }
+
     const res = await fetch("/api/hosts" + (editHostName ? "/" + editHostName : ""), {
       method: METHOD_POST,
       headers: apiReqHeaders(),

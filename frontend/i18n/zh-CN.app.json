@@ -1,6 +1,13 @@
 {
   "$LANG": "zh-CN",
+  "Always on Top": "总在最前",
   "Check Update": "检查更新",
+  "Non-Transparent": "不透明",
+  "10% Transparent": "10% 透明",
+  "20% Transparent": "20% 透明",
+  "30% Transparent": "30% 透明",
+  "50% Transparent": "50% 透明",
+  "80% Transparent": "80% 透明",
   "Open": "打开",
   "Open App.exe Dir": "打开 App.exe 文件夹",
   "Open Data Dir": "打开数据文件夹",
