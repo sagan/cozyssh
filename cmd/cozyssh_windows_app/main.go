@@ -478,6 +478,7 @@ func bindAppFunctions(w webview2.WebView, hwnd uintptr, cfg *config.Config) {
 
 			width, height, maximized, _ := GetWindowSize(cfg)
 			subW := webview2.NewWithOptions(webview2.WebViewOptions{
+				Debug:     true,
 				AutoFocus: true,
 				DataPath:  filepath.Join(cfg.ConfigDir, constants.WEBVIEW2_DATA_DIR),
 				WindowOptions: webview2.WindowOptions{

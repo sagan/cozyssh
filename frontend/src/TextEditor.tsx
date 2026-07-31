@@ -118,15 +118,33 @@ export default function TextEditor({ fileName, initialContent, onSave, onClose, 
           </Typography>
           <Button
             variant="contained"
+            color="secondary"
+            size="small"
+            sx={{ mr: 1 }}
+            onClick={() => navigator.clipboard.writeText(fileName)}
+          >
+            {t("Copy Path")}
+          </Button>
+          <Button
+            variant="contained"
+            color="secondary"
+            size="small"
+            sx={{ mr: 1 }}
+            onClick={() => navigator.clipboard.writeText(content)}
+          >
+            {t("Copy")}
+          </Button>
+          <Button
+            variant="contained"
             color="primary"
             size="small"
-            sx={{ mr: 2 }}
+            sx={{ mr: 1 }}
             onClick={() => onSave(content)}
             disabled={!hasChanged || isSaving}
           >
             {isSaving ? t("Saving...") : t("Save")}
           </Button>
-          <IconButton edge="end" color="inherit" onClick={handleClose}>
+          <IconButton title={t("Close")} edge="end" color="inherit" onClick={handleClose}>
             <CloseIcon />
           </IconButton>
         </Toolbar>

@@ -1,8 +1,11 @@
 package fsapi
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -28,11 +31,12 @@ func HandleDownloadDirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sessionID := r.URL.Query().Get("id")
-	path := r.URL.Query().Get("path")
+	reqPath := r.URL.Query().Get("path")
 	expiresStr := r.URL.Query().Get("expires")
 	sig := r.URL.Query().Get("sig")
+	isArchive := r.URL.Query().Get("archive") == "1"
 
-	if !auth.VerifyDownloadToken(sessionID, path, expiresStr, sig) {
+	if !auth.VerifyDownloadToken(sessionID, reqPath, expiresStr, sig) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -44,6 +48,11 @@ func HandleDownloadDirect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	isLocal := (s.Host == constants.LOCAL_NAME)
+	if isArchive {
+		handleDownloadArchive(w, reqPath, isLocal, s)
+		return
+	}
+
 	var sftpClient *sftp.Client
 	if !isLocal {
 		if s.SSHClient == nil {
@@ -59,7 +68,7 @@ func HandleDownloadDirect(w http.ResponseWriter, r *http.Request) {
 		defer sftpClient.Close()
 	}
 
-	handleDownload(w, path, isLocal, sftpClient)
+	handleDownload(w, reqPath, isLocal, sftpClient)
 }
 
 func HandleFS(w http.ResponseWriter, r *http.Request) {
@@ -259,6 +268,23 @@ func sftpRemoveAll(c *sftp.Client, path string) error {
 	return c.RemoveDirectory(path)
 }
 
+func sftpMkdirAll(c *sftp.Client, dirPath string) error {
+	dirPath = path.Clean(dirPath)
+	if dirPath == "." || dirPath == "/" || dirPath == "" {
+		return nil
+	}
+	if stat, err := c.Stat(dirPath); err == nil && stat.IsDir() {
+		return nil
+	}
+	parent := path.Dir(dirPath)
+	if parent != "." && parent != "/" && parent != dirPath {
+		if err := sftpMkdirAll(c, parent); err != nil {
+			return err
+		}
+	}
+	return c.Mkdir(dirPath)
+}
+
 func handleMkdir(w http.ResponseWriter, r *http.Request, parentPath string, isLocal bool, sftpClient *sftp.Client) {
 	var req models.FileMkdirRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -280,7 +306,7 @@ func handleMkdir(w http.ResponseWriter, r *http.Request, parentPath string, isLo
 			return
 		}
 	} else {
-		if err := sftpClient.Mkdir(newPath); err != nil {
+		if err := sftpMkdirAll(sftpClient, newPath); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -399,6 +425,119 @@ func handleDownload(w http.ResponseWriter, path string, isLocal bool, sftpClient
 	}
 }
 
+func quoteShellArg(arg string) string {
+	return "'" + strings.ReplaceAll(arg, "'", "'\\''") + "'"
+}
+
+func archiveLocalFolder(w io.Writer, srcDir string) error {
+	gw := gzip.NewWriter(w)
+	defer gw.Close()
+	tw := tar.NewWriter(gw)
+	defer tw.Close()
+
+	baseDir := filepath.Base(srcDir)
+
+	return filepath.Walk(srcDir, func(file string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(srcDir, file)
+		if err != nil {
+			return err
+		}
+		var headerName string
+		if rel == "." {
+			headerName = baseDir
+		} else {
+			headerName = filepath.Join(baseDir, rel)
+		}
+		headerName = filepath.ToSlash(headerName)
+
+		link := ""
+		if info.Mode()&os.ModeSymlink != 0 {
+			if target, err := os.Readlink(file); err == nil {
+				link = target
+			}
+		}
+
+		header, err := tar.FileInfoHeader(info, link)
+		if err != nil {
+			return err
+		}
+		header.Name = headerName
+
+		if err := tw.WriteHeader(header); err != nil {
+			return err
+		}
+
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+
+		f, err := os.Open(file)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+
+		_, err = io.Copy(tw, f)
+		return err
+	})
+}
+
+func handleDownloadArchive(w http.ResponseWriter, reqPath string, isLocal bool, s *session.Session) {
+	if reqPath == "" {
+		http.Error(w, "Missing path", http.StatusBadRequest)
+		return
+	}
+
+	cleanPath := strings.TrimRight(reqPath, "/\\")
+	folderName := path.Base(cleanPath)
+	if isLocal {
+		folderName = filepath.Base(cleanPath)
+	}
+	if folderName == "" || folderName == "." || folderName == "/" || folderName == "\\" {
+		folderName = "archive"
+	}
+	fileName := folderName + ".tar.gz"
+
+	w.Header().Set(headers.ContentDisposition, constants.HEADER_CONTENT_DISPOSITION_PREFIX+url.PathEscape(fileName))
+	w.Header().Set(headers.ContentType, constants.MIME_BINARY)
+
+	if isLocal {
+		if reqPath == "." || reqPath == "~" {
+			home, _ := os.UserHomeDir()
+			reqPath = home
+		}
+		if err := archiveLocalFolder(w, reqPath); err != nil {
+			log.Printf("archiveLocalFolder error: %v", err)
+		}
+	} else {
+		if s.SSHClient == nil {
+			http.Error(w, "Not connected to SSH", http.StatusServiceUnavailable)
+			return
+		}
+		sshSession, err := s.SSHClient.Client.NewSession()
+		if err != nil {
+			http.Error(w, "Failed to create SSH session: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer sshSession.Close()
+
+		parentDir := path.Dir(cleanPath)
+		baseName := path.Base(cleanPath)
+		if parentDir == "" || parentDir == "." {
+			parentDir = "."
+		}
+
+		sshSession.Stdout = w
+		cmd := "tar -czf - -C " + quoteShellArg(parentDir) + " " + quoteShellArg(baseName)
+		if err := sshSession.Run(cmd); err != nil {
+			log.Printf("ssh tar download error: %v", err)
+		}
+	}
+}
+
 func handleUpload(w http.ResponseWriter, r *http.Request, destPath string, isLocal bool, sftpClient *sftp.Client) {
 	if destPath == "" {
 		http.Error(w, "Missing path", http.StatusBadRequest)
@@ -429,6 +568,10 @@ func handleUpload(w http.ResponseWriter, r *http.Request, destPath string, isLoc
 			http.Error(w, "Invalid filename", http.StatusBadRequest)
 			return
 		}
+		if err := os.MkdirAll(destPath, 0755); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		fullPath := filepath.Join(destPath, safeName)
 
 		f, err := os.Create(fullPath)
@@ -447,6 +590,10 @@ func handleUpload(w http.ResponseWriter, r *http.Request, destPath string, isLoc
 		safeName := path.Base(header.Filename)
 		if safeName == "" || safeName == "." || safeName == ".." {
 			http.Error(w, "Invalid filename", http.StatusBadRequest)
+			return
+		}
+		if err := sftpMkdirAll(sftpClient, destPath); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		fullPath := path.Join(destPath, safeName)
