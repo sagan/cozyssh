@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import { createTheme, CssBaseline, ThemeProvider } from "@mui/material";
 
 import type { FullData, PreflightResponse } from "./api";
 import { BROWSER_STORAGE_KEY_TOKEN } from "./constants";
+import { defaultThemeOptions, loginTheme } from "./common";
 import Login from "./Login";
 import Dashboard from "./Dashboard";
 import InsecureWarning from "./InsecureWarning";
@@ -13,6 +15,7 @@ function App() {
   const [securityCheck, setSecurityCheck] = useState<PreflightResponse | undefined>(undefined);
   const [hasAuth, setHasAuth] = useState(!!localStorage.getItem(BROWSER_STORAGE_KEY_TOKEN));
   const [fullData, setFullData] = useState<FullData | undefined>(undefined);
+  const [muiTheme, setMuiTheme] = useState(() => createTheme(defaultThemeOptions({ fontSize: __CS_FONT_SIZE__ })));
 
   useEffect(() => {
     if (!window.isSecureContext) {
@@ -35,19 +38,27 @@ function App() {
   };
 
   return (
-    <AsyncDialogProvider>
-      <DynamicMenuProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route
-              path="/login"
-              element={!hasAuth ? <Login onLoginSuccess={handleLoginSuccess} /> : <Navigate to="/" />}
-            />
-            <Route path="/" element={hasAuth ? <Dashboard initialData={fullData} /> : <Navigate to="/login" />} />
-          </Routes>
-        </BrowserRouter>
-      </DynamicMenuProvider>
-    </AsyncDialogProvider>
+    <ThemeProvider theme={hasAuth ? muiTheme : loginTheme}>
+      <CssBaseline />
+      <AsyncDialogProvider>
+        <DynamicMenuProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route
+                path="/login"
+                element={!hasAuth ? <Login onLoginSuccess={handleLoginSuccess} /> : <Navigate to="/" />}
+              />
+              <Route
+                path="/"
+                element={
+                  hasAuth ? <Dashboard initialData={fullData} setMuiTheme={setMuiTheme} /> : <Navigate to="/login" />
+                }
+              />
+            </Routes>
+          </BrowserRouter>
+        </DynamicMenuProvider>
+      </AsyncDialogProvider>
+    </ThemeProvider>
   );
 }
 

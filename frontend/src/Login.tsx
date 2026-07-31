@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Box, Button, TextField, Typography, Paper, ThemeProvider, CssBaseline } from "@mui/material";
+import { Box, Button, TextField, Typography, Paper } from "@mui/material";
 
 import { version as PACKAGE_JSON_VERSION } from "../package.json";
 import type { FullData, LoginRequest, LoginResponse, Manifest } from "./api";
@@ -11,7 +11,7 @@ import {
   METHOD_POST,
   MIME_JSON,
 } from "./constants";
-import { forceReload, getKeyCombination, loginTheme, blackholeShortcuts, t } from "./common";
+import { forceReload, getKeyCombination, blackholeShortcuts, t } from "./common";
 import { dialogs } from "./Dialogs";
 
 export default function Login({ onLoginSuccess }: { onLoginSuccess: (data?: FullData) => void }) {
@@ -136,45 +136,42 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess: (data?: Full
   }, []);
 
   return (
-    <ThemeProvider theme={loginTheme}>
-      <CssBaseline />
-      <Box sx={{ height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <Paper elevation={3} sx={{ p: 4, width: 500, maxWidth: "80dvw", textAlign: "center" }}>
-          <Typography variant="h5" gutterBottom sx={{ textAlign: "left", fontWeight: "bold" }}>
-            {APP_NAME} {name}
-          </Typography>
-          <Box component="form" onSubmit={handleLogin} sx={{ mt: 2 }}>
-            <TextField
-              fullWidth
-              label={t("App Password")}
-              type="password"
-              variant="outlined"
-              margin="normal"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoFocus
-            />
-            <Button fullWidth variant="contained" type="submit" sx={{ mt: 3, mb: 1 }}>
-              {t("Sign In")}
-            </Button>
-          </Box>
-          <Button
-            variant="text"
-            size="small"
-            color="error"
-            onClick={handleClearCache}
-            sx={{ mt: 2, fontSize: "typography.caption.fontSize", textTransform: "none" }}
-          >
-            {t("Force clear cache & unregister service worker")}
+    <Box sx={{ height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <Paper elevation={3} sx={{ p: 4, width: 500, maxWidth: "80dvw", textAlign: "center" }}>
+        <Typography variant="h5" gutterBottom sx={{ textAlign: "left", fontWeight: "bold" }}>
+          {APP_NAME} {name}
+        </Typography>
+        <Box component="form" onSubmit={handleLogin} sx={{ mt: 2 }}>
+          <TextField
+            fullWidth
+            label={t("App Password")}
+            type="password"
+            variant="outlined"
+            margin="normal"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoFocus
+          />
+          <Button fullWidth variant="contained" type="submit" sx={{ mt: 3, mb: 1 }}>
+            {t("Sign In")}
           </Button>
-          <Typography variant="body2" sx={{ mt: 2, fontSize: "typography.caption.fontSize" }}>
-            v{PACKAGE_JSON_VERSION}&nbsp;|&nbsp;
-            <a rel="noopener noreferrer" style={{ color: "#1976d2" }} href={LINK_COZYSSH_GITHUB}>
-              GitHub
-            </a>
-          </Typography>
-        </Paper>
-      </Box>
-    </ThemeProvider>
+        </Box>
+        <Button
+          variant="text"
+          size="small"
+          color="error"
+          onClick={handleClearCache}
+          sx={{ mt: 2, fontSize: "typography.caption.fontSize", textTransform: "none" }}
+        >
+          {t("Force clear cache & unregister service worker")}
+        </Button>
+        <Typography variant="body2" sx={{ mt: 2, fontSize: "typography.caption.fontSize" }}>
+          v{PACKAGE_JSON_VERSION}&nbsp;|&nbsp;
+          <a rel="noopener noreferrer" style={{ color: "#1976d2" }} href={LINK_COZYSSH_GITHUB}>
+            GitHub
+          </a>
+        </Typography>
+      </Paper>
+    </Box>
   );
 }

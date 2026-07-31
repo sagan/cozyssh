@@ -20,6 +20,7 @@ import {
   CS_EVENT_TERMINAL_CHANGE,
   getKeyCombination,
   t,
+  ViewModePrefix,
 } from "./common";
 import {
   deleteUnreadTabId,
@@ -37,6 +38,7 @@ import {
   openSaveTabsToButtonDialog,
   getStore,
   handleCloseSearch,
+  parseNewTabDialogFilter,
 } from "./store";
 import { APP_NAME, ID_TERMINAL_SEARCH_INPUT, LOCAL_NAME } from "./constants";
 import TextFieldWithCopy from "./components/TextFieldWithCopy";
@@ -327,8 +329,11 @@ export default function TabBar({
           <IconButton
             size="small"
             title={t("New Tab") + " (Alt+O)"}
-            onClick={() => {
-              setNewTabDialogFilter(getStore().newTabDialogFilter.slice(0, 1)); // preserve mode (if any)
+            onClick={(e) => {
+              if (!e.shiftKey) {
+                const [mode] = parseNewTabDialogFilter(getStore().newTabDialogFilter);
+                setNewTabDialogFilter(ViewModePrefix[mode]);
+              }
               setNewTabDialogOpen(true);
             }}
             sx={{ mr: 1, ml: 0.5, bgcolor: "action.hover", "&:hover": { bgcolor: "action.selected" } }}

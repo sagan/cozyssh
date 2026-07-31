@@ -265,6 +265,15 @@ export function defaultThemeOptions({ fontSize = DEFAULT_FONT_SIZE }: { fontSize
   };
 }
 
+export const ViewModePrefix: Record<ViewMode, string> = {
+  tabs: "@",
+  buttons: ">",
+  help: "?",
+  tags: "#",
+  tunnels: ":",
+  servers: "", // the empty prefix must be the last
+} as const;
+
 export const loginTheme = createTheme({
   cssVariables: true,
   palette: {
@@ -966,6 +975,11 @@ export const liquidEngine = new Liquid({
     readFileSync: liquidFs,
   },
 });
+
+// {{ 30 | random_string %}}
+liquidEngine.registerFilter("random_string", (length, digitOnly?: boolean) =>
+  generatePassword(parseInt(length) || 12, digitOnly),
+);
 
 export function getTemplateVariables(templateStr: string): string[] {
   try {

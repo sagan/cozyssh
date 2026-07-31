@@ -1242,6 +1242,11 @@ export default function DialogManager({
                         payload: buttonFormData.payload + " {{shellIntegration | json}}",
                       });
                     }}
+                    slotProps={{
+                      label: {
+                        title: t("The shell integration info of current terminal"),
+                      },
+                    }}
                   />
                   <Chip
                     color="success"
@@ -1251,6 +1256,11 @@ export default function DialogManager({
                         ...buttonFormData,
                         payload: buttonFormData.payload + " {{vars | json}}",
                       });
+                    }}
+                    slotProps={{
+                      label: {
+                        title: t("Global variables"),
+                      },
                     }}
                   />
                   <Chip
@@ -1262,6 +1272,11 @@ export default function DialogManager({
                         payload: buttonFormData.payload + " {{localVars | json}}",
                       });
                     }}
+                    slotProps={{
+                      label: {
+                        title: t("Local variables"),
+                      },
+                    }}
                   />
                   <Chip
                     color="success"
@@ -1272,6 +1287,11 @@ export default function DialogManager({
                         payload: buttonFormData.payload + " {{host | json}}",
                       });
                     }}
+                    slotProps={{
+                      label: {
+                        title: t("The current terminal host info"),
+                      },
+                    }}
                   />
                   <Chip
                     color="success"
@@ -1281,6 +1301,26 @@ export default function DialogManager({
                         ...buttonFormData,
                         payload: buttonFormData.payload + " {{clipboard}}",
                       });
+                    }}
+                    slotProps={{
+                      label: {
+                        title: t("The clipboard data"),
+                      },
+                    }}
+                  />
+                  <Chip
+                    color="success"
+                    label="{{12 | random_string}}"
+                    onClick={() => {
+                      setButtonFormData({
+                        ...buttonFormData,
+                        payload: buttonFormData.payload + " {{12 | random_string}}",
+                      });
+                    }}
+                    slotProps={{
+                      label: {
+                        title: t("Generate a random string of [a-zA-Z0-9]{12}"),
+                      },
                     }}
                   />
                 </Box>
@@ -1616,12 +1656,22 @@ export default function DialogManager({
                     onClick={() => {
                       setInputValue(inputValue + " {{shellIntegration | json}}");
                     }}
+                    slotProps={{
+                      label: {
+                        title: t("The shell integration info of current terminal"),
+                      },
+                    }}
                   />
                   <Chip
                     color="success"
                     label="vars"
                     onClick={() => {
                       setInputValue(inputValue + " {{vars | json}}");
+                    }}
+                    slotProps={{
+                      label: {
+                        title: t("Global variables"),
+                      },
                     }}
                   />
                   <Chip
@@ -1630,6 +1680,11 @@ export default function DialogManager({
                     onClick={() => {
                       setInputValue(inputValue + " {{localVars | json}}");
                     }}
+                    slotProps={{
+                      label: {
+                        title: t("Local variables"),
+                      },
+                    }}
                   />
                   <Chip
                     color="success"
@@ -1637,12 +1692,34 @@ export default function DialogManager({
                     onClick={() => {
                       setInputValue(inputValue + " {{host | json}}");
                     }}
+                    slotProps={{
+                      label: {
+                        title: t("The current terminal host info"),
+                      },
+                    }}
                   />
                   <Chip
                     color="success"
                     label="clipboard"
                     onClick={() => {
                       setInputValue(inputValue + " {{clipboard}}");
+                    }}
+                    slotProps={{
+                      label: {
+                        title: t("The clipboard data"),
+                      },
+                    }}
+                  />
+                  <Chip
+                    color="success"
+                    label="{{12 | random_string}}"
+                    onClick={() => {
+                      setInputValue(inputValue + " {{12 | random_string}}");
+                    }}
+                    slotProps={{
+                      label: {
+                        title: t("Generate a random string of [a-zA-Z0-9]{12}"),
+                      },
                     }}
                   />
                 </Box>

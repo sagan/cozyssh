@@ -2,9 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useShallow } from "zustand/react/shallow";
 import {
   Box,
-  CssBaseline,
   createTheme,
-  ThemeProvider,
   IconButton,
   Typography,
   useMediaQuery,
@@ -13,6 +11,7 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  type Theme,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import ViewSidebarIcon from "@mui/icons-material/ViewSidebar";
@@ -38,7 +37,6 @@ import {
 import {
   type ContextMenu,
   type ScratchpadSyncState,
-  defaultThemeOptions,
   genTabId,
   genPaneId,
   apiReqHeaders,
@@ -84,9 +82,10 @@ import { dialogs } from "./Dialogs";
 
 interface DashboardProps {
   initialData?: FullData;
+  setMuiTheme: React.Dispatch<React.SetStateAction<Theme>>;
 }
 
-export default function Dashboard({ initialData }: DashboardProps) {
+export default function Dashboard({ initialData, setMuiTheme }: DashboardProps) {
   const mobileAppletsOpen = useStore((state) => state.mobileAppletsOpen);
   const groups = useStore(
     useShallow((state) =>
@@ -123,7 +122,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const isTouch = useMediaQuery("(pointer: coarse)");
   const hasSidebarApplet = useMemo(() => !!applets.find((a) => a.position === "sidebar"), [applets]);
-  const [muiTheme, setMuiTheme] = useState(() => createTheme(defaultThemeOptions({ fontSize: __CS_FONT_SIZE__ })));
 
   useEffect(() => {
     window.__CS_APPLETS__ = appletRefs;
@@ -132,6 +130,7 @@ export default function Dashboard({ initialData }: DashboardProps) {
     window.csSetTheme = (options: any, ...args: any[]) => setMuiTheme(createTheme(options, ...args));
     window.csSetApplets = setApplets;
     window.__CS_MAX_ZINDEX__ = maxZIndexRef;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
     appletRefs.current = applets;
@@ -559,9 +558,8 @@ export default function Dashboard({ initialData }: DashboardProps) {
   }, [applets.length]);
 
   return (
-    <ThemeProvider theme={muiTheme}>
+    <>
       <Box id="main-ui" sx={{ display: "flex", height: viewportHeight, overflow: "hidden" }}>
-        <CssBaseline />
         <Sidebar
           isMobile={isMobile}
           isTouch={isTouch}
@@ -793,7 +791,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
             </DialogContent>
           </Dialog>
         ))}
-
       <DialogManager
         isMobile={isMobile}
         isTouch={isTouch}
@@ -805,6 +802,6 @@ export default function Dashboard({ initialData }: DashboardProps) {
         sendParsedString={sendParsedString}
       />
       <SideEffect />
-    </ThemeProvider>
+    </>
   );
 }

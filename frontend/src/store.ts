@@ -64,6 +64,7 @@ import {
   liquidEngine,
   openHostInNewWindow,
   getHostFlags,
+  ViewModePrefix,
 } from "./common";
 import {
   APP_NAME,
@@ -752,16 +753,10 @@ export const setNewTabDialogFilter = (newTabDialogFilter: string) => useStore.se
 export const closeNewTabDialog = () => useStore.setState({ newTabDialogOpen: false });
 
 export function parseNewTabDialogFilter(filter: string): [viewMode: ViewMode, f: string] {
-  if (filter.startsWith(">")) {
-    return ["buttons", filter.slice(1)];
-  } else if (filter.startsWith("@")) {
-    return ["tabs", filter.slice(1)];
-  } else if (filter.startsWith("#") && !filter.includes(" ")) {
-    return ["tags", filter.slice(1)];
-  } else if (filter.startsWith(":")) {
-    return ["tunnels", filter.slice(1)];
-  } else if (filter.startsWith("?")) {
-    return ["help", filter.slice(1)];
+  for (const [mode, prefix] of Object.entries(ViewModePrefix) as [ViewMode, string][]) {
+    if (filter.startsWith(prefix)) {
+      return [mode, filter.slice(prefix.length)];
+    }
   }
   return ["servers", filter];
 }
@@ -785,19 +780,7 @@ export const changeNewTabDialogViewMode = (target?: boolean | ViewMode, resetFil
         nextMode = modes[(target ? idx - 1 + modes.length : idx + 1) % modes.length];
       }
     }
-    const prefix =
-      nextMode === "buttons"
-        ? ">"
-        : nextMode === "tabs"
-          ? "@"
-          : nextMode === "tunnels"
-            ? ":"
-            : nextMode === "tags"
-              ? "#"
-              : nextMode === "help"
-                ? "?"
-                : "";
-    return { newTabDialogFilter: prefix + (resetFilter ? "" : f) };
+    return { newTabDialogFilter: ViewModePrefix[nextMode] + (resetFilter ? "" : f) };
   });
 
 export const setInputDialogOpen = (inputDialogOpen: boolean) => useStore.setState({ inputDialogOpen });
@@ -1589,9 +1572,10 @@ export const attachSession: typeof csAttach = async function (
   if (typeof id === "object") {
     ({ id, host, title, canonicalHostString, isCustomTitle, isLocked } = id);
   }
-  if (!host || !title) {
-    throw new Error("Missing host or title");
+  if (!host) {
+    throw new Error("Missing host");
   }
+  title = title || newTabTitle(hostTitle(host));
   const existing = getStore().tabs.find((t) =>
     t.panes.some((p) => (p.sessionId || p.id) === id && p.state !== "stolen"),
   );
@@ -2972,7 +2956,7 @@ export async function runButton(
             appendNewLine: false,
           });
         } else {
-          await sendParsedString(btn.payload);
+          await sendParsedString(btn.payload, !!btn.liquidjs);
           triggerFocus();
         }
       }
