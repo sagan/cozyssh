@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -614,7 +615,7 @@ func activateWindow(hwnd uintptr) {
 	procSetForegroundWindow.Call(hwnd)
 }
 
-var originalWindows = map[uintptr]uintptr{}
+var originalWindows = sync.Map{}
 
 const ID_MENU_ALWAYS_ON_TOP = 0x10
 const ID_MENU_TRANSPARENT_0 = 0x20
@@ -641,14 +642,14 @@ func setupWindowMenu(hwnd uintptr) {
 
 	// 4. Hook the window using SetWindowLongPtr and GWLP_WNDPROC (-4).
 	// This intercepts events before they hit go-webview2's internal handler.
-	originalWindows[hwnd] = w32.SetWindowLongPtr(w32.HWND(hwnd), w32.GWLP_WNDPROC, newWndProc)
+	originalWindows.Store(hwnd, w32.SetWindowLongPtr(w32.HWND(hwnd), w32.GWLP_WNDPROC, newWndProc))
 }
 
 // 6. Our custom window procedure (event handler)
 func customWndProc(hwnd w32.HWND, msg uint32, wParam, lParam uintptr) uintptr {
 	switch msg {
 	case w32.WM_DESTROY:
-		delete(originalWindows, uintptr(hwnd))
+		originalWindows.Delete(uintptr(hwnd))
 	case w32.WM_SYSCOMMAND:
 		// Mask out the lower 4 bits used internally by the Windows OS
 		cmd := wParam & 0xFFF0
@@ -698,5 +699,9 @@ func customWndProc(hwnd w32.HWND, msg uint32, wParam, lParam uintptr) uintptr {
 
 	// CRITICAL: Always pass the message down to the original window procedure.
 	// If you forget this, the WebView will freeze, stop rendering, or refuse to close.
-	return w32.CallWindowProc(originalWindows[uintptr(hwnd)], hwnd, msg, wParam, lParam)
+	o, ok := originalWindows.Load(uintptr(hwnd))
+	if !ok {
+		return w32.DefWindowProc(hwnd, msg, wParam, lParam)
+	}
+	return w32.CallWindowProc(o.(uintptr), hwnd, msg, wParam, lParam)
 }
