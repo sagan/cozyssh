@@ -121,6 +121,7 @@ func GetShellIntegrationEnv(shellName string) []string {
 	case "bash":
 		return []string{
 			"VSCODE_INJECTION=1",
+			"VSCODE_SHELL_LOGIN=1",
 			"TERM_PROGRAM=vscode",
 		}
 
@@ -190,7 +191,9 @@ func ApplyShellIntegrationArgs(shellName string, args []string) []string {
 			args = slices.Delete(args, i, i+1)
 		}
 		scriptPath := filepath.ToSlash(filepath.Join(dir, "shellIntegration-bash.sh"))
-		args = append(args, "--init-file", scriptPath, "-")
+		// If --init-file is set /etc/bash.bashrc & ~/.bashrc won't be executed by bash.
+		// However the VS Code shellIntegration-bash.sh will execute them instead.
+		args = slices.Insert(args, 0, "--init-file", scriptPath)
 		return args
 	}
 

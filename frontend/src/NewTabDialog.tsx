@@ -67,6 +67,8 @@ import {
   getCanonicalHostString,
   getHostFlags,
   getKeyCombination,
+  getSSHCommand,
+  getSSHCopyIdCommand,
   isModifier,
   isValidHostname,
   localShellHost,
@@ -120,6 +122,7 @@ import {
   closeNewTabDialog,
   setSettingsOpen,
   setSettingsTab,
+  sshCopyId,
 } from "./store";
 import TextFieldWithCopy from "./components/TextFieldWithCopy";
 import ExtraMenu from "./components/ExtraMenu";
@@ -1667,6 +1670,43 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
           {!!contextMenu && (
             <>
               {itemMenus}
+              {["host", "recent"].includes(contextMenu.item.type) && (
+                <>
+                  <MenuItem
+                    id="ntdm-copy-ssh-command"
+                    onClick={() => {
+                      setContextMenuOpen(false);
+                      navigator.clipboard.writeText(getSSHCommand(getHost(contextMenu.item.value)));
+                    }}
+                  >
+                    {t("Copy SSH Command")}
+                  </MenuItem>
+                  <MenuItem
+                    id="ntdm-copy-upload-identity-command"
+                    onClick={() => {
+                      setContextMenuOpen(false);
+                      navigator.clipboard.writeText(
+                        getSSHCopyIdCommand(
+                          getHost(contextMenu.item.value),
+                          getStore().sysinfo.defaultIdentityPath,
+                          getStore().sysinfo.defaultIdentityPublicKey,
+                        ),
+                      );
+                    }}
+                  >
+                    {t("Copy Upload Identity Command")}
+                  </MenuItem>
+                  <MenuItem
+                    id="ntdm-run-ssh-copy-id"
+                    onClick={() => {
+                      setContextMenuOpen(false);
+                      sshCopyId(getHost(contextMenu.item.value));
+                    }}
+                  >
+                    {t("Run ssh-copy-id")}
+                  </MenuItem>
+                </>
+              )}
               <ExtraMenu
                 extraMenu={extraNtdMenu}
                 target={contextMenu.item}
@@ -1681,6 +1721,7 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
                   data-type={contextMenu.item.type}
                   data-value={contextMenu.item.value}
                   className={contextMenu.item.className}
+                  sx={{ color: "error.main" }}
                   onClick={() => {
                     setContextMenuOpen(false);
                     handleDeleteItem(contextMenu.item);

@@ -65,6 +65,8 @@ import {
   openHostInNewWindow,
   getHostFlags,
   ViewModePrefix,
+  cutPrefix,
+  cutString,
 } from "./common";
 import {
   APP_NAME,
@@ -543,12 +545,12 @@ export const notify = (msg: string, severity: Severity = "info", key?: string) =
       : [...prev, newToast];
     return newToasts.slice(-getIntVar(VAR_CS_TOAST_NUMBER, DEFAULT_TOAST_NUMBER));
   });
-  setTimeout(
-    () => {
+  const timeout = getIntVar(VAR_CS_TOAST_TIMEOUT, DEFAULT_TOAST_TIMEOUT);
+  if (timeout > 0) {
+    setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    },
-    getIntVar(VAR_CS_TOAST_TIMEOUT, DEFAULT_TOAST_TIMEOUT),
-  );
+    }, timeout);
+  }
 };
 
 export const updateRecentButtonId = (id: string) => {
@@ -755,6 +757,9 @@ export const closeNewTabDialog = () => useStore.setState({ newTabDialogOpen: fal
 export function parseNewTabDialogFilter(filter: string): [viewMode: ViewMode, f: string] {
   for (const [mode, prefix] of Object.entries(ViewModePrefix) as [ViewMode, string][]) {
     if (filter.startsWith(prefix)) {
+      if (mode === "tags" && filter.includes(" ")) {
+        return ["servers", filter];
+      }
       return [mode, filter.slice(prefix.length)];
     }
   }
@@ -768,7 +773,7 @@ export function parseNewTabDialogFilter(filter: string): [viewMode: ViewMode, f:
 export const changeNewTabDialogViewMode = (target?: boolean | ViewMode, resetFilter = false) =>
   useStore.setState((state) => {
     let nextMode: ViewMode;
-    const [mode, f] = parseNewTabDialogFilter(state.newTabDialogFilter);
+    const [mode, filter] = parseNewTabDialogFilter(state.newTabDialogFilter);
     if (typeof target === "string") {
       nextMode = target;
     } else {
@@ -780,7 +785,14 @@ export const changeNewTabDialogViewMode = (target?: boolean | ViewMode, resetFil
         nextMode = modes[(target ? idx - 1 + modes.length : idx + 1) % modes.length];
       }
     }
-    return { newTabDialogFilter: ViewModePrefix[nextMode] + (resetFilter ? "" : f) };
+    let newFilter = filter;
+    if (nextMode === "tags") {
+      [newFilter] = cutString(newFilter, " ");
+      [newFilter] = cutPrefix(newFilter, "#");
+    }
+    return {
+      newTabDialogFilter: ViewModePrefix[nextMode] + (resetFilter ? "" : newFilter),
+    };
   });
 
 export const setInputDialogOpen = (inputDialogOpen: boolean) => useStore.setState({ inputDialogOpen });

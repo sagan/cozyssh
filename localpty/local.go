@@ -155,14 +155,13 @@ func Start(initialCmd string, execFlag bool, shellIntegrationFlag string, env []
 
 	// Set standard xterm env
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
-	cmd.Env = append(cmd.Env, env...)
-
 	// Inject shell integration env vars for interactive sessions.
 	if doInjection {
 		if siEnv := GetShellIntegrationEnv(shellName); len(siEnv) > 0 {
 			cmd.Env = append(cmd.Env, siEnv...)
 		}
 	}
+	cmd.Env = append(cmd.Env, env...)
 
 	// Force explicitly working out of home dir
 	if home, err := os.UserHomeDir(); err == nil {

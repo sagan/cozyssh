@@ -407,14 +407,16 @@ window.csGetShellIntegration = (paneId?: string) => {
   return shellIntegrations[paneId ?? activePaneId];
 };
 
-window.csSetVar = async (nameOrVars: string | Record<string, string | undefined>, value?: string | undefined) => {
-  const { vars, localVars } = getStore();
+window.csSetVar = async (
+  nameOrVars: string | Record<string, string | undefined | null>,
+  value?: string | undefined | null,
+) => {
   const updates: Record<string, string | null> = {};
-  const localUpdates: Record<string, string | undefined> = {};
+  const localUpdates: Record<string, string | null> = {};
 
   if (typeof nameOrVars === "string") {
     if (nameOrVars.toLowerCase().startsWith(LOCAL_VAR_PREFIX)) {
-      localUpdates[nameOrVars] = value;
+      localUpdates[nameOrVars] = value === undefined ? null : value;
     } else {
       updates[nameOrVars] = value === undefined ? null : value;
     }
@@ -422,7 +424,7 @@ window.csSetVar = async (nameOrVars: string | Record<string, string | undefined>
     for (const k in nameOrVars) {
       const v = nameOrVars[k];
       if (k.toLowerCase().startsWith(LOCAL_VAR_PREFIX)) {
-        localUpdates[k] = v;
+        localUpdates[k] = v === undefined ? null : v;
       } else {
         updates[k] = v === undefined ? null : v;
       }
@@ -430,15 +432,22 @@ window.csSetVar = async (nameOrVars: string | Record<string, string | undefined>
   }
 
   if (Object.keys(localUpdates).length > 0) {
-    const newLocalVars = { ...localVars };
+    const newLocalVars = { ...getStore().localVars };
+    let changed = false;
     for (const [key, value] of Object.entries(localUpdates)) {
-      if (value === undefined) {
-        delete newLocalVars[key];
-      } else {
+      if (value == null) {
+        if (newLocalVars[key] != undefined) {
+          delete newLocalVars[key];
+          changed = true;
+        }
+      } else if (newLocalVars[key] !== value) {
         newLocalVars[key] = value;
+        changed = true;
       }
     }
-    setLocalVars(newLocalVars);
+    if (changed) {
+      setLocalVars(newLocalVars);
+    }
   }
   if (Object.keys(updates).length === 0) {
     return;
@@ -453,16 +462,22 @@ window.csSetVar = async (nameOrVars: string | Record<string, string | undefined>
     throw new Error(`status=${res.status}, msg=${await res.text()}`);
   }
 
-  const nextVars = { ...vars };
-  for (const k in updates) {
-    const v = updates[k];
-    if (v === null) {
-      delete nextVars[k];
-    } else {
-      nextVars[k] = v;
+  const nextVars = { ...getStore().vars };
+  let changed = false;
+  for (const [key, value] of Object.entries(updates)) {
+    if (value === null) {
+      if (nextVars[key] != undefined) {
+        delete nextVars[key];
+        changed = true;
+      }
+    } else if (nextVars[key] !== value) {
+      nextVars[key] = value;
+      changed = true;
     }
   }
-  setVars(nextVars);
+  if (changed) {
+    setVars(nextVars);
+  }
 };
 
 // ── Button / Host CRUD API ────────────────────────────────────────────────

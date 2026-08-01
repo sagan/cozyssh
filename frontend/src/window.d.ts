@@ -448,13 +448,13 @@ declare global {
    * Set the value of a variable.
    * @param name The name of the variable. If it starts with "local_" (case insensitive),
    * it will be stored in current browser local storage, otherwise it will be synced to backend and other browsers.
-   * @param value The value of the variable. Use `undefined` to delete the variable.
+   * @param value The value of the variable. Use `undefined` or `null` to delete the variable.
    */
-  function csSetVar(name: string, value: string | undefined): Promise<void>;
+  function csSetVar(name: string, value: string | undefined | null): Promise<void>;
   /**
    * Set the values of all variables.
    */
-  function csSetVar(vars: Record<string, string | undefined>): Promise<void>;
+  function csSetVar(vars: Record<string, string | undefined | null>): Promise<void>;
   /**
    * Update a button or a set of buttons.
    */

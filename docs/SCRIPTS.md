@@ -13,7 +13,7 @@ CozySSH allows you to extend its functionality by writing custom scripts (JavaSc
   - [`csCloseApplet(name: string): void`](#cscloseappletname-string-void)
   - [`csGetApplet(name: string): AppletData | undefined`, `csGetApplet(): AppletData[]`](#csgetappletname-string-appletdata--undefined-csgetapplet-appletdata)
   - [`csGetVar(name: string): string | undefined`, `csGetVar(): Record<string, string>`](#csgetvarname-string-string--undefined-csgetvar-recordstring-string)
-  - [`csSetVar(name: string, value: string | undefined): Promise<void>`, `csSetVar(vars: Record<string, string | undefined>): Promise<void>`](#cssetvarname-string-value-string--undefined-promisevoid-cssetvarvars-recordstring-string--undefined-promisevoid)
+  - [`csSetVar(name: string, value: string | undefined | null): Promise<void>`, `csSetVar(vars: Record<string, string | undefined | null>): Promise<void>`](#cssetvarname-string-value-string--undefined--null-promisevoid-cssetvarvars-recordstring-string--undefined--null-promisevoid)
   - [`csGetTerminal(paneId?: string): Terminal | undefined`](#csgetterminalpaneid-string-terminal--undefined)
   - [`csGetTerminalHandle(paneId?: string): TerminalHandle | undefined`](#csgetterminalhandlepaneid-string-terminalhandle--undefined)
   - [`csGetShellIntegration(paneId?: string): ShellIntegration | undefined`](#csgetshellintegrationpaneid-string-shellintegration--undefined)
@@ -173,7 +173,7 @@ Returns the value of a persistent variable stored in the CozySSH configuration.
 
 - `name`: Optional. If provided, returns the value of that specific variable. If omitted, returns an object containing all variables.
 
-### `csSetVar(name: string, value: string | undefined): Promise<void>`, `csSetVar(vars: Record<string, string | undefined>): Promise<void>`
+### `csSetVar(name: string, value: string | undefined | null): Promise<void>`, `csSetVar(vars: Record<string, string | undefined | null>): Promise<void>`
 
 Sets one or more persistent variables. These variables are saved to the backend configuration file (`config.yaml`) and persist across browser RESTARTS and application reloads.
 
