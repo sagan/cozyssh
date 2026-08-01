@@ -1922,7 +1922,7 @@ export async function openSaveTabsToButtonDialog() {
   const maxOrder = buttons.length > 0 ? Math.max(...buttons.map((b) => b.order || 0)) : 0;
   const data: ButtonData = {
     id: "",
-    name: "Saved tabs",
+    name: t("Saved tabs"),
     type: "run_script",
     payload,
     group: activeGroup,

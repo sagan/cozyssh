@@ -111,10 +111,15 @@ import {
   TAG_FLAG_SHELL_INTEGRATION_ENABLED,
 } from "./constants";
 import {
+  AM_1_ALT,
+  AM_2_SHIFT,
+  AM_3_CTRL,
+  AM_6_CTRL_SHIFT,
   type ServiceWorkerStatus,
   apiReqHeaders,
   filterHosts,
   forceReload,
+  getAltMode,
   getHostFlags,
   getHostGroupPath,
   getHostOrder,
@@ -122,6 +127,7 @@ import {
   getSSHCommand,
   getSSHConfigBlock,
   getSSHCopyIdCommand,
+  getTagTip,
   hostLabel,
   hostSorter,
   isModifier,
@@ -2099,32 +2105,32 @@ export default function Sidebar({
         e.preventDefault();
         e.stopPropagation();
         setSelectedIndex((prev) => Math.max(prev - step, 0));
-      } else if (keycb === "enter" || keycb === "ctrl+enter" || keycb === "shift+enter" || keycb === "alt+enter") {
+      } else if (e.key === "Enter") {
         e.preventDefault();
         e.stopPropagation();
-        if (e.shiftKey) {
-          const el = document.getElementById(flatListIds[selectedIndex]);
-          if (el) {
-            el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
-          }
-        } else {
-          if (selectedIndex >= 0 && selectedIndex < flatList.length) {
-            const selectedItem = flatList[selectedIndex];
-            if (selectedItem.type === "group") {
-              toggleGroupExpanded(selectedItem.path, isModifier(e, "ctrl"));
-            } else {
-              if (isModifier(e, "ctrl")) {
-                openHostInNewWindow(selectedItem.host.name);
-              } else if (e.shiftKey) {
-                openEditHostDialog(selectedItem.host);
-              } else {
-                openHost(selectedItem.host.name, {
-                  target: isModifier(e, "alt") ? "_self" : undefined,
-                  options: { ...getHostFlags(selectedItem.host) },
-                });
-              }
-              document.getElementById(ID_SIDEBAR_FILTER)?.blur();
+        if (selectedIndex >= 0 && selectedIndex < flatList.length) {
+          const selectedItem = flatList[selectedIndex];
+          const altMode = getAltMode(e);
+          if (altMode === AM_6_CTRL_SHIFT) {
+            // ctrl + shift
+            const el = document.getElementById(flatListIds[selectedIndex]);
+            if (el) {
+              el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
             }
+          } else if (selectedItem.type === "group") {
+            toggleGroupExpanded(selectedItem.path, altMode === AM_3_CTRL);
+          } else {
+            if (altMode === AM_3_CTRL) {
+              openHostInNewWindow(selectedItem.host.name);
+            } else if (altMode === AM_2_SHIFT) {
+              openEditHostDialog(selectedItem.host);
+            } else {
+              openHost(selectedItem.host.name, {
+                target: altMode === AM_1_ALT ? "_self" : undefined,
+                options: { ...getHostFlags(selectedItem.host) },
+              });
+            }
+            document.getElementById(ID_SIDEBAR_FILTER)?.blur();
           }
         }
       }
@@ -3542,6 +3548,7 @@ export default function Sidebar({
                   <b>Ctrl + Enter</b>: {t("open in new window")};&nbsp;
                   <b>Shift + Enter</b>: {t("edit selected host")};&nbsp;
                   <b>Alt + Shift + Enter</b>: {t("input selected host into filter")};&nbsp;
+                  <b>Ctrl + Shift + Enter</b>: {t("Open context menu")};&nbsp;
                   <b>Delete</b> {t("or")} <b>Alt + D</b>: {t("delete a recent item")};&nbsp;
                   <b>Alt + Backspace</b>: {t("clear the filter")};&nbsp;
                   <b>Alt + ↓↑</b> {t("or")} <b>Alt + Shift + J/K</b>: {t("jump through items quickly")};&nbsp;
@@ -3594,9 +3601,9 @@ export default function Sidebar({
                   <b>Enter</b>: {t("open (or toggle group expandness)")};&nbsp;
                   <b>Alt + Enter</b>: {t("open in current tab")};&nbsp;
                   <b>Ctrl + Enter</b>: {t("open in new window (or toggle group and all sub-groups expandness)")};&nbsp;
-                  <b>Shift + Enter</b>: {t("open context menu")};&nbsp;
-                  <b>Ctrl/Alt + Mouse Click</b>: {t("the same as `Ctrl/Alt + Enter`")};&nbsp;
-                  <b>Shift + Mouse Click</b>: {t("edit selected host")}
+                  <b>Shift + Enter</b>: {t("edit selected host")};&nbsp;
+                  <b>Ctrl + Shift + Enter</b>: {t("open context menu")};&nbsp;
+                  <b>Ctrl/Alt/Shift + Mouse Click</b>: {t("the same as `Ctrl/Alt/Shift + Enter`")}
                   <br />
                   <b>Alt + Shift + I</b> : {t("Focus sidebar search filter but preserve current value")}
                   <br />
@@ -3885,7 +3892,17 @@ export default function Sidebar({
             />
             <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
               {parsedTags.map((tag) => (
-                <Chip key={tag} label={tag} size="small" onDelete={() => handleDeleteTag(tag)} />
+                <Chip
+                  key={tag}
+                  label={tag}
+                  size="small"
+                  onDelete={() => handleDeleteTag(tag)}
+                  slotProps={{
+                    label: {
+                      title: getTagTip(tag),
+                    },
+                  }}
+                />
               ))}
               <Autocomplete
                 freeSolo

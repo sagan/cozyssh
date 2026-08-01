@@ -56,6 +56,7 @@ import {
 } from "./constants";
 import {
   AltModeKey,
+  AM_6_CTRL_SHIFT,
   apiReqHeaders,
   assertUnreachable,
   cutString,
@@ -293,7 +294,7 @@ function itemLabel(item: NtdItem, altMode: AltMode): string {
         case 1:
           return t("Open In Current Tab");
         case 2:
-          return t("Edit");
+          return item.type != "local" ? t("Edit") : "";
         case 3:
           return t("Open In New Window");
         case 4:
@@ -748,14 +749,14 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
       // Recents
       const recentList: NtdItemHost[] = [];
       filteredRecents.forEach((r) => {
-        const knownHost = getHost(r.host);
+        const host = getHost(r.host);
         recentList.push({
           type: "recent",
           value: r.host,
           label: r.host,
-          subtitle: knownHost ? `${knownHost.user || "root"}@${knownHost.hostname}` : undefined,
-          tooltip: knownHost?.comment,
-          tag: knownHost?.tags
+          subtitle: getCanonicalHostString(host),
+          tooltip: host.comment,
+          tag: host.tags
             ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX) && !t.startsWith(TAG_FLAG_PREFIX))
             .map((t) => "#" + t)
             .join(" "),
@@ -786,14 +787,14 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
       // Older recents
       const olderRecentList: NtdItemHost[] = [];
       filteredOlderRecents.forEach((r) => {
-        const knownHost = getHost(r.host);
+        const host = getHost(r.host);
         olderRecentList.push({
           type: "recent",
           value: r.host,
           label: r.host,
-          subtitle: knownHost ? `${knownHost.user || "root"}@${knownHost.hostname}` : undefined,
-          tooltip: knownHost?.comment,
-          tag: knownHost?.tags
+          subtitle: getCanonicalHostString(host),
+          tooltip: host.comment,
+          tag: host.tags
             ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX) && !t.startsWith(TAG_FLAG_PREFIX))
             .map((t) => "#" + t)
             .join(" "),
@@ -805,7 +806,7 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
       // Favourite servers
       const favList: NtdItemHost[] = [];
       filteredHosts.favourite.forEach((h) => {
-        let subtitle = `${h.user || "root"}@${h.hostname}`;
+        let subtitle = getCanonicalHostString(h);
         if (f && h.comment) {
           const matchedComment = searchStringAny(h.comment, f);
           if (matchedComment) {
@@ -830,7 +831,7 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
       // 4. Normal servers
       const normalList: NtdItemHost[] = [];
       filteredHosts.normal.forEach((h) => {
-        let subtitle = `${h.user || "root"}@${h.hostname}`;
+        let subtitle = getCanonicalHostString(h);
         if (f && h.comment) {
           const matchedComment = searchStringAny(h.comment, f);
           if (matchedComment) {
@@ -855,7 +856,7 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
       // 5. Auto servers
       const autoList: NtdItemHost[] = [];
       filteredHosts.auto.forEach((h) => {
-        let subtitle = `${h.user || "root"}@${h.hostname}`;
+        let subtitle = getCanonicalHostString(h);
         if (f && h.comment) {
           const matchedComment = searchStringAny(h.comment, f);
           if (matchedComment) {
@@ -1273,8 +1274,29 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
       } else if (e.key === "Enter") {
         e.preventDefault();
         e.stopPropagation();
+        const altMode = getAltMode(e);
+        if (altMode === AM_6_CTRL_SHIFT) {
+          const item = items[selectedIndex];
+          if (!item) {
+            return;
+          }
+          const rect = document.getElementById(`ntd-item-${selectedIndex}`)?.getBoundingClientRect();
+          if (!rect) {
+            return;
+          }
+          const width = rect.width - 2; // Adjust for the menu width
+          const mouseX = rect.left + rect.width / 2 - width / 2;
+          const mouseY = rect.bottom + 2;
+          setContextMenuOpen(true);
+          setContextMenu({
+            mouseX,
+            mouseY,
+            item,
+          });
+          return;
+        }
         if (items[selectedIndex]) {
-          handleSelect(items[selectedIndex], getAltMode(e));
+          handleSelect(items[selectedIndex], altMode);
         }
       } else if (keycb === "delete" || keycb === "alt+d") {
         // Remove from recents only when:
@@ -1515,6 +1537,7 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
               )}
               {section.items.map((item) => (
                 <ListItemButton
+                  id={`ntd-item-${item.flatIndex}`}
                   key={item.flatIndex}
                   onContextMenu={handleContextMenu}
                   selected={selectedIndex === item.flatIndex}

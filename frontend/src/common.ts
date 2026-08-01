@@ -14,7 +14,10 @@ import {
   HEADER_CONTENT_TYPE,
   LOCAL_NAME,
   MIME_JSON,
+  TAG_FAV,
   TAG_FLAG_PREFIX,
+  TAG_FLAG_SHELL_INTEGRATION_DISABLED,
+  TAG_FLAG_SHELL_INTEGRATION_ENABLED,
   TAG_GROUP_PREFIX,
   TAG_ORDER_PREFIX,
   WS_PROTOCOL_DUMMY,
@@ -1882,24 +1885,51 @@ export function getAltMode(e: React.MouseEvent | React.KeyboardEvent): AltMode {
   const isAlt = isModifier(e, "alt");
   if (isModifier(e, "ctrl")) {
     if (e.shiftKey) {
-      return isAlt ? 7 : 6;
+      return isAlt ? AM_7_CTRL_ALT_SHIFT : AM_6_CTRL_SHIFT;
     } else {
-      return isAlt ? 5 : 3;
+      return isAlt ? AM_5_CTRL_ALT : AM_3_CTRL;
     }
   }
   if (e.shiftKey) {
-    return isAlt ? 4 : 2;
+    return isAlt ? AM_4_ALT_SHIFT : AM_2_SHIFT;
   }
-  return isAlt ? 1 : 0;
+  return isAlt ? AM_1_ALT : AM_0_DEFAULT;
 }
 
+export const AM_0_DEFAULT: AltMode = 0;
+export const AM_1_ALT: AltMode = 1;
+export const AM_2_SHIFT: AltMode = 2;
+export const AM_3_CTRL: AltMode = 3;
+export const AM_4_ALT_SHIFT: AltMode = 4;
+export const AM_5_CTRL_ALT: AltMode = 5;
+export const AM_6_CTRL_SHIFT: AltMode = 6;
+export const AM_7_CTRL_ALT_SHIFT: AltMode = 7;
+
 export const AltModeKey: Record<AltMode, string> = {
-  0: "enter",
-  1: "alt+enter",
-  2: "shift+enter",
-  3: "ctrl+enter",
-  4: "alt+shift+enter",
-  5: "ctrl+alt+enter",
-  6: "ctrl+shift+enter",
-  7: "ctrl+alt+shift+enter",
+  [AM_0_DEFAULT]: "enter",
+  [AM_1_ALT]: "alt+enter",
+  [AM_2_SHIFT]: "shift+enter",
+  [AM_3_CTRL]: "ctrl+enter",
+  [AM_4_ALT_SHIFT]: "alt+shift+enter",
+  [AM_5_CTRL_ALT]: "ctrl+alt+enter",
+  [AM_6_CTRL_SHIFT]: "ctrl+shift+enter",
+  [AM_7_CTRL_ALT_SHIFT]: "ctrl+alt+shift+enter",
 };
+
+export function getTagTip(tag: string): string {
+  if (tag.startsWith(TAG_ORDER_PREFIX)) {
+    return t("System tag: host order") + ` (${tag.slice(TAG_ORDER_PREFIX.length)})`;
+  } else if (tag.startsWith(TAG_GROUP_PREFIX)) {
+    return t("System tag: the host group") + ` (${tag.slice(TAG_GROUP_PREFIX.length)})`;
+  }
+  switch (tag) {
+    case TAG_FAV:
+      return t("System tag: favourite host");
+    case TAG_FLAG_SHELL_INTEGRATION_DISABLED:
+      return t("System flag: disable shell integration for the host");
+    case TAG_FLAG_SHELL_INTEGRATION_ENABLED:
+      return t("System flag: enable shell integration for the host");
+    default:
+      return tag;
+  }
+}
