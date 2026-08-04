@@ -55,6 +55,7 @@ import {
   t,
 } from "./common";
 import { type PaneData, notify, getIntVar, getTerminalContents } from "./store";
+import { patchAndroidSoftKeyboardInput } from "./xtermInternals";
 
 export type TerminalMarkers = {
   /**
@@ -364,20 +365,48 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
 
       const textarea = term.textarea;
       if (textarea) {
-        // Still a problem. See https://github.com/xtermjs/xterm.js/issues/3600
+        // Workaround for https://github.com/xtermjs/xterm.js/issues/3600
         if (getIntVar(VAR_CS_NOMODTEXTAREA) !== 1) {
-          textarea.setAttribute("autocomplete", "off");
-          textarea.setAttribute("autocorrect", "off");
-          textarea.setAttribute("autocapitalize", "off");
-          textarea.setAttribute("spellcheck", "false");
-          textarea.setAttribute("data-gramm", "false");
+          patchAndroidSoftKeyboardInput(term);
         }
-        textarea.addEventListener("blur", () => {
+        textarea.addEventListener("blur", (ev) => {
+          // When the Android soft-keyboard patch is active, it redirects focus
+          // from the textarea to a hidden proxy <input>.  That redirect fires
+          // a blur on the textarea, but the terminal is still logically
+          // focused — so don't propagate the blur to the UI layer (which would
+          // e.g. close the MobileInputBar's extra-keys panel).
+          const related = (ev as FocusEvent).relatedTarget;
+          if (
+            related instanceof HTMLElement &&
+            related.classList.contains("kolu-android-keyboard-input")
+          ) {
+            return;
+          }
           onTerminalBlur();
         });
         textarea.addEventListener("focus", () => {
           onTerminalFocus();
         });
+
+        // When the Android patch is active, the real focus target is the
+        // hidden proxy <input>.  Wire up its blur so that onTerminalBlur
+        // fires when focus genuinely leaves the terminal (not when focus
+        // just bounces back to the textarea).
+        const androidProxy = textarea.parentElement?.querySelector<HTMLInputElement>(
+          ".kolu-android-keyboard-input",
+        );
+        if (androidProxy) {
+          androidProxy.addEventListener("blur", (ev) => {
+            const related = (ev as FocusEvent).relatedTarget;
+            if (related === textarea) return; // focus returning to textarea — not a real blur
+            // When inputMode is "none" the MobileInputBar is intentionally
+            // suppressing the keyboard (extra-keys panel open).  The proxy
+            // blur is from the MutationObserver calling input.blur(), not
+            // from the user moving focus away.
+            if (textarea.inputMode === "none") return;
+            onTerminalBlur();
+          });
+        }
       }
 
       if (getIntVar(VAR_CS_NOIMAGE) !== 1) {

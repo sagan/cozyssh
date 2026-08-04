@@ -113,6 +113,7 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: true,
     minify: !debug,
+    target: "es2022",
   },
   resolve: debug
     ? {
