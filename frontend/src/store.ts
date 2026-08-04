@@ -326,6 +326,15 @@ export interface CsScriptModule {
   // [key: string]: unknown;
 }
 
+export const PaneStateLabels: Record<PaneData["state"], string> = {
+  "": "",
+  stolen: t("stolen"),
+  disconnected: t("disconnected"),
+  connected: t("connected"),
+  connecting: t("connecting"),
+  exited: t("exited"),
+};
+
 /**
  * id => moduleObj
  */

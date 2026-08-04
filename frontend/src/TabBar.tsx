@@ -39,6 +39,7 @@ import {
   getStore,
   handleCloseSearch,
   parseNewTabDialogFilter,
+  PaneStateLabels,
 } from "./store";
 import { APP_NAME, ID_TERMINAL_SEARCH_INPUT, LOCAL_NAME } from "./constants";
 import TextFieldWithCopy from "./components/TextFieldWithCopy";
@@ -64,6 +65,7 @@ export default function TabBar({
   const activeTabId = useStore((state) => state.activeTabId);
   const activePaneId = useStore((state) => state.activePaneId);
   const unreadTabIds = useStore((state) => state.unreadTabIds);
+  const shellIntegrations = useStore((state) => state.shellIntegrations);
   const sysSitename = useStore((state) => state.sysinfo.sitename);
   const searchOpen = useStore((state) => state.searchOpen);
   const extraTabBarMenu = useStore((state) => state.extraTabBarMenu);
@@ -167,163 +169,249 @@ export default function TabBar({
               allowScrollButtonsMobile
               sx={{ minHeight: 40 }}
             >
-              {tabs.map((tab) => (
-                <Tab
-                  className={`tab ${tab.id === activeTabId ? "active" : ""} ${
-                    unreadTabIds.has(tab.id) ? "unread" : ""
-                  } ${tab.panes[0]?.options?.tabClass || ""} ${tab.id === draggedTabId ? "dragging" : ""}`}
-                  data-id={tab.id}
-                  data-type={tab.type}
-                  data-is-pinned={tab.isPinned ? "1" : "0"}
-                  data-is-locked={tab.isLocked ? "1" : "0"}
-                  key={tab.id}
-                  value={tab.id}
-                  title={
-                    tab.type === "terminal"
-                      ? t("Hosts:") + ` ${tab.panes.map((p) => p.host).join(", ")}`
-                      : t("Scratchpad")
+              {tabs.map((tab) => {
+                let isUnread = false;
+                let hasExecutingAndUnread = false;
+                let hasUnreadOnly = false;
+                let hasExecutingOnly = false;
+                if (tab.type === "terminal") {
+                  isUnread = unreadTabIds.has(tab.id);
+                  for (const pane of tab.panes) {
+                    const isExecuting = pane.state === "connected" && shellIntegrations[pane.id]?.isExecuting === true;
+                    if (isExecuting && isUnread) {
+                      hasExecutingAndUnread = true;
+                    } else if (isUnread) {
+                      hasUnreadOnly = true;
+                    } else if (isExecuting) {
+                      hasExecutingOnly = true;
+                    }
                   }
-                  onContextMenu={(e) => handleContextMenu(e, tab.id)}
-                  onAuxClick={(e) => {
-                    // mouse middle key
-                    if (e.button === 1) {
-                      e.preventDefault();
-                      closeTab(tab.id);
+                }
+
+                return (
+                  <Tab
+                    className={`tab ${tab.id === activeTabId ? "active" : ""} ${isUnread ? "unread" : ""} ${
+                      tab.id === draggedTabId ? "dragging" : ""
+                    } ${hasExecutingAndUnread || hasExecutingOnly ? "executing" : ""} ${tab.panes
+                      .map((p) => p.options?.tabClass || "")
+                      .join(" ")}`}
+                    data-id={tab.id}
+                    data-type={tab.type}
+                    data-is-pinned={tab.isPinned ? "1" : "0"}
+                    data-is-locked={tab.isLocked ? "1" : "0"}
+                    key={tab.id}
+                    value={tab.id}
+                    title={
+                      tab.type === "terminal"
+                        ? t("Hosts:") + ` ${tab.panes.map((p) => p.host).join(", ")}`
+                        : t("Scratchpad")
                     }
-                  }}
-                  draggable={!isMobile && !isTouch}
-                  onDragStart={(e) => {
-                    activatePane(tab.activePaneId, tab.id);
-                    e.dataTransfer.effectAllowed = "move";
-                    e.dataTransfer.setData("text/plain", tab.id);
-                    setDraggedTabId(tab.id);
-                  }}
-                  onDragEnd={() => {
-                    setDraggedTabId(null);
-                    setDragOverTab(null);
-                  }}
-                  onDragOver={(e) => {
-                    if (!draggedTabId || draggedTabId === tab.id) {
-                      return;
-                    }
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = "move";
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const position = e.clientX > rect.left + rect.width / 2 ? "after" : "before";
-                    if (!dragOverTab || dragOverTab.id !== tab.id || dragOverTab.position !== position) {
-                      setDragOverTab({ id: tab.id, position });
-                    }
-                  }}
-                  onDragLeave={() => {
-                    if (dragOverTab?.id === tab.id) {
+                    onContextMenu={(e) => handleContextMenu(e, tab.id)}
+                    onAuxClick={(e) => {
+                      // mouse middle key
+                      if (e.button === 1) {
+                        e.preventDefault();
+                        closeTab(tab.id);
+                      }
+                    }}
+                    draggable={!isMobile && !isTouch}
+                    onDragStart={(e) => {
+                      activatePane(tab.activePaneId, tab.id);
+                      e.dataTransfer.effectAllowed = "move";
+                      e.dataTransfer.setData("text/plain", tab.id);
+                      setDraggedTabId(tab.id);
+                    }}
+                    onDragEnd={() => {
+                      setDraggedTabId(null);
                       setDragOverTab(null);
-                    }
-                  }}
-                  onDrop={(e) => {
-                    if (!draggedTabId || draggedTabId === tab.id) {
-                      return;
-                    }
-                    e.preventDefault();
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const position = e.clientX > rect.left + rect.width / 2 ? "after" : "before";
-                    reorderTabs(draggedTabId, tab.id, position);
-                    setDraggedTabId(null);
-                    setDragOverTab(null);
-                  }}
-                  sx={{
-                    minHeight: 40,
-                    py: 0,
-                    textTransform: "none",
-                    minWidth: "auto",
-                    opacity: draggedTabId === tab.id ? 0.4 : 1,
-                    boxShadow:
-                      dragOverTab?.id === tab.id
-                        ? (theme) =>
-                            `inset ${dragOverTab.position === "before" ? "3px" : "-3px"} 0 0 ${theme.palette.primary.main}`
-                        : undefined,
-                    transition: "opacity 0.2s, box-shadow 0.1s",
-                    // ...(tab.id !== activeTabId
-                    //   ? {
-                    //       "&:hover": {
-                    //         bgcolor: "primary.light",
-                    //         color: "white",
-                    //       },
-                    //     }
-                    //   : undefined),
-                    ...(tab.panes[0]?.options?.tabStyle
-                      ? (JSON.parse(tab.panes[0].options.tabStyle) as React.CSSProperties)
-                      : undefined),
-                  }}
-                  label={
-                    <Box sx={{ display: "flex", alignItems: "center" }}>
-                      {tab.isLocked ? (
-                        <LockIcon sx={{ fontSize: 14, mr: 0.5, color: "primary.main" }} />
-                      ) : (
-                        tab.isPinned && <PushPinIcon sx={{ fontSize: 14, mr: 0.5, color: "primary.main" }} />
-                      )}
-                      <Box sx={{ width: 16, mr: 0.5, display: "flex", justifyContent: "center", alignItems: "center" }}>
-                        {tab.type === "scratchpad" ? (
-                          <Box sx={{ display: "flex", alignItems: "center" }}>
-                            {scratchpadSyncState === "offline" && <CloudOffIcon fontSize="small" color="error" />}
-                            {scratchpadSyncState === "syncing" && (
-                              <SyncIcon
-                                fontSize="small"
-                                color="info"
-                                sx={{
-                                  animation: "spin 2s linear infinite",
-                                  "@keyframes spin": {
-                                    "0%": { transform: "rotate(0deg)" },
-                                    "100%": { transform: "rotate(360deg)" },
-                                  },
-                                }}
-                              />
-                            )}
-                            {scratchpadSyncState === "dirty" && <CloudUploadIcon fontSize="small" color="warning" />}
-                            {scratchpadSyncState === "synced" && <CloudDoneIcon fontSize="small" color="success" />}
-                          </Box>
+                    }}
+                    onDragOver={(e) => {
+                      if (!draggedTabId || draggedTabId === tab.id) {
+                        return;
+                      }
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const position = e.clientX > rect.left + rect.width / 2 ? "after" : "before";
+                      if (!dragOverTab || dragOverTab.id !== tab.id || dragOverTab.position !== position) {
+                        setDragOverTab({ id: tab.id, position });
+                      }
+                    }}
+                    onDragLeave={() => {
+                      if (dragOverTab?.id === tab.id) {
+                        setDragOverTab(null);
+                      }
+                    }}
+                    onDrop={(e) => {
+                      if (!draggedTabId || draggedTabId === tab.id) {
+                        return;
+                      }
+                      e.preventDefault();
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const position = e.clientX > rect.left + rect.width / 2 ? "after" : "before";
+                      reorderTabs(draggedTabId, tab.id, position);
+                      setDraggedTabId(null);
+                      setDragOverTab(null);
+                    }}
+                    sx={{
+                      minHeight: 40,
+                      py: 0,
+                      textTransform: "none",
+                      minWidth: "auto",
+                      opacity: draggedTabId === tab.id ? 0.4 : 1,
+                      boxShadow:
+                        dragOverTab?.id === tab.id
+                          ? (theme) =>
+                              `inset ${dragOverTab.position === "before" ? "3px" : "-3px"} 0 0 ${theme.palette.primary.main}`
+                          : undefined,
+                      transition: "opacity 0.2s, box-shadow 0.1s",
+                      // ...(tab.id !== activeTabId
+                      //   ? {
+                      //       "&:hover": {
+                      //         bgcolor: "primary.light",
+                      //         color: "white",
+                      //       },
+                      //     }
+                      //   : undefined),
+                      ...(tab.panes[0]?.options?.tabStyle
+                        ? (JSON.parse(tab.panes[0].options.tabStyle) as React.CSSProperties)
+                        : undefined),
+                    }}
+                    label={
+                      <Box sx={{ display: "flex", alignItems: "center" }}>
+                        {tab.isLocked ? (
+                          <LockIcon sx={{ fontSize: 14, mr: 0.5, color: "primary.main" }} />
                         ) : (
-                          (() => {
-                            const state = tab.panes.find((p) => p.id === tab.activePaneId)?.state || "disconnected";
-                            const isConnected = state === "connected";
-                            const isUnread = unreadTabIds.has(tab.id);
-
-                            if (isConnected && isUnread) {
-                              return <PriorityHighIcon sx={{ fontSize: 18, color: "#2196f3", fontWeight: "bold" }} />;
-                            }
-
-                            return (
-                              <Box
-                                sx={{
-                                  width: 8,
-                                  height: 8,
-                                  borderRadius: "50%",
-                                  bgcolor: isConnected
-                                    ? "success.main"
-                                    : state.startsWith("connecting")
-                                      ? "warning.main"
-                                      : "error.main",
-                                }}
-                                title={state}
-                              />
-                            );
-                          })()
+                          tab.isPinned && <PushPinIcon sx={{ fontSize: 14, mr: 0.5, color: "primary.main" }} />
                         )}
+                        <Box
+                          sx={{ width: 16, mr: 0.5, display: "flex", justifyContent: "center", alignItems: "center" }}
+                        >
+                          {tab.type === "scratchpad" ? (
+                            <Box sx={{ display: "flex", alignItems: "center" }}>
+                              {scratchpadSyncState === "offline" && <CloudOffIcon fontSize="small" color="error" />}
+                              {scratchpadSyncState === "syncing" && (
+                                <SyncIcon
+                                  fontSize="small"
+                                  color="info"
+                                  sx={{
+                                    animation: "spin 2s linear infinite",
+                                    "@keyframes spin": {
+                                      "0%": { transform: "rotate(0deg)" },
+                                      "100%": { transform: "rotate(360deg)" },
+                                    },
+                                  }}
+                                />
+                              )}
+                              {scratchpadSyncState === "dirty" && <CloudUploadIcon fontSize="small" color="warning" />}
+                              {scratchpadSyncState === "synced" && <CloudDoneIcon fontSize="small" color="success" />}
+                            </Box>
+                          ) : (
+                            (() => {
+                              if (hasExecutingAndUnread) {
+                                return (
+                                  <Box
+                                    title={t("Executing & unread")}
+                                    sx={{
+                                      position: "relative",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      width: 18,
+                                      height: 18,
+                                    }}
+                                  >
+                                    <SyncIcon
+                                      sx={{
+                                        fontSize: 16,
+                                        color: "#2196f3",
+                                        animation: "spin 2s linear infinite",
+                                        "@keyframes spin": {
+                                          "0%": { transform: "rotate(0deg)" },
+                                          "100%": { transform: "rotate(360deg)" },
+                                        },
+                                      }}
+                                    />
+                                    <PriorityHighIcon
+                                      sx={{
+                                        position: "absolute",
+                                        top: -3,
+                                        right: -5,
+                                        fontSize: 12,
+                                        color: "#2196f3",
+                                        fontWeight: "bold",
+                                        bgcolor: "#f4f6f8",
+                                        borderRadius: "50%",
+                                      }}
+                                    />
+                                  </Box>
+                                );
+                              }
+
+                              if (hasUnreadOnly) {
+                                return (
+                                  <Box title={t("Unread")} sx={{ display: "flex", alignItems: "center" }}>
+                                    <PriorityHighIcon sx={{ fontSize: 18, color: "#2196f3", fontWeight: "bold" }} />
+                                  </Box>
+                                );
+                              }
+
+                              if (hasExecutingOnly) {
+                                return (
+                                  <Box title={t("Executing")} sx={{ display: "flex", alignItems: "center" }}>
+                                    <SyncIcon
+                                      sx={{
+                                        fontSize: 16,
+                                        color: "#2196f3",
+                                        animation: "spin 2s linear infinite",
+                                        "@keyframes spin": {
+                                          "0%": { transform: "rotate(0deg)" },
+                                          "100%": { transform: "rotate(360deg)" },
+                                        },
+                                      }}
+                                    />
+                                  </Box>
+                                );
+                              }
+
+                              const activeState =
+                                tab.panes.find((p) => p.id === tab.activePaneId)?.state || "disconnected";
+                              const isConnected = activeState === "connected";
+
+                              return (
+                                <Box
+                                  sx={{
+                                    width: 8,
+                                    height: 8,
+                                    borderRadius: "50%",
+                                    bgcolor: isConnected
+                                      ? "success.main"
+                                      : activeState.startsWith("connecting")
+                                        ? "warning.main"
+                                        : "error.main",
+                                  }}
+                                  title={PaneStateLabels[activeState]}
+                                />
+                              );
+                            })()
+                          )}
+                        </Box>
+                        <span>{tab.title}</span>
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            closeTab(tab.id);
+                          }}
+                          sx={{ ml: 1, p: 0.5 }}
+                        >
+                          <CloseIcon fontSize="small" />
+                        </IconButton>
                       </Box>
-                      <span>{tab.title}</span>
-                      <IconButton
-                        size="small"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          closeTab(tab.id);
-                        }}
-                        sx={{ ml: 1, p: 0.5 }}
-                      >
-                        <CloseIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                  }
-                />
-              ))}
+                    }
+                  />
+                );
+              })}
             </Tabs>
           </Box>
           <IconButton
