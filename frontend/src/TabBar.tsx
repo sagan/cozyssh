@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Box, Tabs, Tab, IconButton, Menu, MenuItem } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import AddIcon from "@mui/icons-material/Add";
@@ -40,8 +40,15 @@ import {
   handleCloseSearch,
   parseNewTabDialogFilter,
   PaneStateLabels,
+  getIntVar,
 } from "./store";
-import { APP_NAME, ID_TERMINAL_SEARCH_INPUT, LOCAL_NAME } from "./constants";
+import {
+  APP_NAME,
+  DEFAULT_TERMINAL_ACTIVE_PERIOD,
+  ID_TERMINAL_SEARCH_INPUT,
+  LOCAL_NAME,
+  VAR_CS_TERMINAL_ACTIVE_PERIOD,
+} from "./constants";
 import TextFieldWithCopy from "./components/TextFieldWithCopy";
 import ExtraMenu from "./components/ExtraMenu";
 
@@ -65,6 +72,7 @@ export default function TabBar({
   const activeTabId = useStore((state) => state.activeTabId);
   const activePaneId = useStore((state) => state.activePaneId);
   const unreadTabIds = useStore((state) => state.unreadTabIds);
+  const sessionBufferDataTimes = useStore((state) => state.sessionBufferDataTimes);
   const shellIntegrations = useStore((state) => state.shellIntegrations);
   const sysSitename = useStore((state) => state.sysinfo.sitename);
   const searchOpen = useStore((state) => state.searchOpen);
@@ -75,6 +83,55 @@ export default function TabBar({
   const [dragOverTab, setDragOverTab] = useState<{ id: string; position: "before" | "after" } | null>(null);
 
   const [tabBarContextMenu, setTabBarContextMenu] = useState<{ mouseX: number; mouseY: number } | null>(null);
+
+  const activePeriod = getIntVar(VAR_CS_TERMINAL_ACTIVE_PERIOD, DEFAULT_TERMINAL_ACTIVE_PERIOD);
+  // Force a re-evaluation of executingSpin right after the last data arrived + active period,
+  // so the spin animation stops once the recency window expires.
+  const [refreshToken, setRefreshToken] = useState(0);
+  useEffect(() => {
+    if (activePeriod > 0) {
+      const timer = setTimeout(() => setRefreshToken((t) => t + 1), activePeriod + 100);
+      return () => clearTimeout(timer);
+    }
+  }, [sessionBufferDataTimes]);
+
+  const tabStates = useMemo(() => {
+    return tabs.map((tab) => {
+      let unread = false;
+      let executingUnread = false;
+      let unreadOnly = false;
+      let executingOnly = false;
+      let executingSpin = false;
+      if (tab.type === "terminal") {
+        unread = unreadTabIds.has(tab.id);
+        for (const pane of tab.panes) {
+          const isExecuting = pane.state === "connected" && shellIntegrations[pane.id]?.isExecuting === true;
+          const lastTime = sessionBufferDataTimes[pane.id] || 0;
+          const isRecent = activePeriod > 0 && Date.now() - lastTime < activePeriod;
+          if (isExecuting) {
+            if (isRecent) {
+              executingSpin = true;
+            }
+            if (unread) {
+              executingUnread = true;
+            } else {
+              executingOnly = true;
+            }
+          } else if (unread) {
+            unreadOnly = true;
+          }
+        }
+      }
+      return {
+        unread,
+        executingUnread,
+        unreadOnly,
+        executingOnly,
+        executingSpin,
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabs, unreadTabIds, shellIntegrations, sessionBufferDataTimes, refreshToken]);
 
   const reorderTabs = (draggedId: string, targetId: string, position: "before" | "after") => {
     const draggedIndex = tabs.findIndex((t) => t.id === draggedId);
@@ -100,11 +157,14 @@ export default function TabBar({
 
   useEffect(() => {
     const active = tabs.find((t) => t.id === activeTabId);
+    let title: string;
     if (!active || active.title === LOCAL_NAME) {
-      document.title = APP_NAME + " " + sysSitename;
+      title = APP_NAME + " " + sysSitename;
     } else {
-      document.title = `${active.title} - ${APP_NAME} ${sysSitename}`;
+      title = `${active.title} - ${APP_NAME} ${sysSitename}`;
     }
+    document.title = title;
+    appSetWindowTitle?.(title);
   }, [tabs, activeTabId, sysSitename]);
 
   useEffect(() => {
@@ -169,30 +229,13 @@ export default function TabBar({
               allowScrollButtonsMobile
               sx={{ minHeight: 40 }}
             >
-              {tabs.map((tab) => {
-                let isUnread = false;
-                let hasExecutingAndUnread = false;
-                let hasUnreadOnly = false;
-                let hasExecutingOnly = false;
-                if (tab.type === "terminal") {
-                  isUnread = unreadTabIds.has(tab.id);
-                  for (const pane of tab.panes) {
-                    const isExecuting = pane.state === "connected" && shellIntegrations[pane.id]?.isExecuting === true;
-                    if (isExecuting && isUnread) {
-                      hasExecutingAndUnread = true;
-                    } else if (isUnread) {
-                      hasUnreadOnly = true;
-                    } else if (isExecuting) {
-                      hasExecutingOnly = true;
-                    }
-                  }
-                }
-
+              {tabs.map((tab, i) => {
+                const state = tabStates[i];
                 return (
                   <Tab
-                    className={`tab ${tab.id === activeTabId ? "active" : ""} ${isUnread ? "unread" : ""} ${
+                    className={`tab ${tab.id === activeTabId ? "active" : ""} ${state.unread ? "unread" : ""} ${
                       tab.id === draggedTabId ? "dragging" : ""
-                    } ${hasExecutingAndUnread || hasExecutingOnly ? "executing" : ""} ${tab.panes
+                    } ${state.executingUnread || state.executingOnly ? "executing" : ""} ${tab.panes
                       .map((p) => p.options?.tabClass || "")
                       .join(" ")}`}
                     data-id={tab.id}
@@ -308,7 +351,7 @@ export default function TabBar({
                             </Box>
                           ) : (
                             (() => {
-                              if (hasExecutingAndUnread) {
+                              if (state.executingUnread) {
                                 return (
                                   <Box
                                     title={t("Executing & unread")}
@@ -325,11 +368,15 @@ export default function TabBar({
                                       sx={{
                                         fontSize: 16,
                                         color: "#2196f3",
-                                        animation: "spin 2s linear infinite",
-                                        "@keyframes spin": {
-                                          "0%": { transform: "rotate(0deg)" },
-                                          "100%": { transform: "rotate(360deg)" },
-                                        },
+                                        ...(state.executingSpin
+                                          ? {
+                                              animation: "spin 2s linear infinite",
+                                              "@keyframes spin": {
+                                                "0%": { transform: "rotate(0deg)" },
+                                                "100%": { transform: "rotate(360deg)" },
+                                              },
+                                            }
+                                          : {}),
                                       }}
                                     />
                                     <PriorityHighIcon
@@ -348,7 +395,7 @@ export default function TabBar({
                                 );
                               }
 
-                              if (hasUnreadOnly) {
+                              if (state.unreadOnly) {
                                 return (
                                   <Box title={t("Unread")} sx={{ display: "flex", alignItems: "center" }}>
                                     <PriorityHighIcon sx={{ fontSize: 18, color: "#2196f3", fontWeight: "bold" }} />
@@ -356,18 +403,22 @@ export default function TabBar({
                                 );
                               }
 
-                              if (hasExecutingOnly) {
+                              if (state.executingOnly) {
                                 return (
                                   <Box title={t("Executing")} sx={{ display: "flex", alignItems: "center" }}>
                                     <SyncIcon
                                       sx={{
                                         fontSize: 16,
                                         color: "#2196f3",
-                                        animation: "spin 2s linear infinite",
-                                        "@keyframes spin": {
-                                          "0%": { transform: "rotate(0deg)" },
-                                          "100%": { transform: "rotate(360deg)" },
-                                        },
+                                        ...(state.executingSpin
+                                          ? {
+                                              animation: "spin 2s linear infinite",
+                                              "@keyframes spin": {
+                                                "0%": { transform: "rotate(0deg)" },
+                                                "100%": { transform: "rotate(360deg)" },
+                                              },
+                                            }
+                                          : {}),
                                       }}
                                     />
                                   </Box>

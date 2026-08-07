@@ -110,6 +110,11 @@ export interface ShellIntegration {
   exitStatus?: number;
   exitSignal?: string;
   isExecuting?: boolean;
+  /**
+   * Command executing start unix timestamp in ms.
+   * Note for simplicity it's not cleared after the command execution finishes.
+   */
+  executingStartTime?: number;
   recentCommands?: CommandHistoryEntry[];
   /** Current OSC 133 prompt lifecycle phase */
   promptPhase?: PromptPhase;

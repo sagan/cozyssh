@@ -65,6 +65,11 @@ export const VAR_CS_SIDEBAR_WIDTH = "cs_sidebar_width";
 export const VAR_CS_RECENT_HOSTS = "cs_recent_hosts";
 export const VAR_CS_RECENT_BUTTONS = "cs_recent_buttons";
 /**
+ * The period in ms to consider a terminal is active if any new data arrives in buffer recently.
+ * Default is 2000ms (2 seconds)
+ */
+export const VAR_CS_TERMINAL_ACTIVE_PERIOD = "cs_terminal_active_period";
+/**
  * Shell Integration keeped recent commands number for each terminal
  */
 export const VAR_CS_TERMINAL_RECENT_COMMANDS = "cs_terminal_recent_commands";
@@ -88,6 +93,7 @@ export const DEFAULT_TERMINAL_RECENT_COMMANDS = 100;
  * xterm.js default fontSize
  */
 export const DEFAULT_TERMINAL_FONT_SIZE = 15;
+export const DEFAULT_TERMINAL_ACTIVE_PERIOD = 2000;
 
 export const COZYSSH_TOKEN_PREFIX = "cozytoken.";
 export const WS_PROTOCOL_QUERY_PREFIX = "query.";

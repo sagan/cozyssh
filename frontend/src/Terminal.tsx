@@ -376,10 +376,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
           // focused — so don't propagate the blur to the UI layer (which would
           // e.g. close the MobileInputBar's extra-keys panel).
           const related = (ev as FocusEvent).relatedTarget;
-          if (
-            related instanceof HTMLElement &&
-            related.classList.contains("kolu-android-keyboard-input")
-          ) {
+          if (related instanceof HTMLElement && related.classList.contains("kolu-android-keyboard-input")) {
             return;
           }
           onTerminalBlur();
@@ -392,9 +389,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
         // hidden proxy <input>.  Wire up its blur so that onTerminalBlur
         // fires when focus genuinely leaves the terminal (not when focus
         // just bounces back to the textarea).
-        const androidProxy = textarea.parentElement?.querySelector<HTMLInputElement>(
-          ".kolu-android-keyboard-input",
-        );
+        const androidProxy = textarea.parentElement?.querySelector<HTMLInputElement>(".kolu-android-keyboard-input");
         if (androidProxy) {
           androidProxy.addEventListener("blur", (ev) => {
             const related = (ev as FocusEvent).relatedTarget;
@@ -512,6 +507,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
             if (type === "command") {
               updates.commandId = info.start;
               updates.isExecuting = true;
+              updates.executingStartTime = Date.now();
               updates.promptPhase = "output";
               updates.currentCmdLine = undefined;
               promptEndRef.current = null;

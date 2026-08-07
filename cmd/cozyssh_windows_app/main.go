@@ -85,6 +85,8 @@ var (
 
 type winRect struct{ Left, Top, Right, Bottom int32 }
 
+const DEFAULT_WINDOW_TITLE_SUFFIX = " (main)"
+
 const (
 	swShowNormal    = 1
 	swShowMaximized = 3
@@ -333,7 +335,7 @@ func main() {
 		AutoFocus: true,
 		DataPath:  filepath.Join(cfg.ConfigDir, constants.WEBVIEW2_DATA_DIR),
 		WindowOptions: webview2.WindowOptions{
-			Title:     constants.APP_NAME + " (main)",
+			Title:     constants.APP_NAME + DEFAULT_WINDOW_TITLE_SUFFIX,
 			Width:     initWidth,
 			Height:    initHeight,
 			IconId:    2,
@@ -418,6 +420,16 @@ func bindAppFunctions(w webview2.WebView, hwnd uintptr, cfg *config.Config) {
 	var isFullscreen bool
 	var savedWindowRect winRect
 	var savedWindowStyle uint32
+
+	w.Bind("appSetWindowTitle", func(title string) {
+		currentTitle := w32.GetWindowText(w32.HWND(hwnd))
+		if strings.HasSuffix(currentTitle, DEFAULT_WINDOW_TITLE_SUFFIX) {
+			title += DEFAULT_WINDOW_TITLE_SUFFIX
+		}
+		w.Dispatch(func() {
+			w32.SetWindowText(w32.HWND(hwnd), title)
+		})
+	})
 
 	w.Bind("appOpenUrl", func(u string) {
 		windows.ShellExecute(0, nil, windows.StringToUTF16Ptr(u), nil, nil, windows.SW_SHOWNORMAL)

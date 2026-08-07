@@ -295,6 +295,10 @@ interface Store {
   newTabDialogOpen: boolean;
   newTabDialogFilter: string;
   unreadTabIds: Set<string>;
+  /**
+   * pane id => timestamp
+   */
+  sessionBufferDataTimes: Record<string, number>;
   focusTrigger: number;
   focusSearchInputTrigger: number;
   tabs: TabData[];
@@ -314,6 +318,9 @@ interface Store {
   /** Local (browser-only) vars. All names have a "local_" (case-insensitive) prefix. */
   localVars: Record<string, string>;
   recentButtonIds: string[];
+  /**
+   * pane id => shell integration
+   */
   shellIntegrations: Record<string, ShellIntegration>;
   activeTunnels: ActiveTunnel[];
 }
@@ -473,6 +480,7 @@ export const useStore = create<Store>(
       inputValue: "",
       inputLiquid: false,
       unreadTabIds: new Set<string>(),
+      sessionBufferDataTimes: {},
       focusTrigger: 0,
       focusSearchInputTrigger: 0,
       tabs: [],
@@ -838,6 +846,84 @@ export const addUnreadTabId = (tabId: string) =>
     unreadTabIds: new Set([...state.unreadTabIds, tabId]),
   }));
 
+export const setSessionBufferDataTime = (sessionId: string, timestamp = Date.now()) =>
+  useStore.setState((state) => ({
+    sessionBufferDataTimes: {
+      ...state.sessionBufferDataTimes,
+      [sessionId]: timestamp,
+    },
+  }));
+
+export const cleanupAssociatedTabState = (state: Store, newTabs: TabData[]): Partial<Store> => {
+  const validTabIds = new Set(newTabs.map((t) => t.id));
+  const validPaneIds = new Set(newTabs.flatMap((t) => t.panes.map((p) => p.id)));
+
+  let unreadTabIds = state.unreadTabIds;
+  let unreadChanged = false;
+  if (unreadTabIds) {
+    for (const id of unreadTabIds) {
+      if (!validTabIds.has(id)) {
+        unreadChanged = true;
+        break;
+      }
+    }
+    if (unreadChanged) {
+      unreadTabIds = new Set([...unreadTabIds].filter((id) => validTabIds.has(id)));
+    }
+  } else {
+    unreadTabIds = new Set();
+  }
+
+  let shellIntegrations = state.shellIntegrations;
+  let shellChanged = false;
+  if (shellIntegrations) {
+    for (const id in shellIntegrations) {
+      if (!validPaneIds.has(id)) {
+        shellChanged = true;
+        break;
+      }
+    }
+    if (shellChanged) {
+      shellIntegrations = {};
+      for (const [id, val] of Object.entries(state.shellIntegrations)) {
+        if (validPaneIds.has(id)) {
+          shellIntegrations[id] = val;
+        }
+      }
+    }
+  } else {
+    shellIntegrations = {};
+  }
+
+  let sessionBufferDataTimes = state.sessionBufferDataTimes;
+  let bufferChanged = false;
+  if (sessionBufferDataTimes) {
+    for (const id in sessionBufferDataTimes) {
+      if (!validPaneIds.has(id)) {
+        bufferChanged = true;
+        break;
+      }
+    }
+    if (bufferChanged) {
+      sessionBufferDataTimes = {};
+      for (const [id, val] of Object.entries(state.sessionBufferDataTimes)) {
+        if (validPaneIds.has(id)) {
+          sessionBufferDataTimes[id] = val;
+        }
+      }
+    }
+  } else {
+    sessionBufferDataTimes = {};
+  }
+
+  return {
+    tabs: newTabs,
+    unreadTabIds,
+    shellIntegrations,
+    sessionBufferDataTimes,
+  };
+};
+
 export const closeOtherTabs = (targetTabId?: string) => {
   const { activeTabId, tabs } = getStore();
   targetTabId = targetTabId || activeTabId;
@@ -848,11 +934,11 @@ export const closeOtherTabs = (targetTabId?: string) => {
   if (!targetTab) {
     return;
   }
-  useStore.setState({
-    tabs: [targetTab],
+  useStore.setState((state) => ({
+    ...cleanupAssociatedTabState(state, [targetTab]),
     activeTabId: targetTab.id,
     activePaneId: targetTab.activePaneId,
-  });
+  }));
   triggerFocus();
 };
 
@@ -869,22 +955,23 @@ export const closeRightTabs = (targetTabId?: string) => {
   const targetTab = tabs[targetTabIndex];
   const activeTabClosed = tabs.findIndex((tab) => tab.id === activeTabId) > targetTabIndex;
   const newTabs = tabs.slice(0, targetTabIndex + 1);
-  useStore.setState(
-    activeTabClosed
+  useStore.setState((state) => ({
+    ...cleanupAssociatedTabState(state, newTabs),
+    ...(activeTabClosed
       ? {
-          tabs: newTabs,
           activeTabId: targetTab.id,
           activePaneId: targetTab.activePaneId,
         }
-      : { tabs: newTabs },
-  );
+      : {}),
+  }));
   triggerFocus();
 };
 
 export const setTabs = (update: TabData[] | ((data: TabData[]) => TabData[])) =>
-  useStore.setState((state) => ({
-    tabs: typeof update === "function" ? update(state.tabs) : update,
-  }));
+  useStore.setState((state) => {
+    const newTabs = typeof update === "function" ? update(state.tabs) : update;
+    return cleanupAssociatedTabState(state, newTabs);
+  });
 
 export const setActiveTabId = (activeTabId: string) => useStore.setState({ activeTabId });
 
@@ -1046,6 +1133,8 @@ export const clearData = (preserveLocalVars = false) =>
     recents: [],
     toasts: [],
     vars: {},
+    unreadTabIds: new Set(),
+    sessionBufferDataTimes: {},
     shellIntegrations: {},
     recentButtonIds: [],
     ...(preserveLocalVars ? {} : { localVars: {} }),

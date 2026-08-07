@@ -50,7 +50,9 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess: (data?: Full
           name = name.slice(prefix.length);
         }
         setName(name);
-        document.title = prefix + name;
+        const title = prefix + name;
+        document.title = title;
+        appSetWindowTitle?.(title);
       })
       .catch((e) => console.log(e));
   }, []);

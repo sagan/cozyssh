@@ -2124,6 +2124,11 @@ export interface ShellIntegration {
 	exitStatus?: number;
 	exitSignal?: string;
 	isExecuting?: boolean;
+	/**
+	 * Command executing start unix timestamp in ms.
+	 * Note for simplicity it's not cleared after the command execution finishes.
+	 */
+	executingStartTime?: number;
 	recentCommands?: CommandHistoryEntry[];
 	/** Current OSC 133 prompt lifecycle phase */
 	promptPhase?: PromptPhase;
@@ -2354,6 +2359,10 @@ export interface Store {
 	newTabDialogOpen: boolean;
 	newTabDialogFilter: string;
 	unreadTabIds: Set<string>;
+	/**
+	 * pane id => timestamp
+	 */
+	sessionBufferDataTimes: Record<string, number>;
 	focusTrigger: number;
 	focusSearchInputTrigger: number;
 	tabs: TabData[];
@@ -2373,6 +2382,9 @@ export interface Store {
 	/** Local (browser-only) vars. All names have a "local_" (case-insensitive) prefix. */
 	localVars: Record<string, string>;
 	recentButtonIds: string[];
+	/**
+	 * pane id => shell integration
+	 */
 	shellIntegrations: Record<string, ShellIntegration>;
 	activeTunnels: ActiveTunnel[];
 }
@@ -3086,6 +3098,10 @@ declare global {
 	 * Open url in system default browser (only valid for desktop app).
 	 */
 	var appOpenUrl: ((url: string) => Promise<void>) | undefined;
+	/**
+	 * Set the native window title
+	 */
+	var appSetWindowTitle: ((title: string) => Promise<void>) | undefined;
 }
 
 export {};

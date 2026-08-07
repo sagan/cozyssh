@@ -18,6 +18,7 @@ import {
   setMobileOpen,
   setNewTabDialogFilter,
   setNewTabDialogOpen,
+  setSessionBufferDataTime,
   setShellIntegrations,
   setTabs,
   useStore,
@@ -68,12 +69,12 @@ export default function TerminalGrid({
   const [isCtrlActive, setIsCtrlActive] = useState(false);
   const [isAltActive, setIsAltActive] = useState(false);
 
-  const handleTerminalData = useCallback((tabId: string) => {
+  const handleTerminalData = useCallback((tabId: string, paneId: string) => {
     const { activeTabId, unreadTabIds } = getStore();
-    if (activeTabId === tabId || unreadTabIds.has(tabId)) {
-      return;
+    if (activeTabId !== tabId && !unreadTabIds.has(tabId)) {
+      addUnreadTabId(tabId);
     }
-    addUnreadTabId(tabId);
+    setSessionBufferDataTime(paneId);
   }, []);
 
   // ── Gesture-mode: non-passive native touch listeners ─────────────────────
@@ -150,7 +151,8 @@ export default function TerminalGrid({
 
   // Note it must not depend on any state other then focusTrigger to avoid re-rendering.
   useEffect(() => {
-    if (focusTrigger > 0) {
+    // during first render window.__CS_TERMINALS__ may not be set yet
+    if (focusTrigger > 0 && window.__CS_TERMINALS__) {
       __CS_TERMINALS__.current[getStore().activePaneId]?.focus();
     }
   }, [focusTrigger]);
@@ -255,7 +257,7 @@ export default function TerminalGrid({
                         onShellIntegrationChange={(info) => {
                           setShellIntegrations((prev) => ({ ...prev, [pane.id]: info }));
                         }}
-                        onDataReceived={() => handleTerminalData(tab.id)}
+                        onDataReceived={() => handleTerminalData(tab.id, pane.id)}
                         onTabStateChange={(state) => {
                           setTabs((prev) =>
                             prev.map((t) =>

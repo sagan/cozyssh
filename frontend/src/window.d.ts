@@ -613,6 +613,10 @@ declare global {
    * Open url in system default browser (only valid for desktop app).
    */
   var appOpenUrl: ((url: string) => Promise<void>) | undefined;
+  /**
+   * Set the native window title
+   */
+  var appSetWindowTitle: ((title: string) => Promise<void>) | undefined;
 }
 
 export {};
