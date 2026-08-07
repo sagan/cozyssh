@@ -36,9 +36,9 @@ func TestLogin(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 4. Verify we are on the dashboard (should see "Filter hosts")
+	// 4. Verify we are on the dashboard (should see filter input)
 	// Using a locator that waits for the element to appear
-	selector := "input[placeholder*=\"Filter hosts\"]"
+	selector := SELECTOR_FILTER_INPUT
 	if _, err := page.WaitForSelector(selector); err != nil {
 		t.Fatalf("Login failed or dashboard not loaded: %v", err)
 	}

@@ -52,7 +52,7 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess: (data?: Full
         setName(name);
         const title = prefix + name;
         document.title = title;
-        appSetWindowTitle?.(title);
+        window.appSetWindowTitle?.(title);
       })
       .catch((e) => console.log(e));
   }, []);

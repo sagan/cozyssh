@@ -117,7 +117,7 @@ func TestPinTab(t *testing.T) {
 		t.Fatalf("reload: %v", err)
 	}
 	// Wait for dashboard to load.
-	if _, err := page.WaitForSelector("input[placeholder*=\"Filter hosts\"]"); err != nil {
+	if _, err := page.WaitForSelector(SELECTOR_FILTER_INPUT); err != nil {
 		t.Fatalf("dashboard after reload: %v", err)
 	}
 	// Wait for the pinned tab's terminal to attach.
@@ -147,7 +147,7 @@ func TestPinTab(t *testing.T) {
 	if _, err := page.Reload(); err != nil {
 		t.Fatalf("reload 2: %v", err)
 	}
-	if _, err := page.WaitForSelector("input[placeholder*=\"Filter hosts\"]"); err != nil {
+	if _, err := page.WaitForSelector(SELECTOR_FILTER_INPUT); err != nil {
 		t.Fatalf("dashboard after reload 2: %v", err)
 	}
 	// Give the 350ms init timer time to fire.
@@ -212,7 +212,7 @@ func TestLockTab(t *testing.T) {
 	if _, err := page.Reload(); err != nil {
 		t.Fatalf("reload: %v", err)
 	}
-	if _, err := page.WaitForSelector("input[placeholder*=\"Filter hosts\"]"); err != nil {
+	if _, err := page.WaitForSelector(SELECTOR_FILTER_INPUT); err != nil {
 		t.Fatalf("dashboard after reload: %v", err)
 	}
 	_, err := page.WaitForSelector(selectorXterm(""), playwright.PageWaitForSelectorOptions{

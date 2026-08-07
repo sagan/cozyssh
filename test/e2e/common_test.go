@@ -30,6 +30,8 @@ import (
 // yescrypt hash of `123456`
 const PASSWORD_HASH_123456 = "$y$j9T$jKQVBWNujTG0c1nVGLoO0.$V4sEZinfjMEcEUesyGvzDsTGcchoP1sV2A7BedR5Qn5"
 
+const SELECTOR_FILTER_INPUT = "input#sidebar-filter"
+
 var (
 	pwInstance *playwright.Playwright
 	browser    playwright.Browser
@@ -146,7 +148,7 @@ func login(t *testing.T, page playwright.Page, url string, password string) {
 	}
 
 	// Wait for dashboard
-	selector := "input[placeholder*=\"Filter hosts\"]"
+	selector := SELECTOR_FILTER_INPUT
 	if _, err := page.WaitForSelector(selector); err != nil {
 		t.Fatalf("Login failed or dashboard not loaded: %v", err)
 	}

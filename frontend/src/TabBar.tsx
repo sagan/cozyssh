@@ -93,6 +93,7 @@ export default function TabBar({
       const timer = setTimeout(() => setRefreshToken((t) => t + 1), activePeriod + 100);
       return () => clearTimeout(timer);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionBufferDataTimes]);
 
   const tabStates = useMemo(() => {
@@ -107,6 +108,7 @@ export default function TabBar({
         for (const pane of tab.panes) {
           const isExecuting = pane.state === "connected" && shellIntegrations[pane.id]?.isExecuting === true;
           const lastTime = sessionBufferDataTimes[pane.id] || 0;
+          // eslint-disable-next-line react-hooks/purity
           const isRecent = activePeriod > 0 && Date.now() - lastTime < activePeriod;
           if (isExecuting) {
             if (isRecent) {
@@ -164,7 +166,7 @@ export default function TabBar({
       title = `${active.title} - ${APP_NAME} ${sysSitename}`;
     }
     document.title = title;
-    appSetWindowTitle?.(title);
+    window.appSetWindowTitle?.(title);
   }, [tabs, activeTabId, sysSitename]);
 
   useEffect(() => {
