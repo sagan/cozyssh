@@ -799,7 +799,7 @@ export const changeNewTabDialogViewMode = (target?: boolean | ViewMode, resetFil
       if (idx === -1) {
         nextMode = "servers";
       } else {
-        nextMode = modes[(target ? idx - 1 + modes.length : idx + 1) % modes.length];
+        nextMode = modes[(target ? idx - 1 + modes.length : idx + 1) % modes.length]!;
       }
     }
     let newFilter = filter;
@@ -927,7 +927,7 @@ export const cleanupAssociatedTabState = (state: Store, newTabs: TabData[]): Par
 export const closeOtherTabs = (targetTabId?: string) => {
   const { activeTabId, tabs } = getStore();
   targetTabId = targetTabId || activeTabId;
-  if (tabs.length === 0 || (tabs.length === 1 && tabs[0].id === targetTabId)) {
+  if (tabs.length === 0 || (tabs.length === 1 && tabs[0]!.id === targetTabId)) {
     return;
   }
   const targetTab = tabs.find((tab) => tab.id === targetTabId);
@@ -945,14 +945,14 @@ export const closeOtherTabs = (targetTabId?: string) => {
 export const closeRightTabs = (targetTabId?: string) => {
   const { activeTabId, tabs } = getStore();
   targetTabId = targetTabId || activeTabId;
-  if (tabs.length === 0 || (tabs.length === 1 && tabs[0].id === targetTabId)) {
+  if (tabs.length === 0 || (tabs.length === 1 && tabs[0]!.id === targetTabId)) {
     return;
   }
   const targetTabIndex = tabs.findIndex((tab) => tab.id === targetTabId);
   if (targetTabIndex === -1) {
     return;
   }
-  const targetTab = tabs[targetTabIndex];
+  const targetTab = tabs[targetTabIndex]!;
   const activeTabClosed = tabs.findIndex((tab) => tab.id === activeTabId) > targetTabIndex;
   const newTabs = tabs.slice(0, targetTabIndex + 1);
   useStore.setState((state) => ({
@@ -1028,11 +1028,11 @@ export const prevButtonGroup = (includeHidden = false) => {
   const idx = groups.indexOf(activeGroup);
   let nextIdx = (idx - 1 + groups.length) % groups.length;
   if (!includeHidden) {
-    while (nextIdx !== idx && groups[nextIdx].startsWith("_")) {
+    while (nextIdx !== idx && groups[nextIdx]!.startsWith("_")) {
       nextIdx = (nextIdx - 1 + groups.length) % groups.length;
     }
   }
-  setActiveGroup(groups[nextIdx]);
+  setActiveGroup(groups[nextIdx]!);
 };
 
 export const nextButtonGroup = (includeHidden = false) => {
@@ -1041,11 +1041,11 @@ export const nextButtonGroup = (includeHidden = false) => {
   const idx = groups.indexOf(activeGroup);
   let nextIdx = (idx + 1) % groups.length;
   if (!includeHidden) {
-    while (nextIdx !== idx && groups[nextIdx].startsWith("_")) {
+    while (nextIdx !== idx && groups[nextIdx]!.startsWith("_")) {
       nextIdx = (nextIdx + 1) % groups.length;
     }
   }
-  setActiveGroup(groups[nextIdx]);
+  setActiveGroup(groups[nextIdx]!);
 };
 
 /**
@@ -1379,12 +1379,12 @@ export function openHostsAsSplit(
     title,
     id: tabId,
     panes: panes,
-    activePaneId: panes[0].id,
+    activePaneId: panes[0]!.id,
     type: "terminal",
   };
   setTabs((prev) => [...prev, newTab]);
   setActiveTabId(newTab.id);
-  setActivePaneId(panes[0].id);
+  setActivePaneId(panes[0]!.id);
   return tabId;
 }
 
@@ -1428,7 +1428,7 @@ export function openHostsAsSplit2(
       }
     }
   }
-  title = title || hostNames[0];
+  title = title || hostNames[0]!;
   if (target === "_self") {
     target = getStore().activeTabId;
   } else if (target === "_blank") {
@@ -1437,7 +1437,7 @@ export function openHostsAsSplit2(
   if (hostNames.length > 1) {
     return openHostsAsSplit(title, hostNames, hostOptions);
   } else {
-    return openHost(hostNames[0], { title, target, options: hostOptions[0] });
+    return openHost(hostNames[0]!, { title, target, options: hostOptions[0] });
   }
 }
 
@@ -1514,7 +1514,7 @@ export async function openHost(
       const idx = prev.findIndex((r) => r.host === hostWithoutPass);
       const next = [...prev];
       if (idx >= 0) {
-        next[idx] = { ...next[idx], last_used: now };
+        next[idx] = { ...next[idx]!, last_used: now };
       } else {
         next.push({ host: hostWithoutPass, last_used: now });
       }
@@ -1743,7 +1743,7 @@ export async function pinTab(id?: string) {
     dialogs.alert(t("Only single-pane tabs can be pinned."));
     return;
   }
-  const pane = tab.panes[0];
+  const pane = tab.panes[0]!;
   const backendSessionId = pane.sessionId || pane.id;
   // Pinning only supports single-pane tabs for now (backend requirement)
   await fetch("/api/sessions/pin", {
@@ -1768,7 +1768,7 @@ export async function unlockTab(id?: string) {
     dialogs.alert(t("Only single-pane tabs can be unlocked."));
     return;
   }
-  const pane = tab.panes[0];
+  const pane = tab.panes[0]!;
   const paneId = pane.sessionId || pane.id;
   await fetch("/api/sessions/pin", {
     method: METHOD_POST,
@@ -1792,7 +1792,7 @@ export async function lockTab(id?: string) {
     dialogs.alert(t("Only single-pane tabs can be locked."));
     return;
   }
-  const pane = tab.panes[0];
+  const pane = tab.panes[0]!;
   const backendSessionId = pane.sessionId || pane.id;
   await fetch("/api/sessions/lock", {
     method: METHOD_POST,
@@ -1816,7 +1816,7 @@ export async function hideTab(id?: string) {
     dialogs.alert(t("Only single-pane tabs can be hided."));
     return;
   }
-  const pane = tab.panes[0];
+  const pane = tab.panes[0]!;
   const backendSessionId = pane.sessionId || pane.id;
   await fetch("/api/sessions/hide", {
     method: METHOD_POST,
@@ -1833,7 +1833,7 @@ export async function hideTab(id?: string) {
   setTabs(newTabs);
   if (activeTabId === id && newTabs.length > 0) {
     const nextIdx = idx > 0 ? idx - 1 : 0;
-    const nextTab = newTabs[nextIdx];
+    const nextTab = newTabs[nextIdx]!;
     setActiveTabId(nextTab.id);
     setActivePaneId(nextTab.activePaneId);
   } else if (newTabs.length === 0) {
@@ -1866,7 +1866,7 @@ export function closeTab(id?: string) {
     const newTabs = prev.filter((t) => t.id !== id);
     if (activeTabId === id && newTabs.length > 0) {
       const nextIdx = idx > 0 ? idx - 1 : 0;
-      const nextTab = newTabs[nextIdx];
+      const nextTab = newTabs[nextIdx]!;
       setActiveTabId(nextTab.id);
       setActivePaneId(nextTab.activePaneId);
     } else if (newTabs.length === 0) {
@@ -1911,7 +1911,7 @@ export function closeTabOrPane(tabOrPaneId?: string) {
       const newPanes = parentTab.panes.filter((p) => p.id !== tabOrPaneId);
       let nextPaneId = parentTab.activePaneId;
       if (parentTab.activePaneId === tabOrPaneId) {
-        nextPaneId = newPanes[Math.max(0, paneIdx - 1)].id;
+        nextPaneId = newPanes[Math.max(0, paneIdx - 1)]!.id;
       }
 
       if (!parentTab.isLocked && targetPane.state !== "stolen") {
@@ -2093,7 +2093,7 @@ export function openScratchpad() {
   const existing = getStore().tabs.find((t) => t.type === "scratchpad");
   if (existing) {
     setActiveTabId(existing.id);
-    setActivePaneId(existing.panes[0].id);
+    setActivePaneId(existing.panes[0]!.id);
     triggerFocus();
     return;
   }
@@ -2172,7 +2172,7 @@ export async function reorderButtons(draggedId: string, targetId: string, positi
   const [removed] = newGroupButtons.splice(draggedIdx, 1);
   const newTargetIdx = newGroupButtons.findIndex((b) => b.id === targetId);
   const insertIdx = position === "before" ? newTargetIdx : newTargetIdx + 1;
-  newGroupButtons.splice(insertIdx, 0, removed);
+  newGroupButtons.splice(insertIdx, 0, removed!);
 
   const now = Date.now();
   const updatedGroupButtons = newGroupButtons.map((b, i) => ({
@@ -2281,7 +2281,7 @@ export async function moveServer(serverName: string, destGroupPath: string | nul
 
   const updatedHosts: HostData[] = [];
   for (let i = 0; i < newSortedList.length; i++) {
-    const h = newSortedList[i];
+    const h = newSortedList[i]!;
     const newOrder = (i + 1) * 10;
     const newGroupTag = destGroupPath ? `g-${destGroupPath}` : null;
 
@@ -2339,11 +2339,11 @@ export async function reorderFavourites(draggedName: string, targetName: string,
   const [removed] = newFavs.splice(draggedIdx, 1);
   const newTargetIdx = newFavs.findIndex((h) => h.name === targetName);
   const insertIdx = position === "before" ? newTargetIdx : newTargetIdx + 1;
-  newFavs.splice(insertIdx, 0, removed);
+  newFavs.splice(insertIdx, 0, removed!);
 
   const updatedHosts: HostData[] = [];
   for (let i = 0; i < newFavs.length; i++) {
-    const h = newFavs[i];
+    const h = newFavs[i]!;
     const newOrder = (i + 1) * 10;
 
     // We clean existing o- tags
@@ -2606,7 +2606,7 @@ export function openEditTabHost(target?: TabData | string) {
     return;
   }
   const pane = target.panes.find((p) => p.id === target.activePaneId) || target.panes[0];
-  openEditHost(pane.canonicalHostString);
+  openEditHost(pane!.canonicalHostString);
 }
 
 export function openEditHost(host: string | HostData) {
@@ -2734,8 +2734,8 @@ export function moveTabLeft(tabId?: string) {
     return;
   }
   const newTabs = tabs.slice();
-  newTabs[i - 1] = tabs[i];
-  newTabs[i] = tabs[i - 1];
+  newTabs[i - 1] = tabs[i]!;
+  newTabs[i] = tabs[i - 1]!;
   setTabs(newTabs);
 }
 
@@ -2747,8 +2747,8 @@ export function moveTabRight(tabId?: string) {
     return;
   }
   const newTabs = tabs.slice();
-  newTabs[i + 1] = tabs[i];
-  newTabs[i] = tabs[i + 1];
+  newTabs[i + 1] = tabs[i]!;
+  newTabs[i] = tabs[i + 1]!;
   setTabs(newTabs);
 }
 
@@ -2767,7 +2767,7 @@ export function updateTabTitles(name: string) {
   let changed = false;
   for (const tab of tabs) {
     if (tab.type === "terminal" && tab.panes.length === 1 && !tab.isCustomTitle) {
-      const paneHost = getHost(tab.panes[0].canonicalHostString);
+      const paneHost = getHost(tab.panes[0]!.canonicalHostString);
       if (paneHost.source === "config" && getCanonicalHostString(paneHost) === getCanonicalHostString(host)) {
         const title = removeNameNumSuffix(tab.title);
         if (title !== host.name) {
@@ -2876,7 +2876,7 @@ export async function sendParsedString(input: string, isLiquid?: boolean, userVa
         continue;
       }
       const ctrlMatch = part.match(/<ctrl-([!-~])>/);
-      const dataToSend = ctrlMatch ? String.fromCharCode(ctrlMatch[1].charCodeAt(0) & 0x1f) : part;
+      const dataToSend = ctrlMatch ? String.fromCharCode(ctrlMatch[1]!.charCodeAt(0) & 0x1f) : part;
 
       for (const pane of targetPanes) {
         if (__CS_TERMINALS__.current[pane.id]) {
@@ -3002,7 +3002,7 @@ export async function runScript({ button, background, altMode: alternativeMode }
       }
     }
   } else {
-    moduleObj = moduleCache[button.id];
+    moduleObj = moduleCache[button.id]!;
     cached = true;
   }
 
@@ -3143,20 +3143,27 @@ export async function runButton(
 
         case "COPY_CWD": {
           const shellIntegration = getStore().shellIntegrations[getStore().activePaneId];
-          navigator.clipboard.writeText(shellIntegration.cwd || "");
+          navigator.clipboard.writeText(shellIntegration?.cwd || "");
           term.focus();
           break;
         }
 
         case "COPY_CURRENT_CMDLINE": {
           const shellIntegration = getStore().shellIntegrations[getStore().activePaneId];
-          navigator.clipboard.writeText(shellIntegration.currentCmdLine || "");
+          navigator.clipboard.writeText(shellIntegration?.currentCmdLine || "");
           term.focus();
           break;
         }
 
         case "CLEAR_CURRENT_CMDLINE": {
           term.replaceCmdLine("");
+          term.focus();
+          break;
+        }
+
+        case "COPY_LAST_COMMAND": {
+          const shellIntegration = getStore().shellIntegrations[getStore().activePaneId];
+          navigator.clipboard.writeText(shellIntegration?.command || "");
           term.focus();
           break;
         }

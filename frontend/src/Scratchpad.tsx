@@ -43,7 +43,7 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
     };
   });
 
-  const [activePageId, setActivePageId] = useState<string>(data.pages.length > 0 ? data.pages[0].id : "");
+  const [activePageId, setActivePageId] = useState<string>(data.pages.length > 0 ? data.pages[0]!.id : "");
   const [syncState, setSyncState] = useState<ScratchpadSyncState>("offline");
   const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number; pageId: string } | null>(null);
   const [dirtyPageIds, setDirtyPageIds] = useState<Set<string>>(new Set());
@@ -85,7 +85,7 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
 
   useEffect(() => {
     if (data.pages.length > 0 && !data.pages.find((p) => p.id === activePageId)) {
-      setActivePageId(data.pages[0].id);
+      setActivePageId(data.pages[0]!.id);
     }
   }, [data.pages, activePageId]);
 
@@ -336,7 +336,7 @@ const Scratchpad = forwardRef<ScratchpadHandle, ScratchpadProps>(({ onSyncStateC
     }
     wsRef.current?.send(JSON.stringify({ type: "delete", id: pageId } satisfies ScratchpadDeleteMsg));
     if (activePageId === pageId) {
-      setActivePageId(newData.pages[0].id);
+      setActivePageId(newData.pages[0]!.id);
     }
   }, [activePageId, contextMenu, data, onSyncStateChange]);
 

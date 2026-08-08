@@ -322,21 +322,21 @@ export default function DialogManager({
       let autorun = 0;
       const jsDocMatch = text.match(/^\s*\/\*\*([\s\S]*?)\*\//);
       if (jsDocMatch) {
-        const content = jsDocMatch[1];
+        const content = jsDocMatch[1]!;
         const moduleMatch = content.match(/@module\s+([^\r\n]+)/);
         if (moduleMatch) {
-          buttonName = moduleMatch[1].trim();
+          buttonName = moduleMatch[1]!.trim();
         }
         const idMatch = content.match(/@id\s+([^\r\n]+)/);
         if (idMatch) {
-          buttonId = idMatch[1].trim();
+          buttonId = idMatch[1]!.trim();
         }
         const groupMatch = content.match(/@group\s+([^\r\n]+)/);
         if (groupMatch) {
-          group = groupMatch[1].trim();
+          group = groupMatch[1]!.trim();
         }
         const autorunMatch = content.match(/@autorun\s+([^\r\n]+)/);
-        if (autorunMatch && autorunMatch[1].trim() === "1") {
+        if (autorunMatch && autorunMatch[1]!.trim() === "1") {
           autorun = 1;
         }
       }

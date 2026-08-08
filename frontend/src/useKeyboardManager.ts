@@ -297,19 +297,19 @@ const handleKeyDown = (e: KeyboardEvent) => {
       if (idx < 0) {
         return;
       }
-      const activeTab = tabs[idx];
+      const activeTab = tabs[idx]!;
       const tabMode = keycomb === "alt+shift+h" || keycomb === "ctrl+shift+tab";
       if (activeTab.panes.length <= 1 || tabMode) {
         // single pane tab or shift pressed, switch to prev tab
         const prevIdx = (idx - 1 + tabs.length) % tabs.length;
-        activatePane(tabs[prevIdx].activePaneId, tabs[prevIdx].id);
+        activatePane(tabs[prevIdx]!.activePaneId, tabs[prevIdx]!.id);
         (document.activeElement as HTMLElement)?.blur?.();
         triggerFocus();
       } else {
         // multiple-panes tab, switch to prev pane of this tab
         const paneIdx = activeTab.panes.findIndex((p) => p.id === activePaneId);
         const prevPaneIdx = (paneIdx - 1 + activeTab.panes.length) % activeTab.panes.length;
-        activatePane(activeTab.panes[prevPaneIdx].id);
+        activatePane(activeTab.panes[prevPaneIdx]!.id);
         (document.activeElement as HTMLElement)?.blur?.();
         triggerFocus();
       }
@@ -329,19 +329,19 @@ const handleKeyDown = (e: KeyboardEvent) => {
       if (idx < 0) {
         return;
       }
-      const activeTab = tabs[idx];
+      const activeTab = tabs[idx]!;
       const tabMode = keycomb === "alt+shift+l" || keycomb === "ctrl+tab";
       if (activeTab.panes.length <= 1 || tabMode) {
         // single pane tab or shift pressed, switch to next tab
         const nextIdx = (idx + 1) % tabs.length;
-        activatePane(tabs[nextIdx].activePaneId, tabs[nextIdx].id);
+        activatePane(tabs[nextIdx]!.activePaneId, tabs[nextIdx]!.id);
         (document.activeElement as HTMLElement)?.blur?.();
         triggerFocus();
       } else {
         // multiple-panes tab, switch to next pane of this tab
         const paneIdx = activeTab.panes.findIndex((p) => p.id === activePaneId);
         const nextPaneIdx = (paneIdx + 1) % activeTab.panes.length;
-        activatePane(activeTab.panes[nextPaneIdx].id);
+        activatePane(activeTab.panes[nextPaneIdx]!.id);
         (document.activeElement as HTMLElement)?.blur?.();
         triggerFocus();
       }
@@ -415,7 +415,7 @@ const handleKeyDown = (e: KeyboardEvent) => {
       const { tabs, activeTabId } = getStore();
       const activeTab = tabs.find((t) => t.id === activeTabId);
       if (activeTab) {
-        activatePane(activeTab.panes[0].id, activeTab.id);
+        activatePane(activeTab.panes[0]!.id, activeTab.id);
         triggerFocus();
       }
       return;
@@ -534,7 +534,7 @@ const handleKeyDown = (e: KeyboardEvent) => {
     let idx = parseInt(e.key);
     idx = idx === 0 ? tabs.length - 1 : idx - 1;
     if (tabs[idx]) {
-      const target = tabs[idx];
+      const target = tabs[idx]!;
       setActiveTabId(target.id);
       setActivePaneId(target.activePaneId);
       setNewTabDialogOpen(false);
@@ -550,11 +550,11 @@ const handleKeyDown = (e: KeyboardEvent) => {
     const digitMatch = e.code.match(/Digit(\d)/);
     if (digitMatch) {
       e.preventDefault();
-      const num = parseInt(digitMatch[1]);
+      const num = parseInt(digitMatch[1]!);
       const idx = num === 0 ? 9 : num - 1;
       const filteredButtons = buttons.filter((b) => (b.group || DEFAULT_BUTTON_GROUP) === activeGroup);
       if (idx < filteredButtons.length) {
-        runButton(filteredButtons[idx]);
+        runButton(filteredButtons[idx]!);
       }
     }
   }

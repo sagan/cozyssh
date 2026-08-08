@@ -328,7 +328,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
 
         xhr.open(METHOD_POST, url);
         for (const key in headers) {
-          xhr.setRequestHeader(key, headers[key]);
+          xhr.setRequestHeader(key, headers[key]!);
         }
         xhr.send(formData);
 
@@ -354,7 +354,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
         hasFiles = true;
       } else if (items) {
         for (let i = 0; i < items.length; i++) {
-          if (items[i].kind === "file") {
+          if (items[i]!.kind === "file") {
             hasFiles = true;
             break;
           }
@@ -369,7 +369,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
       const scanned: ScannedEntryItem[] = [];
       if (items && items.length > 0) {
         for (let i = 0; i < items.length; i++) {
-          const item = items[i];
+          const item = items[i]!;
           if (item.kind === "file") {
             const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
             if (entry) {
@@ -385,7 +385,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
         }
       } else if (files && files.length > 0) {
         for (let i = 0; i < files.length; i++) {
-          const file = files[i];
+          const file = files[i]!;
           scanned.push({ file, relPath: file.name, isDir: false });
         }
       }
@@ -442,7 +442,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
 
       if (items && items.length > 0) {
         for (let i = 0; i < items.length; i++) {
-          const item = items[i];
+          const item = items[i]!;
           if (item.kind === "file") {
             const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
             if (entry) {
@@ -459,7 +459,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
       } else if (files && files.length > 0) {
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
-          scanned.push({ file, relPath: file.name, isDir: false });
+          scanned.push({ file, relPath: file!.name, isDir: false });
         }
       }
 
@@ -571,7 +571,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
             nextPath = parts.join(sep);
             if (!isWindows) {
               nextPath = "/" + nextPath;
-            } else if (parts.length === 1 && parts[0].endsWith(":")) {
+            } else if (parts.length === 1 && parts[0]!.endsWith(":")) {
               nextPath += sep;
             }
           }

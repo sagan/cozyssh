@@ -102,8 +102,8 @@ export default function TerminalGrid({
       // CRITICAL: Stop the event from ever reaching xterm.js
       e.stopPropagation();
       e.preventDefault();
-      startX = e.touches[0].clientX;
-      startY = e.touches[0].clientY;
+      startX = e.touches[0]!.clientX;
+      startY = e.touches[0]!.clientY;
     };
 
     const onTouchMove = (e: TouchEvent) => {
@@ -120,8 +120,8 @@ export default function TerminalGrid({
       }
       e.stopPropagation();
       e.preventDefault();
-      const diffX = e.changedTouches[0].clientX - startX;
-      const diffY = e.changedTouches[0].clientY - startY;
+      const diffX = e.changedTouches[0]!.clientX - startX;
+      const diffY = e.changedTouches[0]!.clientY - startY;
       const THRESHOLD = 40;
       if (Math.abs(diffX) < THRESHOLD && Math.abs(diffY) < THRESHOLD) {
         return;
@@ -307,26 +307,26 @@ export default function TerminalGrid({
 
                 const n = tab.panes.length;
                 if (n <= 1) {
-                  return renderPaneInner(tab.panes[0]);
+                  return renderPaneInner(tab.panes[0]!);
                 }
                 if (n === 2) {
                   return (
                     <Box sx={{ display: "flex", flexDirection: "row", height: "100%" }}>
-                      {renderPaneInner(tab.panes[0])}
+                      {renderPaneInner(tab.panes[0]!)}
                       <Box sx={{ width: "1px", bgcolor: "divider", flexShrink: 0 }} />
-                      {renderPaneInner(tab.panes[1])}
+                      {renderPaneInner(tab.panes[1]!)}
                     </Box>
                   );
                 }
                 if (n === 3) {
                   return (
                     <Box sx={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-                      {renderPaneInner(tab.panes[0])}
+                      {renderPaneInner(tab.panes[0]!)}
                       <Box sx={{ height: "1px", bgcolor: "divider", flexShrink: 0 }} />
                       <Box sx={{ flex: 1, display: "flex", flexDirection: "row", minHeight: 0 }}>
-                        {renderPaneInner(tab.panes[1])}
+                        {renderPaneInner(tab.panes[1]!)}
                         <Box sx={{ width: "1px", bgcolor: "divider", flexShrink: 0 }} />
-                        {renderPaneInner(tab.panes[2])}
+                        {renderPaneInner(tab.panes[2]!)}
                       </Box>
                     </Box>
                   );
@@ -335,15 +335,15 @@ export default function TerminalGrid({
                   return (
                     <Box sx={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
                       <Box sx={{ flex: 1, display: "flex", flexDirection: "row", minHeight: 0 }}>
-                        {renderPaneInner(tab.panes[0])}
+                        {renderPaneInner(tab.panes[0]!)}
                         <Box sx={{ width: "1px", bgcolor: "divider", flexShrink: 0 }} />
-                        {renderPaneInner(tab.panes[1])}
+                        {renderPaneInner(tab.panes[1]!)}
                       </Box>
                       <Box sx={{ height: "1px", bgcolor: "divider", flexShrink: 0 }} />
                       <Box sx={{ flex: 1, display: "flex", flexDirection: "row", minHeight: 0 }}>
-                        {renderPaneInner(tab.panes[2])}
+                        {renderPaneInner(tab.panes[2]!)}
                         <Box sx={{ width: "1px", bgcolor: "divider", flexShrink: 0 }} />
-                        {renderPaneInner(tab.panes[3])}
+                        {renderPaneInner(tab.panes[3]!)}
                       </Box>
                     </Box>
                   );

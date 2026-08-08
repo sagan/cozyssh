@@ -1826,7 +1826,7 @@ export default function Sidebar({
     const nodesMap = new Map<string, GroupNode>();
     for (const gp of allGroupPaths) {
       const parts = gp.split("/");
-      const name = parts[parts.length - 1];
+      const name = parts[parts.length - 1]!;
       nodesMap.set(gp, {
         id: `group:${gp}`,
         type: "group",
@@ -1955,7 +1955,7 @@ export default function Sidebar({
         }
       } else {
         const gp = getHostGroupPath(node.host);
-        counts[""]++;
+        counts[""]!++;
         if (gp) {
           counts[gp] = (counts[gp] || 0) + 1;
         }
@@ -2036,7 +2036,7 @@ export default function Sidebar({
 
   useEffect(() => {
     if (selectedIndex >= 0 && selectedIndex < flatList.length) {
-      lastSelectedItemId.current = flatList[selectedIndex].id;
+      lastSelectedItemId.current = flatList[selectedIndex]!.id;
     } else {
       lastSelectedItemId.current = null;
     }
@@ -2109,11 +2109,11 @@ export default function Sidebar({
         e.preventDefault();
         e.stopPropagation();
         if (selectedIndex >= 0 && selectedIndex < flatList.length) {
-          const selectedItem = flatList[selectedIndex];
+          const selectedItem = flatList[selectedIndex]!;
           const altMode = getAltMode(e);
           if (altMode === AM_6_CTRL_SHIFT) {
             // ctrl + shift
-            const el = document.getElementById(flatListIds[selectedIndex]);
+            const el = document.getElementById(flatListIds[selectedIndex]!);
             if (el) {
               el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
             }
@@ -2534,7 +2534,7 @@ export default function Sidebar({
               )}
               <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary", letterSpacing: "0.08em" }}>
                 {t("ALL")}
-                {groupHostCounts[""] > 0 && ` (${groupHostCounts[""]})`}
+                {groupHostCounts[""]! > 0 && ` (${groupHostCounts[""]})`}
               </Typography>
             </Box>
             <IconButton
@@ -4492,7 +4492,7 @@ function TreeGroupItem({
           primary={
             <Typography variant="body2" sx={{ fontWeight: 600, color: "text.primary" }}>
               {node.name}
-              {groupHostCounts[node.path] > 0 && ` (${groupHostCounts[node.path]})`}
+              {groupHostCounts[node.path]! > 0 && ` (${groupHostCounts[node.path]})`}
             </Typography>
           }
         />

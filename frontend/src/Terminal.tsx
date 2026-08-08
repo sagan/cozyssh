@@ -1,5 +1,5 @@
 import { useEffect, useRef, useImperativeHandle, forwardRef, useCallback } from "react";
-import { Terminal, type IMarker, type ITerminalAddon } from "@xterm/xterm";
+import { Terminal, type IMarker, type IDecoration, type ITerminalAddon } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { ImageAddon } from "@xterm/addon-image";
@@ -8,6 +8,18 @@ import { SerializeAddon } from "@xterm/addon-serialize";
 import { type ISearchOptions, SearchAddon } from "@xterm/addon-search";
 import { Box } from "@mui/material";
 import "@xterm/xterm/css/xterm.css";
+
+export const DECORATION_COLOR_RUNNING = "rgba(160, 160, 160, 0.8)";
+export const DECORATION_COLOR_SUCCESS = "#388bfd";
+export const DECORATION_COLOR_FAILURE = "#f85149";
+
+interface CommandDecorationEntry {
+  marker: IMarker;
+  runningDecoration?: IDecoration;
+  finalDecoration?: IDecoration;
+  commandId?: string;
+  isExecuting: boolean;
+}
 
 import type { WsResizeMsg, WsTerminalMessage } from "./api";
 import {
@@ -174,6 +186,122 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
     const shellIntegrationRef = useRef<ShellIntegration>({});
     const markersRef = useRef<TerminalMarkers>({});
 
+    const activeCmdDecorationRef = useRef<CommandDecorationEntry | null>(null);
+    const commandDecorationsRef = useRef<CommandDecorationEntry[]>([]);
+
+    const handleCommandStartDecoration = useCallback((commandId?: string) => {
+      const term = xtermRef.current;
+      if (!term) return;
+
+      const currentLine = term.buffer.active.cursorY + term.buffer.active.baseY;
+      if (activeCmdDecorationRef.current && activeCmdDecorationRef.current.isExecuting) {
+        if (activeCmdDecorationRef.current.marker.line === currentLine) {
+          if (commandId) activeCmdDecorationRef.current.commandId = commandId;
+          return;
+        }
+      }
+
+      const marker = term.registerMarker(0);
+      if (!marker || marker.isDisposed) return;
+
+      const runningDecoration = term.registerDecoration({
+        marker,
+        overviewRulerOptions: {
+          color: DECORATION_COLOR_RUNNING,
+          position: "full",
+        },
+      });
+
+      const entry: CommandDecorationEntry = {
+        marker,
+        runningDecoration,
+        commandId,
+        isExecuting: true,
+      };
+
+      activeCmdDecorationRef.current = entry;
+      commandDecorationsRef.current.push(entry);
+
+      marker.onDispose(() => {
+        const idx = commandDecorationsRef.current.indexOf(entry);
+        if (idx !== -1) {
+          commandDecorationsRef.current.splice(idx, 1);
+        }
+        if (activeCmdDecorationRef.current === entry) {
+          activeCmdDecorationRef.current = null;
+        }
+      });
+    }, []);
+
+    const handleCommandFinishedDecoration = useCallback((exitStatus?: number, commandId?: string) => {
+      const term = xtermRef.current;
+      if (!term) return;
+
+      const status = exitStatus ?? 0;
+      const finalColor = status === 0 ? DECORATION_COLOR_SUCCESS : DECORATION_COLOR_FAILURE;
+
+      let entry = activeCmdDecorationRef.current;
+      if (!entry || !entry.isExecuting) {
+        if (commandId) {
+          entry = commandDecorationsRef.current.find((e) => e.commandId === commandId && e.isExecuting) || null;
+        }
+      }
+
+      if (entry) {
+        entry.isExecuting = false;
+        entry.runningDecoration?.dispose();
+        entry.runningDecoration = undefined;
+
+        if (!entry.marker.isDisposed) {
+          entry.finalDecoration = term.registerDecoration({
+            marker: entry.marker,
+            overviewRulerOptions: {
+              color: finalColor,
+              position: "full",
+            },
+          });
+        }
+
+        if (activeCmdDecorationRef.current === entry) {
+          activeCmdDecorationRef.current = null;
+        }
+      } else {
+        const marker = term.registerMarker(0);
+        if (marker && !marker.isDisposed) {
+          const finalDecoration = term.registerDecoration({
+            marker,
+            overviewRulerOptions: {
+              color: finalColor,
+              position: "full",
+            },
+          });
+          const newEntry: CommandDecorationEntry = {
+            marker,
+            finalDecoration,
+            commandId,
+            isExecuting: false,
+          };
+          commandDecorationsRef.current.push(newEntry);
+          marker.onDispose(() => {
+            const idx = commandDecorationsRef.current.indexOf(newEntry);
+            if (idx !== -1) {
+              commandDecorationsRef.current.splice(idx, 1);
+            }
+          });
+        }
+      }
+    }, []);
+
+    const clearCommandDecorations = useCallback(() => {
+      for (const entry of commandDecorationsRef.current) {
+        entry.runningDecoration?.dispose();
+        entry.finalDecoration?.dispose();
+        entry.marker.dispose();
+      }
+      commandDecorationsRef.current = [];
+      activeCmdDecorationRef.current = null;
+    }, []);
+
     /**
      * Cursor position recorded at OSC 133;B (right after the prompt, where user
      * input starts). Used to extract the live cmdline from the xterm buffer.
@@ -275,9 +403,11 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
         xtermRef.current?.clearSelection();
       },
       clear: () => {
+        clearCommandDecorations();
         xtermRef.current?.clear();
       },
       reset: () => {
+        clearCommandDecorations();
         xtermRef.current?.reset();
       },
       reconnect: () => {
@@ -341,10 +471,16 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       // Track the webgl addon
       let webglAddon: WebglAddon | null = null;
 
-      const term = new Terminal({
+      const termOptions = {
         ...DefaultXtermOptions,
         ...__CS_TERMINAL_OPTIONS__,
-      });
+        scrollbar: {
+          width: 14,
+          ...DefaultXtermOptions.scrollbar,
+          ...__CS_TERMINAL_OPTIONS__?.scrollbar,
+        },
+      };
+      const term = new Terminal(termOptions);
       const fitAddon = new FitAddon();
       term.loadAddon(fitAddon);
       fitAddonRef.current = fitAddon;
@@ -520,6 +656,8 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
               markersRef.current.$end?.dispose();
               markersRef.current.$start = term.registerMarker(0);
 
+              handleCommandStartDecoration(info.start);
+
               // Fallback: if no command string provided via OSC, try to read from buffer
               if (!updates.command) {
                 const buffer = term.buffer.active;
@@ -570,6 +708,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
               markersRef.current.$end = term.registerMarker(0);
 
               const exitStatus = info.status ? parseInt(info.status) : info.exit === "success" ? 0 : 1;
+              handleCommandFinishedDecoration(exitStatus, info.end);
               const entry: CommandHistoryEntry = {
                 commandId: info.end,
                 command: shellIntegrationRef.current.command,
@@ -645,6 +784,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
               absLine: buf.cursorY + buf.baseY,
             };
             updateShellIntegration({ promptPhase: "input" });
+            handleCommandStartDecoration(shellIntegrationRef.current.commandId);
           } else if (type === "C") {
             // Output starting — command is now running
             markersRef.current.$start?.dispose();
@@ -652,12 +792,14 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
             markersRef.current.$start = term.registerMarker(0);
             promptEndRef.current = null;
             updateShellIntegration({ promptPhase: "output", isExecuting: true, currentCmdLine: undefined });
+            handleCommandStartDecoration(shellIntegrationRef.current.commandId);
           } else if (type === "D") {
             // Command finished — optional exit code in parts[1]
             const exitCodeStr = parts[1];
             const exitStatus = exitCodeStr !== undefined && exitCodeStr !== "" ? parseInt(exitCodeStr, 10) : undefined;
 
             markersRef.current.$end = term.registerMarker(0);
+            handleCommandFinishedDecoration(exitStatus, shellIntegrationRef.current.commandId);
 
             const updates: Partial<ShellIntegration> = {
               promptPhase: "finished",
@@ -729,6 +871,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
               absLine: buf.cursorY + buf.baseY,
             };
             updateShellIntegration({ promptPhase: "input" });
+            handleCommandStartDecoration(shellIntegrationRef.current.commandId);
           } else if (subCmd === "C") {
             // Output starting - command is now running and producing output
             markersRef.current.$start?.dispose();
@@ -736,6 +879,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
             markersRef.current.$start = term.registerMarker(0);
             promptEndRef.current = null;
             updateShellIntegration({ promptPhase: "output", isExecuting: true, currentCmdLine: undefined });
+            handleCommandStartDecoration(shellIntegrationRef.current.commandId);
           } else if (subCmd === "D") {
             // Command finished - optional exit code in parts[1]
             const exitCodeStr = parts[1];
@@ -743,6 +887,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
 
             // Place end marker right here before the new prompt renders
             markersRef.current.$end = term.registerMarker(0);
+            handleCommandFinishedDecoration(exitStatus, shellIntegrationRef.current.commandId);
 
             const updates: Partial<ShellIntegration> = {
               promptPhase: "finished",
@@ -963,9 +1108,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
           const keys = Object.keys(options).sort(); // make variables in $foo, _foo, foo order
           for (const key of keys) {
             if (!key.startsWith(TAG_FLAG_PREFIX) && !terminalClientSideParams.has(key)) {
-              params.set(key, options[key]);
+              params.set(key, options[key]!);
             } else if (key === TAG_FLAG_SHELL_INTEGRATION) {
-              params.set(key.slice(1), options[key]);
+              params.set(key.slice(1), options[key]!);
             }
           }
         }
@@ -1407,6 +1552,8 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
         if (wsRef.current) {
           wsRef.current.close();
         }
+
+        clearCommandDecorations();
 
         // <-- Dispose of markers
         markersRef.current.$start?.dispose();

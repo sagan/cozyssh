@@ -145,7 +145,7 @@ export default function Dashboard({ initialData, setMuiTheme }: DashboardProps) 
       if (!isTouch || !isMobile || gestureMode) {
         return; // gesture mode uses native listeners
       }
-      const touch = e.touches[0];
+      const touch = e.touches[0]!;
       swipeStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
     },
     [gestureMode, isMobile, isTouch],
@@ -156,7 +156,7 @@ export default function Dashboard({ initialData, setMuiTheme }: DashboardProps) 
       if (!isTouch || !isMobile || gestureMode || !swipeStartRef.current) {
         return;
       }
-      const touch = e.changedTouches[0];
+      const touch = e.changedTouches[0]!;
       const diffX = touch.clientX - swipeStartRef.current.x;
       const diffY = touch.clientY - swipeStartRef.current.y;
       const diffTime = Date.now() - swipeStartRef.current.time;
@@ -167,13 +167,13 @@ export default function Dashboard({ initialData, setMuiTheme }: DashboardProps) 
         const { activeTabId, tabs } = getStore();
         const currentIndex = tabs.findIndex((t) => t.id === activeTabId);
         if (diffX > 0 && currentIndex > 0) {
-          const newTab = tabs[currentIndex - 1];
+          const newTab = tabs[currentIndex - 1]!;
           window.navigator.vibrate?.(getIntVar(VAR_CS_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN));
           setActiveTabId(newTab.id);
           setActivePaneId(newTab.activePaneId);
           triggerFocus();
         } else if (diffX < 0 && currentIndex < tabs.length - 1) {
-          const newTab = tabs[currentIndex + 1];
+          const newTab = tabs[currentIndex + 1]!;
           window.navigator.vibrate?.(getIntVar(VAR_CS_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN));
           setActiveTabId(newTab.id);
           setActivePaneId(newTab.activePaneId);
@@ -285,7 +285,7 @@ export default function Dashboard({ initialData, setMuiTheme }: DashboardProps) 
     if (sanitizeHash) {
       const elements = hash.split(/\s*,\s*/);
       for (let i = 0; i < elements.length; i++) {
-        let element = elements[i];
+        let element = elements[i]!;
         [element] = cutString(element, "?");
         element = element.replace(/[^a-z0-9._:#@-[\]]+/gi, "");
         elements[i] = element;
@@ -435,10 +435,10 @@ export default function Dashboard({ initialData, setMuiTheme }: DashboardProps) 
           if (pinnedTabs.length > 0) {
             setTabs((prev) => (prev.length > 0 ? prev : pinnedTabs));
             if (!getStore().activeTabId) {
-              setActiveTabId(pinnedTabs[0].id);
+              setActiveTabId(pinnedTabs[0]!.id);
             }
             if (!getStore().activePaneId) {
-              setActivePaneId(pinnedTabs[0].activePaneId);
+              setActivePaneId(pinnedTabs[0]!.activePaneId);
             }
           } else {
             const tabId = genTabId(LOCAL_NAME);

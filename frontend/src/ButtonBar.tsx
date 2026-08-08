@@ -267,7 +267,7 @@ export default function ButtonBar({ groups, isMobile, isTouch }: ButtonBarProps)
             const { buttons, activeGroup } = getStore();
             let text = t("Active Group Buttons:") + ` (${activeGroup})\n`;
             for (let i = 0; i < filteredButtons.length; i++) {
-              const btn = filteredButtons[i];
+              const btn = filteredButtons[i]!;
               let shortcut = "";
               if (i <= 8) {
                 shortcut = `alt+shift+${i + 1} `;

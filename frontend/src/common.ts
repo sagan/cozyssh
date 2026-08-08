@@ -423,12 +423,16 @@ export const DefaultXtermOptions: ITerminalOptions = {
   scrollback: 10000,
   allowProposedApi: true,
   cursorBlink: true,
+  scrollbar: {
+    width: 14,
+  },
   theme: {
     background: "#ffffff",
     foreground: "#000000",
     cursor: "#000000",
     cursorAccent: "#ffffff",
     selectionBackground: "rgba(0, 0, 0, 0.2)",
+    overviewRulerBorder: "transparent",
   },
   fontFamily: 'Consolas, "Courier New", monospace',
 };
@@ -518,7 +522,7 @@ export function getKeyCombination(ev: KeyboardEvent | React.KeyboardEvent): stri
   // In some keyboard layout (like Windows English International layout) some keystrokes perse will produce "Dead" key,
   // e.g. ' since 'e is used to input é. We need to get the actual key.
   if (key === "dead" && codeKeys[ev.code]) {
-    key = codeKeys[ev.code][ev.shiftKey ? 1 : 0];
+    key = codeKeys[ev.code]![ev.shiftKey ? 1 : 0];
   }
   if (!suppressKeys.has(key)) {
     mods += "+" + key;
@@ -599,7 +603,7 @@ export function generatePassword(length: number, digitOnly?: boolean) {
       bufferIndex = 0;
     }
 
-    const randomValue = randomValuesBuffer[bufferIndex++];
+    const randomValue = randomValuesBuffer[bufferIndex++]!;
     if (randomValue < MAX_VALID_THRESHOLD) {
       password += PWD_CHARS[randomValue % PWD_CHARS_LEN];
     }
@@ -625,7 +629,7 @@ export function filterHosts(hosts: HostData[], filterStr: string): HostData[] {
 
   // Extract tags from the beginning
   for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i];
+    const token = tokens[i]!;
     if (token.startsWith("#") && token.length > 1) {
       // Remove the '#' and add to required tags
       requiredTags.push(token.substring(1));
@@ -791,7 +795,7 @@ export function hostTitle(host: string): string {
 export function removeNameNumSuffix(name: string): string {
   const match = name.match(/^(.*) \((\d+)\)$/);
   if (match) {
-    return match[1];
+    return match[1]!;
   }
   return name;
 }
@@ -845,17 +849,17 @@ const terminalFontSizes: number[] = [
 export function prevTerminalFontSize(fontSize: number): number {
   const idx = terminalFontSizes.findIndex((s) => s >= fontSize);
   if (idx === -1) {
-    return terminalFontSizes[0];
+    return terminalFontSizes[0]!;
   }
-  return terminalFontSizes[Math.max(0, idx - 1)];
+  return terminalFontSizes[Math.max(0, idx - 1)]!;
 }
 
 export function nextTerminalFontSize(fontSize: number): number {
   const idx = terminalFontSizes.findIndex((s) => s >= fontSize);
   if (idx === -1) {
-    return terminalFontSizes[terminalFontSizes.length - 1];
+    return terminalFontSizes[terminalFontSizes.length - 1]!;
   }
-  return terminalFontSizes[Math.min(terminalFontSizes.length - 1, idx + 1)];
+  return terminalFontSizes[Math.min(terminalFontSizes.length - 1, idx + 1)]!;
 }
 
 /**
@@ -1004,16 +1008,16 @@ export function getTemplateVariables(templateStr: string): string[] {
 
     let match;
     while ((match = assignRegex.exec(templateStr)) !== null) {
-      internalVars.add(match[1]);
+      internalVars.add(match[1]!);
     }
     while ((match = captureRegex.exec(templateStr)) !== null) {
-      internalVars.add(match[1]);
+      internalVars.add(match[1]!);
     }
     while ((match = forRegex.exec(templateStr)) !== null) {
-      internalVars.add(match[1]);
+      internalVars.add(match[1]!);
     }
     while ((match = tablerowRegex.exec(templateStr)) !== null) {
-      internalVars.add(match[1]);
+      internalVars.add(match[1]!);
     }
 
     const excluded = new Set(["vars", "localVars", "shellIntegration", "host", "clipboard"]);
@@ -1053,7 +1057,7 @@ export async function closeModal(closeAll?: boolean): Promise<boolean> {
   if (modals.length === 0) {
     return false;
   }
-  const targetModals = closeAll ? Array.from(modals).reverse() : [modals[modals.length - 1]];
+  const targetModals = closeAll ? Array.from(modals).reverse() : ([modals[modals.length - 1]] as Element[]);
   for (const modal of targetModals) {
     modal.dispatchEvent(
       new KeyboardEvent("keydown", {
@@ -1124,7 +1128,7 @@ export function isValidHostname(hostname: string, allowLocalhost: boolean = true
 
   // The final TLD extension cannot be purely numeric (e.g., 'example.123' is invalid)
   if (labels.length > 1) {
-    const tld = labels[labels.length - 1];
+    const tld = labels[labels.length - 1]!;
     if (/^\d+$/.test(tld)) {
       return false;
     }
@@ -1508,15 +1512,15 @@ export function parseSSHConfigBlock(text: string): HostData {
     const match = trimmed.match(/^([a-zA-Z0-9_]+)\s*=?\s*(.*)$/);
     if (!match) continue;
 
-    const key = match[1].toLowerCase();
-    let val = match[2].trim();
+    const key = match[1]!.toLowerCase();
+    let val = match[2]!.trim();
     if (val.startsWith('"') && val.endsWith('"')) {
       val = val.slice(1, -1);
     }
 
     switch (key) {
       case "host":
-        name = val.split(/\s+/)[0];
+        name = val.split(/\s+/)[0]!;
         break;
       case "hostname":
         hostname = val;
@@ -1760,7 +1764,7 @@ export function sendKeyDown(kc: string, el?: HTMLElement) {
   const ctrlKey = kc.includes("ctrl");
   const shiftKey = kc.includes("shift");
   const parts = kc.split("+");
-  const key = parts[parts.length - 1];
+  const key = parts[parts.length - 1]!;
   let code = "";
   if (key.length === 1) {
     if (key >= "0" && key <= "9") {

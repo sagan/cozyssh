@@ -13,6 +13,8 @@ import SyncIcon from "@mui/icons-material/Sync";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import CloudDoneIcon from "@mui/icons-material/CloudDone";
 import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
+import DoneIcon from "@mui/icons-material/Done";
+import ErrorIcon from "@mui/icons-material/Error";
 
 import {
   type CSEventDetailTerminalChange,
@@ -51,6 +53,37 @@ import {
 } from "./constants";
 import TextFieldWithCopy from "./components/TextFieldWithCopy";
 import ExtraMenu from "./components/ExtraMenu";
+
+interface TabState {
+  /**
+   * last command execution failed and current in INPUT phrase
+   */
+  error: boolean;
+  /**
+   * last command execution success and current in INPUT phrase
+   */
+  success: boolean;
+  /**
+   * tab contains unread messages
+   */
+  unread: boolean;
+  /**
+   * tab contains unread messages and is executing
+   */
+  executingUnread: boolean;
+  /**
+   * tab contains only unread messages
+   */
+  unreadOnly: boolean;
+  /**
+   * tab contains only executing commands
+   */
+  executingOnly: boolean;
+  /**
+   * tab contains executing commands that are recent (last command execution success or failed and current in INPUT phrase)
+   */
+  executingSpin: boolean;
+}
 
 export interface TabBarProps {
   isMobile: boolean;
@@ -96,17 +129,29 @@ export default function TabBar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionBufferDataTimes]);
 
-  const tabStates = useMemo(() => {
+  const tabStates: TabState[] = useMemo(() => {
     return tabs.map((tab) => {
       let unread = false;
       let executingUnread = false;
       let unreadOnly = false;
       let executingOnly = false;
       let executingSpin = false;
+      let error = false;
+      let success = false;
       if (tab.type === "terminal") {
         unread = unreadTabIds.has(tab.id);
         for (const pane of tab.panes) {
-          const isExecuting = pane.state === "connected" && shellIntegrations[pane.id]?.isExecuting === true;
+          if (pane.state !== "connected") {
+            unread = false;
+            executingUnread = false;
+            unreadOnly = false;
+            executingOnly = false;
+            executingSpin = false;
+            error = false;
+            success = false;
+            break; // if any pane is disconnected, the tab will display as disconnected
+          }
+          const isExecuting = shellIntegrations[pane.id]?.isExecuting === true;
           const lastTime = sessionBufferDataTimes[pane.id] || 0;
           // eslint-disable-next-line react-hooks/purity
           const isRecent = activePeriod > 0 && Date.now() - lastTime < activePeriod;
@@ -119,18 +164,34 @@ export default function TabBar({
             } else {
               executingOnly = true;
             }
-          } else if (unread) {
-            unreadOnly = true;
+          } else {
+            if (unread) {
+              unreadOnly = true;
+            }
+            const si = shellIntegrations[pane.id];
+            if (si && si.promptPhase === "input" && si.exitStatus !== undefined) {
+              if (si.exitStatus === 0) {
+                success = true;
+              } else {
+                error = true;
+              }
+            }
           }
         }
       }
+      // Error has higher priority than success: if any pane has an error, the tab is in error state
+      if (error) {
+        success = false;
+      }
       return {
+        error,
+        success,
         unread,
         executingUnread,
         unreadOnly,
         executingOnly,
         executingSpin,
-      };
+      } satisfies TabState;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabs, unreadTabIds, shellIntegrations, sessionBufferDataTimes, refreshToken]);
@@ -147,7 +208,7 @@ export default function TabBar({
     const newTargetIndex = newTabs.findIndex((t) => t.id === targetId);
     const insertIndex = position === "before" ? newTargetIndex : newTargetIndex + 1;
 
-    newTabs.splice(insertIndex, 0, removed);
+    newTabs.splice(insertIndex, 0, removed!);
     setTabs(newTabs);
   };
 
@@ -232,7 +293,7 @@ export default function TabBar({
               sx={{ minHeight: 40 }}
             >
               {tabs.map((tab, i) => {
-                const state = tabStates[i];
+                const state = tabStates[i]!;
                 return (
                   <Tab
                     className={`tab ${tab.id === activeTabId ? "active" : ""} ${state.unread ? "unread" : ""} ${
@@ -400,7 +461,13 @@ export default function TabBar({
                               if (state.unreadOnly) {
                                 return (
                                   <Box title={t("Unread")} sx={{ display: "flex", alignItems: "center" }}>
-                                    <PriorityHighIcon sx={{ fontSize: 18, color: "#2196f3", fontWeight: "bold" }} />
+                                    <PriorityHighIcon
+                                      sx={{
+                                        fontSize: 18,
+                                        color: state.success ? "green" : state.error ? "red" : "#2196f3",
+                                        fontWeight: "bold",
+                                      }}
+                                    />
                                   </Box>
                                 );
                               }
@@ -421,6 +488,32 @@ export default function TabBar({
                                               },
                                             }
                                           : {}),
+                                      }}
+                                    />
+                                  </Box>
+                                );
+                              }
+
+                              if (state.error) {
+                                return (
+                                  <Box title={t("Last Command Error")} sx={{ display: "flex", alignItems: "center" }}>
+                                    <ErrorIcon
+                                      sx={{
+                                        fontSize: 18,
+                                        color: "red",
+                                        fontWeight: "bold",
+                                      }}
+                                    />
+                                  </Box>
+                                );
+                              } else if (state.success) {
+                                return (
+                                  <Box title={t("Last Command Success")} sx={{ display: "flex", alignItems: "center" }}>
+                                    <DoneIcon
+                                      sx={{
+                                        fontSize: 18,
+                                        color: "green",
+                                        fontWeight: "bold",
                                       }}
                                     />
                                   </Box>

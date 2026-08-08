@@ -1343,7 +1343,7 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
       if (!isTouch || !isMobile) {
         return;
       }
-      const touch = e.touches[0];
+      const touch = e.touches[0]!;
       swipeStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
     },
     [isMobile, isTouch],
@@ -1354,7 +1354,7 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
       if (!isTouch || !isMobile || !swipeStartRef.current) {
         return;
       }
-      const touch = e.changedTouches[0];
+      const touch = e.changedTouches[0]!;
       const diffX = touch.clientX - swipeStartRef.current.x;
       const diffY = touch.clientY - swipeStartRef.current.y;
       const diffTime = Date.now() - swipeStartRef.current.time;
