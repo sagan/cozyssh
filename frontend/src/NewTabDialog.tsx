@@ -68,6 +68,7 @@ import {
   getHostFlags,
   getKeyCombination,
   getSSHCommand,
+  getSSHConfigBlock,
   getSSHCopyIdCommand,
   isModifier,
   isValidHostname,
@@ -1697,6 +1698,15 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
                     {t("Copy Upload Identity Command")}
                   </MenuItem>
                   <MenuItem
+                    id="ntdm-copy-ssh-config-block"
+                    onClick={() => {
+                      setContextMenuOpen(false);
+                      navigator.clipboard.writeText(getSSHConfigBlock(getHost(contextMenu.item.value)));
+                    }}
+                  >
+                    {t("Copy SSH Config Block")}
+                  </MenuItem>
+                  <MenuItem
                     id="ntdm-run-ssh-copy-id"
                     onClick={() => {
                       setContextMenuOpen(false);
@@ -1704,6 +1714,19 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
                     }}
                   >
                     {t("Run ssh-copy-id")}
+                  </MenuItem>
+                </>
+              )}
+              {["builtin_button", "other_button", "button"].includes(contextMenu.item.type) && (
+                <>
+                  <MenuItem
+                    id="ntdm-copy-button"
+                    onClick={() => {
+                      setContextMenuOpen(false);
+                      navigator.clipboard.writeText(JSON.stringify((contextMenu.item as NtdItemButton).btn));
+                    }}
+                  >
+                    {t("Copy Button To Clipboard")}
                   </MenuItem>
                 </>
               )}

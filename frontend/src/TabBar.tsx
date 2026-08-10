@@ -43,6 +43,7 @@ import {
   parseNewTabDialogFilter,
   PaneStateLabels,
   getIntVar,
+  getPaneTip,
 } from "./store";
 import {
   APP_NAME,
@@ -309,7 +310,7 @@ export default function TabBar({
                     value={tab.id}
                     title={
                       tab.type === "terminal"
-                        ? t("Hosts:") + ` ${tab.panes.map((p) => p.host).join(", ")}`
+                        ? t("Hosts:") + `\n${tab.panes.map((p) => getPaneTip(p, shellIntegrations[p.id])).join("\n")}`
                         : t("Scratchpad")
                     }
                     onContextMenu={(e) => handleContextMenu(e, tab.id)}

@@ -636,7 +636,6 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
           }
           if (info.cmd) {
             updates.command = info.cmd;
-            updates.command = info.cmd;
           }
           if (info.start) {
             const type = info.type || "shell";
@@ -683,7 +682,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
               updates.shellId = info.start;
               updates.isExecuting = false;
               // Shell is back at the prompt. Activate live cmdline tracking.
-              updates.promptPhase = "prompt";
+              // OSC 3008 with type=shell is emitted once the prompt is drawn,
+              // corresponding to OSC 133 prompt lifecycle phase B ("input").
+              updates.promptPhase = "input";
               updates.currentCmdLine = "";
               // Capture cursor position as fallback anchor for readCurrentCmdLine().
               // OSC 3008 has no explicit "prompt-end" marker (unlike OSC 133;B), so
@@ -826,7 +827,10 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
             updateShellIntegration(updates);
           } else if (type === "E" && parts[1]) {
             // Command text — parts[1] is the command (escaped), parts[2] is an optional nonce (ignored)
-            updateShellIntegration({ command: decodeVscodeOscValue(parts[1]) });
+            const command = decodeVscodeOscValue(parts[1]);
+            if (!command.startsWith("__systemd_osc_context_")) {
+              updateShellIntegration({ command });
+            }
           } else if (type === "P" && parts[1]) {
             // Property — key=value pairs (Cwd, IsWindows, Prompt, HasRichCommandDetection, …)
             const eqIdx = parts[1].indexOf("=");

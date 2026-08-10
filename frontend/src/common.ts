@@ -18,6 +18,7 @@ import {
   TAG_FLAG_PREFIX,
   TAG_FLAG_SHELL_INTEGRATION_DISABLED,
   TAG_FLAG_SHELL_INTEGRATION_ENABLED,
+  TAG_FLAG_SHELL_INTEGRATION_FORCE_ENABLED,
   TAG_GROUP_PREFIX,
   TAG_ORDER_PREFIX,
   WS_PROTOCOL_DUMMY,
@@ -91,7 +92,7 @@ export interface CommandHistoryEntry {
 /**
  * OSC 133 prompt lifecycle phase:
  * - 'prompt'   — OSC 133;A  (prompt drawing started)
- * - 'input'    — OSC 133;B  (user hit Enter; command text beginning)
+ * - 'input'    — OSC 133;B  (until user hit Enter; command text beginning)
  * - 'output'   — OSC 133;C  (command output starting)
  * - 'finished' — OSC 133;D  (command finished, exit code available)
  */
@@ -1935,9 +1936,11 @@ export function getTagTip(tag: string): string {
     case TAG_FAV:
       return t("System tag: favourite host");
     case TAG_FLAG_SHELL_INTEGRATION_DISABLED:
-      return t("System flag: disable shell integration for the host");
+      return t("System flag: disable shell integration script injection for the host");
     case TAG_FLAG_SHELL_INTEGRATION_ENABLED:
-      return t("System flag: enable shell integration for the host");
+      return t("System flag: enable shell integration script injection for the host");
+    case TAG_FLAG_SHELL_INTEGRATION_FORCE_ENABLED:
+      return t("System flag: force enable shell integration script injection for the host");
     default:
       return tag;
   }

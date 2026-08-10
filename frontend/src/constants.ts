@@ -164,6 +164,8 @@ export const TAG_FLAG_SHELL_INTEGRATION_DISABLED = "$shellIntegration=0";
 
 export const TAG_FLAG_SHELL_INTEGRATION_ENABLED = "$shellIntegration=1";
 
+export const TAG_FLAG_SHELL_INTEGRATION_FORCE_ENABLED = "$shellIntegration=2";
+
 export const LINK_COZYSSH_GITHUB = "https://github.com/sagan/cozyssh";
 export const LINK_COZYSSH_DOC_DATA = "https://github.com/sagan/cozyssh/blob/master/docs/DATA.md";
 export const LINK_COZYSSH_DOC_SCRIPTS = "https://github.com/sagan/cozyssh/blob/master/docs/SCRIPTS.md";

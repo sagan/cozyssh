@@ -109,6 +109,7 @@ import {
   TAG_FLAG_PREFIX,
   TAG_FLAG_SHELL_INTEGRATION_DISABLED,
   TAG_FLAG_SHELL_INTEGRATION_ENABLED,
+  TAG_FLAG_SHELL_INTEGRATION_FORCE_ENABLED,
 } from "./constants";
 import {
   AM_1_ALT,
@@ -3911,6 +3912,7 @@ export default function Sidebar({
                   TAG_FAV,
                   TAG_FLAG_SHELL_INTEGRATION_DISABLED,
                   TAG_FLAG_SHELL_INTEGRATION_ENABLED,
+                  TAG_FLAG_SHELL_INTEGRATION_FORCE_ENABLED,
                   ...uniqueTags,
                 ].filter((t) => !parsedTags.includes(t))}
                 value={tagInput}

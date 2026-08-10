@@ -80,9 +80,9 @@ func (p *PooledClient) ServerVersion() string {
 // In modern Linux (systemd 258+) native OSC 3008 shell integration is ready out of the box, no need to inject custom shell integration script.
 var shellIntegrationNativeList = []*regexp.Regexp{
 	// Ubuntu 26.04+
-	regexp.MustCompile(`^SSH-2\.0-OpenSSH_(?:1[0-9]|[2-9][0-9])\.[0-9]+p[0-9]+\s+Ubuntu-(?:[2-9][0-9]|[1-9][0-9]{2,})ubuntu[0-9]+`),
+	regexp.MustCompile(`^SSH-2\.0-OpenSSH_(?:1[0-9]|[2-9][0-9])\.[0-9]+p[0-9]+\s+Ubuntu-[0-9]+ubuntu[0-9]+(?:\.[0-9]+)?`),
 	// Debian 14+
-	regexp.MustCompile(`^SSH-2\.0-OpenSSH_(?:10\.[3-9]|1[1-9]\.[0-9]+|[2-9][0-9]\.[0-9]+)p[0-9]+\s+Debian-(?:[5-9]|[1-9][0-9]+)`),
+	regexp.MustCompile(`^SSH-2\.0-OpenSSH_(?:10\.[4-9]|1[1-9]\.[0-9]+|[2-9][0-9]\.[0-9]+)p[0-9]+\s+Debian-[0-9]+(?:\+deb(?:1[4-9]|[2-9][0-9])u[0-9]+)?`),
 	// Fedora 44+
 	// Arch Linux (rolling-update)
 }

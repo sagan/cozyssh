@@ -335,11 +335,11 @@ export interface CsScriptModule {
 
 export const PaneStateLabels: Record<PaneData["state"], string> = {
   "": "",
-  stolen: t("stolen"),
-  disconnected: t("disconnected"),
-  connected: t("connected"),
-  connecting: t("connecting"),
-  exited: t("exited"),
+  stolen: t("Stolen"),
+  disconnected: t("Disconnected"),
+  connected: t("Connected"),
+  connecting: t("Connecting"),
+  exited: t("Exited"),
 };
 
 /**
@@ -2583,7 +2583,7 @@ export function openEditHostDialog(target: HostData) {
   const isAuto = target.source === "known_hosts";
   const data: HostForm = {
     ...target,
-    name: parseHostName(target.name || target.hostname).hostname,
+    name: target.source === "config" ? target.name : parseHostName(target.name || target.hostname).hostname,
     tags: target.tags?.join(" ") || "",
   };
   setEditHostName(isAuto ? "" : target.name);
@@ -2633,6 +2633,8 @@ export function getHost(
   host: string | (Pick<HostData, "hostname"> & Partial<Pick<HostData, "port" | "user" | "password">>),
 ): HostData & { [PartialMatchHostKey]?: HostData } {
   const parsedHost = typeof host === "string" ? parseHostName(host) : host;
+  const parsedHostIsNameOnly =
+    parsedHost.user === undefined && parsedHost.password === undefined && parsedHost.port === undefined;
   const parsedHostString = getCanonicalHostString(parsedHost, "root", true);
   let nameMatchHost: HostData | undefined;
   let infoMatchHost: HostData | undefined;
@@ -2641,7 +2643,7 @@ export function getHost(
   for (const h of hosts) {
     if (h.name === parsedHost.hostname) {
       nameMatchHost = h;
-      if (parsedHost.user === undefined && parsedHost.password === undefined && parsedHost.port === undefined) {
+      if (parsedHostIsNameOnly) {
         exactFound = true;
       }
       break;
@@ -2659,7 +2661,7 @@ export function getHost(
     }
   }
   if (exactFound) {
-    return (nameMatchHost || infoMatchHost)!;
+    return (parsedHostIsNameOnly ? nameMatchHost || infoMatchHost : infoMatchHost || nameMatchHost)!;
   }
   const newHost: HostData & { [PartialMatchHostKey]?: HostData } = Object.assign(parsedHost, {
     name: parsedHost.hostname,
@@ -3511,4 +3513,20 @@ export function getTerminalContents(
   }
 
   return content.join("\n");
+}
+
+export function getPaneTip(pane: PaneData, si: ShellIntegration | undefined): string {
+  const labels: string[] = [PaneStateLabels[pane.state]];
+  if (si) {
+    if (si.isExecuting) {
+      labels.push(t("Executing"));
+    } else if (si.promptPhase === "input" && si.exitStatus !== undefined) {
+      if (si.exitStatus === 0) {
+        labels.push(t("Last Command Success"));
+      } else {
+        labels.push(t("Last Command Error"));
+      }
+    }
+  }
+  return `${pane.host} (${labels.join(", ")})`;
 }
