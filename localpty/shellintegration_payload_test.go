@@ -1,4 +1,4 @@
-﻿package localpty
+package localpty
 
 import (
 	"strings"
@@ -15,8 +15,17 @@ func TestSplitBase64Lines_MaxLineLen(t *testing.T) {
 	}
 }
 
+func TestStripScriptComments(t *testing.T) {
+	input := []byte("# Comment line 1\n  # Indented comment line 2\n\n\texport FOO=1 # inline comment\n\n   echo hello\n")
+	got := string(stripScriptComments(input))
+	expected := "export FOO=1 # inline comment\necho hello"
+	if got != expected {
+		t.Errorf("stripScriptComments failed:\ngot:\n%q\nexpected:\n%q", got, expected)
+	}
+}
+
 func TestPayload_UsesHeredoc(t *testing.T) {
-	payload := GetRemoteShellIntegrationPayload()
+	payload := GetRemoteShellIntegrationPayload("")
 	if payload == "" {
 		t.Skip("no embedded scripts available")
 	}
@@ -29,8 +38,8 @@ func TestPayload_UsesHeredoc(t *testing.T) {
 	if strings.Contains(payload, "printf '%s'") {
 		t.Error("payload must not use printf with huge base64 argument")
 	}
-	if !strings.Contains(payload, "} 2>/dev/null") {
-		t.Error("payload should wrap eval in { } 2>/dev/null")
+	if !strings.Contains(payload, "} >/dev/null 2>&1") && !strings.Contains(payload, "} 2>/dev/null") {
+		t.Error("payload should wrap eval in block with stderr redirected")
 	}
 	for i, line := range strings.Split(payload, "\n") {
 		if len(line) > 200 {

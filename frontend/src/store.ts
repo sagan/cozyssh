@@ -1647,6 +1647,7 @@ export async function cloneSession(id: string, cloneInSameTab?: boolean) {
       canonicalHostString: pane.canonicalHostString,
       cloneFrom: backendSessionId,
       state: pane.state,
+      options: pane.options,
     };
     if (cloneInSameTab) {
       return prev.map((t) =>

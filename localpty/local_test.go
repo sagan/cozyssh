@@ -51,7 +51,7 @@ func TestLocalSession_CloseKillsProcess(t *testing.T) {
 // as the actual stdout of `echo marker`.  Neither occurrence should be visible.
 func TestMarkerFilter_WithPTYEcho(t *testing.T) {
 	marker := "__cozyssh_deadbeef__"
-	simulated := "{ if ...; } 2>/dev/null; echo " + marker + "\r\n" +
+	simulated := "__csmk='__cozyssh_';echo \"${__csmk}deadbeef__\"\r\n" +
 		marker + "\r\n" +
 		"root@linode:~# "
 
@@ -97,9 +97,9 @@ func TestMarkerFilter_WithoutPTYEcho(t *testing.T) {
 // Ubuntu with bash where the shell takes a moment to evaluate the script.
 func TestMarkerFilter_SecondOccurrenceArrivesLate(t *testing.T) {
 	marker := "__cozyssh_deadbeef__"
-	// Two separate chunks: first contains marker in echoed command only,
+	// Two separate chunks: first contains echoed command line without full marker,
 	// second contains the actual echo output + prompt.
-	chunk1 := "{ ... }; echo " + marker + "\r\n"
+	chunk1 := "__csmk='__cozyssh_';echo \"${__csmk}deadbeef__\"\r\n"
 	chunk2 := marker + "\r\nroot@linode:~# "
 
 	r := newMarkerFilter(&twoChunkReader{

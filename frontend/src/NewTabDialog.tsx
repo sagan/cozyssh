@@ -682,7 +682,7 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
             subtitle:
               t("Group:") +
               ` ${btn.group || DEFAULT_BUTTON_GROUP} | ` +
-              +t("Type:") +
+              t("Type:") +
               ` ${BUTTPN_TYPES[btn.type]}${
                 btn.type !== "send_string" && btn.type !== "run_script" ? " | " + t("Payload:") + " " + btn.payload : ""
               }`,
@@ -1302,7 +1302,7 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
         if (items[selectedIndex]) {
           handleSelect(items[selectedIndex], altMode);
         }
-      } else if (keycb === "delete" || keycb === "alt+d") {
+      } else if (keycb === "alt+d") {
         // Remove from recents only when:
         //   - the selected item is deletable AND
         //   - the cursor is at end-of-input (or input is empty) so normal Delete editing still works
@@ -1750,7 +1750,7 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
                     handleDeleteItem(contextMenu.item);
                   }}
                 >
-                  {t("Delete")} (delete / alt+d)
+                  {t("Delete")} (alt+d)
                 </MenuItem>
               )}
             </>

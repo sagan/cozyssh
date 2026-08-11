@@ -16,9 +16,12 @@ import {
   MIME_JSON,
   TAG_FAV,
   TAG_FLAG_PREFIX,
+  TAG_FLAG_SHELL_INTEGRATION_ASH,
+  TAG_FLAG_SHELL_INTEGRATION_BASH,
   TAG_FLAG_SHELL_INTEGRATION_DISABLED,
   TAG_FLAG_SHELL_INTEGRATION_ENABLED,
   TAG_FLAG_SHELL_INTEGRATION_FORCE_ENABLED,
+  TAG_FLAG_SHELL_INTEGRATION_ZSH,
   TAG_GROUP_PREFIX,
   TAG_ORDER_PREFIX,
   WS_PROTOCOL_DUMMY,
@@ -1941,6 +1944,12 @@ export function getTagTip(tag: string): string {
       return t("System flag: enable shell integration script injection for the host");
     case TAG_FLAG_SHELL_INTEGRATION_FORCE_ENABLED:
       return t("System flag: force enable shell integration script injection for the host");
+    case TAG_FLAG_SHELL_INTEGRATION_ASH:
+      return t("System flag: use basic feature BusyBox ash (OpenWrt / Alpine) shell integration for the host");
+    case TAG_FLAG_SHELL_INTEGRATION_BASH:
+      return t("System flag: use bash shell integration for the host");
+    case TAG_FLAG_SHELL_INTEGRATION_ZSH:
+      return t("System flag: use zsh shell integration for the host");
     default:
       return tag;
   }

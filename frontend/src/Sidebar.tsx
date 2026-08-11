@@ -110,6 +110,9 @@ import {
   TAG_FLAG_SHELL_INTEGRATION_DISABLED,
   TAG_FLAG_SHELL_INTEGRATION_ENABLED,
   TAG_FLAG_SHELL_INTEGRATION_FORCE_ENABLED,
+  TAG_FLAG_SHELL_INTEGRATION_ASH,
+  TAG_FLAG_SHELL_INTEGRATION_BASH,
+  TAG_FLAG_SHELL_INTEGRATION_ZSH,
 } from "./constants";
 import {
   AM_1_ALT,
@@ -3550,7 +3553,7 @@ export default function Sidebar({
                   <b>Shift + Enter</b>: {t("edit selected host")};&nbsp;
                   <b>Alt + Shift + Enter</b>: {t("input selected host into filter")};&nbsp;
                   <b>Ctrl + Shift + Enter</b>: {t("Open context menu")};&nbsp;
-                  <b>Delete</b> {t("or")} <b>Alt + D</b>: {t("delete a recent item")};&nbsp;
+                  <b>Alt + D</b>: {t("delete a recent item")};&nbsp;
                   <b>Alt + Backspace</b>: {t("clear the filter")};&nbsp;
                   <b>Alt + ↓↑</b> {t("or")} <b>Alt + Shift + J/K</b>: {t("jump through items quickly")};&nbsp;
                   <b>Ctrl + Alt + J/K</b>: {t("jump to top/bottom")};&nbsp;
@@ -3862,7 +3865,7 @@ export default function Sidebar({
               label={t("User")}
               size="small"
               placeholder={t("leave empty to use backend current user")}
-              options={["root", "ubuntu", "user", "administrator"]}
+              options={["root", "ubuntu", "user", "admin", "administrator"]}
               onKeyDown={handleEditHostFormKeyDown}
               value={hostFormData.user}
               onChange={(newValue) => {
@@ -3874,7 +3877,7 @@ export default function Sidebar({
               label={t("Port")}
               size="small"
               placeholder="22"
-              options={["22", "222", "2222"]}
+              options={["22", "222", "2222", "22222"]}
               value={hostFormData.port || ""}
               onKeyDown={handleEditHostFormKeyDown}
               onChange={(newValue) => {
@@ -3913,6 +3916,9 @@ export default function Sidebar({
                   TAG_FLAG_SHELL_INTEGRATION_DISABLED,
                   TAG_FLAG_SHELL_INTEGRATION_ENABLED,
                   TAG_FLAG_SHELL_INTEGRATION_FORCE_ENABLED,
+                  TAG_FLAG_SHELL_INTEGRATION_BASH,
+                  TAG_FLAG_SHELL_INTEGRATION_ZSH,
+                  TAG_FLAG_SHELL_INTEGRATION_ASH,
                   ...uniqueTags,
                 ].filter((t) => !parsedTags.includes(t))}
                 value={tagInput}

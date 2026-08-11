@@ -2106,7 +2106,7 @@ export interface CommandHistoryEntry {
 /**
  * OSC 133 prompt lifecycle phase:
  * - 'prompt'   — OSC 133;A  (prompt drawing started)
- * - 'input'    — OSC 133;B  (user hit Enter; command text beginning)
+ * - 'input'    — OSC 133;B  (until user hit Enter; command text beginning)
  * - 'output'   — OSC 133;C  (command output starting)
  * - 'finished' — OSC 133;D  (command finished, exit code available)
  */

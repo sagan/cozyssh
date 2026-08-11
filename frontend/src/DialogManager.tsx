@@ -1420,6 +1420,10 @@ export default function DialogManager({
                 {t(
                   `Whether to inject shell integration script to the new session: ""(empty string, default) = auto; 0 = disable (don't inject); 1 = enable (inject unless it's detected that the injection may not work); 2 = force enable (always inject).`,
                 )}
+                &nbsp;
+                {t(
+                  "It also support some special values: `bash`, `zsh`, `ash` - inject specific shell type integration script for the host. Note `ash` (BusyBox, used in OpenWrt / Alpine) only supports basic shell integration features.",
+                )}
                 <br />- <b>proxyJump</b> : {t("Proxy jump server.")} {t("E.g.")} <code>server-foo,server-bar</code>
                 <br />- <b>target</b> :&nbsp;
                 {t(

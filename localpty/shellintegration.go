@@ -200,56 +200,91 @@ func ApplyShellIntegrationArgs(shellName string, args []string) []string {
 	return args
 }
 
+type RemotePayload struct {
+	Default string // Full-featured shell integration for bash, zsh, fish...
+	Bash    string // Dedicated Bash payload
+	Zsh     string // Dedicated Zsh payload
+	Ash     string // Basic feature shell integration for BusyBox ash (OpenWrt / Alpine)
+}
+
 var (
-	remotePayload     string
+	remotePayload     RemotePayload
 	remotePayloadOnce sync.Once
 )
 
 // GetRemoteShellIntegrationPayload returns a self-contained shell snippet
 // that detects whether the remote shell is Zsh or Bash, decodes the embedded
 // script from base64, and evaluates it in memory without writing files to disk.
-func GetRemoteShellIntegrationPayload() string {
+func GetRemoteShellIntegrationPayload(shellIntegration string) string {
 	remotePayloadOnce.Do(func() {
 		bashBytes, err1 := resources.Scripts.ReadFile("scripts/shellIntegration-bash.sh")
 		zshBytes, err2 := resources.Scripts.ReadFile("scripts/shellIntegration-rc.zsh")
-		if err1 != nil || err2 != nil {
-			log.Printf("shellintegration: error reading embedded scripts: %v, %v", err1, err2)
+		ashBytes, err3 := resources.Scripts.ReadFile("scripts/shellIntegration-ash.sh")
+		if err1 != nil || err2 != nil || err3 != nil {
+			log.Printf("shellintegration: error reading embedded scripts: %v, %v, %v", err1, err2, err3)
 			return
 		}
 
-		// Normalize line endings to Unix LF (\n) to prevent syntax errors on Linux targets
+		// Normalize line endings to Unix LF (\n)
 		bashBytes = bytes.ReplaceAll(bashBytes, []byte("\r\n"), []byte("\n"))
 		zshBytes = bytes.ReplaceAll(zshBytes, []byte("\r\n"), []byte("\n"))
+		ashBytes = bytes.ReplaceAll(ashBytes, []byte("\r\n"), []byte("\n"))
 
-		bashB64 := splitBase64Lines(base64.StdEncoding.EncodeToString(bashBytes))
-		zshB64 := splitBase64Lines(base64.StdEncoding.EncodeToString(zshBytes))
+		// Strip comment lines and empty lines
+		bashBytes = stripScriptComments(bashBytes)
+		zshBytes = stripScriptComments(zshBytes)
+		ashBytes = stripScriptComments(ashBytes)
 
-		// Use heredocs instead of huge printf arguments.
-		//
-		// The old approach (printf '%s' '<giant_b64>' | base64 -d) fails silently on
-		// Alpine Linux / OpenWrt (busybox ash) and some other systems because the
-		// shell's interactive line-input buffer is limited (~4 KB on busybox).  When
-		// the injected command line exceeds that limit it is silently truncated,
-		// leaving an unclosed single-quote; the shell then waits for the user to
-		// close the string — freezing the terminal.
-		//
-		// Heredocs feed data line-by-line (76 chars each), safely under any shell's
-		// line-length limits.  The `{ } 2>/dev/null` group silently absorbs any
-		// error from the eval'd script without preventing the `echo marker` that
-		// follows from running.
-		remotePayload = fmt.Sprintf(
-			"set +o history;\r "+
-				"{ if [ -n \"$ZSH_VERSION\" ]; then eval \"$(base64 -d 2>/dev/null <<'__COZYSSH_ZSH__'\n"+
-				"%s\n"+
-				"__COZYSSH_ZSH__\n"+
-				")\"; elif [ -n \"$BASH_VERSION\" ]; then eval \"$(base64 -d 2>/dev/null <<'__COZYSSH_BASH__'\n"+
-				"%s\n"+
-				"__COZYSSH_BASH__\n"+
-				")\"; fi; set -o history; } >/dev/null 2>&1",
-			zshB64, bashB64,
-		)
+		// IMPORTANT: Keep Bash/Zsh base64 as single contiguous strings (NO line splitting).
+		// This prevents Readline 6.2 (CentOS 7) from processing hundreds of lines interactively.
+		bashB64 := base64.StdEncoding.EncodeToString(bashBytes)
+		zshB64 := base64.StdEncoding.EncodeToString(zshBytes)
+
+		// BusyBox ash still needs line wrapping due to its small line-input buffer.
+		ashB64 := splitBase64Lines(base64.StdEncoding.EncodeToString(ashBytes))
+
+		// Dedicated Bash payload
+		// Dedicated Bash payload (guarded & output-suppressed)
+		remotePayload.Bash = "set +o history >/dev/null 2>&1;" + "\n" +
+			`{ if [ -n "$BASH_VERSION" ]; then eval "$(base64 -d 2>/dev/null <<'__COZYSSH_BASH__'` + "\n" +
+			bashB64 + "\n" +
+			"__COZYSSH_BASH__" + "\n" +
+			`)"; fi; set -o history; } >/dev/null 2>&1`
+
+		// Dedicated Zsh payload (guarded & output-suppressed)
+		remotePayload.Zsh = "set +o history >/dev/null 2>&1;" + "\n" +
+			`{ if [ -n "$ZSH_VERSION" ]; then eval "$(base64 -d 2>/dev/null <<'__COZYSSH_ZSH__'` + "\n" +
+			zshB64 + "\n" +
+			"__COZYSSH_ZSH__" + "\n" +
+			`)"; fi; set -o history; } >/dev/null 2>&1`
+
+		// Combined fallback payload (for auto-detection)
+		remotePayload.Default = "set +o history >/dev/null 2>&1;\n" +
+			`{ if [ -n "$ZSH_VERSION" ]; then eval "$(base64 -d 2>/dev/null <<'__COZYSSH_ZSH__'` + "\n" +
+			zshB64 + "\n" +
+			"__COZYSSH_ZSH__" + "\n" +
+			`)"; elif [ -n "$BASH_VERSION" ]; then eval "$(base64 -d 2>/dev/null <<'__COZYSSH_BASH__'` + "\n" +
+			bashB64 + "\n" +
+			"__COZYSSH_BASH__" + "\n" +
+			`)"; fi; set -o history; } >/dev/null 2>&1`
+
+		// BusyBox ash payload
+		remotePayload.Ash = `eval "$(base64 -d 2>/dev/null <<'__COZYSSH_ASH__'` + "\n" +
+			ashB64 + "\n" +
+			"__COZYSSH_ASH__" + "\n" +
+			`)" >/dev/null 2>&1`
 	})
-	return remotePayload
+
+	switch shellIntegration {
+	case "bash":
+		return remotePayload.Bash
+	case "zsh":
+		return remotePayload.Zsh
+	case "ash":
+		return remotePayload.Ash
+	default:
+		return remotePayload.Default
+	}
 }
 
 // splitBase64Lines wraps a base64 string at 76 characters per line.
@@ -268,6 +303,22 @@ func splitBase64Lines(s string) string {
 	return sb.String()
 }
 
+// stripScriptComments removes full-line comments (lines whose first non-whitespace character is #),
+// leading/trailing whitespace (indentation), and empty lines from shell script bytes before base64
+// encoding to minimize payload size while keeping script logic identical.
+func stripScriptComments(content []byte) []byte {
+	lines := bytes.Split(content, []byte("\n"))
+	var filtered [][]byte
+	for _, line := range lines {
+		trimmed := bytes.TrimSpace(line)
+		if len(trimmed) == 0 || bytes.HasPrefix(trimmed, []byte("#")) {
+			continue
+		}
+		filtered = append(filtered, trimmed)
+	}
+	return bytes.Join(filtered, []byte("\n"))
+}
+
 // InjectRemoteShellIntegration writes the shell integration payload to stdin
 // and returns a wrapped stdout that discards all output until the end-of-injection
 // marker is seen, then resumes normal pass-through.
@@ -277,8 +328,8 @@ func splitBase64Lines(s string) string {
 // in the echoed command text.  This guarantees the filter only ever sees the
 // marker ONCE — in the actual shell output — regardless of whether PTY echo
 // is enabled.
-func InjectRemoteShellIntegration(stdin io.Writer, stdout io.Reader) io.Reader {
-	payload := GetRemoteShellIntegrationPayload()
+func InjectRemoteShellIntegration(stdin io.Writer, stdout io.Reader, shellIntegration string) io.Reader {
+	payload := GetRemoteShellIntegrationPayload(shellIntegration)
 	if payload == "" {
 		return stdout
 	}
