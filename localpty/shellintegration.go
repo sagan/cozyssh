@@ -243,30 +243,27 @@ func GetRemoteShellIntegrationPayload(shellIntegration string) string {
 		// BusyBox ash still needs line wrapping due to its small line-input buffer.
 		ashB64 := splitBase64Lines(base64.StdEncoding.EncodeToString(ashBytes))
 
-		// Dedicated Bash payload
+		// set +o history broke shell integration on CentOS 7 because CentOS 7 doesn't have HISTCONTROL env set
 		// Dedicated Bash payload (guarded & output-suppressed)
-		remotePayload.Bash = "set +o history >/dev/null 2>&1;" + "\n" +
-			`{ if [ -n "$BASH_VERSION" ]; then eval "$(base64 -d 2>/dev/null <<'__COZYSSH_BASH__'` + "\n" +
+		remotePayload.Bash = `{ if [ -n "$BASH_VERSION" ]; then eval "$(base64 -d 2>/dev/null <<'__COZYSSH_BASH__'` + "\n" +
 			bashB64 + "\n" +
 			"__COZYSSH_BASH__" + "\n" +
-			`)"; fi; set -o history; } >/dev/null 2>&1`
+			`)"; history -d -1 2>/dev/null; fi; } >/dev/null 2>&1`
 
 		// Dedicated Zsh payload (guarded & output-suppressed)
-		remotePayload.Zsh = "set +o history >/dev/null 2>&1;" + "\n" +
-			`{ if [ -n "$ZSH_VERSION" ]; then eval "$(base64 -d 2>/dev/null <<'__COZYSSH_ZSH__'` + "\n" +
+		remotePayload.Zsh = `{ if [ -n "$ZSH_VERSION" ]; then eval "$(base64 -d 2>/dev/null <<'__COZYSSH_ZSH__'` + "\n" +
 			zshB64 + "\n" +
 			"__COZYSSH_ZSH__" + "\n" +
-			`)"; fi; set -o history; } >/dev/null 2>&1`
+			`)"; history -d -1 2>/dev/null; fi; } >/dev/null 2>&1`
 
 		// Combined fallback payload (for auto-detection)
-		remotePayload.Default = "set +o history >/dev/null 2>&1;\n" +
-			`{ if [ -n "$ZSH_VERSION" ]; then eval "$(base64 -d 2>/dev/null <<'__COZYSSH_ZSH__'` + "\n" +
+		remotePayload.Default = `{ if [ -n "$ZSH_VERSION" ]; then eval "$(base64 -d 2>/dev/null <<'__COZYSSH_ZSH__'` + "\n" +
 			zshB64 + "\n" +
 			"__COZYSSH_ZSH__" + "\n" +
-			`)"; elif [ -n "$BASH_VERSION" ]; then eval "$(base64 -d 2>/dev/null <<'__COZYSSH_BASH__'` + "\n" +
+			`)"; history -d -1 2>/dev/null; elif [ -n "$BASH_VERSION" ]; then eval "$(base64 -d 2>/dev/null <<'__COZYSSH_BASH__'` + "\n" +
 			bashB64 + "\n" +
 			"__COZYSSH_BASH__" + "\n" +
-			`)"; fi; set -o history; } >/dev/null 2>&1`
+			`)"; history -d -1 2>/dev/null; fi; } >/dev/null 2>&1`
 
 		// BusyBox ash payload
 		remotePayload.Ash = `eval "$(base64 -d 2>/dev/null <<'__COZYSSH_ASH__'` + "\n" +
