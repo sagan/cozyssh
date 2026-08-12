@@ -48,6 +48,7 @@ type PooledClient struct {
 	Closers       []io.Closer
 	RemoteCommand string
 	SendEnv       string
+	Env           []string
 	Mu            sync.Mutex
 	Refs          int
 }
@@ -87,6 +88,12 @@ var shellIntegrationNativeList = []*regexp.Regexp{
 	// Arch Linux (rolling-update)
 }
 
+// Legacy (obsolete) old Linux versions such as CentOS 6/7, Ubuntu 14.04/16.04/18.04, or Debian 8/9
+var shellIntegrationLegacyList = []*regexp.Regexp{
+	// Pattern matching OpenSSH 1.x through 7.x on SSH protocol 1.99 or 2.0
+	regexp.MustCompile(`^SSH-(?:1\.99|2\.0)-OpenSSH_[1-7]\.[0-9]+(?:\.[0-9]+)?(?:p[0-9]+)?`),
+}
+
 var shellIntegrationServerWhitelist = []string{
 	"ubuntu",
 	"debian",
@@ -98,7 +105,13 @@ var shellIntegrationServerBlacklist = []string{
 	"dropbear",
 }
 
-// Return: 0 : unknown; 1 : unsupported; 2: possibly supported; 3 - native supported.
+// Returns:
+//   - 0 : unknown;
+//   - 1 : unsupported;
+//   - 2 : possibly supported;
+//   - 3 : native supported;
+//   - 4 : legacy SSH server (possibly supported but with caveats)
+//
 // SSH Server banners:
 //   - SSH-2.0-OpenSSH_10.2  Alpine
 //   - SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13.18
@@ -113,6 +126,9 @@ func (p *PooledClient) ShellIntegrationType() int {
 	verLower := strings.ToLower(ver)
 	if slices.ContainsFunc(shellIntegrationServerBlacklist, func(s string) bool { return strings.Contains(verLower, s) }) {
 		return 1
+	}
+	if slices.ContainsFunc(shellIntegrationLegacyList, func(s *regexp.Regexp) bool { return s.MatchString(ver) }) {
+		return 4
 	}
 	if slices.ContainsFunc(shellIntegrationServerWhitelist, func(s string) bool { return strings.Contains(verLower, s) }) {
 		return 2
@@ -850,20 +866,13 @@ func DialSSH(name string, term TerminalUI, rows, cols int, identity string, prox
 		return nil, nil, "", "", err
 	}
 
-	if err := setupSession(session, rows, cols); err != nil {
+	if err := setupSession(session, common.LookupEnv(env, "TERM"), rows, cols); err != nil {
 		session.Close()
 		pClient.Release()
 		return nil, nil, "", "", err
 	}
 
-	applySendEnv(session, pClient.SendEnv)
-
-	for _, v := range env {
-		if v != "" {
-			name, value, _ := strings.Cut(v, "=")
-			session.Setenv(name, value)
-		}
-	}
+	applySendEnv(session, pClient.SendEnv, env)
 
 	go startKeepAlive(client)
 
@@ -1558,16 +1567,16 @@ func CloneSSH(pClient *PooledClient, rows, cols int) (*ssh.Session, string, erro
 		pClient.Release()
 		return nil, "", err
 	}
-	if err := setupSession(session, rows, cols); err != nil {
+	if err := setupSession(session, common.LookupEnv(pClient.Env, "TERM"), rows, cols); err != nil {
 		session.Close()
 		pClient.Release()
 		return nil, "", err
 	}
-	applySendEnv(session, pClient.SendEnv)
+	applySendEnv(session, pClient.SendEnv, pClient.Env)
 	return session, pClient.RemoteCommand, nil
 }
 
-func applySendEnv(session *ssh.Session, sendEnv string) {
+func applySendEnv(session *ssh.Session, sendEnv string, env []string) {
 	if sendEnv == "" {
 		return
 	}
@@ -1581,6 +1590,12 @@ func applySendEnv(session *ssh.Session, sendEnv string) {
 			session.Setenv(name, val)
 		}
 	}
+	for _, v := range env {
+		if v != "" {
+			name, value, _ := strings.Cut(v, "=")
+			session.Setenv(name, value)
+		}
+	}
 }
 
 func matchEnvPatterns(name string, patterns string) bool {
@@ -1592,11 +1607,15 @@ func matchEnvPatterns(name string, patterns string) bool {
 	return false
 }
 
-func setupSession(session *ssh.Session, rows, cols int) error {
+func setupSession(session *ssh.Session, term string, rows, cols int) error {
 	modes := ssh.TerminalModes{
 		ssh.ECHO:          1,
 		ssh.TTY_OP_ISPEED: 14400,
 		ssh.TTY_OP_OSPEED: 14400,
+	}
+
+	if term == "" {
+		term = "xterm-256color"
 	}
 
 	if rows <= 0 {
@@ -1606,7 +1625,7 @@ func setupSession(session *ssh.Session, rows, cols int) error {
 		cols = 80
 	}
 
-	if err := session.RequestPty("xterm-256color", rows, cols, modes); err != nil {
+	if err := session.RequestPty(term, rows, cols, modes); err != nil {
 		return fmt.Errorf("request for pseudo terminal failed: %s", err)
 	}
 	return nil

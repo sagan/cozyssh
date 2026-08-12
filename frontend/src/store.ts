@@ -1843,6 +1843,12 @@ export async function hideTab(id?: string) {
   }
 }
 
+export function toggleFiles(tabId?: string) {
+  const { activeTabId } = getStore();
+  tabId = tabId || activeTabId;
+  setTabs((prev) => prev.map((t) => (t.id === tabId ? { ...t, showFiles: !t.showFiles } : t)));
+}
+
 export function closeTab(id?: string) {
   const { activeTabId, tabs } = getStore();
   id = id || activeTabId;
@@ -3261,6 +3267,10 @@ export async function runButton(
         case "SEARCH":
           setSearchOpen(true);
           setTimeout(() => document.getElementById(ID_TERMINAL_SEARCH_INPUT)?.focus(), 100);
+          break;
+
+        case "TOGGLE_FILES":
+          toggleFiles();
           break;
 
         case "LOCK_TAB": {

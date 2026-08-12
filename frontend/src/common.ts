@@ -15,6 +15,9 @@ import {
   LOCAL_NAME,
   MIME_JSON,
   TAG_FAV,
+  TAG_FLAG_ENV_TERM_LINUX,
+  TAG_FLAG_ENV_TERM_TMUX_256COLOR,
+  TAG_FLAG_ENV_TERM_VT100,
   TAG_FLAG_PREFIX,
   TAG_FLAG_SHELL_INTEGRATION_ASH,
   TAG_FLAG_SHELL_INTEGRATION_BASH,
@@ -1375,9 +1378,25 @@ export function getSSHCopyIdCommand(host: HostData | HostForm, defaultIdentity?:
     command += ` ${host.hostname}`;
   }
   if (publicKey) {
-    command += ` "mkdir -p ~/.ssh && chmod 700 ~/.ssh && touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && grep -qF '${publicKey}' ~/.ssh/authorized_keys || echo '${publicKey}' >> ~/.ssh/authorized_keys"`;
+    command += ` "` + getAddAuthorizedKeyCmd(publicKey) + `"`;
   }
   return command;
+}
+
+/**
+ * Return a cmdline to append publicKey to local device OpenSSH authorized_keys file. E.g. `mkdir -p ~/.ssh ...`.
+ * @param publicKey OpenSSH public key contents.
+ * @param win boolean If true, return Windows (PowerShell) version cmdline.
+ * @returns The cmdline. The Linux version cmdline doesn't contain " (double quote) char,
+ *    so it can be wrapped in quotes and used in `ssh host "cmdline"`.
+ *    The Windows version cmdline contains single & double quotes
+ *    so it's only suitable for being executed in local PowerShell.
+ */
+export function getAddAuthorizedKeyCmd(publicKey: string, win = false): string {
+  if (win) {
+    return `$k='${publicKey}'; $d="$env:USERPROFILE\\.ssh"; $f="$d\\authorized_keys"; if (-not (Test-Path $d)) { New-Item $d -Type Directory | Out-Null }; if (-not (Test-Path $f)) { New-Item $f -Type File | Out-Null }; icacls $d /inheritance:r /grant "$($env:USERNAME):F" "SYSTEM:F" | Out-Null; icacls $f /inheritance:r /grant "$($env:USERNAME):F" "SYSTEM:F" | Out-Null; if (-not (Select-String -Path $f -Pattern $k -SimpleMatch -Quiet)) { Add-Content -Path $f -Value $k }`;
+  }
+  return `mkdir -p ~/.ssh && chmod 700 ~/.ssh && touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && grep -qF '${publicKey}' ~/.ssh/authorized_keys || echo '${publicKey}' >> ~/.ssh/authorized_keys`;
 }
 
 export function getSSHConfigBlock(host: HostData | HostForm): string {
@@ -1950,6 +1969,12 @@ export function getTagTip(tag: string): string {
       return t("System flag: use bash shell integration for the host");
     case TAG_FLAG_SHELL_INTEGRATION_ZSH:
       return t("System flag: use zsh shell integration for the host");
+    case TAG_FLAG_ENV_TERM_LINUX:
+      return t("Set session env: TERM=linux");
+    case TAG_FLAG_ENV_TERM_VT100:
+      return t("Set session env: TERM=vt100");
+    case TAG_FLAG_ENV_TERM_TMUX_256COLOR:
+      return t("Set session env: TERM=tmux-256color");
     default:
       return tag;
   }

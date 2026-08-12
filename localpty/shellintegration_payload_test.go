@@ -7,7 +7,7 @@ import (
 
 func TestSplitBase64Lines_MaxLineLen(t *testing.T) {
 	input := strings.Repeat("A", 500)
-	result := splitBase64Lines(input)
+	result := splitBase64LinesChunked(input, 76)
 	for i, line := range strings.Split(result, "\n") {
 		if len(line) > 76 {
 			t.Errorf("line %d has length %d (>76): %q", i, len(line), line)
@@ -25,7 +25,7 @@ func TestStripScriptComments(t *testing.T) {
 }
 
 func TestPayload_UsesHeredoc(t *testing.T) {
-	payload := GetRemoteShellIntegrationPayload("")
+	payload := GetRemoteShellIntegrationPayload("", false)
 	if payload == "" {
 		t.Skip("no embedded scripts available")
 	}

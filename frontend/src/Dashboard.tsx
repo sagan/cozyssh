@@ -66,6 +66,7 @@ import {
   startupParams,
   sendParsedString,
   runScript,
+  toggleFiles,
 } from "./store";
 import "./pluginAPI";
 import "./useKeyboardManager";
@@ -500,7 +501,7 @@ export default function Dashboard({ initialData, setMuiTheme }: DashboardProps) 
     }
     const targetId = contextMenu.targetTabId;
     setContextMenu(null);
-    setTabs((prev) => prev.map((t) => (t.id === targetId ? { ...t, showFiles: !t.showFiles } : t)));
+    toggleFiles(targetId);
   }, [contextMenu]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, id: string) => {

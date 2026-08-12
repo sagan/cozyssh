@@ -225,6 +225,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			}
 			stdout, _ := sshSession.StdoutPipe()
 			stdin, _ := sshSession.StdinPipe()
+			pClient.Env = env
 
 			if sessionRemoteCommand != "" {
 				remoteCommand = sessionRemoteCommand
@@ -253,7 +254,7 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 				if doInjection {
-					stdout = localpty.InjectRemoteShellIntegration(stdin, stdout, shellIntegrationFlag)
+					stdout = localpty.InjectRemoteShellIntegration(stdin, stdout, shellIntegrationFlag, false)
 				}
 			} else {
 				if err := sshSession.Shell(); err != nil {
@@ -267,12 +268,12 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 				case "2", "bash", "zsh", "ash": // force inject
 					doInjection = true
 				case "", "1": // auto, inject
-					if shellIntegrationType == 0 || shellIntegrationType == 2 {
+					if shellIntegrationType == 0 || shellIntegrationType == 2 || shellIntegrationType == 4 {
 						doInjection = true
 					}
 				}
 				if doInjection {
-					stdout = localpty.InjectRemoteShellIntegration(stdin, stdout, shellIntegrationFlag)
+					stdout = localpty.InjectRemoteShellIntegration(stdin, stdout, shellIntegrationFlag, shellIntegrationType == 4)
 				}
 			}
 			s = session.NewSession(sessionID, host, stdout, stdin, func() error {

@@ -158,6 +158,8 @@ export const TAG_FLAG_PREFIX = "$";
 
 export const TAG_FAV = "fav";
 
+export const TAG_FLAG_ENV = "$env";
+
 export const TAG_FLAG_SHELL_INTEGRATION = "$shellIntegration";
 
 export const TAG_FLAG_SHELL_INTEGRATION_DISABLED = "$shellIntegration=0";
@@ -171,6 +173,12 @@ export const TAG_FLAG_SHELL_INTEGRATION_ASH = "$shellIntegration=ash";
 export const TAG_FLAG_SHELL_INTEGRATION_BASH = "$shellIntegration=bash";
 
 export const TAG_FLAG_SHELL_INTEGRATION_ZSH = "$shellIntegration=zsh";
+
+export const TAG_FLAG_ENV_TERM_LINUX = "$env=TERM=linux";
+
+export const TAG_FLAG_ENV_TERM_VT100 = "$env=TERM=vt100";
+
+export const TAG_FLAG_ENV_TERM_TMUX_256COLOR = "$env=TERM=tmux-256color";
 
 export const LINK_COZYSSH_GITHUB = "https://github.com/sagan/cozyssh";
 export const LINK_COZYSSH_DOC_DATA = "https://github.com/sagan/cozyssh/blob/master/docs/DATA.md";

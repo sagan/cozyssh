@@ -200,7 +200,9 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
 
   const enqueueItems = useCallback(
     (items: ScannedEntryItem[]) => {
-      if (items.length === 0) return;
+      if (items.length === 0) {
+        return;
+      }
       const join = getPathJoiner(currentPath);
       const isWin = isWindowsHost || isWindowsPath(currentPath);
       const sep = isWin ? "\\" : "/";
@@ -233,10 +235,14 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   // Queue runner
   useEffect(() => {
     const processNext = async () => {
-      if (isProcessingRef.current) return;
+      if (isProcessingRef.current) {
+        return;
+      }
 
       const pendingItem = uploadQueue.find((item) => item.status === "pending");
-      if (!pendingItem) return;
+      if (!pendingItem) {
+        return;
+      }
 
       isProcessingRef.current = true;
 
@@ -255,7 +261,9 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
               body: JSON.stringify({ name: dirName } satisfies FileMkdirRequest),
             },
           );
-          if (!res.ok) throw new Error(`status=${res.status}`);
+          if (!res.ok) {
+            throw new Error(`status=${res.status}`);
+          }
           setUploadQueue((prev) =>
             prev.map((it) => (it.id === pendingItem.id ? { ...it, status: "completed", progress: 100 } : it)),
           );
@@ -343,7 +351,9 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
 
   // Global paste listener (Ctrl+V)
   useEffect(() => {
-    if (!isActive) return;
+    if (!isActive) {
+      return;
+    }
 
     const handlePaste = async (e: ClipboardEvent) => {
       const items = e.clipboardData?.items;
@@ -361,7 +371,9 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
         }
       }
 
-      if (!hasFiles) return;
+      if (!hasFiles) {
+        return;
+      }
 
       e.preventDefault();
       e.stopPropagation();
@@ -526,8 +538,12 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   }, []);
 
   const sortedFiles = [...files].sort((a, b) => {
-    if (a.isDir && !b.isDir) return -1;
-    if (!a.isDir && b.isDir) return 1;
+    if (a.isDir && !b.isDir) {
+      return -1;
+    }
+    if (!a.isDir && b.isDir) {
+      return 1;
+    }
 
     let cmp = 0;
     if (sortField === "name") {
@@ -626,7 +642,9 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
 
   const handleGoTo = useCallback(async () => {
     const val = filterValue.trim();
-    if (!val) return;
+    if (!val) {
+      return;
+    }
 
     const join = getPathJoiner(currentPath);
     let targetPath = val;
@@ -727,7 +745,9 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
 
   const handleSaveTextFile = useCallback(
     async (newContent: string) => {
-      if (!editingFile || !editingPath) return;
+      if (!editingFile || !editingPath) {
+        return;
+      }
       setLoading(true);
       try {
         const isWin = isWindowsHost || isWindowsPath(editingPath);
@@ -780,7 +800,9 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
         t("Rename file") + ". " + t("Current name:") + " " + file.name + ". " + t("Enter new name:") + " ",
         file.name,
       );
-      if (!newName || newName === file.name) return;
+      if (!newName || newName === file.name) {
+        return;
+      }
 
       const join = getPathJoiner(currentPath);
       const oldPath = join(file.name);
@@ -838,8 +860,10 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   );
 
   const handleMkdir = useCallback(async () => {
-    const name = await dialogs.prompt(t("Enter new folder name:"));
-    if (!name) return;
+    const name = await dialogs.prompt(t("Enter new folder name:") + ` (${t("Current path:")} ${currentPath})`);
+    if (!name) {
+      return;
+    }
 
     try {
       const res = await fetch(
@@ -860,8 +884,10 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   }, [currentPath, fetchFiles, sessionId]);
 
   const handleNewFile = useCallback(async () => {
-    const name = await dialogs.prompt(t("Enter new file name:"));
-    if (!name) return;
+    const name = await dialogs.prompt(t("Enter new file name:") + ` (${t("Current path:")} ${currentPath})`);
+    if (!name) {
+      return;
+    }
     setLoading(true);
     try {
       const blob = new Blob([""], { type: "text/plain" });

@@ -20,7 +20,6 @@ import (
 
 var (
 	shellIntegrationDir      string
-	shellIntegrationDirOnce  sync.Once
 	shellIntegrationDirMutex sync.Mutex
 	shellIntegrationDirErr   error // error creating dir, won't try again
 )
@@ -201,10 +200,30 @@ func ApplyShellIntegrationArgs(shellName string, args []string) []string {
 }
 
 type RemotePayload struct {
-	Default string // Full-featured shell integration for bash, zsh, fish...
+	Default string // Full-featured shell integration for bash, zsh, fish... The base64 payload is sent in single line
 	Bash    string // Dedicated Bash payload
 	Zsh     string // Dedicated Zsh payload
-	Ash     string // Basic feature shell integration for BusyBox ash (OpenWrt / Alpine)
+	// Legacy version for <= CentOS 7 (Bash 4.2 and Readline 6.2).
+	// It splits base64 payload to multiple lines of 500~2000 chars.
+	//   - If line length is small (like 76 chars), there will be too much lines:
+	//     Readline triggers a full prompt cycle (>  continuation prompt) for every single line break.
+	//     100+ line breaks cause Readline to stall redrawing prompts and risk overflowing
+	//     the Linux kernel's 4 KB TTY input buffer.
+	//   - If we put the whole payload in single line:
+	//     Readline 6.2 tries to recalculate screen wrapping for an 8,000-character line across 100+ virtual screen rows.
+	//     In Readline 6.2, the line-display layout algorithm is O(N^2) with respect to line length.
+	//     Calculating the layout for an 8,000-character line causes a 2 to 3 second CPU freeze
+	//     in Readline before it even hits "Enter" to run eval.
+	//   - Modern Linux (Ubuntu, Debian, and CentOS 8+) run modern versions of Readline (7.0 / 8.0+)
+	//     with bracketed paste mode and O(N) line rendering so it's completely OK to send single line.
+	DefaultLegacy string
+	BashLegacy    string
+	ZshLegacy     string
+	// Basic feature shell integration for BusyBox ash (OpenWrt / Alpine)
+	// Ash version splits base64 payload to lines of 76 chars.
+	// The line length is small because BusyBox ash has a limited (~4 KB) single-line buffer limit.
+	// The performance is OK since the ash version payload is only few lines.
+	Ash string
 }
 
 var (
@@ -215,7 +234,7 @@ var (
 // GetRemoteShellIntegrationPayload returns a self-contained shell snippet
 // that detects whether the remote shell is Zsh or Bash, decodes the embedded
 // script from base64, and evaluates it in memory without writing files to disk.
-func GetRemoteShellIntegrationPayload(shellIntegration string) string {
+func GetRemoteShellIntegrationPayload(shellIntegration string, legacy bool) string {
 	remotePayloadOnce.Do(func() {
 		bashBytes, err1 := resources.Scripts.ReadFile("scripts/shellIntegration-bash.sh")
 		zshBytes, err2 := resources.Scripts.ReadFile("scripts/shellIntegration-rc.zsh")
@@ -235,20 +254,22 @@ func GetRemoteShellIntegrationPayload(shellIntegration string) string {
 		zshBytes = stripScriptComments(zshBytes)
 		ashBytes = stripScriptComments(ashBytes)
 
-		// IMPORTANT: Keep Bash/Zsh base64 as single contiguous strings (NO line splitting).
-		// This prevents Readline 6.2 (CentOS 7) from processing hundreds of lines interactively.
 		bashB64 := base64.StdEncoding.EncodeToString(bashBytes)
 		zshB64 := base64.StdEncoding.EncodeToString(zshBytes)
 
+		// Chunk Base64 at 1000 characters per line for optimal CentOS 7 Readline performance
+		bashB64Legacy := splitBase64LinesChunked(bashB64, 750)
+		zshB64Legacy := splitBase64LinesChunked(zshB64, 750)
+
 		// BusyBox ash still needs line wrapping due to its small line-input buffer.
-		ashB64 := splitBase64Lines(base64.StdEncoding.EncodeToString(ashBytes))
+		ashB64 := splitBase64LinesChunked(base64.StdEncoding.EncodeToString(ashBytes), 76)
 
 		// set +o history broke shell integration on CentOS 7 because CentOS 7 doesn't have HISTCONTROL env set
 		// Dedicated Bash payload (guarded & output-suppressed)
 		remotePayload.Bash = `{ if [ -n "$BASH_VERSION" ]; then eval "$(base64 -d 2>/dev/null <<'__COZYSSH_BASH__'` + "\n" +
 			bashB64 + "\n" +
 			"__COZYSSH_BASH__" + "\n" +
-			`)"; history -d -1 2>/dev/null; fi; } >/dev/null 2>&1`
+			`)"; fi; history -d -1 2>/dev/null; } >/dev/null 2>&1`
 
 		// Dedicated Zsh payload (guarded & output-suppressed)
 		remotePayload.Zsh = `{ if [ -n "$ZSH_VERSION" ]; then eval "$(base64 -d 2>/dev/null <<'__COZYSSH_ZSH__'` + "\n" +
@@ -256,16 +277,35 @@ func GetRemoteShellIntegrationPayload(shellIntegration string) string {
 			"__COZYSSH_ZSH__" + "\n" +
 			`)"; history -d -1 2>/dev/null; fi; } >/dev/null 2>&1`
 
-		// Combined fallback payload (for auto-detection)
+		// Combined fallback payload (for auto-detection).
+		// Note it only detects bash / zsh and doesn't support ash.
 		remotePayload.Default = `{ if [ -n "$ZSH_VERSION" ]; then eval "$(base64 -d 2>/dev/null <<'__COZYSSH_ZSH__'` + "\n" +
 			zshB64 + "\n" +
 			"__COZYSSH_ZSH__" + "\n" +
-			`)"; history -d -1 2>/dev/null; elif [ -n "$BASH_VERSION" ]; then eval "$(base64 -d 2>/dev/null <<'__COZYSSH_BASH__'` + "\n" +
+			`)"; elif [ -n "$BASH_VERSION" ]; then eval "$(base64 -d 2>/dev/null <<'__COZYSSH_BASH__'` + "\n" +
 			bashB64 + "\n" +
 			"__COZYSSH_BASH__" + "\n" +
-			`)"; history -d -1 2>/dev/null; fi; } >/dev/null 2>&1`
+			`)"; fi; history -d -1 2>/dev/null; } >/dev/null 2>&1`
 
-		// BusyBox ash payload
+		remotePayload.BashLegacy = `{ if [ -n "$BASH_VERSION" ]; then eval "$(base64 -d 2>/dev/null <<'__COZYSSH_BASH__'` + "\n" +
+			bashB64Legacy + "\n" +
+			"__COZYSSH_BASH__" + "\n" +
+			`)"; fi; history -d -1 2>/dev/null; } >/dev/null 2>&1`
+		remotePayload.ZshLegacy = `{ if [ -n "$ZSH_VERSION" ]; then eval "$(base64 -d 2>/dev/null <<'__COZYSSH_ZSH__'` + "\n" +
+			zshB64Legacy + "\n" +
+			"__COZYSSH_ZSH__" + "\n" +
+			`)"; history -d -1 2>/dev/null; fi; } >/dev/null 2>&1`
+		remotePayload.DefaultLegacy = `{ if [ -n "$ZSH_VERSION" ]; then eval "$(base64 -d 2>/dev/null <<'__COZYSSH_ZSH__'` + "\n" +
+			zshB64Legacy + "\n" +
+			"__COZYSSH_ZSH__" + "\n" +
+			`)"; elif [ -n "$BASH_VERSION" ]; then eval "$(base64 -d 2>/dev/null <<'__COZYSSH_BASH__'` + "\n" +
+			bashB64Legacy + "\n" +
+			"__COZYSSH_BASH__" + "\n" +
+			`)"; fi; history -d -1 2>/dev/null; } >/dev/null 2>&1`
+
+		// BusyBox ash payload.
+		// { eval } block does not work in some OpenWrt environment.
+		// The command also can't has trailing `;` otherwise it won't work in OpenWrt ash.
 		remotePayload.Ash = `eval "$(base64 -d 2>/dev/null <<'__COZYSSH_ASH__'` + "\n" +
 			ashB64 + "\n" +
 			"__COZYSSH_ASH__" + "\n" +
@@ -274,27 +314,35 @@ func GetRemoteShellIntegrationPayload(shellIntegration string) string {
 
 	switch shellIntegration {
 	case "bash":
+		if legacy {
+			return remotePayload.BashLegacy
+		}
 		return remotePayload.Bash
 	case "zsh":
+		if legacy {
+			return remotePayload.ZshLegacy
+		}
 		return remotePayload.Zsh
 	case "ash":
 		return remotePayload.Ash
 	default:
+		if legacy {
+			return remotePayload.DefaultLegacy
+		}
 		return remotePayload.Default
 	}
 }
 
-// splitBase64Lines wraps a base64 string at 76 characters per line.
-// This keeps each line well within the interactive shell input-buffer limits
-// of minimal systems (busybox ash, OpenWrt sh, etc.) when the data is
-// delivered via a heredoc.
-func splitBase64Lines(s string) string {
-	const lineLen = 76
+// splitBase64LinesChunked wraps a base64 string at chunkSize characters per line.
+// Using ~1000 characters per line hits the sweet spot for legacy Readline 6.2 (CentOS 7):
+//   - Keeps line length under 1000 chars to avoid Readline's O(N^2) display rendering freeze.
+//   - Keeps line count tiny (~8 lines) to avoid continuation prompt ('>') redraw lag.
+func splitBase64LinesChunked(s string, chunkSize int) string {
 	var sb strings.Builder
-	for len(s) > lineLen {
-		sb.WriteString(s[:lineLen])
+	for len(s) > chunkSize {
+		sb.WriteString(s[:chunkSize])
 		sb.WriteByte('\n')
-		s = s[lineLen:]
+		s = s[chunkSize:]
 	}
 	sb.WriteString(s)
 	return sb.String()
@@ -325,8 +373,8 @@ func stripScriptComments(content []byte) []byte {
 // in the echoed command text.  This guarantees the filter only ever sees the
 // marker ONCE — in the actual shell output — regardless of whether PTY echo
 // is enabled.
-func InjectRemoteShellIntegration(stdin io.Writer, stdout io.Reader, shellIntegration string) io.Reader {
-	payload := GetRemoteShellIntegrationPayload(shellIntegration)
+func InjectRemoteShellIntegration(stdin io.Writer, stdout io.Reader, shellIntegration string, legacy bool) io.Reader {
+	payload := GetRemoteShellIntegrationPayload(shellIntegration, legacy)
 	if payload == "" {
 		return stdout
 	}

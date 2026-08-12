@@ -25,6 +25,7 @@ import type { WsResizeMsg, WsTerminalMessage } from "./api";
 import {
   BROWSER_STORAGE_KEY_TOKEN,
   DEFAULT_TERMINAL_RECENT_COMMANDS,
+  TAG_FLAG_ENV,
   TAG_FLAG_PREFIX,
   TAG_FLAG_SHELL_INTEGRATION,
   TOAST_KEY_TERMINAL,
@@ -1115,6 +1116,15 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
               params.set(key, options[key]!);
             } else if (key === TAG_FLAG_SHELL_INTEGRATION) {
               params.set(key.slice(1), options[key]!);
+            } else if (key === TAG_FLAG_ENV) {
+              let value = options[key]!;
+              try {
+                // value may contains `%0A` (\n)
+                value = decodeURIComponent(value);
+              } catch {
+                /* empty */
+              }
+              params.set(key.slice(1), value);
             }
           }
         }

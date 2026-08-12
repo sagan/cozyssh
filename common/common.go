@@ -123,3 +123,15 @@ outer:
 	}
 	return sb.String()
 }
+
+func LookupEnv(env []string, key string) string {
+	prefix := key + "="
+	for _, e := range env {
+		if value, ok := strings.CutPrefix(e, prefix); ok {
+			return value
+		} else if e == key {
+			return ""
+		}
+	}
+	return ""
+}

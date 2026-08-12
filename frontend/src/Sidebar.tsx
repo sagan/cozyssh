@@ -113,6 +113,9 @@ import {
   TAG_FLAG_SHELL_INTEGRATION_ASH,
   TAG_FLAG_SHELL_INTEGRATION_BASH,
   TAG_FLAG_SHELL_INTEGRATION_ZSH,
+  TAG_FLAG_ENV_TERM_VT100,
+  TAG_FLAG_ENV_TERM_LINUX,
+  TAG_FLAG_ENV_TERM_TMUX_256COLOR,
 } from "./constants";
 import {
   AM_1_ALT,
@@ -123,6 +126,7 @@ import {
   apiReqHeaders,
   filterHosts,
   forceReload,
+  getAddAuthorizedKeyCmd,
   getAltMode,
   getHostFlags,
   getHostGroupPath,
@@ -189,6 +193,7 @@ import SSHExportTab from "./SSHExportTab";
 import ChipCopy from "./components/ChipCopy";
 import TextFieldWithCopy from "./components/TextFieldWithCopy";
 import ExtraMenu from "./components/ExtraMenu";
+import CopyButton from "./components/CopyButton";
 
 type Section = "fav" | "tree" | "auto";
 
@@ -3176,6 +3181,25 @@ export default function Sidebar({
                   <code>{t("Default Identity Public Key")}:</code>
                   <ChipCopy label={sysDefaultIdentityPublicKey} />
                 </Typography>
+                {!!sysDefaultIdentityPublicKey && (
+                  <Typography variant="subtitle2" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }} gutterBottom>
+                    <code>{t("Copy Add Public Key to authorized_keys Command")}:</code>
+                    <CopyButton
+                      variant="text"
+                      size="small"
+                      data={() => getAddAuthorizedKeyCmd(sysDefaultIdentityPublicKey)}
+                    >
+                      {t("Linux version")}
+                    </CopyButton>
+                    <CopyButton
+                      variant="text"
+                      size="small"
+                      data={() => getAddAuthorizedKeyCmd(sysDefaultIdentityPublicKey, true)}
+                    >
+                      {t("Windows version (PowerShell)")}
+                    </CopyButton>
+                  </Typography>
+                )}
                 <Typography variant="subtitle2" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }} gutterBottom>
                   <code>{t("OS Username")}:</code>
                   <ChipCopy label={sysUsername} />
@@ -3919,6 +3943,9 @@ export default function Sidebar({
                   TAG_FLAG_SHELL_INTEGRATION_BASH,
                   TAG_FLAG_SHELL_INTEGRATION_ZSH,
                   TAG_FLAG_SHELL_INTEGRATION_ASH,
+                  TAG_FLAG_ENV_TERM_VT100,
+                  TAG_FLAG_ENV_TERM_LINUX,
+                  TAG_FLAG_ENV_TERM_TMUX_256COLOR,
                   ...uniqueTags,
                 ].filter((t) => !parsedTags.includes(t))}
                 value={tagInput}
