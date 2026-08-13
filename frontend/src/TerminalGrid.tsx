@@ -1,10 +1,10 @@
 import { useRef, useEffect, useCallback, useState } from "react";
-import { Box, Tooltip, IconButton, Typography } from "@mui/material";
+import { Box, Tooltip, IconButton, Typography, Button } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import AddIcon from "@mui/icons-material/Add";
 import ViewSidebarIcon from "@mui/icons-material/ViewSidebar";
 
-import { VAR_CS_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN } from "./constants";
+import { VAR_CS_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN, SETTINGS_TAB_IDX_SHORTCUTS } from "./constants";
 import { type ScratchpadSyncState, genPaneId, t } from "./common";
 import {
   type PaneData,
@@ -19,6 +19,8 @@ import {
   setNewTabDialogFilter,
   setNewTabDialogOpen,
   setSessionBufferDataTime,
+  setSettingsOpen,
+  setSettingsTab,
   setShellIntegrations,
   setTabs,
   useStore,
@@ -368,15 +370,14 @@ export default function TerminalGrid({
           <Box
             sx={{
               p: 4,
-              textAlign: "center",
-              mt: 10,
+              mt: 5,
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
             }}
           >
-            <Box sx={{ display: "flex", justifyContent: "center", gap: 3, mb: 4 }}>
-              <Tooltip title={t("Open Sidebar") + " (Alt+I)"}>
+            <Box sx={{ display: "flex", textAlign: "center", justifyContent: "center", gap: 3, mb: 4 }}>
+              <Tooltip title={t("Open Sidebar") + " (alt+i)"}>
                 <IconButton
                   onClick={() => setMobileOpen(true)}
                   sx={{
@@ -391,7 +392,7 @@ export default function TerminalGrid({
                   <MenuIcon sx={{ fontSize: 32 }} />
                 </IconButton>
               </Tooltip>
-              <Tooltip title={t("New Tab") + " (Alt+O)"}>
+              <Tooltip title={t("New Tab") + " (alt+o)"}>
                 <IconButton
                   onClick={() => {
                     setNewTabDialogFilter("");
@@ -428,7 +429,27 @@ export default function TerminalGrid({
               )}
             </Box>
             <Typography color="text.secondary" variant="body1" sx={{ maxWidth: 400, fontWeight: 500 }}>
-              {t("Select a server from the sidebar (alt+i) or open a new tab (alt+o) to start.")}
+              {t("Open new tab:")} <code>alt+o</code>
+              <br />
+              {t("Search from sidebar:")} <code>alt+i</code>
+              <br />
+              {t("Open local shell:")} <code>alt+n</code>
+              <br />
+              {t("Help:")} <code>alt+?</code>
+              <br />
+              <code>{t("In Mac use command for alt")}</code>
+              <br />
+              <Button
+                sx={{ pl: 0 }}
+                variant="text"
+                size="small"
+                onClick={() => {
+                  setSettingsOpen(true);
+                  setSettingsTab(SETTINGS_TAB_IDX_SHORTCUTS);
+                }}
+              >
+                {t("View shortcuts")}
+              </Button>
             </Typography>
           </Box>
         )}

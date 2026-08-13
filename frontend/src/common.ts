@@ -477,7 +477,7 @@ let macModifierKeyRegex: RegExp | undefined;
  * and in Mac keyboard layout from spacebar to left is `meta` (command), `alt` (option), `ctrl`, `fn`,
  * we simply swap `meta` and `alt` keys in Mac by default.
  */
-export const macModifierSwap: Map<Modifier, Modifier> = createMapProxy(
+export const macModifierSwap: Map<Exclude<Modifier, "shift">, Exclude<Modifier, "shift">> = createMapProxy(
   [
     ["meta", "alt"],
     ["alt", "meta"],
@@ -523,8 +523,8 @@ export function getKeyCombination(ev: KeyboardEvent | React.KeyboardEvent): stri
     mods += "+meta";
   }
   let key = ev.key.toLowerCase();
-  if (IS_APPLE && macModifierSwap.has(key as Modifier)) {
-    key = macModifierSwap.get(key as Modifier)!;
+  if (IS_APPLE && macModifierSwap.has(key as Exclude<Modifier, "shift">)) {
+    key = macModifierSwap.get(key as Exclude<Modifier, "shift">)!;
   }
   // In some keyboard layout (like Windows English International layout) some keystrokes perse will produce "Dead" key,
   // e.g. ' since 'e is used to input é. We need to get the actual key.
@@ -538,14 +538,14 @@ export function getKeyCombination(ev: KeyboardEvent | React.KeyboardEvent): stri
 }
 
 /**
- * Check if the KeyboardEvent has the given modifier (ctrl / alt / meta / shift) in Mac aware way.
+ * Check if the KeyboardEvent has the given modifier (ctrl / alt / meta) in Mac aware way.
  * @param ev KeyboardEvent, React.KeyboardEvent, MouseEvent, or React.MouseEvent
- * @param modifier "ctrl", "meta", "alt", or "shift"
+ * @param modifier "ctrl", "meta", "alt". Note "shift" is not supported, use ev.shiftKey directly instead.
  * @returns true if the event has the given modifier, false otherwise
  */
 export function isModifier(
   ev: KeyboardEvent | React.KeyboardEvent | MouseEvent | React.MouseEvent,
-  modifier: Modifier,
+  modifier: Exclude<Modifier, "shift">,
 ): boolean {
   if (IS_APPLE && macModifierSwap.has(modifier)) {
     modifier = macModifierSwap.get(modifier)!;
@@ -553,8 +553,6 @@ export function isModifier(
   switch (modifier) {
     case "ctrl":
       return ev.ctrlKey;
-    case "shift":
-      return ev.shiftKey;
     case "meta":
       return ev.metaKey;
     case "alt":
@@ -567,7 +565,7 @@ export function isModifier(
 export function shortcutLabel(shortcut: string): string {
   if (IS_APPLE && macModifierKeyRegex) {
     return shortcut.replace(macModifierKeyRegex, (match) => {
-      match = macModifierSwap.get(match as Modifier) || match;
+      match = macModifierSwap.get(match as Exclude<Modifier, "shift">) || match;
       switch (match) {
         case "alt":
           return "option";

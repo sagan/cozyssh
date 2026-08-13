@@ -44,6 +44,7 @@ import {
   openHostInNewWindow,
   apiReqHeaders,
   t,
+  isModifier,
 } from "./common";
 import {
   type TabData,
@@ -539,7 +540,7 @@ export default function DialogManager({
                           triggerFocus();
                         }}
                       >
-                        {t("Unlock Tab")}
+                        {t("Unlock Tab")} (ctrl+alt+shift+l)
                       </MenuItem>
                     ) : (
                       <MenuItem
@@ -550,7 +551,7 @@ export default function DialogManager({
                           triggerFocus();
                         }}
                       >
-                        {t("Lock Tab")}
+                        {t("Lock Tab")} (ctrl+alt+shift+l)
                       </MenuItem>
                     )}
                     <MenuItem
@@ -580,7 +581,7 @@ export default function DialogManager({
                         }
                       }}
                     >
-                      {t("Find")}
+                      {t("Find")} (ctrl+shift+f)
                     </MenuItem>
                     <MenuItem
                       id="tab-menu-send-input"
@@ -594,7 +595,7 @@ export default function DialogManager({
                         }
                       }}
                     >
-                      {t("Send Input")}
+                      {t("Send Input")} (alt+q)
                     </MenuItem>
                   </>
                 )}
@@ -606,7 +607,7 @@ export default function DialogManager({
                       closeTab();
                     }}
                   >
-                    {t("Close Tab")}
+                    {t("Close Tab")} (alt+shift+w)
                   </MenuItem>
                 )}
                 <MenuItem
@@ -616,7 +617,7 @@ export default function DialogManager({
                     closeTabOrPane();
                   }}
                 >
-                  {t("Close Pane/Tab")}
+                  {t("Close Pane/Tab")} (alt+w)
                 </MenuItem>
 
                 {tab.type !== "scratchpad" && (
@@ -628,7 +629,7 @@ export default function DialogManager({
                         cloneSession(memoTabId);
                       }}
                     >
-                      {t("Clone Session")}
+                      {t("Clone Session")} (alt+c)
                     </MenuItem>
                     {tab.panes.length < 4 && (
                       <MenuItem
@@ -638,7 +639,7 @@ export default function DialogManager({
                           cloneSession(memoTabId, true);
                         }}
                       >
-                        {t("Clone Session (Split Screen)")}
+                        {t("Clone Session (Split Screen)")} (alt+shift+c)
                       </MenuItem>
                     )}
                     {tab.panes.length === 1 && (
@@ -662,7 +663,7 @@ export default function DialogManager({
                         triggerFocus();
                       }}
                     >
-                      {t("Reconnect")}
+                      {t("Reconnect")} (ctrl+shift+r)
                     </MenuItem>
                     <MenuItem
                       id="tab-menu-rename"
@@ -770,6 +771,7 @@ export default function DialogManager({
           }}
         >
           {t("Edit")} {btnContextMenu?.btn ? `${btnContextMenu.btn.name} (${btnContextMenu.btn.type})` : t("Button")}
+          &nbsp;(shift+click)
         </MenuItem>
         <MenuItem
           id="button-menu-send"
@@ -787,7 +789,7 @@ export default function DialogManager({
           }}
           sx={{ display: btnContextMenu?.btn.type === "send_string" ? "flex" : "none" }}
         >
-          {t("Send")}
+          {t("Send")} (ctrl+click)
         </MenuItem>
         <MenuItem
           id="button-menu-send-all"
@@ -820,7 +822,7 @@ export default function DialogManager({
             display: btnContextMenu?.btn.type === "open_terminal" ? "flex" : "none",
           }}
         >
-          {t("Open (New Window)")}
+          {t("Open (New Window)")} (ctrl+click)
         </MenuItem>
         <MenuItem
           id="button-menu-open-in-current-tab"
@@ -838,7 +840,7 @@ export default function DialogManager({
             display: btnContextMenu?.btn.type === "open_terminal" ? "flex" : "none",
           }}
         >
-          {t("Open (In Current Tab)")}
+          {t("Open (In Current Tab)")} (alt+click)
         </MenuItem>
         <MenuItem
           id="button-menu-copy-url"
@@ -877,6 +879,7 @@ export default function DialogManager({
           }}
         >
           {t("Copy Contents")}
+          {btnContextMenu?.btn.type !== "open_terminal" ? " (alt+click)" : ""}
         </MenuItem>
         <MenuItem
           id="button-menu-copy-button-data"
@@ -942,7 +945,7 @@ export default function DialogManager({
         data-id={editButton?.id || ""}
         open={editButtonDialogOpen}
         onClose={(e, reason) => {
-          if (buttonFormDirty && !(reason === "backdropClick" && (e as MouseEvent)?.ctrlKey)) {
+          if (buttonFormDirty && !(reason === "backdropClick" && isModifier(e as MouseEvent, "ctrl"))) {
             return;
           }
           setEditButtonDialogOpen(false);
@@ -1531,7 +1534,9 @@ export default function DialogManager({
       <Dialog
         id="input-dialog"
         open={inputDialogOpen}
-        onClose={(e, reason) => handleCloseInputDialog(reason === "backdropClick" && (e as MouseEvent)?.ctrlKey)}
+        onClose={(e, reason) =>
+          handleCloseInputDialog(reason === "backdropClick" && isModifier(e as MouseEvent, "ctrl"))
+        }
         disableRestoreFocus
         fullWidth
         maxWidth="md"

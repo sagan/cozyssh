@@ -563,7 +563,7 @@ export default function TabBar({
           </Box>
           <IconButton
             size="small"
-            title={t("New Tab") + " (Alt+O)"}
+            title={t("New Tab") + " (alt+o)"}
             onClick={(e) => {
               if (!e.shiftKey) {
                 const [mode] = parseNewTabDialogFilter(getStore().newTabDialogFilter);
