@@ -257,9 +257,9 @@ func GetRemoteShellIntegrationPayload(shellIntegration string, legacy bool) stri
 		bashB64 := base64.StdEncoding.EncodeToString(bashBytes)
 		zshB64 := base64.StdEncoding.EncodeToString(zshBytes)
 
-		// Chunk Base64 at 1000 characters per line for optimal CentOS 7 Readline performance
-		bashB64Legacy := splitBase64LinesChunked(bashB64, 750)
-		zshB64Legacy := splitBase64LinesChunked(zshB64, 750)
+		// Chunk Base64 at around 1000 characters per line for optimal CentOS 7 Readline performance
+		bashB64Legacy := splitBase64LinesChunked(bashB64, 1250)
+		zshB64Legacy := splitBase64LinesChunked(zshB64, 1250)
 
 		// BusyBox ash still needs line wrapping due to its small line-input buffer.
 		ashB64 := splitBase64LinesChunked(base64.StdEncoding.EncodeToString(ashBytes), 76)

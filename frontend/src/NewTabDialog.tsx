@@ -442,8 +442,8 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
       type: "link",
       value: LINK_COZYSSH_GITHUB,
       label: t("About (GitHub)"),
-      subtitle: `${APP_NAME} ${PACKAGE_JSON_VERSION} (${t("Backend")}: ${appVersion})`,
-      tag: PACKAGE_JSON_VERSION,
+      subtitle: `${APP_NAME} v${PACKAGE_JSON_VERSION} (${t("Backend")}: v${appVersion})`,
+      tag: "v" + PACKAGE_JSON_VERSION,
     };
   }, [appVersion]);
 

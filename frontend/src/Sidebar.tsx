@@ -1792,7 +1792,7 @@ export default function Sidebar({
 
   const handleCloseHostDialog: DialogProps["onClose"] = useCallback(
     (e, reason) => {
-      if (hostFormDirty && !(reason === "backdropClick" && (e as MouseEvent)?.ctrlKey)) {
+      if (hostFormDirty && !(reason === "backdropClick" && isModifier(e as MouseEvent, "ctrl"))) {
         return;
       }
       setEditHostDialogOpen(false);
@@ -2276,7 +2276,16 @@ export default function Sidebar({
               onRefresh();
             }}
           >
-            {t("Refresh")}
+            {t("Refresh")} (ctrl+alt+r)
+          </MenuItem>
+          <MenuItem
+            id="main-menu-open-scratchpad"
+            onClick={() => {
+              setAnchorEl(null);
+              onOpenScratchpad();
+            }}
+          >
+            {t("Open Scratchpad")} (alt+s)
           </MenuItem>
           <MenuItem
             id="main-menu-dashboard"
@@ -2289,15 +2298,6 @@ export default function Sidebar({
             }}
           >
             {t("Dashboard")}
-          </MenuItem>
-          <MenuItem
-            id="main-menu-open-scratchpad"
-            onClick={() => {
-              setAnchorEl(null);
-              onOpenScratchpad();
-            }}
-          >
-            {t("Open Scratchpad")}
           </MenuItem>
           <ExtraMenu
             extraMenu={extraMainMenu}
@@ -2637,16 +2637,47 @@ export default function Sidebar({
         anchorEl={() => localShellRef.current}
       >
         {shells.map((shell, idx) => (
-          <MenuItem
-            key={idx}
-            onClick={() => {
-              setLocalShellContextMenuOpen(false);
-              openHost(idx > 0 ? localShellHost(shell) : LOCAL_NAME);
-              setMobileOpen(false);
-            }}
-          >
-            {shell.name + (idx === 0 ? " " + t("(Default)") : idx === 1 ? " " + t("(Alternative)") : "")}
-          </MenuItem>
+          <>
+            <MenuItem
+              key={idx}
+              onClick={() => {
+                setLocalShellContextMenuOpen(false);
+                openHost(idx > 0 ? localShellHost(shell) : LOCAL_NAME);
+                setMobileOpen(false);
+              }}
+            >
+              {shell.name +
+                (idx === 0
+                  ? " " + t("(Default)") + " (alt+n)"
+                  : idx === 1
+                    ? " " + t("(Alternative)") + " (alt+shift+n)"
+                    : "")}
+            </MenuItem>
+            {idx === 0 && (
+              <MenuItem
+                key="default-newtab"
+                onClick={() => {
+                  setLocalShellContextMenuOpen(false);
+                  openHost(LOCAL_NAME, { target: "_self" });
+                  setMobileOpen(false);
+                }}
+              >
+                {`${shell.name} ${t("(Default)")} (${t("In Current Tab")}) (ctrl+alt+n)`}
+              </MenuItem>
+            )}
+            {idx === 1 && (
+              <MenuItem
+                key="alternative-newtab"
+                onClick={() => {
+                  setLocalShellContextMenuOpen(false);
+                  openHost(localShellHost(shell), { target: "_self" });
+                  setMobileOpen(false);
+                }}
+              >
+                {`${shell.name} ${t("(Alternative)")} (${t("In Current Tab")}) (ctrl+alt+shift+n)`}
+              </MenuItem>
+            )}
+          </>
         ))}
       </Menu>
 
@@ -2658,7 +2689,8 @@ export default function Sidebar({
         anchorEl={contextMenu?.element}
       >
         <MenuItem id="host-menu-edit" onClick={handleEditOpen}>
-          {t("Edit")} {contextMenu?.target.name ?? ""}
+          {t("Edit")}
+          {contextMenu ? " " + contextMenu.target.name : ""} (shift+click)
         </MenuItem>
         <MenuItem
           id="host-menu-open-new-window"
@@ -2671,7 +2703,7 @@ export default function Sidebar({
             openHostInNewWindow(target.name);
           }}
         >
-          {t("Open (New Window)")}
+          {t("Open (New Window)")} (ctrl+click)
         </MenuItem>
         <MenuItem
           id="host-menu-open-current-tab"
@@ -2685,7 +2717,7 @@ export default function Sidebar({
             setMobileOpen(false);
           }}
         >
-          {t("Open (In Current Tab)")}
+          {t("Open (In Current Tab)")} (alt+click)
         </MenuItem>
         <MenuItem
           id="host-menu-copy-url"
@@ -2860,7 +2892,7 @@ export default function Sidebar({
           </>
         )}
         <MenuItem id="group-menu-expand-collapse-all" onClick={handleToggleExpandAll}>
-          {t("Expand/Collapse All")}
+          {t("Expand/Collapse All")} (ctrl+click)
         </MenuItem>
         {!!groupContextMenu?.path && (
           <>
@@ -3155,7 +3187,7 @@ export default function Sidebar({
                   <code>Service Worker:</code>
                   <Chip label={swStatus} color={swStatus === "active" ? "success" : "default"} variant="outlined" />
                   <Button variant="outlined" color="error" size="small" onClick={handleClearCache}>
-                    {t("Force Update")}
+                    {t("Force Update")} (ctrl+alt+shift+r)
                   </Button>
                 </Typography>
                 <Divider sx={{ my: 1 }} />
@@ -3735,9 +3767,9 @@ export default function Sidebar({
                   CozySSH
                 </Typography>
                 <Typography variant="body1" color="text.secondary" gutterBottom>
-                  {t("Version:")} <b>{PACKAGE_JSON_VERSION}</b>
+                  {t("Version:")} <b>v{PACKAGE_JSON_VERSION}</b>
                   <br />
-                  {t("Backend:")} <b>{appVersion}</b>
+                  {t("Backend:")} <b>v{appVersion}</b>
                 </Typography>
                 <Typography variant="body2" sx={{ mt: 3 }}>
                   <a
