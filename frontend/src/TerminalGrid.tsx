@@ -1,11 +1,17 @@
 import { useRef, useEffect, useCallback, useState } from "react";
-import { Box, Tooltip, IconButton, Typography, Button } from "@mui/material";
+import { Box, Tooltip, IconButton, Typography, Button, useTheme } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import AddIcon from "@mui/icons-material/Add";
 import ViewSidebarIcon from "@mui/icons-material/ViewSidebar";
 
 import { version as PACKAGE_JSON_VERSION } from "../package.json";
-import { VAR_CS_VIBRATE_PATTERN, DEFAULT_VIBRATE_PATTERN, SETTINGS_TAB_IDX_SHORTCUTS, APP_NAME } from "./constants";
+import {
+  VAR_CS_VIBRATE_PATTERN,
+  DEFAULT_VIBRATE_PATTERN,
+  SETTINGS_TAB_IDX_SHORTCUTS,
+  APP_NAME,
+  LINK_COZYSSH_GITHUB,
+} from "./constants";
 import { type ScratchpadSyncState, genPaneId, t } from "./common";
 import {
   type PaneData,
@@ -63,6 +69,8 @@ export default function TerminalGrid({
   onExtraKeysOpenChange,
   keyboardHeight,
 }: TerminalGridProps) {
+  const theme = useTheme();
+
   const appVersion = useStore((state) => state.sysinfo.version);
   const focusTrigger = useStore((state) => state.focusTrigger);
   const tabs = useStore((state) => state.tabs);
@@ -454,6 +462,15 @@ export default function TerminalGrid({
               >
                 {t("View shortcuts")}
               </Button>
+              <br />
+              <a
+                href={LINK_COZYSSH_GITHUB}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: theme.palette.primary.main, textDecoration: "none" }}
+              >
+                GitHub
+              </a>
             </Typography>
           </Box>
         )}

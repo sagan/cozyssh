@@ -391,7 +391,7 @@ func InjectRemoteShellIntegration(stdin io.Writer, stdout io.Reader, shellIntegr
 	// Shell output:    __cozyssh_deadbeef12345678__   ← only occurrence the filter sees.
 	const markerPrefix = "__cozyssh_"
 	markerSuffix := marker[len(markerPrefix):]
-	echoCmd := fmt.Sprintf(`__csmk='%s';echo "${__csmk}%s"`, markerPrefix, markerSuffix)
+	echoCmd := fmt.Sprintf(`__csmk='%s';echo -n "${__csmk}%s"`, markerPrefix, markerSuffix)
 
 	// Wrap stdout BEFORE writing to stdin so no bytes are missed.
 	filtered := newMarkerFilter(stdout, marker)

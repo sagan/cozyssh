@@ -692,7 +692,7 @@ export default function DialogManager({
                     closeOtherTabs(memoTabId);
                   }}
                 >
-                  {t("Close Other Tabs")}
+                  {t("Close Other Tabs")} (ctrl+alt+shift+w)
                 </MenuItem>
                 <MenuItem
                   id="tab-menu-close-right-tabs"
