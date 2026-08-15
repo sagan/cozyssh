@@ -4043,13 +4043,17 @@ export default function Sidebar({
               }}
               placeholder={t("Optional SSH server password")}
             />
-            <TextFieldWithCopy
+            <FreeTextField
               fullWidth
               label={t("ProxyJump (Optional)")}
               size="small"
               type="search"
-              value={hostFormData.proxyJump}
-              onChange={(e) => setHostFormData({ ...hostFormData, proxyJump: e.target.value })}
+              value={hostFormData.proxyJump || ""}
+              options={[
+                ...filteredHosts.favourite.map((h) => h.name),
+                ...filteredHosts.treeNodes.filter((n) => n.type === "server").map((h) => h.name),
+              ]}
+              onChange={(newValue) => setHostFormData({ ...hostFormData, proxyJump: newValue })}
               onKeyDown={handleEditHostFormKeyDown}
               placeholder="e.g. server-foo,server-bar"
             />
