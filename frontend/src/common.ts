@@ -1780,18 +1780,52 @@ export function hostLabel(host: HostData | HostForm, alwaysIncludeUser = false):
   }`;
 }
 
-export function sendKeyDown(kc: string, el?: HTMLElement) {
+export function sendKeyDown(kc: string, el?: Element) {
   const altKey = kc.includes("alt");
   const ctrlKey = kc.includes("ctrl");
   const shiftKey = kc.includes("shift");
   const parts = kc.split("+");
-  const key = parts[parts.length - 1]!;
+  let key = parts[parts.length - 1]!;
   let code = "";
   if (key.length === 1) {
     if (key >= "0" && key <= "9") {
       code = "Digit" + key;
     } else {
       code = "Key" + key.toUpperCase();
+      if (shiftKey) {
+        key = key.toUpperCase();
+      }
+    }
+  } else {
+    switch (key) {
+      case "arrowdown":
+        key = "ArrowDown";
+        code = "ArrowDown";
+        break;
+      case "arrowup":
+        key = "ArrowUp";
+        code = "ArrowUp";
+        break;
+      case "arrowleft":
+        key = "ArrowLeft";
+        code = "ArrowLeft";
+        break;
+      case "arrowright":
+        key = "ArrowRight";
+        code = "ArrowRight";
+        break;
+      case "home":
+        key = "Home";
+        code = "Home";
+        break;
+      case "end":
+        key = "End";
+        code = "End";
+        break;
+      default:
+        key = key.charAt(0).toUpperCase() + key.slice(1);
+        code = "Key" + key;
+        break;
     }
   }
   const event = new KeyboardEvent("keydown", {

@@ -1,6 +1,7 @@
 package localpty
 
 import (
+	"cozyssh/common"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -163,9 +164,13 @@ func Start(initialCmd string, execFlag bool, shellIntegrationFlag string, env []
 	}
 	cmd.Env = append(cmd.Env, env...)
 
-	// Force explicitly working out of home dir
-	if home, err := os.UserHomeDir(); err == nil {
-		cmd.Dir = home
+	if pwd := common.LookupEnv(env, "PWD"); pwd != "" {
+		cmd.Dir = pwd
+	} else {
+		// Force explicitly working out of home dir
+		if home, err := os.UserHomeDir(); err == nil {
+			cmd.Dir = home
+		}
 	}
 
 	if err := cmd.Start(); err != nil {

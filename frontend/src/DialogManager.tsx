@@ -1444,6 +1444,10 @@ export default function DialogManager({
                 {t(
                   "Environment variables to send to SSH server. Format: `NAME=value`. Use \\n to seperate multiple variables.",
                 )}
+                &nbsp;
+                {t(
+                  "Some variables are recognized specially: `PWD` - the start dir (for local shell only); `TERM` - the terminal type, fallbacks to 'xterm-256color'.",
+                )}
                 <br />- <b>state</b> :&nbsp;
                 {t("Set the initial state of the opened terminal session: 0=normal, 1=pinned, 2=locked, 3=hidden.")}
                 <br />- <b>tabStyle</b> :&nbsp;
@@ -1454,7 +1458,9 @@ export default function DialogManager({
                 <br />
                 {t("It's possible to set multiple (up to 4) comma-separated servers to open them in split screen.")}
                 &nbsp;
-                {t("If a parameter value contains special chars (e.g. `?&,\\n`) it must be URL encoded.")}
+                {t(
+                  "If a parameter value contains special chars (e.g. `?&,\\n`) it must be URL encoded, e.g. \\n => %0A.",
+                )}
                 <br />
                 {t("E.g.")} <b>local?title=Local</b>. {t("More examples:")}
                 <br />- <b>local?id=local-abc&title=Local&remoteCommand=tmux attach || tmux new</b>

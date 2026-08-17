@@ -694,7 +694,6 @@ export default function Sidebar({
   const [tagInput, setTagInput] = useState("");
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTagInput("");
   }, [editHostDialogOpen]);
 
@@ -2055,7 +2054,6 @@ export default function Sidebar({
     if (filterStr !== lastFilterStr.current) {
       lastFilterStr.current = filterStr;
       if (filterStr.trim() !== "" && flatList.length > 0) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSelectedIndex(0);
       } else {
         setSelectedIndex(-1);
@@ -2075,6 +2073,15 @@ export default function Sidebar({
       setSelectedIndex(flatList.length - 1);
     }
   }, [flatList, flatListIds, filterStr, selectedIndex]);
+
+  useEffect(() => {
+    if (selectedIndex === 0) {
+      const el = document.getElementById(ID_SIDEBAR_MAIN);
+      if (el) {
+        el.scrollTop = 0;
+      }
+    }
+  }, [selectedIndex]);
 
   const handleFilterKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -2490,7 +2497,6 @@ export default function Sidebar({
                         section="fav"
                         key={`fav-${host.name}`}
                         id={`sidebar-fav-${host.name}`}
-                        itemIdx={itemIdx}
                         filter={filterStr}
                         host={host}
                         onContextMenu={handleContextMenu}
@@ -2616,7 +2622,6 @@ export default function Sidebar({
                         section="auto"
                         key={`auto-${host.name}`}
                         id={`sidebar-auto-${host.name}`}
-                        itemIdx={itemIdx}
                         filter={filterStr}
                         host={host}
                         onContextMenu={handleContextMenu}
@@ -4216,7 +4221,6 @@ export default function Sidebar({
 
 function HostListItem({
   id,
-  itemIdx,
   section,
   filter,
   host,
@@ -4230,7 +4234,6 @@ function HostListItem({
   setDragOverTarget,
 }: {
   id: string;
-  itemIdx: number;
   section: Section;
   filter: string;
   host: HostData;
@@ -4252,20 +4255,12 @@ function HostListItem({
     if (!isSelected) {
       return;
     }
-    if (itemIdx === 0) {
-      const el = document.getElementById(ID_SIDEBAR_MAIN);
-      if (el) {
-        el.scrollTop = 0;
-        return;
-      }
-    }
     if (itemRef.current) {
       itemRef.current.scrollIntoView({
         behavior: "auto",
         block: "nearest",
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSelected]);
 
   const isFavourite = host.isFavourite;
