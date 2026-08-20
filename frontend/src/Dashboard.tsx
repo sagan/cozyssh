@@ -288,7 +288,7 @@ export default function Dashboard({ initialData, setMuiTheme }: DashboardProps) 
       for (let i = 0; i < elements.length; i++) {
         let element = elements[i]!;
         [element] = cutString(element, "?");
-        element = element.replace(/[^a-z0-9._:#@-[\]]+/gi, "");
+        element = element.replace(/[^-a-z0-9._:#@[\]]+/gi, "");
         elements[i] = element;
       }
       hash = elements.filter(Boolean).join(",");

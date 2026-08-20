@@ -2487,6 +2487,9 @@ export function openAddHostDialog(initial?: Partial<HostData>) {
     clearPassword: false,
   };
   Object.assign(data, initial);
+  if (initial?.tags) {
+    data.tags = initial.tags.join(" ");
+  }
   setEditHostName("");
   setHostFormData(data);
   setInitialHostFormData(data);

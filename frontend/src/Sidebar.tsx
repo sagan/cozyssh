@@ -124,6 +124,7 @@ import {
   AM_6_CTRL_SHIFT,
   type ServiceWorkerStatus,
   apiReqHeaders,
+  cutString,
   filterHosts,
   forceReload,
   getAddAuthorizedKeyCmd,
@@ -715,15 +716,24 @@ export default function Sidebar({
         .split(/\s+/)
         .map((t) => t.trim())
         .filter((t) => t !== "");
-      if (newTags.length === 0) return;
+      if (newTags.length === 0) {
+        return;
+      }
 
-      const currentTags = (hostFormData.tags || "")
+      let currentTags = (hostFormData.tags || "")
         .replace(/,/g, " ")
         .split(/\s+/)
         .filter((t) => t.trim() !== "");
 
       const tagsToAdd = newTags.filter((t) => !currentTags.includes(t));
       if (tagsToAdd.length > 0) {
+        currentTags = currentTags.filter((t) => {
+          if (t.startsWith("$")) {
+            const key = cutString(t, "=")[0];
+            return !tagsToAdd.some((t) => cutString(t, "=")[0] === key);
+          }
+          return true;
+        });
         setHostFormData({
           ...hostFormData,
           tags: [...currentTags, ...tagsToAdd].join(" "),
@@ -1381,6 +1391,23 @@ export default function Sidebar({
       );
       setMobileOpen(false);
     }
+  }, [groupContextMenu]);
+
+  const handleGroupCopyUrl = useCallback(async () => {
+    setGroupContextMenuOpen(false);
+    if (!groupContextMenu) {
+      return;
+    }
+    const url = `${window.location.origin}/##${TAG_GROUP_PREFIX}${groupContextMenu.path}`;
+    navigator.clipboard.writeText(url);
+  }, [groupContextMenu]);
+
+  const handleAddGroupHostClick = useCallback(async () => {
+    setGroupContextMenuOpen(false);
+    if (!groupContextMenu) {
+      return;
+    }
+    openAddHostDialog({ tags: [TAG_GROUP_PREFIX + groupContextMenu.path] });
   }, [groupContextMenu]);
 
   const handleAddSubGroupClick = useCallback(async () => {
@@ -2724,23 +2751,24 @@ export default function Sidebar({
         >
           {t("Open (In Current Tab)")} (alt+click)
         </MenuItem>
-        <MenuItem
-          id="host-menu-copy-url"
-          className={CLASS_HIDE_DESKTOP}
-          onClick={() => {
-            if (!contextMenu) {
-              return;
-            }
-            const target = contextMenu.target;
-            setContextMenuOpen(false);
-            const url = `${window.location.origin}/#${
-              target.source !== "known_hosts" ? target.name : hostLabel(target, true)
-            }`;
-            navigator.clipboard.writeText(url);
-          }}
-        >
-          Copy URL
-        </MenuItem>
+        {__CS_ENV__ === 0 && (
+          <MenuItem
+            id="host-menu-copy-url"
+            onClick={() => {
+              if (!contextMenu) {
+                return;
+              }
+              const target = contextMenu.target;
+              setContextMenuOpen(false);
+              const url = `${window.location.origin}/#${
+                target.source !== "known_hosts" ? target.name : hostLabel(target, true)
+              }`;
+              navigator.clipboard.writeText(url);
+            }}
+          >
+            {t("Copy URL")}
+          </MenuItem>
+        )}
         <MenuItem
           id="host-menu-copy-ssh-command"
           onClick={() => {
@@ -2862,7 +2890,7 @@ export default function Sidebar({
         <MenuItem id="tag-menu-open-new-window" onClick={handleOpenAllServersInNewWindow}>
           {t("Open All (New Window)")}
         </MenuItem>
-        <MenuItem id="tag-menu-copy-url" onClick={handleCopyTagUrl}>
+        <MenuItem id="tag-menu-copy-url" className={CLASS_HIDE_DESKTOP} onClick={handleCopyTagUrl}>
           {t("Copy URL")}
         </MenuItem>
         {!!tagContextMenu && (
@@ -2894,6 +2922,11 @@ export default function Sidebar({
             <MenuItem id="group-menu-open-split" onClick={handleOpenGroupAllSplitScreen}>
               {t("Open All (Split Screen)")}
             </MenuItem>
+            {__CS_ENV__ === 0 && (
+              <MenuItem id="group-menu-copy-url" onClick={handleGroupCopyUrl}>
+                {t("Copy URL")}
+              </MenuItem>
+            )}
           </>
         )}
         <MenuItem id="group-menu-expand-collapse-all" onClick={handleToggleExpandAll}>
@@ -2901,6 +2934,9 @@ export default function Sidebar({
         </MenuItem>
         {!!groupContextMenu?.path && (
           <>
+            <MenuItem id="group-menu-add-host" onClick={handleAddGroupHostClick}>
+              {t("Add Host")}
+            </MenuItem>
             <MenuItem id="group-menu-add-sub-group" onClick={handleAddSubGroupClick}>
               {t("Add Sub-Group")}
             </MenuItem>
