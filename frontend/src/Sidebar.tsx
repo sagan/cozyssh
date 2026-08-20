@@ -4090,10 +4090,7 @@ export default function Sidebar({
               size="small"
               type="search"
               value={hostFormData.proxyJump || ""}
-              options={[
-                ...filteredHosts.favourite.map((h) => h.name),
-                ...filteredHosts.treeNodes.filter((n) => n.type === "server").map((h) => h.name),
-              ]}
+              options={[...hosts.map((h) => h.name)]}
               onChange={(newValue) => setHostFormData({ ...hostFormData, proxyJump: newValue })}
               onKeyDown={handleEditHostFormKeyDown}
               placeholder="e.g. server-foo,server-bar"
