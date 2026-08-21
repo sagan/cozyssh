@@ -53,8 +53,7 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess: (data?: Full
         const title = prefix + name;
         document.title = title;
         window.appSetWindowTitle?.(title);
-      })
-      .catch((e) => console.log(e));
+      });
   }, []);
 
   const handleLogin = useCallback(

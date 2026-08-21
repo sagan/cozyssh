@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
+  Menu,
+  MenuItem,
+  TableSortLabel,
+  InputBase,
   Box,
   Typography,
   IconButton,
@@ -37,7 +41,6 @@ import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
 import CancelIcon from "@mui/icons-material/Cancel";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ErrorIcon from "@mui/icons-material/Error";
-import { Menu, MenuItem, TableSortLabel, InputBase } from "@mui/material";
 
 import type { FileInfo, FileMkdirRequest, FileRenameRequest, FsList, FsToken } from "./api";
 import { type Order, apiReqHeaders, formatSize, getKeyCombination, t, triggerDownload } from "./common";
@@ -978,7 +981,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
           webkitdirectory: "",
           directory: "",
           multiple: true,
-        } as unknown as React.InputHTMLAttributes<HTMLInputElement>)}
+        } as React.InputHTMLAttributes<HTMLInputElement>)}
         onChange={handleFolderChange}
       />
 

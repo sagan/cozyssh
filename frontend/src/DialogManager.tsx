@@ -391,8 +391,7 @@ export default function DialogManager({
 
       try {
         new URL(url);
-      } catch (e) {
-        console.log(e);
+      } catch {
         setImportTip({
           msg: "Invalid URL format. Please enter a valid URL (e.g., http://example.com/button.json).",
           severity: "error",

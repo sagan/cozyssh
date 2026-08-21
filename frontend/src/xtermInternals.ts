@@ -8,7 +8,7 @@ import type { Terminal } from "@xterm/xterm";
  *  structurally at each call site below; the guards there are what keep us
  *  safe, since this cast asserts nothing. */
 function core<T>(term: Terminal): T | undefined {
-  return (term as unknown as { _core?: T })._core;
+  return (term as { _core?: T })._core;
 }
 
 interface CompositionHelperShape {

@@ -74,11 +74,11 @@ import {
   setExtraNtdMenu,
   setExtraButtonBarMenu,
   runButton,
+  moduleCache,
 } from "./store";
 import { dialogs } from "./Dialogs";
 import type { ITerminalOptions } from "@xterm/xterm";
 import { openMenu } from "./DynamicMenu";
-import { moduleCache } from "./store";
 
 window.__CS_REMAP_CTRL_L__ = undefined;
 window.__CS_AUTORUN_DONE__ = undefined;

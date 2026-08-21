@@ -7,7 +7,7 @@ import { t } from "../common";
 interface FreeTextFieldProps extends Omit<TextFieldProps, "onChange"> {
   value: string;
   onChange: (value: string) => void;
-  options: string[];
+  options: readonly string[];
 }
 
 export default function FreeTextField({ value, onChange, options, label, sx, ...restProps }: FreeTextFieldProps) {

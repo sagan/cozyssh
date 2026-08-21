@@ -402,7 +402,6 @@ function itemIcon(item: NtdItem, selectedIndex: number) {
         return <StarIcon {...activeProps} />;
       }
       return <DnsIcon {...baseProps} />;
-      break;
     case "action":
     case "tag":
       return <DnsIcon {...baseProps} />;

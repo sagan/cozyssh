@@ -2839,7 +2839,7 @@ export async function sendParsedString(input: string, isLiquid?: boolean, userVa
           localVars: localVars || {},
           host: getHost(pane.host),
           clipboard,
-          ...(userVars || {}),
+          ...userVars,
         };
         const rendered = await liquidEngine.parseAndRender(input, context);
 
@@ -2874,7 +2874,7 @@ export async function sendParsedString(input: string, isLiquid?: boolean, userVa
           localVars: localVars || {},
           host: getHost(activePaneId),
           clipboard,
-          ...(userVars || {}),
+          ...userVars,
         };
         renderedInput = await liquidEngine.parseAndRender(input, context);
       } catch (e) {

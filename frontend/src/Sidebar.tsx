@@ -731,6 +731,10 @@ export default function Sidebar({
           if (t.startsWith("$")) {
             const key = cutString(t, "=")[0];
             return !tagsToAdd.some((t) => cutString(t, "=")[0] === key);
+          } else if (t.startsWith(TAG_ORDER_PREFIX)) {
+            return !tagsToAdd.some((t) => t.startsWith(TAG_ORDER_PREFIX));
+          } else if (t.startsWith(TAG_GROUP_PREFIX)) {
+            return !tagsToAdd.some((t) => t.startsWith(TAG_GROUP_PREFIX));
           }
           return true;
         });
@@ -1826,9 +1830,21 @@ export default function Sidebar({
     [hostFormDirty],
   );
 
+  const [allFavs, allNormals] = useMemo(() => {
+    const allFavs: HostData[] = [];
+    const allNormals: HostData[] = [];
+    for (const host of hosts) {
+      if (host.isFavourite) {
+        allFavs.push(host);
+      } else {
+        allNormals.push(host);
+      }
+    }
+    return [allFavs, allNormals];
+  }, [hosts]);
+
   const filteredHosts = useMemo(() => {
     const filteredAll = filterHosts(hosts, filterStr);
-
     const favs = filteredAll.filter((h) => h.isFavourite);
     const sortedFavs = favs.sort(hostSorter);
 
@@ -4010,6 +4026,7 @@ export default function Sidebar({
                 size="small"
                 options={[
                   TAG_FAV,
+                  ...uniqueTags,
                   TAG_FLAG_SHELL_INTEGRATION_DISABLED,
                   TAG_FLAG_SHELL_INTEGRATION_ENABLED,
                   TAG_FLAG_SHELL_INTEGRATION_FORCE_ENABLED,
@@ -4019,7 +4036,6 @@ export default function Sidebar({
                   TAG_FLAG_ENV_TERM_VT100,
                   TAG_FLAG_ENV_TERM_LINUX,
                   TAG_FLAG_ENV_TERM_TMUX_256COLOR,
-                  ...uniqueTags,
                 ].filter((t) => !parsedTags.includes(t))}
                 value={tagInput}
                 onChange={(_, newValue) => {
@@ -4090,7 +4106,7 @@ export default function Sidebar({
               size="small"
               type="search"
               value={hostFormData.proxyJump || ""}
-              options={[...hosts.map((h) => h.name)]}
+              options={[...allFavs.map((h) => h.name), ...allNormals.map((h) => h.name)]}
               onChange={(newValue) => setHostFormData({ ...hostFormData, proxyJump: newValue })}
               onKeyDown={handleEditHostFormKeyDown}
               placeholder="e.g. server-foo,server-bar"
@@ -4188,7 +4204,7 @@ export default function Sidebar({
               label={t("RemoteCommand (Optional)")}
               size="small"
               placeholder={t("Use %i for session id")}
-              options={remoteCommandOptions as unknown as string[]}
+              options={remoteCommandOptions}
               value={hostFormData.remoteCommand || ""}
               onChange={(newValue) => {
                 setHostFormData({ ...hostFormData, remoteCommand: newValue });

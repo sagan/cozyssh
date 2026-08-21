@@ -9,7 +9,7 @@ import jsonStringify from "json-stable-stringify";
 import { walk } from "estree-walker";
 import MagicString from "magic-string";
 
-import { CACHE_API_DATA, CACHE_MANIFEST } from "./src/constants";
+import { CACHE_API_DATA, CACHE_MANIFEST } from "./src/constants.ts";
 
 const debug = false;
 
@@ -17,7 +17,7 @@ const I18N_MISSING_TRANSLATION_PLACEHOLDER_PREFIX = "__MISSING_TRANSLATION__";
 
 process.env.VITE_APP_LANG = process.env.VITE_APP_LANG || "en";
 let translations: Record<string, string> | undefined;
-const localePath = path.resolve(__dirname, `./i18n/${process.env.VITE_APP_LANG}.json`);
+const localePath = path.resolve(import.meta.dirname, `./i18n/${process.env.VITE_APP_LANG}.json`);
 if (process.env.VITE_APP_LANG !== "en") {
   // Let the build fail if the locale file doesn't exist
   translations = JSON.parse(fs.readFileSync(localePath, "utf-8"));

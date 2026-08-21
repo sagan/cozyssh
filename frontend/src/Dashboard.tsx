@@ -295,7 +295,6 @@ export default function Dashboard({ initialData, setMuiTheme }: DashboardProps) 
     }
 
     const initAsync = async () => {
-      console.log("initAsync starting, hash:", hash);
       let data = initialData;
       if (!data) {
         try {
