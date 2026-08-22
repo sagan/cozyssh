@@ -185,7 +185,13 @@ interface NtdItemBasic {
 }
 
 export interface NtdItemHost extends NtdItemBasic {
-  type: "recent" | "host" | "direct" | "local";
+  type: "host";
+  host: HostData;
+  isFav?: boolean;
+}
+
+export interface NtdItemHost2 extends NtdItemBasic {
+  type: "recent" | "direct" | "local";
   isFav?: boolean;
 }
 
@@ -235,6 +241,7 @@ export interface NtdItemHelp extends NtdItemBasic {
  */
 export type NtdItem =
   | NtdItemHost
+  | NtdItemHost2
   | NtdItemButton
   | NtdItemTab
   | NtdItemPinnedTab
@@ -841,10 +848,13 @@ export const deleteUnreadTabId = (tabId: string) =>
     unreadTabIds: new Set([...state.unreadTabIds].filter((id) => id !== tabId)),
   }));
 
-export const addUnreadTabId = (tabId: string) =>
-  useStore.setState((state) => ({
-    unreadTabIds: new Set([...state.unreadTabIds, tabId]),
-  }));
+export function addUnreadTabId(tabId: string): void {
+  const unreadTabIds = getStore().unreadTabIds;
+  if (unreadTabIds.has(tabId)) {
+    return;
+  }
+  setUnreadTabIds(new Set(unreadTabIds).add(tabId));
+}
 
 export const setSessionBufferDataTime = (sessionId: string, timestamp = Date.now()) =>
   useStore.setState((state) => ({

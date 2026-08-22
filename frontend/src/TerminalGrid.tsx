@@ -82,8 +82,8 @@ export default function TerminalGrid({
   const [isAltActive, setIsAltActive] = useState(false);
 
   const handleTerminalData = useCallback((tabId: string, paneId: string) => {
-    const { activeTabId, unreadTabIds } = getStore();
-    if (activeTabId !== tabId && !unreadTabIds.has(tabId)) {
+    const { activeTabId } = getStore();
+    if (activeTabId !== tabId) {
       addUnreadTabId(tabId);
     }
     setSessionBufferDataTime(paneId);

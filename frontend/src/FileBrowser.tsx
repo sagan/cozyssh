@@ -352,58 +352,57 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uploadQueue, sessionId, currentPath]);
 
-  // Global paste listener (Ctrl+V)
   useEffect(() => {
     if (!isActive) {
       return;
     }
 
     const handlePaste = async (e: ClipboardEvent) => {
-      const items = e.clipboardData?.items;
-      const files = e.clipboardData?.files;
-
-      let hasFiles = false;
-      if (files && files.length > 0) {
-        hasFiles = true;
-      } else if (items) {
-        for (let i = 0; i < items.length; i++) {
-          if (items[i]!.kind === "file") {
-            hasFiles = true;
-            break;
-          }
-        }
-      }
-
-      if (!hasFiles) {
+      // 1. Ignore if typing in an input
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
+      if (isInput) {
         return;
       }
 
-      e.preventDefault();
-      e.stopPropagation();
+      const items = e.clipboardData?.items;
+      const files = e.clipboardData?.files;
+      const scanPromises: Promise<ScannedEntryItem[]>[] = [];
 
-      const scanned: ScannedEntryItem[] = [];
+      // 2. Synchronously collect all available files BEFORE awaiting anything
       if (items && items.length > 0) {
         for (let i = 0; i < items.length; i++) {
-          const item = items[i]!;
-          if (item.kind === "file") {
+          const item = items[i];
+          if (item && item.kind === "file") {
             const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
             if (entry) {
-              const res = await scanEntry(entry);
-              scanned.push(...res);
+              scanPromises.push(scanEntry(entry));
             } else {
               const file = item.getAsFile();
               if (file) {
-                scanned.push({ file, relPath: file.name, isDir: false });
+                scanPromises.push(Promise.resolve([{ file, relPath: file.name, isDir: false }]));
               }
             }
           }
         }
       } else if (files && files.length > 0) {
         for (let i = 0; i < files.length; i++) {
-          const file = files[i]!;
-          scanned.push({ file, relPath: file.name, isDir: false });
+          const file = files[i];
+          if (file) {
+            scanPromises.push(Promise.resolve([{ file, relPath: file.name, isDir: false }]));
+          }
         }
       }
+
+      // 3. Exit if nothing was valid (allows normal paste to continue)
+      if (scanPromises.length === 0) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      // 4. Resolve all files concurrently
+      const scannedResults = await Promise.all(scanPromises);
+      const scanned = scannedResults.flat();
 
       if (scanned.length > 0) {
         enqueueItems(scanned);

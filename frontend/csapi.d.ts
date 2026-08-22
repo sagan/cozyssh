@@ -2267,7 +2267,12 @@ export interface NtdItemBasic {
 	tag?: string;
 }
 export interface NtdItemHost extends NtdItemBasic {
-	type: "recent" | "host" | "direct" | "local";
+	type: "host";
+	host: HostData;
+	isFav?: boolean;
+}
+export interface NtdItemHost2 extends NtdItemBasic {
+	type: "recent" | "direct" | "local";
 	isFav?: boolean;
 }
 export interface NtdItemButton extends NtdItemBasic {
@@ -2305,7 +2310,7 @@ export interface NtdItemHelp extends NtdItemBasic {
 /**
  * New Tab Dialog item
  */
-export type NtdItem = NtdItemHost | NtdItemButton | NtdItemTab | NtdItemPinnedTab | NtdItemCustomShortcut | NtdItemTag | NtdItemTunnel | NtdItemLink | NtdItemAction | NtdItemHelp;
+export type NtdItem = NtdItemHost | NtdItemHost2 | NtdItemButton | NtdItemTab | NtdItemPinnedTab | NtdItemCustomShortcut | NtdItemTag | NtdItemTunnel | NtdItemLink | NtdItemAction | NtdItemHelp;
 /**
  * The type of CozySSH main zustand store.
  */

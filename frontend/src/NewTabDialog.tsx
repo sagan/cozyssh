@@ -101,6 +101,7 @@ import {
   logoutAll,
   type NtdItemAction,
   type NtdItemHost,
+  type NtdItemHost2,
   type NtdItemTab,
   type NtdItemPinnedTab,
   type NtdItemButton,
@@ -750,7 +751,7 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
 
     if (viewMode === "servers") {
       // Recents
-      const recentList: NtdItemHost[] = [];
+      const recentList: NtdItemHost2[] = [];
       filteredRecents.forEach((r) => {
         const host = getHost(r.host);
         recentList.push({
@@ -769,7 +770,7 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
       addSection(t("Recents"), recentList);
 
       // Local shells
-      const localList: NtdItemHost[] = [];
+      const localList: NtdItemHost2[] = [];
       filteredShells.forEach((shell) => {
         localList.push({
           type: "local",
@@ -788,7 +789,7 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
       addSection(t("Local Shells"), localList);
 
       // Older recents
-      const olderRecentList: NtdItemHost[] = [];
+      const olderRecentList: NtdItemHost2[] = [];
       filteredOlderRecents.forEach((r) => {
         const host = getHost(r.host);
         olderRecentList.push({
@@ -827,6 +828,7 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
             ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX) && !t.startsWith(TAG_FLAG_PREFIX))
             .map((t) => "#" + t)
             .join(" "),
+          host: h,
         });
       });
       addSection(t("Favourite Servers"), favList);
@@ -852,6 +854,7 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
             ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX) && !t.startsWith(TAG_FLAG_PREFIX))
             .map((t) => "#" + t)
             .join(" "),
+          host: h,
         });
       });
       addSection(t("Normal Servers"), normalList);
@@ -877,6 +880,7 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
             ?.filter((t) => !t.startsWith(TAG_ORDER_PREFIX) && !t.startsWith(TAG_FLAG_PREFIX))
             .map((t) => "#" + t)
             .join(" "),
+          host: h,
         });
       });
       addSection(t("Auto Servers"), autoList);
@@ -1180,7 +1184,10 @@ export default function NewTabDialog({ isMobile, isTouch }: NewTabDialogProps) {
         let hostStr = hostname;
         let parsedHost: HostData | undefined;
         let options: Record<string, string> | undefined;
-        if (hostname !== LOCAL_NAME) {
+        if (item.type === "host") {
+          parsedHost = item.host;
+          options = { ...getHostFlags(parsedHost) };
+        } else if (hostname !== LOCAL_NAME) {
           // Check if it's a direct connection and not in known hosts
           const existingHost = getHost(hostname);
           parsedHost = getHost(hostname);
