@@ -52,6 +52,7 @@ export const TERMINAL_FUNCTIONS = [
   { value: "CLEAR_UNREAD_TABS", label: t("Clear Unread Tabs") },
   { value: "CLOSE_OTHER_TABS", label: t("Close Other Tabs"), shortcut: "ctrl+alt+shift+w" },
   { value: "CLOSE_RIGHT_TABS", label: t("Close Tabs to the Right") },
+  { value: "CLOSE_LEFT_TABS", label: t("Close Tabs to the Left") },
   { value: "CLOSE_ALL_TABS", label: t("Close All Tabs") },
   { value: "MOVE_TAB_LEFT", label: t("Move Tab Left") },
   { value: "MOVE_TAB_RIGHT", label: t("Move Tab Right") },

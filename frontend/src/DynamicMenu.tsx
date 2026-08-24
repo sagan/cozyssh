@@ -1,6 +1,9 @@
 import * as React from "react";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
+import { getActiveMuiModal } from "./common";
+import { triggerFocus } from "./store";
+import { ID_DYNAMIC_MENU } from "./constants";
 
 // Define the shape of our menu configuration state
 interface MenuConfig {
@@ -68,13 +71,18 @@ export function DynamicMenuProvider({ children }: ProviderProps) {
       config.resolve(selectedValue); // Resolve the promise right away
       setConfig(null); // Instantly tear down state to hide menu
     }
+    setTimeout(() => {
+      if (!getActiveMuiModal("#" + ID_DYNAMIC_MENU)) {
+        triggerFocus();
+      }
+    }, 0);
   };
 
   return (
     <>
       {children}
       <Menu
-        id="dynamic-imperative-menu"
+        id={ID_DYNAMIC_MENU}
         anchorEl={config?.anchorEl}
         open={Boolean(config?.anchorEl)}
         onClose={() => handleClose(null)} // Clicked outside or pressed Escape

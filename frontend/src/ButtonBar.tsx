@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Box, TextField, Tabs, Tab, IconButton, Menu, MenuItem } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 
@@ -12,6 +12,7 @@ import {
   setBtnContextMenu,
   setBtnContextMenuOpen,
   useStore,
+  triggerFocus,
 } from "./store";
 import { useShallow } from "zustand/react/shallow";
 import { DEFAULT_BUTTON_GROUP } from "./constants";
@@ -78,6 +79,11 @@ export default function ButtonBar({ groups, isMobile, isTouch }: ButtonBarProps)
   const [buttonBarContextMenu, setButtonBarContextMenu] = useState<{ mouseX: number; mouseY: number } | null>(null);
   const [draggedButtonId, setDraggedButtonId] = useState<string | null>(null);
   const [dragOverButton, setDragOverButton] = useState<{ id: string; position: "before" | "after" } | null>(null);
+
+  const closeContextMenus = useCallback(() => {
+    setButtonBarContextMenu(null);
+    triggerFocus();
+  }, []);
 
   return (
     <Box
@@ -249,7 +255,7 @@ export default function ButtonBar({ groups, isMobile, isTouch }: ButtonBarProps)
       <Menu
         id="button-bar-menu"
         open={!!buttonBarContextMenu}
-        onClose={() => setButtonBarContextMenu(null)}
+        onClose={closeContextMenus}
         anchorReference="anchorPosition"
         anchorPosition={
           buttonBarContextMenu
@@ -263,7 +269,7 @@ export default function ButtonBar({ groups, isMobile, isTouch }: ButtonBarProps)
         <MenuItem
           id="button-bar-menu-show-shortcuts"
           onClick={() => {
-            setButtonBarContextMenu(null);
+            closeContextMenus();
             const { buttons, activeGroup } = getStore();
             let text = t("Active Group Buttons:") + ` (${activeGroup})\n`;
             for (let i = 0; i < filteredButtons.length; i++) {
@@ -319,9 +325,7 @@ export default function ButtonBar({ groups, isMobile, isTouch }: ButtonBarProps)
           extraMenu={extraButtonBarMenu}
           // eslint-disable-next-line @typescript-eslint/prefer-as-const
           target={"" as ""}
-          before={() => {
-            setButtonBarContextMenu(null);
-          }}
+          before={closeContextMenus}
         />
       </Menu>
     </Box>

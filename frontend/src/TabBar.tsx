@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Box, Tabs, Tab, IconButton, Menu, MenuItem } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import AddIcon from "@mui/icons-material/Add";
@@ -117,6 +117,11 @@ export default function TabBar({
   const [dragOverTab, setDragOverTab] = useState<{ id: string; position: "before" | "after" } | null>(null);
 
   const [tabBarContextMenu, setTabBarContextMenu] = useState<{ mouseX: number; mouseY: number } | null>(null);
+
+  const closeContextMenus = useCallback(() => {
+    setTabBarContextMenu(null);
+    triggerFocus();
+  }, []);
 
   const activePeriod = getIntVar(VAR_CS_TERMINAL_ACTIVE_PERIOD, DEFAULT_TERMINAL_ACTIVE_PERIOD);
   // Force a re-evaluation of executingSpin right after the last data arrived + active period,
@@ -677,7 +682,7 @@ export default function TabBar({
           <Menu
             id="tab-bar-menu"
             open={!!tabBarContextMenu}
-            onClose={() => setTabBarContextMenu(null)}
+            onClose={closeContextMenus}
             anchorReference="anchorPosition"
             anchorPosition={
               tabBarContextMenu
@@ -692,7 +697,7 @@ export default function TabBar({
               id="tab-bar-menu-close-all"
               disabled={tabs.length === 0}
               onClick={() => {
-                setTabBarContextMenu(null);
+                closeContextMenus();
                 setTabs([]);
               }}
             >
@@ -702,7 +707,7 @@ export default function TabBar({
               id="tab-bar-menu-save-all"
               disabled={tabs.length === 0}
               onClick={() => {
-                setTabBarContextMenu(null);
+                closeContextMenus();
                 openSaveTabsToButtonDialog();
               }}
             >
@@ -712,9 +717,7 @@ export default function TabBar({
               extraMenu={extraTabBarMenu}
               // eslint-disable-next-line @typescript-eslint/prefer-as-const
               target={"" as ""}
-              before={() => {
-                setTabBarContextMenu(null);
-              }}
+              before={closeContextMenus}
             />
           </Menu>
         </Box>

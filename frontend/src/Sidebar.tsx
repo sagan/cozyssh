@@ -771,6 +771,20 @@ export default function Sidebar({
 
   const filterStrLower = filterStr.toLowerCase().trim();
 
+  const closeContextMenus = useCallback(() => {
+    setContextMenuOpen(false);
+    setGroupContextMenuOpen(false);
+    setTagContextMenuOpen(false);
+    setLocalShellContextMenuOpen(false);
+    setAnchorEl(null);
+    setTimeout(() => {
+      const activeEl = document.activeElement;
+      if (!activeEl || (activeEl.tagName !== "INPUT" && activeEl.tagName !== "TEXTAREA")) {
+        triggerFocus();
+      }
+    }, 0);
+  }, []);
+
   const handleHostTitleMenuClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
     setHostTitleMenuAnchor(event.currentTarget);
   }, []);
@@ -1191,30 +1205,30 @@ export default function Sidebar({
     if (!tagContextMenu) {
       return;
     }
+    closeContextMenus();
     const tag = tagContextMenu.tag;
-    setTagContextMenuOpen(false);
     openHostInNewWindow(`#${tag}`);
-  }, [tagContextMenu]);
+  }, [tagContextMenu, closeContextMenus]);
 
   const handleOpenAllServers = useCallback(() => {
     if (!tagContextMenu) {
       return;
     }
+    closeContextMenus();
     const tag = tagContextMenu.tag;
-    setTagContextMenuOpen(false);
     setFilterStr(`#${tag} `);
     const { hosts } = getStore();
     const targets = hosts.filter((h) => h.tags && h.tags.includes(tag));
     targets.forEach((h) => openHost(h.name));
     setMobileOpen(false);
-  }, [tagContextMenu]);
+  }, [tagContextMenu, closeContextMenus]);
 
   const handleOpenSplitServers = useCallback(() => {
     if (!tagContextMenu) {
       return;
     }
+    closeContextMenus();
     const tag = tagContextMenu.tag;
-    setTagContextMenuOpen(false);
     const { hosts } = getStore();
     const filtered = hosts.filter((h) => h.tags && h.tags.includes(tag));
 
@@ -1238,26 +1252,26 @@ export default function Sidebar({
       );
       setMobileOpen(false);
     }
-  }, [tagContextMenu]);
+  }, [tagContextMenu, closeContextMenus]);
 
   const handleCopyTagUrl = useCallback(() => {
     if (!tagContextMenu) {
       return;
     }
+    closeContextMenus();
     const tag = tagContextMenu.tag;
-    setTagContextMenuOpen(false);
     const url = `${window.location.origin}/##${tag}`;
     navigator.clipboard.writeText(url);
-  }, [tagContextMenu]);
+  }, [tagContextMenu, closeContextMenus]);
 
   const handleEditOpen = useCallback(() => {
     if (!contextMenu) {
       return;
     }
+    closeContextMenus();
     const target = contextMenu.target;
-    setContextMenuOpen(false);
     openEditHostDialog(target);
-  }, [contextMenu]);
+  }, [contextMenu, closeContextMenus]);
 
   const closeMobileSidebar = useCallback(() => {
     setMobileOpen(false);
@@ -1267,17 +1281,17 @@ export default function Sidebar({
     if (!contextMenu) {
       return;
     }
+    closeContextMenus();
     const target = contextMenu.target;
-    setContextMenuOpen(false);
     deleteHost(target.name);
-  }, [contextMenu]);
+  }, [contextMenu, closeContextMenus]);
 
   const handleDeleteKnownHost = useCallback(async () => {
     if (!contextMenu) {
       return;
     }
     const target = contextMenu.target;
-    setContextMenuOpen(false);
+    closeContextMenus();
     if (
       await dialogs.confirm(
         t("Will delete this host from known_hosts:") + " " + target.hostname + ". " + t("Are you sure?"),
@@ -1295,14 +1309,14 @@ export default function Sidebar({
         notify(t("Failed to delete known_host entry:") + ` status=${res.status}, msg=${await res.text()}`, "error");
       }
     }
-  }, [contextMenu]);
+  }, [contextMenu, closeContextMenus]);
 
   const handleToggleFavourite = useCallback(async () => {
     if (!contextMenu) {
       return;
     }
+    closeContextMenus();
     const target = contextMenu.target;
-    setContextMenuOpen(false);
 
     let newTags = target.tags ? [...target.tags] : [];
     if (target.isFavourite) {
@@ -1332,22 +1346,22 @@ export default function Sidebar({
       body: JSON.stringify([payload]),
     });
     fetchHosts();
-  }, [contextMenu]);
+  }, [contextMenu, closeContextMenus]);
 
   const handleRunCopyID = useCallback(async () => {
     if (!contextMenu) {
       return;
     }
     const target = contextMenu.target;
-    setContextMenuOpen(false);
+    closeContextMenus();
     sshCopyId(target);
-  }, [contextMenu]);
+  }, [closeContextMenus, contextMenu]);
 
   const handleToggleExpandAll = useCallback(() => {
-    setGroupContextMenuOpen(false);
     if (!groupContextMenu) {
       return;
     }
+    closeContextMenus();
     if (groupContextMenu.path) {
       toggleGroupExpanded(groupContextMenu.path, true);
     } else {
@@ -1359,32 +1373,32 @@ export default function Sidebar({
         toggleExpandAllGroups();
       }
     }
-  }, [groupContextMenu]);
+  }, [closeContextMenus, groupContextMenu]);
 
   const handleOpenGroupAll = useCallback(() => {
-    setGroupContextMenuOpen(false);
     if (!groupContextMenu) {
       return;
     }
+    closeContextMenus();
     const { hosts } = getStore();
     const targets = hosts.filter((h) => h.tags && h.tags.includes(TAG_GROUP_PREFIX + groupContextMenu.path));
     targets.forEach((h) => openHost(h.name));
     setMobileOpen(false);
-  }, [groupContextMenu]);
+  }, [groupContextMenu, closeContextMenus]);
 
   const handleOpenGroupAllInNewWindow = useCallback(() => {
-    setGroupContextMenuOpen(false);
     if (!groupContextMenu) {
       return;
     }
+    closeContextMenus();
     openHostInNewWindow("#" + TAG_GROUP_PREFIX + groupContextMenu.path);
-  }, [groupContextMenu]);
+  }, [groupContextMenu, closeContextMenus]);
 
   const handleOpenGroupAllSplitScreen = useCallback(() => {
-    setGroupContextMenuOpen(false);
     if (!groupContextMenu) {
       return;
     }
+    closeContextMenus();
     const { hosts } = getStore();
     const filtered = hosts.filter((h) => h.tags && h.tags.includes(TAG_GROUP_PREFIX + groupContextMenu.path));
     const targets = filtered.slice(0, 4);
@@ -1395,30 +1409,30 @@ export default function Sidebar({
       );
       setMobileOpen(false);
     }
-  }, [groupContextMenu]);
+  }, [groupContextMenu, closeContextMenus]);
 
   const handleGroupCopyUrl = useCallback(async () => {
-    setGroupContextMenuOpen(false);
     if (!groupContextMenu) {
       return;
     }
+    closeContextMenus();
     const url = `${window.location.origin}/##${TAG_GROUP_PREFIX}${groupContextMenu.path}`;
     navigator.clipboard.writeText(url);
-  }, [groupContextMenu]);
+  }, [groupContextMenu, closeContextMenus]);
 
   const handleAddGroupHostClick = useCallback(async () => {
-    setGroupContextMenuOpen(false);
     if (!groupContextMenu) {
       return;
     }
+    closeContextMenus();
     openAddHostDialog({ tags: [TAG_GROUP_PREFIX + groupContextMenu.path] });
-  }, [groupContextMenu]);
+  }, [groupContextMenu, closeContextMenus]);
 
   const handleAddSubGroupClick = useCallback(async () => {
-    setGroupContextMenuOpen(false);
     if (!groupContextMenu) {
       return;
     }
+    closeContextMenus();
     const parentPath = groupContextMenu.path;
     const name = await dialogs.prompt(
       t("Create new sub-group") + ` (${t("Parent group:")} ${parentPath}). ` + t("Enter sub-group name:"),
@@ -1465,11 +1479,13 @@ export default function Sidebar({
     } else {
       dialogs.alert(t("Failed to save group"));
     }
-  }, [groupContextMenu]);
+  }, [groupContextMenu, closeContextMenus]);
 
   const handleAddTopLevelGroupClick = useCallback(async () => {
-    setGroupContextMenuOpen(false);
-    setContextMenuOpen(false);
+    if (!groupContextMenu) {
+      return;
+    }
+    closeContextMenus();
     const name = await dialogs.prompt(t("Enter top-level group name:"));
     if (!name) {
       return;
@@ -1498,13 +1514,13 @@ export default function Sidebar({
     } else {
       dialogs.alert(t("Failed to save group"));
     }
-  }, []);
+  }, [closeContextMenus, groupContextMenu]);
 
   const handleDeleteGroupClick = useCallback(async () => {
-    setGroupContextMenuOpen(false);
     if (!groupContextMenu) {
       return;
     }
+    closeContextMenus();
     const G = groupContextMenu.path;
     if (
       !(await dialogs.confirm(
@@ -1573,13 +1589,13 @@ export default function Sidebar({
     });
 
     fetchHosts();
-  }, [groupContextMenu]);
+  }, [closeContextMenus, groupContextMenu]);
 
   const handleRenameGroupClick = useCallback(async () => {
-    setGroupContextMenuOpen(false);
     if (!groupContextMenu) {
       return;
     }
+    closeContextMenus();
     const G = groupContextMenu.path;
 
     const parts = G.split("/");
@@ -1690,7 +1706,7 @@ export default function Sidebar({
     });
 
     fetchHosts();
-  }, [groupContextMenu]);
+  }, [closeContextMenus, groupContextMenu]);
 
   const handleSaveHost = useCallback(async () => {
     const { editHostName, hostFormData } = getStore();
@@ -2318,11 +2334,11 @@ export default function Sidebar({
         <IconButton onClick={(e) => setAnchorEl(e.currentTarget)} size="small">
           <MoreVertIcon />
         </IconButton>
-        <Menu id="main-menu" anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
+        <Menu id="main-menu" anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={closeContextMenus}>
           <MenuItem
             id="main-menu-refresh"
             onClick={() => {
-              setAnchorEl(null);
+              closeContextMenus();
               onRefresh();
             }}
           >
@@ -2331,7 +2347,7 @@ export default function Sidebar({
           <MenuItem
             id="main-menu-open-scratchpad"
             onClick={() => {
-              setAnchorEl(null);
+              closeContextMenus();
               onOpenScratchpad();
             }}
           >
@@ -2340,7 +2356,7 @@ export default function Sidebar({
           <MenuItem
             id="main-menu-dashboard"
             onClick={() => {
-              setAnchorEl(null);
+              closeContextMenus();
               setSettingsOpen(true);
               if (isMobile) {
                 closeMobileSidebar();
@@ -2353,15 +2369,13 @@ export default function Sidebar({
             extraMenu={extraMainMenu}
             // eslint-disable-next-line @typescript-eslint/prefer-as-const
             target={"" as ""}
-            before={() => {
-              setAnchorEl(null);
-            }}
+            before={closeContextMenus}
           />
           <MenuItem
             id="main-menu-logout"
             className={CLASS_HIDE_DESKTOP}
             onClick={() => {
-              setAnchorEl(null);
+              closeContextMenus();
               logout(true);
             }}
           >
@@ -2371,7 +2385,7 @@ export default function Sidebar({
             id="main-menu-logout-all"
             className={CLASS_HIDE_DESKTOP}
             onClick={() => {
-              setAnchorEl(null);
+              closeContextMenus();
               logoutAll(true);
             }}
           >
@@ -2679,17 +2693,13 @@ export default function Sidebar({
         </List>
       </Box>
 
-      <Menu
-        open={localShellContextMenuOpen}
-        onClose={() => setLocalShellContextMenuOpen(false)}
-        anchorEl={() => localShellRef.current}
-      >
+      <Menu open={localShellContextMenuOpen} onClose={closeContextMenus} anchorEl={() => localShellRef.current}>
         {shells.map((shell, idx) => (
           <>
             <MenuItem
               key={idx}
               onClick={() => {
-                setLocalShellContextMenuOpen(false);
+                closeContextMenus();
                 openHost(idx > 0 ? localShellHost(shell) : LOCAL_NAME);
                 setMobileOpen(false);
               }}
@@ -2705,7 +2715,7 @@ export default function Sidebar({
               <MenuItem
                 key="default-newtab"
                 onClick={() => {
-                  setLocalShellContextMenuOpen(false);
+                  closeContextMenus();
                   openHost(LOCAL_NAME, { target: "_self" });
                   setMobileOpen(false);
                 }}
@@ -2717,7 +2727,7 @@ export default function Sidebar({
               <MenuItem
                 key="alternative-newtab"
                 onClick={() => {
-                  setLocalShellContextMenuOpen(false);
+                  closeContextMenus();
                   openHost(localShellHost(shell), { target: "_self" });
                   setMobileOpen(false);
                 }}
@@ -2730,12 +2740,7 @@ export default function Sidebar({
       </Menu>
 
       {/* Host Context Menu */}
-      <Menu
-        id="host-menu"
-        open={contextMenuOpen}
-        onClose={() => setContextMenuOpen(false)}
-        anchorEl={contextMenu?.element}
-      >
+      <Menu id="host-menu" open={contextMenuOpen} onClose={closeContextMenus} anchorEl={contextMenu?.element}>
         <MenuItem id="host-menu-edit" onClick={handleEditOpen}>
           {t("Edit")}
           {contextMenu ? " " + contextMenu.target.name : ""} (shift+click)
@@ -2747,7 +2752,7 @@ export default function Sidebar({
               return;
             }
             const target = contextMenu.target;
-            setContextMenuOpen(false);
+            closeContextMenus();
             openHostInNewWindow(target.name);
           }}
         >
@@ -2760,7 +2765,7 @@ export default function Sidebar({
               return;
             }
             const target = contextMenu.target;
-            setContextMenuOpen(false);
+            closeContextMenus();
             openHost(target.name, { target: "_self" });
             setMobileOpen(false);
           }}
@@ -2775,7 +2780,7 @@ export default function Sidebar({
                 return;
               }
               const target = contextMenu.target;
-              setContextMenuOpen(false);
+              closeContextMenus();
               const url = `${window.location.origin}/#${
                 target.source !== "known_hosts" ? target.name : hostLabel(target, true)
               }`;
@@ -2792,7 +2797,7 @@ export default function Sidebar({
               return;
             }
             const target = contextMenu.target;
-            setContextMenuOpen(false);
+            closeContextMenus();
             navigator.clipboard.writeText(getSSHCommand(target));
           }}
         >
@@ -2805,7 +2810,7 @@ export default function Sidebar({
               return;
             }
             const target = contextMenu.target;
-            setContextMenuOpen(false);
+            closeContextMenus();
             navigator.clipboard.writeText(
               getSSHCopyIdCommand(
                 target,
@@ -2824,7 +2829,7 @@ export default function Sidebar({
               return;
             }
             const target = contextMenu.target;
-            setContextMenuOpen(false);
+            closeContextMenus();
             navigator.clipboard.writeText(getSSHConfigBlock(target));
           }}
         >
@@ -2844,7 +2849,7 @@ export default function Sidebar({
                 return;
               }
               const target = contextMenu.target;
-              setContextMenuOpen(false);
+              closeContextMenus();
               const groups = getStore().groups;
               const currentGroup = getHostGroupPath(target);
               const dstGroup = await dialogs.prompt(
@@ -2877,7 +2882,7 @@ export default function Sidebar({
           </MenuItem>
         )}
         {contextMenu?.target && (
-          <ExtraMenu extraMenu={extraHostMenu} target={contextMenu.target} before={() => setContextMenuOpen(false)} />
+          <ExtraMenu extraMenu={extraHostMenu} target={contextMenu.target} before={closeContextMenus} />
         )}
         {contextMenu?.target.source === "config" && (
           <MenuItem id="host-menu-delete" onClick={handleDelete} sx={{ color: "error.main" }}>
@@ -2891,12 +2896,7 @@ export default function Sidebar({
         )}
       </Menu>
 
-      <Menu
-        id="tag-menu"
-        open={tagContextMenuOpen}
-        onClose={() => setTagContextMenuOpen(false)}
-        anchorEl={tagContextMenu?.element}
-      >
+      <Menu id="tag-menu" open={tagContextMenuOpen} onClose={closeContextMenus} anchorEl={tagContextMenu?.element}>
         <MenuItem id="tag-menu-open-all" onClick={handleOpenAllServers}>
           {t("Open All")} ({tagContextMenu?.tag})
         </MenuItem>
@@ -2910,13 +2910,7 @@ export default function Sidebar({
           {t("Copy URL")}
         </MenuItem>
         {!!tagContextMenu && (
-          <ExtraMenu
-            extraMenu={extraTagMenu}
-            target={tagContextMenu.tag}
-            before={() => {
-              setTagContextMenuOpen(false);
-            }}
-          />
+          <ExtraMenu extraMenu={extraTagMenu} target={tagContextMenu.tag} before={closeContextMenus} />
         )}
       </Menu>
 
@@ -2924,7 +2918,7 @@ export default function Sidebar({
       <Menu
         id="group-menu"
         open={groupContextMenuOpen}
-        onClose={() => setGroupContextMenuOpen(false)}
+        onClose={closeContextMenus}
         anchorEl={groupContextMenu?.element}
       >
         {!!groupContextMenu?.path && (
@@ -2959,13 +2953,7 @@ export default function Sidebar({
             <MenuItem id="group-menu-rename-group" onClick={handleRenameGroupClick}>
               {t("Rename Group")}
             </MenuItem>
-            <ExtraMenu
-              extraMenu={extraGroupMenu}
-              target={groupContextMenu.path}
-              before={() => {
-                setGroupContextMenuOpen(false);
-              }}
-            />
+            <ExtraMenu extraMenu={extraGroupMenu} target={groupContextMenu.path} before={closeContextMenus} />
             <MenuItem id="group-menu-delete" onClick={handleDeleteGroupClick} sx={{ color: "error.main" }}>
               {t("Delete Group")}
             </MenuItem>

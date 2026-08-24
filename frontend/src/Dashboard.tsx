@@ -510,7 +510,10 @@ export default function Dashboard({ initialData, setMuiTheme }: DashboardProps) 
     setContextMenu({ mouseX: e.clientX + 2, mouseY: e.clientY - 6, targetTabId: id });
   }, []);
 
-  const handleCloseMenu = useCallback(() => setContextMenu(null), []);
+  const handleCloseMenu = useCallback(() => {
+    setContextMenu(null);
+    triggerFocus();
+  }, []);
 
   const [lastKeyboardHeight, setLastKeyboardHeight] = useState(0);
 

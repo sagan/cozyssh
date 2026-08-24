@@ -65,7 +65,7 @@ import {
   triggerFocusSearchInput,
   activatePane,
   closeOtherTabs,
-  closeRightTabs,
+  closeSideTabs,
   openInputDialog,
   closeInputDialog,
   setInputDialogDirty,
@@ -88,10 +88,10 @@ import {
   openEditHost,
   moveTabLeft,
   moveTabRight,
-  setBtnContextMenuOpen,
   unloadButton,
   runScript,
   handleReconnectTab,
+  closeContextMenus,
 } from "./store";
 import NewTabDialog from "./NewTabDialog";
 import { dialogs } from "./Dialogs";
@@ -697,7 +697,7 @@ export default function DialogManager({
                   id="tab-menu-close-right-tabs"
                   onClick={() => {
                     handleCloseMenu();
-                    closeRightTabs(memoTabId);
+                    closeSideTabs(memoTabId);
                   }}
                 >
                   {t("Close Tabs to the Right")}
@@ -739,19 +739,14 @@ export default function DialogManager({
           })()}
       </Menu>
 
-      <Menu
-        id="button-menu"
-        anchorEl={btnContextMenu?.element}
-        open={btnContextMenuOpen}
-        onClose={() => setBtnContextMenuOpen(false)}
-      >
+      <Menu id="button-menu" anchorEl={btnContextMenu?.element} open={btnContextMenuOpen} onClose={closeContextMenus}>
         <MenuItem
           id="button-menu-edit"
           onClick={() => {
             if (!btnContextMenu) {
               return;
             }
-            setBtnContextMenuOpen(false);
+            closeContextMenus();
             const data = {
               id: "",
               name: btnContextMenu.btn.name,
@@ -778,7 +773,7 @@ export default function DialogManager({
             if (!btnContextMenu) {
               return;
             }
-            setBtnContextMenuOpen(false);
+            closeContextMenus();
             openInputDialog({
               inputValue: btnContextMenu.btn.payload,
               inputLiquid: btnContextMenu.btn.liquidjs === 1 || btnContextMenu.btn.liquidjs === 2,
@@ -796,7 +791,7 @@ export default function DialogManager({
             if (!btnContextMenu) {
               return;
             }
-            setBtnContextMenuOpen(false);
+            closeContextMenus();
             openInputDialog({
               inputValue: btnContextMenu.btn.payload,
               inputLiquid: btnContextMenu.btn.liquidjs === 1 || btnContextMenu.btn.liquidjs === 2,
@@ -814,7 +809,7 @@ export default function DialogManager({
             if (!btnContextMenu) {
               return;
             }
-            setBtnContextMenuOpen(false);
+            closeContextMenus();
             openHostInNewWindow(btnContextMenu.btn.payload);
           }}
           sx={{
@@ -829,7 +824,7 @@ export default function DialogManager({
             if (!btnContextMenu) {
               return;
             }
-            setBtnContextMenuOpen(false);
+            closeContextMenus();
             const hosts = btnContextMenu.btn.payload.split(/\s*,\s*/);
             for (const host of hosts) {
               openHost(host, { target: "_self" });
@@ -847,7 +842,7 @@ export default function DialogManager({
             if (!btnContextMenu) {
               return;
             }
-            setBtnContextMenuOpen(false);
+            closeContextMenus();
             navigator.clipboard.writeText(
               `${window.location.origin}/#${encodeURIComponent(btnContextMenu.btn.payload)}`,
             );
@@ -865,7 +860,7 @@ export default function DialogManager({
             if (!btnContextMenu) {
               return;
             }
-            setBtnContextMenuOpen(false);
+            closeContextMenus();
             navigator.clipboard.writeText(btnContextMenu.btn.payload);
           }}
           sx={{
@@ -886,18 +881,14 @@ export default function DialogManager({
             if (!btnContextMenu) {
               return;
             }
-            setBtnContextMenuOpen(false);
+            closeContextMenus();
             navigator.clipboard.writeText(JSON.stringify(btnContextMenu.btn));
           }}
         >
           {t("Copy Button Data")}
         </MenuItem>
         {btnContextMenu && (
-          <ExtraMenu
-            extraMenu={extraButtonMenu}
-            target={btnContextMenu.btn}
-            before={() => setBtnContextMenuOpen(false)}
-          />
+          <ExtraMenu extraMenu={extraButtonMenu} target={btnContextMenu.btn} before={closeContextMenus} />
         )}
         <MenuItem
           id="button-menu-move-left"
@@ -905,7 +896,7 @@ export default function DialogManager({
             if (!btnContextMenu) {
               return;
             }
-            setBtnContextMenuOpen(false);
+            closeContextMenus();
             moveButton(btnContextMenu.btn.id, -1);
           }}
         >
@@ -917,7 +908,7 @@ export default function DialogManager({
             if (!btnContextMenu) {
               return;
             }
-            setBtnContextMenuOpen(false);
+            closeContextMenus();
             moveButton(btnContextMenu.btn.id, 1);
           }}
         >
@@ -929,7 +920,7 @@ export default function DialogManager({
             if (!btnContextMenu) {
               return;
             }
-            setBtnContextMenuOpen(false);
+            closeContextMenus();
             deleteButton(btnContextMenu.btn);
           }}
           sx={{ color: "error.main" }}

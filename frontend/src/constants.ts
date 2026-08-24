@@ -142,6 +142,8 @@ export const ID_SIDEBAR = "sidebar";
 
 export const ID_SIDEBAR_MAIN = "sidebar-main";
 
+export const ID_DYNAMIC_MENU = "dynamic-menu";
+
 export const CACHE_API_DATA = "api-data-cache";
 
 export const CACHE_MANIFEST = "manifest-cache";

@@ -619,6 +619,11 @@ export const setBtnContextMenuOpen = (btnContextMenuOpen: boolean) => useStore.s
 export const setBtnContextMenu = (btnContextMenu: { element: Element; btn: ButtonData } | null) =>
   useStore.setState({ btnContextMenu });
 
+export function closeContextMenus() {
+  setBtnContextMenuOpen(false);
+  triggerFocus();
+}
+
 export const setSettingsTab = (settingsTab: number) => useStore.setState({ settingsTab });
 
 export const setSettingsOpen = (settingsOpen: boolean) => useStore.setState({ settingsOpen });
@@ -952,7 +957,10 @@ export const closeOtherTabs = (targetTabId?: string) => {
   triggerFocus();
 };
 
-export const closeRightTabs = (targetTabId?: string) => {
+/**
+ * Close side (right or left of the specified tab, default to right) tabs
+ */
+export const closeSideTabs = (targetTabId?: string, left = false) => {
   const { activeTabId, tabs } = getStore();
   targetTabId = targetTabId || activeTabId;
   if (tabs.length === 0 || (tabs.length === 1 && tabs[0]!.id === targetTabId)) {
@@ -963,8 +971,10 @@ export const closeRightTabs = (targetTabId?: string) => {
     return;
   }
   const targetTab = tabs[targetTabIndex]!;
-  const activeTabClosed = tabs.findIndex((tab) => tab.id === activeTabId) > targetTabIndex;
-  const newTabs = tabs.slice(0, targetTabIndex + 1);
+  const activeTabClosed = left
+    ? tabs.findIndex((tab) => tab.id === activeTabId) < targetTabIndex
+    : tabs.findIndex((tab) => tab.id === activeTabId) > targetTabIndex;
+  const newTabs = left ? tabs.slice(targetTabIndex) : tabs.slice(0, targetTabIndex + 1);
   useStore.setState((state) => ({
     ...cleanupAssociatedTabState(state, newTabs),
     ...(activeTabClosed
@@ -3351,7 +3361,10 @@ export async function runButton(
           closeOtherTabs();
           break;
         case "CLOSE_RIGHT_TABS":
-          closeRightTabs();
+          closeSideTabs();
+          break;
+        case "CLOSE_LEFT_TABS":
+          closeSideTabs(undefined, true);
           break;
         case "CLOSE_ALL_TABS":
           setTabs([]);
