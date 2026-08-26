@@ -958,6 +958,38 @@ export const closeOtherTabs = (targetTabId?: string) => {
 };
 
 /**
+ * Close all panes except the active pane in the specified tab
+ * @param targetTabId
+ */
+export const closeOtherPanes = (targetTabId?: string) => {
+  const { activeTabId, tabs } = getStore();
+  targetTabId = targetTabId || activeTabId;
+  const targetTabIndex = tabs.findIndex((tab) => tab.id === targetTabId);
+  if (targetTabIndex === -1) {
+    return;
+  }
+  const targetTab = tabs[targetTabIndex]!;
+  if (targetTab.type !== "terminal" || targetTab.panes.length <= 1) {
+    return;
+  }
+  const newTabs = tabs.map((tab) => {
+    if (tab.id === targetTab.id) {
+      return {
+        ...tab,
+        panes: [tab.panes.find((pane) => pane.id === targetTab.activePaneId)!],
+      };
+    }
+    return tab;
+  });
+  useStore.setState((state) => ({
+    ...cleanupAssociatedTabState(state, newTabs),
+    activeTabId: targetTab.id,
+    activePaneId: targetTab.activePaneId,
+  }));
+  triggerFocus();
+};
+
+/**
  * Close side (right or left of the specified tab, default to right) tabs
  */
 export const closeSideTabs = (targetTabId?: string, left = false) => {
@@ -3368,6 +3400,9 @@ export async function runButton(
           break;
         case "CLOSE_ALL_TABS":
           setTabs([]);
+          break;
+        case "CLOSE_OTHER_PANES":
+          closeOtherPanes();
           break;
         default: {
           return assertUnreachable(payload);

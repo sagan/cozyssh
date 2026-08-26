@@ -54,6 +54,7 @@ export const TERMINAL_FUNCTIONS = [
   { value: "CLOSE_RIGHT_TABS", label: t("Close Tabs to the Right") },
   { value: "CLOSE_LEFT_TABS", label: t("Close Tabs to the Left") },
   { value: "CLOSE_ALL_TABS", label: t("Close All Tabs") },
+  { value: "CLOSE_OTHER_PANES", label: t("Close Other Panes") },
   { value: "MOVE_TAB_LEFT", label: t("Move Tab Left") },
   { value: "MOVE_TAB_RIGHT", label: t("Move Tab Right") },
 ] as const;
