@@ -2518,6 +2518,10 @@ export interface TerminalHandle {
 	replaceCmdLine: (newText: string) => void;
 	getAddon(): Record<string, ITerminalAddon>;
 	getAddon(name: string): ITerminalAddon | undefined;
+	enterMarkMode: () => void;
+	exitMarkMode: () => void;
+	toggleMarkMode: () => void;
+	isMarkMode: () => boolean;
 }
 export type AppletPosition = "widget" | "sidebar" | "dialog";
 export interface AppletData {

@@ -69,6 +69,7 @@ import {
 } from "./common";
 import { type PaneData, notify, getIntVar, getTerminalContents } from "./store";
 import { patchAndroidSoftKeyboardInput } from "./xtermInternals";
+import { MarkModeManager } from "./markMode";
 
 export type TerminalMarkers = {
   /**
@@ -127,6 +128,10 @@ export interface TerminalHandle {
   replaceCmdLine: (newText: string) => void;
   getAddon(): Record<string, ITerminalAddon>;
   getAddon(name: string): ITerminalAddon | undefined;
+  enterMarkMode: () => void;
+  exitMarkMode: () => void;
+  toggleMarkMode: () => void;
+  isMarkMode: () => boolean;
 }
 
 interface TerminalProps {
@@ -186,6 +191,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
     const forceReconnectRef = useRef(false);
     const shellIntegrationRef = useRef<ShellIntegration>({});
     const markersRef = useRef<TerminalMarkers>({});
+    const markModeRef = useRef<MarkModeManager | null>(null);
 
     const activeCmdDecorationRef = useRef<CommandDecorationEntry | null>(null);
     const commandDecorationsRef = useRef<CommandDecorationEntry[]>([]);
@@ -404,14 +410,17 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
         xtermRef.current?.clearSelection();
       },
       clear: () => {
+        markModeRef.current?.exit();
         clearCommandDecorations();
         xtermRef.current?.clear();
       },
       reset: () => {
+        markModeRef.current?.exit();
         clearCommandDecorations();
         xtermRef.current?.reset();
       },
       reconnect: () => {
+        markModeRef.current?.exit();
         forceReconnectRef.current = true;
         reconnectFuncRef.current?.();
       },
@@ -462,6 +471,18 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
           ws.send(new TextEncoder().encode("\x05\x15" + newText));
         }
       },
+      enterMarkMode: () => {
+        markModeRef.current?.enter();
+      },
+      exitMarkMode: () => {
+        markModeRef.current?.exit();
+      },
+      toggleMarkMode: () => {
+        markModeRef.current?.toggle();
+      },
+      isMarkMode: () => {
+        return markModeRef.current?.isActive || false;
+      },
     }));
 
     useEffect(() => {
@@ -499,6 +520,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
 
       term.open(terminalRef.current!);
       xtermRef.current = term;
+
+      const markMode = new MarkModeManager(term, terminalRef.current!);
+      markModeRef.current = markMode;
 
       const textarea = term.textarea;
       if (textarea) {
@@ -1071,6 +1095,11 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
           return false;
         }
 
+        if (markModeRef.current?.isActive) {
+          markModeRef.current.handleKeyDown(e);
+          return false;
+        }
+
         return true;
       });
 
@@ -1346,6 +1375,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       setTimeout(connectWS, 50);
 
       term.onData((data) => {
+        if (markModeRef.current?.isActive) {
+          return;
+        }
         if (data === "\x0c") {
           // \x0c is the ASCII Form Feed sent by Ctrl + L
           pendingClearMarker = true;
@@ -1474,6 +1506,8 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       };
 
       term.onWriteParsed(() => {
+        markModeRef.current?.onBufferChange();
+
         // Consume a pending Ctrl+L clear-marker request. We defer registration to
         // here because Ctrl+L sends \x0c to the PTY asynchronously; by the time
         // this callback fires the clear sequences have been fully applied to the
@@ -1568,6 +1602,8 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
         }
 
         clearCommandDecorations();
+        markMode.dispose();
+        markModeRef.current = null;
 
         // <-- Dispose of markers
         markersRef.current.$start?.dispose();

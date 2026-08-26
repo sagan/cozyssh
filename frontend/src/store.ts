@@ -3324,6 +3324,12 @@ export async function runButton(
           setTimeout(() => document.getElementById(ID_TERMINAL_SEARCH_INPUT)?.focus(), 100);
           break;
 
+        case "MARK_MODE":
+          if ("toggleMarkMode" in term) {
+            term.toggleMarkMode();
+          }
+          break;
+
         case "TOGGLE_FILES":
           toggleFiles();
           break;
@@ -3552,6 +3558,14 @@ export function handleReconnectTab(id: string) {
       term.reconnect();
     }
   });
+}
+
+export function toggleMarkMode(paneId?: string) {
+  paneId = paneId || getStore().activePaneId;
+  const term = __CS_TERMINALS__.current[paneId];
+  if (term && "toggleMarkMode" in term) {
+    term.toggleMarkMode();
+  }
 }
 
 export function getTerminalContents(

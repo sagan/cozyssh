@@ -92,6 +92,7 @@ import {
   runScript,
   handleReconnectTab,
   closeContextMenus,
+  toggleMarkMode,
 } from "./store";
 import NewTabDialog from "./NewTabDialog";
 import { dialogs } from "./Dialogs";
@@ -576,11 +577,25 @@ export default function DialogManager({
                           triggerFocusSearchInput();
                         } else {
                           activatePane(tab.activePaneId, tab.id);
-                          setTimeout(() => triggerFocusSearchInput(), 200);
+                          setTimeout(triggerFocusSearchInput, 200);
                         }
                       }}
                     >
                       {t("Find")} (ctrl+shift+f)
+                    </MenuItem>
+                    <MenuItem
+                      id="tab-menu-mark-mode"
+                      onClick={() => {
+                        handleCloseMenu();
+                        if (getStore().activeTabId === tab.id) {
+                          toggleMarkMode();
+                        } else {
+                          activatePane(tab.activePaneId, tab.id);
+                          setTimeout(toggleMarkMode, 100);
+                        }
+                      }}
+                    >
+                      {t("Toggle Mark Mode")} (ctrl+shift+m)
                     </MenuItem>
                     <MenuItem
                       id="tab-menu-send-input"

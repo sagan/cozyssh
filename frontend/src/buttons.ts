@@ -38,6 +38,7 @@ export const TERMINAL_FUNCTIONS = [
   { value: "CLONE_SESSION", label: t("CLONE (Session)"), shortcut: "alt+c" },
   { value: "CLONE_SESSION_IN_SAME_TAB", label: t("CLONE (Session In Same Tab)"), shortcut: "alt+shift+c" },
   { value: "SEARCH", label: t("SEARCH (Buffer)"), shortcut: "ctrl+shift+f" },
+  { value: "MARK_MODE", label: t("Toggle Mark Mode"), shortcut: "ctrl+shift+m" },
   { value: "TOGGLE_FILES", label: t("Toggle Files Panel") },
   { value: "LOCK_TAB", label: t("Lock (Tab)"), shortcut: "ctrl+alt+shift+l" },
   { value: "UNLOCK_TAB", label: t("Unlock (Tab)"), shortcut: "ctrl+alt+shift+l" },

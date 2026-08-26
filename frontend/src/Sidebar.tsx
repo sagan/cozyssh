@@ -3782,6 +3782,18 @@ export default function Sidebar({
                   <b>Alt + Mouse Click</b> {t("on a 'Send String' type button")} : {t("copy contents to clipboard")}
                   <br />
                   <b>Ctrl + Mouse Click</b> {t("on backdrop of modal dialog")} : {t("force close it")}
+                  <br />
+                  <b>Ctrl + Shift + M</b> : {t("Toggle Mark Mode")}. {t("In mark mode:")}&nbsp;
+                  <b>Arrow keys</b> {t("or")} <b>h/j/k/l</b>:&nbsp;
+                  {t("move cursor (horizontally by char, vertically by line)")};&nbsp;
+                  <b>Shift + Arrow keys</b> {t("or")} <b>Shift + h/j/k/l</b>:&nbsp;
+                  {t("extend selection in the choosed direction")};&nbsp;
+                  <b>g / G</b>: {t("move cursor to top / bottom of buffer")};&nbsp;
+                  <b>0 or ^ / $</b>: {t("move cursor to the line start / end")};&nbsp;
+                  <b>w / b</b>: {t("move cursor forward / backward by a word")};&nbsp;
+                  <b>W / B</b>: {t("extend selection forward / backward by a word")};&nbsp;
+                  <b>Enter</b> {t("or")} <b>y</b>: {t("copy selection to clipboard and exit mark mode")};&nbsp;
+                  <b>Esc</b> {t("or")} <b>Ctrl + [</b> : {t("exit mark mode without copying")}
                 </Typography>
                 {__CS_ENV__ === 1 && (
                   <>

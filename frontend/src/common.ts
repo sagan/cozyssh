@@ -388,6 +388,7 @@ export const appShortcuts = new Set([
   "ctrl+shift+f",
   "ctrl+shift+r",
   "ctrl+shift+c",
+  "ctrl+shift+m",
 
   // Dynamic Tab Navigation (Alt + 0-9)
   "alt+0",

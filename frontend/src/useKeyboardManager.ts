@@ -518,6 +518,16 @@ const handleKeyDown = (e: KeyboardEvent) => {
       }
       return;
     }
+
+    case "ctrl+shift+m": {
+      const { activePaneId } = getStore();
+      const term = __CS_TERMINALS__.current[activePaneId];
+      if (term && "toggleMarkMode" in term) {
+        e.preventDefault();
+        term.toggleMarkMode();
+      }
+      return;
+    }
   }
 
   // ── Alt+0-9: switch to tab by index ───────────────────────────────────
