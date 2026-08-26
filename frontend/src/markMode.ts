@@ -43,19 +43,52 @@ export const markModeActions: Record<string, MarkModeActionHandler> = {
   selectLineEnd: (ctx) => ctx.setCursor(ctx.term.cols - 1, ctx.cursor.row, true),
 
   wordLeft: (ctx) => {
-    const pos = findPrevWordPosition(ctx.term, ctx.cursor);
+    const pos = findPrevWordPosition(ctx.term, ctx.cursor, false);
     ctx.setCursor(pos.col, pos.row, false);
   },
   wordRight: (ctx) => {
-    const pos = findNextWordPosition(ctx.term, ctx.cursor);
+    const pos = findNextWordPosition(ctx.term, ctx.cursor, false);
+    ctx.setCursor(pos.col, pos.row, false);
+  },
+  wordEnd: (ctx) => {
+    const pos = findEndOfWordPosition(ctx.term, ctx.cursor, false);
     ctx.setCursor(pos.col, pos.row, false);
   },
   selectWordLeft: (ctx) => {
-    const pos = findPrevWordPosition(ctx.term, ctx.cursor);
+    const pos = findPrevWordPosition(ctx.term, ctx.cursor, false);
     ctx.setCursor(pos.col, pos.row, true);
   },
   selectWordRight: (ctx) => {
-    const pos = findNextWordPosition(ctx.term, ctx.cursor);
+    const pos = findNextWordPosition(ctx.term, ctx.cursor, false);
+    ctx.setCursor(pos.col, pos.row, true);
+  },
+  selectWordEnd: (ctx) => {
+    const pos = findEndOfWordPosition(ctx.term, ctx.cursor, false);
+    ctx.setCursor(pos.col, pos.row, true);
+  },
+
+  bigWordLeft: (ctx) => {
+    const pos = findPrevWordPosition(ctx.term, ctx.cursor, true);
+    ctx.setCursor(pos.col, pos.row, false);
+  },
+  bigWordRight: (ctx) => {
+    const pos = findNextWordPosition(ctx.term, ctx.cursor, true);
+    ctx.setCursor(pos.col, pos.row, false);
+  },
+  bigWordEnd: (ctx) => {
+    const pos = findEndOfWordPosition(ctx.term, ctx.cursor, true);
+    ctx.setCursor(pos.col, pos.row, false);
+  },
+  selectBigWordLeft: (ctx) => {
+    const pos = findPrevWordPosition(ctx.term, ctx.cursor, true);
+    ctx.setCursor(pos.col, pos.row, true);
+  },
+  selectBigWordRight: (ctx) => {
+    const pos = findNextWordPosition(ctx.term, ctx.cursor, true);
+    ctx.setCursor(pos.col, pos.row, true);
+  },
+  selectBigWordEnd: (ctx) => {
+    const pos = findEndOfWordPosition(ctx.term, ctx.cursor, true);
     ctx.setCursor(pos.col, pos.row, true);
   },
 
@@ -151,14 +184,16 @@ export const defaultMarkModeKeymap: Record<string, string | MarkModeActionHandle
   "shift+home": "selectLineStart",
   "shift+end": "selectLineEnd",
 
-  // Word navigation
+  // Word navigation (vim-style w, b, e; W, B, E extend selection)
   w: "wordRight",
-  e: "wordRight",
   b: "wordLeft",
+  e: "wordEnd",
   W: "selectWordRight",
   "shift+w": "selectWordRight",
   B: "selectWordLeft",
   "shift+b": "selectWordLeft",
+  E: "selectWordEnd",
+  "shift+e": "selectWordEnd",
   "ctrl+arrowleft": "wordLeft",
   "ctrl+arrowright": "wordRight",
   "ctrl+shift+arrowleft": "selectWordLeft",
@@ -199,82 +234,130 @@ export const defaultMarkModeKeymap: Record<string, string | MarkModeActionHandle
   "ctrl+shift+m": "exit",
 };
 
-/**
- * Helper: Find the next word start in the buffer
- */
-function findNextWordPosition(term: Terminal, current: MarkModePosition): MarkModePosition {
-  const buffer = term.buffer.active;
-  let { col, row } = current;
-  const maxRow = buffer.length - 1;
+const CharClass = {
+  Whitespace: 0,
+  Keyword: 1,
+  Punctuation: 2,
+} as const;
+type CharClass = (typeof CharClass)[keyof typeof CharClass];
 
-  while (row <= maxRow) {
-    const line = buffer.getLine(row);
-    if (!line) {
-      row++;
-      col = 0;
-      continue;
-    }
-    const text = line.translateToString(false);
-    let i = col + 1;
+function getChar(term: Terminal, pos: MarkModePosition): string {
+  const line = term.buffer.active.getLine(pos.row);
+  if (!line) return "";
+  const cell = line.getCell(pos.col);
+  return cell ? cell.getChars() : "";
+}
 
-    // Skip current word characters
-    while (i < term.cols && isWordChar(text[i])) {
-      i++;
-    }
-    // Skip whitespace / non-word characters
-    while (i < term.cols && !isWordChar(text[i])) {
-      i++;
-    }
-
-    if (i < term.cols) {
-      return { col: i, row };
-    }
-    row++;
-    col = -1;
+function getCharClass(char: string, bigWord = false): CharClass {
+  if (!char || char === " " || char === "\t" || char === "\0") {
+    return CharClass.Whitespace;
   }
+  if (bigWord) {
+    return CharClass.Keyword;
+  }
+  if (/^[a-zA-Z0-9_]$/.test(char)) {
+    return CharClass.Keyword;
+  }
+  return CharClass.Punctuation;
+}
 
-  return { col: term.cols - 1, row: Math.max(0, maxRow) };
+function nextPos(term: Terminal, pos: MarkModePosition): MarkModePosition | null {
+  if (pos.col < term.cols - 1) {
+    return { col: pos.col + 1, row: pos.row };
+  }
+  if (pos.row < term.buffer.active.length - 1) {
+    return { col: 0, row: pos.row + 1 };
+  }
+  return null;
+}
+
+function prevPos(term: Terminal, pos: MarkModePosition): MarkModePosition | null {
+  if (pos.col > 0) {
+    return { col: pos.col - 1, row: pos.row };
+  }
+  if (pos.row > 0) {
+    return { col: term.cols - 1, row: pos.row - 1 };
+  }
+  return null;
 }
 
 /**
- * Helper: Find the previous word start in the buffer
+ * Vim-compliant `w` / `W` motion:
+ * Move to the start of the next word.
  */
-function findPrevWordPosition(term: Terminal, current: MarkModePosition): MarkModePosition {
-  const buffer = term.buffer.active;
-  let { col, row } = current;
+function findNextWordPosition(term: Terminal, current: MarkModePosition, bigWord = false): MarkModePosition {
+  let p = nextPos(term, current);
+  if (!p) return current;
 
-  while (row >= 0) {
-    const line = buffer.getLine(row);
-    if (!line) {
-      row--;
-      col = term.cols - 1;
-      continue;
-    }
-    const text = line.translateToString(false);
-    let i = col - 1;
+  const startClass = getCharClass(getChar(term, current), bigWord);
 
-    // Skip whitespace / non-word characters backwards
-    while (i >= 0 && !isWordChar(text[i])) {
-      i--;
+  if (startClass !== CharClass.Whitespace) {
+    // 1. Skip rest of current word of same class
+    while (p && getCharClass(getChar(term, p), bigWord) === startClass) {
+      p = nextPos(term, p);
     }
-    // Skip word characters backwards to find beginning of word
-    while (i >= 0 && isWordChar(text[i])) {
-      i--;
-    }
-
-    if (i + 1 < col || row < current.row) {
-      return { col: Math.max(0, i + 1), row };
-    }
-    row--;
-    col = term.cols;
   }
 
-  return { col: 0, row: 0 };
+  // 2. Skip any whitespace to start of next word
+  while (p && getCharClass(getChar(term, p), bigWord) === CharClass.Whitespace) {
+    p = nextPos(term, p);
+  }
+
+  return p || { col: term.cols - 1, row: Math.max(0, term.buffer.active.length - 1) };
 }
 
-function isWordChar(char?: string): boolean {
-  if (!char) return false;
-  return /[\w\d_.-]/.test(char);
+/**
+ * Vim-compliant `b` / `B` motion:
+ * Move to the start of the previous/current word.
+ */
+function findPrevWordPosition(term: Terminal, current: MarkModePosition, bigWord = false): MarkModePosition {
+  let p = prevPos(term, current);
+  if (!p) return current;
+
+  // 1. Skip whitespace backwards
+  while (p && getCharClass(getChar(term, p), bigWord) === CharClass.Whitespace) {
+    p = prevPos(term, p);
+  }
+  if (!p) return { col: 0, row: 0 };
+
+  // 2. Determine class of word
+  const targetClass = getCharClass(getChar(term, p), bigWord);
+
+  // 3. Move back to the start of this word group
+  let prev = prevPos(term, p);
+  while (prev && getCharClass(getChar(term, prev), bigWord) === targetClass) {
+    p = prev;
+    prev = prevPos(term, p);
+  }
+
+  return p;
+}
+
+/**
+ * Vim-compliant `e` / `E` motion:
+ * Move to the end of the next/current word.
+ */
+function findEndOfWordPosition(term: Terminal, current: MarkModePosition, bigWord = false): MarkModePosition {
+  let p = nextPos(term, current);
+  if (!p) return current;
+
+  // 1. Skip whitespace forward
+  while (p && getCharClass(getChar(term, p), bigWord) === CharClass.Whitespace) {
+    p = nextPos(term, p);
+  }
+  if (!p) return { col: term.cols - 1, row: Math.max(0, term.buffer.active.length - 1) };
+
+  // 2. Determine class of word
+  const targetClass = getCharClass(getChar(term, p), bigWord);
+
+  // 3. Move to the end of this word group
+  let next = nextPos(term, p);
+  while (next && getCharClass(getChar(term, next), bigWord) === targetClass) {
+    p = next;
+    next = nextPos(term, p);
+  }
+
+  return p;
 }
 
 /**

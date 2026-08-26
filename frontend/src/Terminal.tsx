@@ -1545,7 +1545,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       // container edge (e.g. over sidebar, header, or outside window), mouseup still fires
       // and copies the selection reliably.
       const handleCopyOnSelect = () => {
-        if (!hasNewSelection) {
+        if (!hasNewSelection || markModeRef.current?.isActive) {
           return;
         }
         if (getIntVar(VAR_CS_NO_SELECT_TO_COPY) === 1) {

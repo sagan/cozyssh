@@ -67,6 +67,7 @@ import {
   ViewModePrefix,
   cutPrefix,
   cutString,
+  sendKeyDown,
 } from "./common";
 import {
   APP_NAME,
@@ -3325,11 +3326,43 @@ export async function runButton(
           break;
 
         case "MARK_MODE":
-          if ("toggleMarkMode" in term) {
-            term.toggleMarkMode();
-          }
+          term.toggleMarkMode();
           break;
-
+        case "SELECT_TO_PREV_WORD": {
+          term.enterMarkMode();
+          sendKeyDown("shift+b", term.getXterm()?.textarea);
+          break;
+        }
+        case "SELECT_TO_NEXT_WORD": {
+          term.enterMarkMode();
+          sendKeyDown("shift+w", term.getXterm()?.textarea);
+          break;
+        }
+        case "SELECT_TO_WORD_END": {
+          term.enterMarkMode();
+          sendKeyDown("shift+e", term.getXterm()?.textarea);
+          break;
+        }
+        case "SELECT_TO_PREV_CHAR": {
+          term.enterMarkMode();
+          sendKeyDown("shift+h", term.getXterm()?.textarea);
+          break;
+        }
+        case "SELECT_TO_NEXT_CHAR": {
+          term.enterMarkMode();
+          sendKeyDown("shift+l", term.getXterm()?.textarea);
+          break;
+        }
+        case "SELECT_TO_PREV_LINE": {
+          term.enterMarkMode();
+          sendKeyDown("shift+k", term.getXterm()?.textarea);
+          break;
+        }
+        case "SELECT_TO_NEXT_LINE": {
+          term.enterMarkMode();
+          sendKeyDown("shift+j", term.getXterm()?.textarea);
+          break;
+        }
         case "TOGGLE_FILES":
           toggleFiles();
           break;

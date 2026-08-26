@@ -3790,8 +3790,9 @@ export default function Sidebar({
                   {t("extend selection in the choosed direction")};&nbsp;
                   <b>g / G</b>: {t("move cursor to top / bottom of buffer")};&nbsp;
                   <b>0 or ^ / $</b>: {t("move cursor to the line start / end")};&nbsp;
-                  <b>w / b</b>: {t("move cursor forward / backward by a word")};&nbsp;
-                  <b>W / B</b>: {t("extend selection forward / backward by a word")};&nbsp;
+                  <b>w / b / e</b>:&nbsp;
+                  {t("move cursor to next word start / prev word start / current word end (same as vim)")};&nbsp;
+                  <b>W / B / E</b>: {t("extend selection by a word in the choosed direction")};&nbsp;
                   <b>Enter</b> {t("or")} <b>y</b>: {t("copy selection to clipboard and exit mark mode")};&nbsp;
                   <b>Esc</b> {t("or")} <b>Ctrl + [</b> : {t("exit mark mode without copying")}
                 </Typography>
