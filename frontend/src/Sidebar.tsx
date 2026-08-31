@@ -2698,9 +2698,15 @@ export default function Sidebar({
           <>
             <MenuItem
               key={idx}
-              onClick={() => {
+              onClick={(e) => {
                 closeContextMenus();
-                openHost(idx > 0 ? localShellHost(shell) : LOCAL_NAME);
+                if (isModifier(e, "ctrl")) {
+                  openHostInNewWindow(idx > 0 ? localShellHost(shell) : LOCAL_NAME);
+                } else {
+                  openHost(idx > 0 ? localShellHost(shell) : LOCAL_NAME, {
+                    target: isModifier(e, "alt") ? "_self" : undefined,
+                  });
+                }
                 setMobileOpen(false);
               }}
             >
@@ -2714,9 +2720,13 @@ export default function Sidebar({
             {idx === 0 && (
               <MenuItem
                 key="default-newtab"
-                onClick={() => {
+                onClick={(e) => {
                   closeContextMenus();
-                  openHost(LOCAL_NAME, { target: "_self" });
+                  if (isModifier(e, "ctrl")) {
+                    openHostInNewWindow(LOCAL_NAME);
+                  } else {
+                    openHost(LOCAL_NAME, { target: "_self" });
+                  }
                   setMobileOpen(false);
                 }}
               >
@@ -2726,9 +2736,13 @@ export default function Sidebar({
             {idx === 1 && (
               <MenuItem
                 key="alternative-newtab"
-                onClick={() => {
+                onClick={(e) => {
                   closeContextMenus();
-                  openHost(localShellHost(shell), { target: "_self" });
+                  if (isModifier(e, "ctrl")) {
+                    openHostInNewWindow(localShellHost(shell));
+                  } else {
+                    openHost(localShellHost(shell), { target: "_self" });
+                  }
                   setMobileOpen(false);
                 }}
               >
@@ -3793,6 +3807,12 @@ export default function Sidebar({
                   <b>w / b / e</b>:&nbsp;
                   {t("move cursor to next word start / prev word start / current word end (same as vim)")};&nbsp;
                   <b>W / B / E</b>: {t("extend selection by a word in the choosed direction")};&nbsp;
+                  <b>Ctrl + U/D</b>: {t("move cursor up/down by half page")};&nbsp;
+                  <b>Space</b>: {t("extend selection forward to the next boundary of a non-space & space character")}
+                  &nbsp;
+                  <b>Shift + Space</b>:&nbsp;
+                  {t("extend selection backward to the previous boundary of a non-space & space character")}&nbsp;
+                  <b>Ctrl + Shift + U/D</b>: {t("extend selection up/down by half page")};&nbsp;
                   <b>Enter</b> {t("or")} <b>y</b>: {t("copy selection to clipboard and exit mark mode")};&nbsp;
                   <b>Esc</b> {t("or")} <b>Ctrl + [</b> : {t("exit mark mode without copying")}
                 </Typography>

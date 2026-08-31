@@ -296,7 +296,12 @@ export default function TabBar({
               variant="scrollable"
               scrollButtons={true}
               allowScrollButtonsMobile
-              sx={{ minHeight: 40 }}
+              sx={{
+                minHeight: 40,
+                //"& .MuiTabs-indicator": {
+                //  transition: "none", // Removes the sliding animation
+                //},
+              }}
             >
               {tabs.map((tab, i) => {
                 const state = tabStates[i]!;
@@ -629,19 +634,27 @@ export default function TabBar({
                 }}
                 onKeyDown={(e) => {
                   const kb = getKeyCombination(e);
-                  if (kb === "enter") {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const term = __CS_TERMINALS__.current[activePaneId];
-                    if (term && "getXterm" in term) {
-                      if (e.shiftKey) {
-                        term.findPrevious(searchQuery);
-                      } else {
-                        term.findNext(searchQuery);
+                  switch (kb) {
+                    case "enter":
+                    case "shift+enter": {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const term = __CS_TERMINALS__.current[activePaneId];
+                      if (term && "getXterm" in term) {
+                        if (e.shiftKey) {
+                          term.findPrevious(searchQuery);
+                        } else {
+                          term.findNext(searchQuery);
+                        }
                       }
+                      break;
                     }
-                  } else if (e.key === "Escape") {
-                    handleCloseSearch();
+                    case "escape": {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleCloseSearch();
+                      break;
+                    }
                   }
                 }}
                 sx={{
@@ -658,7 +671,7 @@ export default function TabBar({
                     term.findPrevious(searchQuery);
                   }
                 }}
-                title={t("Previous")}
+                title={t("Previous") + " (shift+enter)"}
               >
                 <NavigateBeforeIcon fontSize="small" />
               </IconButton>
@@ -670,11 +683,11 @@ export default function TabBar({
                     term.findNext(searchQuery);
                   }
                 }}
-                title={t("Next")}
+                title={t("Next") + " (enter)"}
               >
                 <NavigateNextIcon fontSize="small" />
               </IconButton>
-              <IconButton size="small" onClick={handleCloseSearch} title={t("Close")}>
+              <IconButton size="small" onClick={handleCloseSearch} title={t("Close") + " (esc)"}>
                 <CloseIcon fontSize="small" />
               </IconButton>
             </Box>

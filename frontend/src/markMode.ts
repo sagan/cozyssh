@@ -23,6 +23,10 @@ export interface MarkModeContext {
 
 export type MarkModeActionHandler = (ctx: MarkModeContext, ev?: KeyboardEvent) => void | boolean | Promise<void>;
 
+function isSpace(char: string) {
+  return " \t\r\n".includes(char);
+}
+
 /**
  * Built-in Action Handlers for Mark Mode
  */
@@ -41,7 +45,87 @@ export const markModeActions: Record<string, MarkModeActionHandler> = {
   lineEnd: (ctx) => ctx.setCursor(ctx.term.cols - 1, ctx.cursor.row, false),
   selectLineStart: (ctx) => ctx.setCursor(0, ctx.cursor.row, true),
   selectLineEnd: (ctx) => ctx.setCursor(ctx.term.cols - 1, ctx.cursor.row, true),
-
+  selectUntilSpace: (ctx) => {
+    // select from current cursor to until the first space char (if the current cursor is not in word-space boundary)
+    // or the first non-space char (if the current cursor is in word-space boundary)
+    const line = ctx.term.buffer.active.getLine(ctx.cursor.row);
+    if (!line) {
+      return;
+    }
+    let col = ctx.cursor.col;
+    const nextChar = col < line.length - 1 ? line.getCell(col + 1)!.getChars() : " ";
+    if (nextChar) {
+      if (isSpace(nextChar)) {
+        while (col < line.length - 1 && isSpace(line.getCell(col + 1)!.getChars())) {
+          col++;
+        }
+      } else {
+        while (col < line.length - 1 && !isSpace(line.getCell(col + 1)!.getChars())) {
+          col++;
+        }
+      }
+      ctx.setCursor(col, ctx.cursor.row, true);
+    } else {
+      const nextLine = ctx.term.buffer.active.getLine(ctx.cursor.row + 1);
+      if (!nextLine) {
+        return;
+      }
+      // select to next line. If the first char of the new line is space, select until the first non-space char,
+      // otherwise select before the first space char.
+      let col = 0;
+      if (isSpace(nextLine.getCell(0)!.getChars())) {
+        while (col < nextLine.length - 1 && isSpace(nextLine.getCell(col + 1)!.getChars())) {
+          col++;
+        }
+      } else {
+        while (col < nextLine.length - 1 && !isSpace(nextLine.getCell(col + 1)!.getChars())) {
+          col++;
+        }
+      }
+      ctx.setCursor(col, ctx.cursor.row + 1, true);
+    }
+  },
+  selectUntilSpaceReverse: (ctx) => {
+    // select from current cursor to preceding space char (if previous char is space)
+    // or preceding non-space char (if previous char is non-space)
+    const line = ctx.term.buffer.active.getLine(ctx.cursor.row);
+    if (!line) {
+      return;
+    }
+    let col = ctx.cursor.col;
+    if (col > 0) {
+      const prevChar = line.getCell(col - 1)?.getChars() ?? " ";
+      if (isSpace(prevChar)) {
+        while (col > 0 && isSpace(line.getCell(col - 1)!.getChars())) {
+          col--;
+        }
+      } else {
+        while (col > 0 && !isSpace(line.getCell(col - 1)!.getChars())) {
+          col--;
+        }
+      }
+      ctx.setCursor(col, ctx.cursor.row, true);
+    } else {
+      const prevLine = ctx.term.buffer.active.getLine(ctx.cursor.row - 1);
+      if (!prevLine) {
+        return;
+      }
+      // select to previous line starting from line end. If the last char of the previous line is space,
+      // select backwards until the first non-space char, otherwise select backwards before the first space char.
+      let col = prevLine.length - 1;
+      const lastChar = prevLine.getCell(col)?.getChars() ?? " ";
+      if (isSpace(lastChar)) {
+        while (col > 0 && isSpace(prevLine.getCell(col - 1)!.getChars())) {
+          col--;
+        }
+      } else {
+        while (col > 0 && !isSpace(prevLine.getCell(col - 1)!.getChars())) {
+          col--;
+        }
+      }
+      ctx.setCursor(col, ctx.cursor.row - 1, true);
+    }
+  },
   wordLeft: (ctx) => {
     const pos = findPrevWordPosition(ctx.term, ctx.cursor, false);
     ctx.setCursor(pos.col, pos.row, false);
@@ -183,6 +267,8 @@ export const defaultMarkModeKeymap: Record<string, string | MarkModeActionHandle
   $: "lineEnd",
   "shift+home": "selectLineStart",
   "shift+end": "selectLineEnd",
+  " ": "selectUntilSpace",
+  "shift+ ": "selectUntilSpaceReverse",
 
   // Word navigation (vim-style w, b, e; W, B, E extend selection)
   w: "wordRight",
@@ -204,6 +290,8 @@ export const defaultMarkModeKeymap: Record<string, string | MarkModeActionHandle
   pagedown: "pageDown",
   "shift+pageup": "selectPageUp",
   "shift+pagedown": "selectPageDown",
+  "ctrl+shift+u": "selectPageUp",
+  "ctrl+shift+d": "selectPageDown",
   "ctrl+u": "pageUp",
   "ctrl+d": "pageDown",
   "ctrl+b": "pageUp",
@@ -665,12 +753,7 @@ export class MarkModeManager {
     e.stopPropagation();
 
     const keycomb = getKeyCombination(e);
-    let action = this.keymap[keycomb];
-
-    // Fallback checks for single char keys if modified by shift
-    if (!action && e.key) {
-      action = this.keymap[e.key];
-    }
+    const action = this.keymap[keycomb];
 
     const ctx = this._getContext();
 
@@ -718,7 +801,7 @@ export class MarkModeManager {
     if (start.row === end.row) {
       length = end.col - start.col + 1;
     } else {
-      length = (this._term.cols - start.col) + (end.row - start.row - 1) * this._term.cols + (end.col + 1);
+      length = this._term.cols - start.col + (end.row - start.row - 1) * this._term.cols + (end.col + 1);
     }
 
     this._term.select(start.col, start.row, Math.max(1, length));

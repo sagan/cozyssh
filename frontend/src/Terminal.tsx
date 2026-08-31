@@ -25,6 +25,7 @@ import type { WsResizeMsg, WsTerminalMessage } from "./api";
 import {
   BROWSER_STORAGE_KEY_TOKEN,
   DEFAULT_TERMINAL_RECENT_COMMANDS,
+  ID_TERMINAL_SEARCH_INPUT,
   TAG_FLAG_ENV,
   TAG_FLAG_PREFIX,
   TAG_FLAG_SHELL_INTEGRATION,
@@ -1545,7 +1546,11 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
       // container edge (e.g. over sidebar, header, or outside window), mouseup still fires
       // and copies the selection reliably.
       const handleCopyOnSelect = () => {
-        if (!hasNewSelection || markModeRef.current?.isActive) {
+        if (
+          !hasNewSelection ||
+          markModeRef.current?.isActive ||
+          document.activeElement?.id === ID_TERMINAL_SEARCH_INPUT
+        ) {
           return;
         }
         if (getIntVar(VAR_CS_NO_SELECT_TO_COPY) === 1) {

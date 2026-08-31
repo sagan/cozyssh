@@ -69,6 +69,7 @@ import {
   useStore,
   runButton,
   setMobileOpen,
+  toggleMarkMode,
 } from "./store";
 
 const handleKeyDown = (e: KeyboardEvent) => {
@@ -520,12 +521,7 @@ const handleKeyDown = (e: KeyboardEvent) => {
     }
 
     case "ctrl+shift+m": {
-      const { activePaneId } = getStore();
-      const term = __CS_TERMINALS__.current[activePaneId];
-      if (term && "toggleMarkMode" in term) {
-        e.preventDefault();
-        term.toggleMarkMode();
-      }
+      toggleMarkMode(getStore().activePaneId);
       return;
     }
   }

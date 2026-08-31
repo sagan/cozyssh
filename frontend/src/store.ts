@@ -975,9 +975,11 @@ export const closeOtherPanes = (targetTabId?: string) => {
   }
   const newTabs = tabs.map((tab) => {
     if (tab.id === targetTab.id) {
+      const pane = tab.panes.find((pane) => pane.id === targetTab.activePaneId)!;
       return {
         ...tab,
-        panes: [tab.panes.find((pane) => pane.id === targetTab.activePaneId)!],
+        panes: [pane],
+        title: tab.isCustomTitle || pane === tab.panes[0] ? tab.title : newTabTitle(hostTitle(pane.host)),
       };
     }
     return tab;
@@ -1594,11 +1596,16 @@ export async function openHost(
     tabId = target || genTabId(host);
     const newTab: TabData = {
       id: tabId,
-      title: title || newTabTitle(hostTitle(host)),
+      title: title || "",
       panes: [{ id: paneId, host, canonicalHostString: getCanonicalHostString(host), options, state: "" }],
       activePaneId: paneId,
       type: "terminal",
     };
+    if (newTab.title) {
+      newTab.isCustomTitle = true;
+    } else {
+      newTab.title = newTabTitle(hostTitle(host));
+    }
     setTabs((prev) => [...prev, newTab]);
     setActiveTabId(tabId);
     setActivePaneId(paneId);
@@ -1983,7 +1990,19 @@ export function closeTabOrPane(tabOrPaneId?: string) {
       }
 
       setTabs((prev) =>
-        prev.map((t) => (t.id === parentTab.id ? { ...t, panes: newPanes, activePaneId: nextPaneId } : t)),
+        prev.map((t) =>
+          t.id === parentTab.id
+            ? {
+                ...t,
+                panes: newPanes,
+                activePaneId: nextPaneId,
+                title:
+                  t.isCustomTitle || targetPane !== parentTab.panes[0]
+                    ? t.title
+                    : newTabTitle(hostTitle(newPanes[0]!.host)),
+              }
+            : t,
+        ),
       );
 
       if (activeTabId === parentTab.id) {
@@ -3160,7 +3179,8 @@ export async function runButton(
         })();
         return;
       }
-      const term = __CS_TERMINALS__.current[getStore().activePaneId];
+      const activePaneId = getStore().activePaneId;
+      const term = __CS_TERMINALS__.current[activePaneId];
       if (!term || !("getXterm" in term)) {
         return;
       }
@@ -3326,8 +3346,9 @@ export async function runButton(
           break;
 
         case "MARK_MODE":
-          term.toggleMarkMode();
+          toggleMarkMode(activePaneId);
           break;
+
         case "SELECT_TO_PREV_WORD": {
           term.enterMarkMode();
           sendKeyDown("shift+b", term.getXterm()?.textarea);
@@ -3597,6 +3618,14 @@ export function toggleMarkMode(paneId?: string) {
   paneId = paneId || getStore().activePaneId;
   const term = __CS_TERMINALS__.current[paneId];
   if (term && "toggleMarkMode" in term) {
+    if (!term.isMarkMode()) {
+      term.focus();
+    } else if (document.activeElement?.id === ID_TERMINAL_SEARCH_INPUT) {
+      // Already in mark mode and focus in terminal search box, force re-enter mark mode
+      term.exitMarkMode();
+      term.enterMarkMode();
+      return;
+    }
     term.toggleMarkMode();
   }
 }
