@@ -1052,7 +1052,7 @@ export default function SSHImportTab() {
   return (
     <Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2, mt: -1 }}>
-        <b>{t("SSH Data Import")}</b>:{" "}
+        <b>{t("SSH Data Import")}</b>:&nbsp;
         {t("Import SSH data from other devices of same WebDAV server, or upload a file directly.")} (
         {t(`Supported file formats: OpenSSH "config", "known_hosts"; csv file`)}).
       </Typography>

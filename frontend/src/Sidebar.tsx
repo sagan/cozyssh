@@ -3422,10 +3422,10 @@ export default function Sidebar({
             {settingsTab === SETTINGS_TAB_IDX_SYNC && (
               <>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1, mt: -1 }}>
-                  <b>{t("WebDAV Synchronization")}</b>:{" "}
+                  <b>{t("WebDAV Synchronization")}</b>:&nbsp;
                   {t("Sync CozySSH data (buttons, vars, scratchpad) with a custom WebDAV directory.")}
                   <br />
-                  <b>{t("Note")}</b>:{" "}
+                  <b>{t("Note")}</b>:&nbsp;
                   {t(`OpenSSH hosts data sync is opt-in and semi-automatic.`) +
                     " " +
                     t(`You must manually import other device's hosts from "Import" page.`) +
@@ -3808,11 +3808,17 @@ export default function Sidebar({
                   {t("move cursor to next word start / prev word start / current word end (same as vim)")};&nbsp;
                   <b>W / B / E</b>: {t("extend selection by a word in the choosed direction")};&nbsp;
                   <b>Ctrl + U/D</b>: {t("move cursor up/down by half page")};&nbsp;
-                  <b>Space</b>: {t("extend selection forward to the next boundary of a non-space & space character")}
-                  &nbsp;
-                  <b>Shift + Space</b>:&nbsp;
-                  {t("extend selection backward to the previous boundary of a non-space & space character")}&nbsp;
                   <b>Ctrl + Shift + U/D</b>: {t("extend selection up/down by half page")};&nbsp;
+                  <b>Ctrl + F/B</b>: {t("move cursor up/down by one page")};&nbsp;
+                  <b>Ctrl + Shift + F/B</b>: {t("extend selection up/down by one page")};&nbsp;
+                  <b>Space / Ctrl + Space</b>:&nbsp;
+                  {t("move cursor forward / backward to the next / previous boundary of a non-space & space character")}
+                  ;&nbsp;
+                  <b>Shift + Space / Ctrl + Shift + Space</b>:&nbsp;
+                  {t(
+                    "extend selection forward / backward to the next / previous boundary of a non-space & space character",
+                  )}
+                  ;&nbsp;
                   <b>Enter</b> {t("or")} <b>y</b>: {t("copy selection to clipboard and exit mark mode")};&nbsp;
                   <b>Esc</b> {t("or")} <b>Ctrl + [</b> : {t("exit mark mode without copying")}
                 </Typography>
