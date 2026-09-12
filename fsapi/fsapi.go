@@ -3,17 +3,21 @@ package fsapi
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
-
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-http-utils/headers"
@@ -24,6 +28,77 @@ import (
 	"cozyssh/models"
 	"cozyssh/session"
 )
+
+type UploadProgressItem struct {
+	SessionID string `json:"sessionId"`
+	UploadID  string `json:"uploadId"`
+	Filename  string `json:"filename"`
+	Written   int64  `json:"written"`
+	Total     int64  `json:"total"`
+}
+
+type uploadTracker struct {
+	mu      sync.RWMutex
+	uploads map[string]*UploadProgressItem
+}
+
+var globalUploadTracker = &uploadTracker{
+	uploads: make(map[string]*UploadProgressItem),
+}
+
+func (t *uploadTracker) Register(sessionID, uploadID, filename string, total int64) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.uploads[uploadID] = &UploadProgressItem{
+		SessionID: sessionID,
+		UploadID:  uploadID,
+		Filename:  filename,
+		Written:   0,
+		Total:     total,
+	}
+}
+
+func (t *uploadTracker) Unregister(uploadID string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	delete(t.uploads, uploadID)
+}
+
+func (t *uploadTracker) Update(uploadID string, n int64) {
+	t.mu.RLock()
+	item, ok := t.uploads[uploadID]
+	t.mu.RUnlock()
+	if ok && item != nil {
+		atomic.AddInt64(&item.Written, n)
+	}
+}
+
+func (t *uploadTracker) GetBySession(sessionID string) map[string]*UploadProgressItem {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	res := make(map[string]*UploadProgressItem)
+	for k, v := range t.uploads {
+		if sessionID == "" || v.SessionID == sessionID {
+			res[k] = &UploadProgressItem{
+				SessionID: v.SessionID,
+				UploadID:  v.UploadID,
+				Filename:  v.Filename,
+				Written:   atomic.LoadInt64(&v.Written),
+				Total:     v.Total,
+			}
+		}
+	}
+	return res
+}
+
+func handleUploadProgress(w http.ResponseWriter, r *http.Request, sessionID string) {
+	w.Header().Set(headers.ContentType, constants.MIME_JSON)
+	progress := globalUploadTracker.GetBySession(sessionID)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"uploads": progress,
+	})
+}
+
 
 func HandleDownloadDirect(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -95,6 +170,15 @@ func HandleFS(w http.ResponseWriter, r *http.Request) {
 	s := session.GlobalManager.Get(sessionID)
 	if s == nil {
 		http.Error(w, "Session not found", http.StatusNotFound)
+		return
+	}
+
+	if action == "upload/progress" || action == "upload-progress" {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		handleUploadProgress(w, r, sessionID)
 		return
 	}
 
@@ -538,35 +622,99 @@ func handleDownloadArchive(w http.ResponseWriter, reqPath string, isLocal bool, 
 	}
 }
 
+type progressReader struct {
+	r      io.Reader
+	ctx    context.Context
+	onRead func(n int)
+}
+
+func (pr *progressReader) Read(p []byte) (int, error) {
+	select {
+	case <-pr.ctx.Done():
+		return 0, pr.ctx.Err()
+	default:
+	}
+	n, err := pr.r.Read(p)
+	if n > 0 && pr.onRead != nil {
+		pr.onRead(n)
+	}
+	return n, err
+}
+
 func handleUpload(w http.ResponseWriter, r *http.Request, destPath string, isLocal bool, sftpClient *sftp.Client) {
 	if destPath == "" {
 		http.Error(w, "Missing path", http.StatusBadRequest)
 		return
 	}
 
-	// Parse multipart form
-	err := r.ParseMultipartForm(50 << 20) // 50MB max memory
+	uploadID := r.URL.Query().Get("uploadId")
+	sessionID := r.URL.Query().Get("id")
+	var totalSize int64
+	if tsStr := r.URL.Query().Get("totalSize"); tsStr != "" {
+		if ts, err := strconv.ParseInt(tsStr, 10, 64); err == nil {
+			totalSize = ts
+		}
+	}
+
+	mr, err := r.MultipartReader()
 	if err != nil {
-		http.Error(w, "Unable to parse form", http.StatusBadRequest)
+		http.Error(w, "Unable to read multipart form: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		http.Error(w, "Unable to get file from request", http.StatusBadRequest)
+	var part *multipart.Part
+	for {
+		p, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			http.Error(w, "Error reading multipart part: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if p.FormName() == "file" {
+			part = p
+			break
+		}
+		p.Close()
+	}
+
+	if part == nil {
+		http.Error(w, "Missing file in form", http.StatusBadRequest)
 		return
 	}
-	defer file.Close()
+	defer part.Close()
+
+	rawFilename := part.FileName()
+	if rawFilename == "" {
+		rawFilename = "upload"
+	}
+	safeName := filepath.Base(rawFilename)
+	safeName = path.Base(safeName)
+	if safeName == "" || safeName == "." || safeName == ".." {
+		http.Error(w, "Invalid filename", http.StatusBadRequest)
+		return
+	}
+
+	if uploadID != "" {
+		globalUploadTracker.Register(sessionID, uploadID, safeName, totalSize)
+		defer globalUploadTracker.Unregister(uploadID)
+	}
+
+	pr := &progressReader{
+		r:   part,
+		ctx: r.Context(),
+		onRead: func(n int) {
+			if uploadID != "" {
+				globalUploadTracker.Update(uploadID, int64(n))
+			}
+		},
+	}
 
 	if isLocal {
 		if destPath == "." || destPath == "~" {
 			home, _ := os.UserHomeDir()
 			destPath = home
-		}
-		safeName := filepath.Base(header.Filename)
-		if safeName == "" || safeName == "." || safeName == ".." {
-			http.Error(w, "Invalid filename", http.StatusBadRequest)
-			return
 		}
 		if err := os.MkdirAll(destPath, 0755); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -580,18 +728,26 @@ func handleUpload(w http.ResponseWriter, r *http.Request, destPath string, isLoc
 			return
 		}
 		defer f.Close()
-		io.Copy(f, file)
+
+		_, copyErr := io.Copy(f, pr)
+		closeErr := f.Close()
+
+		if copyErr != nil {
+			os.Remove(fullPath)
+			http.Error(w, copyErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		if closeErr != nil {
+			os.Remove(fullPath)
+			http.Error(w, closeErr.Error(), http.StatusInternalServerError)
+			return
+		}
 	} else {
 		// SFTP path separator is always '/'
 		if destPath == "~" {
 			destPath = "."
 		}
 
-		safeName := path.Base(header.Filename)
-		if safeName == "" || safeName == "." || safeName == ".." {
-			http.Error(w, "Invalid filename", http.StatusBadRequest)
-			return
-		}
 		if err := sftpMkdirAll(sftpClient, destPath); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -604,7 +760,20 @@ func handleUpload(w http.ResponseWriter, r *http.Request, destPath string, isLoc
 			return
 		}
 		defer f.Close()
-		io.Copy(f, file)
+
+		_, copyErr := io.Copy(f, pr)
+		closeErr := f.Close()
+
+		if copyErr != nil {
+			sftpClient.Remove(fullPath)
+			http.Error(w, copyErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		if closeErr != nil {
+			sftpClient.Remove(fullPath)
+			http.Error(w, closeErr.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	w.Header().Set(headers.ContentType, constants.MIME_JSON)

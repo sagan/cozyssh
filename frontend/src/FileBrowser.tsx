@@ -43,7 +43,7 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ErrorIcon from "@mui/icons-material/Error";
 
 import type { FileInfo, FileMkdirRequest, FileRenameRequest, FsList, FsToken } from "./api";
-import { type Order, apiReqHeaders, formatSize, getKeyCombination, t, triggerDownload } from "./common";
+import { type Order, apiReqHeaders, formatSize, formatSpeed, getKeyCombination, t, triggerDownload } from "./common";
 import { METHOD_POST } from "./constants";
 import TextEditor from "./TextEditor";
 import { dialogs } from "./Dialogs";
@@ -58,6 +58,8 @@ export interface UploadQueueItem {
   file?: File;
   status: "pending" | "uploading" | "completed" | "error" | "canceled";
   progress: number;
+  uploadedSize?: number;
+  speed?: number;
   error?: string;
   xhr?: XMLHttpRequest;
 }
@@ -141,6 +143,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   const [isDraggingOver, setIsDraggingOver] = useState<boolean>(false);
   const dragCounterRef = useRef<number>(0);
   const isProcessingRef = useRef<boolean>(false);
+  const uploadSpeedRef = useRef<Map<string, { lastTime: number; lastWritten: number; speed: number }>>(new Map());
 
   const isWindowsPath = (path: string) => /^[a-zA-Z]:/.test(path) || path.includes("\\") || /^\/[a-zA-Z]:/.test(path);
 
@@ -250,7 +253,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
       isProcessingRef.current = true;
 
       setUploadQueue((prev) =>
-        prev.map((it) => (it.id === pendingItem.id ? { ...it, status: "uploading", progress: 0 } : it)),
+        prev.map((it) => (it.id === pendingItem.id ? { ...it, status: "uploading", progress: 0, uploadedSize: 0 } : it)),
       );
 
       if (pendingItem.isDir || !pendingItem.file) {
@@ -284,19 +287,15 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
         const xhr = new XMLHttpRequest();
         setUploadQueue((prev) => prev.map((it) => (it.id === pendingItem.id ? { ...it, xhr } : it)));
 
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            const percent = Math.round((e.loaded / e.total) * 100);
-            setUploadQueue((prev) => prev.map((it) => (it.id === pendingItem.id ? { ...it, progress: percent } : it)));
-          }
-        };
-
         const promise = new Promise<void>((resolve) => {
           xhr.onload = () => {
+            uploadSpeedRef.current.delete(pendingItem.id);
             if (xhr.status >= 200 && xhr.status < 300) {
               setUploadQueue((prev) =>
                 prev.map((it) =>
-                  it.id === pendingItem.id ? { ...it, status: "completed", progress: 100, xhr: undefined } : it,
+                  it.id === pendingItem.id
+                    ? { ...it, status: "completed", progress: 100, uploadedSize: it.size, speed: undefined, xhr: undefined }
+                    : it,
                 ),
               );
               if (pendingItem.targetDir === currentPath) {
@@ -306,7 +305,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
               setUploadQueue((prev) =>
                 prev.map((it) =>
                   it.id === pendingItem.id
-                    ? { ...it, status: "error", error: xhr.responseText || `status=${xhr.status}`, xhr: undefined }
+                    ? { ...it, status: "error", error: xhr.responseText || `status=${xhr.status}`, speed: undefined, xhr: undefined }
                     : it,
                 ),
               );
@@ -315,17 +314,19 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
           };
 
           xhr.onerror = () => {
+            uploadSpeedRef.current.delete(pendingItem.id);
             setUploadQueue((prev) =>
               prev.map((it) =>
-                it.id === pendingItem.id ? { ...it, status: "error", error: t("Network error"), xhr: undefined } : it,
+                it.id === pendingItem.id ? { ...it, status: "error", error: t("Network error"), speed: undefined, xhr: undefined } : it,
               ),
             );
             resolve();
           };
 
           xhr.onabort = () => {
+            uploadSpeedRef.current.delete(pendingItem.id);
             setUploadQueue((prev) =>
-              prev.map((it) => (it.id === pendingItem.id ? { ...it, status: "canceled", xhr: undefined } : it)),
+              prev.map((it) => (it.id === pendingItem.id ? { ...it, status: "canceled", speed: undefined, xhr: undefined } : it)),
             );
             resolve();
           };
@@ -335,7 +336,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
         formData.append("file", pendingItem.file);
 
         const headers = apiReqHeaders(true) as Record<string, string>;
-        const url = `/api/fs/upload?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(pendingItem.targetDir)}`;
+        const url = `/api/fs/upload?id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(pendingItem.targetDir)}&uploadId=${encodeURIComponent(pendingItem.id)}&totalSize=${pendingItem.size}`;
 
         xhr.open(METHOD_POST, url);
         for (const key in headers) {
@@ -351,6 +352,81 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
     processNext();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uploadQueue, sessionId, currentPath]);
+
+  const hasUploading = useMemo(
+    () => uploadQueue.some((item) => item.status === "uploading"),
+    [uploadQueue],
+  );
+
+  useEffect(() => {
+    if (!hasUploading || !sessionId) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const pollProgress = async () => {
+      try {
+        const res = await fetch(`/api/fs/upload/progress?id=${encodeURIComponent(sessionId)}`, {
+          headers: apiReqHeaders(),
+        });
+        if (!res.ok) return;
+        const data: { uploads?: Record<string, { written: number; total: number }> } = await res.json();
+        if (!isMounted || !data.uploads) return;
+
+        const now = Date.now();
+        setUploadQueue((prev) =>
+          prev.map((item) => {
+            const info = data.uploads?.[item.id];
+            if (item.status === "uploading" && info) {
+              const total = info.total > 0 ? info.total : item.size;
+              const percent = total > 0 ? Math.min(99, Math.floor((info.written / total) * 100)) : 0;
+
+              let speed = item.speed;
+              const tracker = uploadSpeedRef.current.get(item.id);
+              if (tracker) {
+                const dt = (now - tracker.lastTime) / 1000;
+                if (dt >= 0.2) {
+                  const dw = Math.max(0, info.written - tracker.lastWritten);
+                  const instSpeed = dw / dt;
+                  speed = tracker.speed > 0 ? tracker.speed * 0.7 + instSpeed * 0.3 : instSpeed;
+                  uploadSpeedRef.current.set(item.id, {
+                    lastTime: now,
+                    lastWritten: info.written,
+                    speed,
+                  });
+                }
+              } else {
+                uploadSpeedRef.current.set(item.id, {
+                  lastTime: now,
+                  lastWritten: info.written,
+                  speed: 0,
+                });
+              }
+
+              return {
+                ...item,
+                progress: percent,
+                uploadedSize: info.written,
+                speed,
+              };
+            }
+            return item;
+          }),
+        );
+      } catch {
+        // Ignore polling errors
+      }
+    };
+
+    pollProgress();
+    const interval = setInterval(pollProgress, 250);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [hasUploading, sessionId]);
 
   useEffect(() => {
     if (!isActive) {
@@ -518,13 +594,14 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   );
 
   const handleCancelQueueItem = useCallback((id: string) => {
+    uploadSpeedRef.current.delete(id);
     setUploadQueue((prev) =>
       prev.map((it) => {
         if (it.id === id) {
           if (it.status === "uploading" && it.xhr) {
             it.xhr.abort();
           }
-          return { ...it, status: "canceled", xhr: undefined };
+          return { ...it, status: "canceled", speed: undefined, xhr: undefined };
         }
         return it;
       }),
@@ -532,6 +609,7 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
   }, []);
 
   const handleRemoveQueueItem = useCallback((id: string) => {
+    uploadSpeedRef.current.delete(id);
     setUploadQueue((prev) => prev.filter((it) => it.id !== id));
   }, []);
 
@@ -1421,15 +1499,37 @@ export default function FileBrowser({ sessionId, isActive, shellCwd, onClose }: 
                     </Box>
 
                     {item.status === "uploading" && (
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.5 }}>
-                        <LinearProgress
-                          variant="determinate"
-                          value={item.progress}
-                          sx={{ flexGrow: 1, height: 6, borderRadius: 3 }}
-                        />
-                        <Typography variant="caption" color="text.secondary" sx={{ minWidth: 32, textAlign: "right" }}>
-                          {item.progress}%
-                        </Typography>
+                      <Box sx={{ mt: 0.5 }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <LinearProgress
+                            variant="determinate"
+                            value={item.progress}
+                            sx={{ flexGrow: 1, height: 6, borderRadius: 3 }}
+                          />
+                          <Typography variant="caption" color="text.secondary" sx={{ minWidth: 36, textAlign: "right" }}>
+                            {item.progress}%
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mt: 0.2 }}>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ fontSize: "0.7rem" }}
+                          >
+                            {item.uploadedSize !== undefined && item.size > 0
+                              ? `${formatSize(item.uploadedSize)} / ${formatSize(item.size)}`
+                              : ""}
+                          </Typography>
+                          {item.speed !== undefined && item.speed > 0 && (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ fontSize: "0.7rem", fontFamily: "monospace" }}
+                            >
+                              {formatSpeed(item.speed)}
+                            </Typography>
+                          )}
+                        </Box>
                       </Box>
                     )}
                     {item.status === "pending" && (

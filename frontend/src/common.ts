@@ -783,7 +783,17 @@ export function formatSize(size: number) {
   if (size < 1024 * 1024) {
     return `${(size / 1024).toFixed(1)} KB`;
   }
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  if (size < 1024 * 1024 * 1024) {
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
+export function formatSpeed(bytesPerSec: number) {
+  if (!bytesPerSec || bytesPerSec <= 0) {
+    return "0 B/s";
+  }
+  return `${formatSize(Math.round(bytesPerSec))}/s`;
 }
 
 export function hostTitle(host: string): string {
