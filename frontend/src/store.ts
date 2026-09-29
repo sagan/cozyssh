@@ -120,6 +120,7 @@ import {
 import { dialogs } from "./Dialogs";
 import type { MISC_FUNCTIONS, TERMINAL_FUNCTIONS } from "./buttons";
 import type { IMarker, Terminal } from "@xterm/xterm";
+import type { TerminalSendData } from "./Terminal";
 
 export interface PaneData {
   id: string;
@@ -146,6 +147,8 @@ export interface TabData {
   showFiles?: boolean;
   type: "terminal" | "scratchpad";
 }
+
+export type BroadcastMode = "off" | "tab" | "all";
 
 /**
  * The custom / extra menu. Used in scripting API.
@@ -275,6 +278,7 @@ interface Store {
   filterStr: string;
   asyncDialogOpen: boolean;
   sendScope: 0 | 1 | 2;
+  broadcastMode: BroadcastMode;
   /**
    * Terminal Input dialog: Append new line (\n) checkbox
    */
@@ -444,6 +448,7 @@ export const useStore = create<Store>(
       filterStr: startupParams.get("filter") || "",
       asyncDialogOpen: false,
       sendScope: 0,
+      broadcastMode: "off",
       appendNewLine: true,
       searchOpen: false,
       mobileOpen: false,
@@ -735,6 +740,47 @@ export const setAsyncDialogOpen = (update: boolean | ((data: boolean) => boolean
 
 export const setSendScope = (sendScope: 0 | 1 | 2) => useStore.setState({ sendScope });
 
+export const setBroadcastMode = (broadcastMode: BroadcastMode) => useStore.setState({ broadcastMode });
+
+export function toggleBroadcastMode(mode: "tab" | "all") {
+  const current = getStore().broadcastMode;
+  const next: BroadcastMode = current === mode ? "off" : mode;
+  setBroadcastMode(next);
+}
+
+export function getBroadcastTargetPaneIds(sourcePaneId?: string): string[] {
+  const { broadcastMode, tabs, activeTabId, activePaneId } = getStore();
+  if (broadcastMode === "off") {
+    return [];
+  }
+  const currentPaneId = sourcePaneId || activePaneId;
+  if (broadcastMode === "tab") {
+    const currentTab = tabs.find((t) => t.id === activeTabId || t.panes.some((p) => p.id === currentPaneId));
+    if (!currentTab || currentTab.type !== "terminal") {
+      return [];
+    }
+    return currentTab.panes.map((p) => p.id).filter((id) => id !== currentPaneId);
+  }
+  if (broadcastMode === "all") {
+    return tabs
+      .filter((t) => t.type === "terminal")
+      .flatMap((t) => t.panes)
+      .map((p) => p.id)
+      .filter((id) => id !== currentPaneId);
+  }
+  return [];
+}
+
+export function broadcastData(data: TerminalSendData, sourcePaneId?: string) {
+  const targetIds = getBroadcastTargetPaneIds(sourcePaneId);
+  for (const paneId of targetIds) {
+    const term = __CS_TERMINALS__.current[paneId];
+    if (term && "getXterm" in term) {
+      term.sendData(data);
+    }
+  }
+}
+
 export const setAppendNewLine = (update: boolean | ((data: boolean) => boolean)) =>
   useStore.setState((state) => ({
     appendNewLine: typeof update === "function" ? update(state.appendNewLine) : update,
@@ -937,6 +983,7 @@ export const cleanupAssociatedTabState = (state: Store, newTabs: TabData[]): Par
     unreadTabIds,
     shellIntegrations,
     sessionBufferDataTimes,
+    ...(newTabs.length === 0 ? { broadcastMode: "off" as const } : {}),
   };
 };
 
@@ -3349,6 +3396,14 @@ export async function runButton(
           toggleMarkMode(activePaneId);
           break;
 
+        case "BROADCAST_TAB":
+          toggleBroadcastMode("tab");
+          break;
+
+        case "BROADCAST_ALL":
+          toggleBroadcastMode("all");
+          break;
+
         case "SELECT_TO_PREV_WORD": {
           term.enterMarkMode();
           sendKeyDown("shift+b", term.getXterm()?.textarea);
@@ -3594,9 +3649,11 @@ export function handleCloseSearch() {
 }
 
 export function handleSendKey(key: string) {
-  const term = __CS_TERMINALS__.current[getStore().activePaneId];
+  const activePaneId = getStore().activePaneId;
+  const term = __CS_TERMINALS__.current[activePaneId];
   if (term && "getXterm" in term) {
     term.sendData(key);
+    broadcastData(key, activePaneId);
     term.focus();
   }
 }

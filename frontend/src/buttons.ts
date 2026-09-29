@@ -39,6 +39,8 @@ export const TERMINAL_FUNCTIONS = [
   { value: "CLONE_SESSION_IN_SAME_TAB", label: t("CLONE (Session In Same Tab)"), shortcut: "alt+shift+c" },
   { value: "SEARCH", label: t("SEARCH (Buffer)"), shortcut: "ctrl+shift+f" },
   { value: "MARK_MODE", label: t("Toggle Mark Mode"), shortcut: "ctrl+shift+m" },
+  { value: "BROADCAST_TAB", label: t("Broadcast to Tab Panes"), shortcut: "ctrl+shift+i" },
+  { value: "BROADCAST_ALL", label: t("Broadcast to All Tabs & Panes"), shortcut: "ctrl+alt+shift+i" },
   { value: "SELECT_TO_PREV_CHAR", label: t("Select to Previous Character") },
   { value: "SELECT_TO_NEXT_CHAR", label: t("Select to Next Character") },
   { value: "SELECT_TO_PREV_WORD", label: t("Select to Previous Word") },

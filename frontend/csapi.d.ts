@@ -2207,6 +2207,126 @@ declare const CS_EVENT_TERMINAL_RESIZE = "cs:terminal-resize";
 declare const CS_EVENT_TERMINAL_CHANGE = "cs:terminal-change";
 declare const CS_EVENT_SHELL_INTEGRATION = "cs:shell-integration";
 declare const CS_EVENT_VARS = "cs:vars";
+/**
+ * Options for a search.
+ */
+export interface ISearchOptions {
+	/**
+	 * Whether the search term is a regex.
+	 */
+	regex?: boolean;
+	/**
+	 * Whether to search for a whole word, the result is only valid if it's
+	 * surrounded in "non-word" characters such as `_`, `(`, `)` or space.
+	 */
+	wholeWord?: boolean;
+	/**
+	 * Whether the search is case sensitive.
+	 */
+	caseSensitive?: boolean;
+	/**
+	 * Whether to do an incremental search, this will expand the selection if it
+	 * still matches the term the user typed. Note that this only affects
+	 * `findNext`, not `findPrevious`.
+	 */
+	incremental?: boolean;
+	/**
+	 * When set, will highlight all instances of the word on search and show
+	 * them in the overview ruler if it's enabled.
+	 */
+	decorations?: ISearchDecorationOptions;
+}
+/**
+ * Options for showing decorations when searching.
+ */
+export interface ISearchDecorationOptions {
+	/**
+	 * The background color of a match, this must use #RRGGBB format.
+	 */
+	matchBackground?: string;
+	/**
+	 * The border color of a match.
+	 */
+	matchBorder?: string;
+	/**
+	 * The overview ruler color of a match.
+	 */
+	matchOverviewRuler: string;
+	/**
+	 * The background color for the currently active match, this must use #RRGGBB format.
+	 */
+	activeMatchBackground?: string;
+	/**
+	 * The border color of the currently active match.
+	 */
+	activeMatchBorder?: string;
+	/**
+	 * The overview ruler color of the currently active match.
+	 */
+	activeMatchColorOverviewRuler: string;
+}
+export type TerminalMarkers = {
+	/**
+	 * Last command output start
+	 */
+	$start?: IMarker;
+	/**
+	 * Last command output end
+	 */
+	$end?: IMarker;
+	/**
+	 * Last position a clear screen (Ctrl + L) is sent
+	 */
+	$lastClear?: IMarker;
+	/**
+	 * Custom / dynamic markers
+	 */
+	[key: string]: IMarker | undefined;
+};
+export type TerminalSendData = Parameters<WebSocket["send"]>[0];
+export interface TerminalHandle {
+	sendData: (data: TerminalSendData) => void;
+	focus: () => void;
+	getSelection: () => string;
+	selectAll: () => void;
+	clearSelection: () => void;
+	clear: () => void;
+	reset: () => void;
+	reconnect: () => void;
+	scrollLines: (amount: number) => void;
+	scrollToTop: () => void;
+	scrollToBottom: () => void;
+	scrollPages: (amount: number) => void;
+	findNext: (term: string, searchOptions?: ISearchOptions) => boolean;
+	findPrevious: (term: string, searchOptions?: ISearchOptions) => boolean;
+	clearSearchDecorations: () => void;
+	clearSearchActiveDecoration: () => void;
+	fit: () => void;
+	/**
+	 * Return registered xterm.js Terminal instance markers.
+	 * It always returns the same object during the lifespan of the terminal.
+	 * It's OK to manually register new marker (using xterm.js API) and add it to the returned object.
+	 */
+	getMarkers: () => TerminalMarkers | null;
+	getBuffer: (start?: IMarker, end?: IMarker) => string;
+	getXterm: () => Terminal | null;
+	/** Set the inputMode on the hidden xterm textarea (e.g. 'none' to suppress system keyboard) */
+	setInputMode: (mode: string) => void;
+	/**
+	 * Atomically replace whatever the user has typed at the shell prompt with
+	 * `newText`, without executing it.
+	 *
+	 * Sends: Ctrl+E (go to end of line) → Ctrl+U (kill to beginning) → newText.
+	 * Only works while the shell is at an interactive prompt (not mid-execution).
+	 */
+	replaceCmdLine: (newText: string) => void;
+	getAddon(): Record<string, ITerminalAddon>;
+	getAddon(name: string): ITerminalAddon | undefined;
+	enterMarkMode: () => void;
+	exitMarkMode: () => void;
+	toggleMarkMode: () => void;
+	isMarkMode: () => boolean;
+}
 export interface PaneData {
 	id: string;
 	sessionId?: string;
@@ -2230,6 +2350,7 @@ export interface TabData {
 	showFiles?: boolean;
 	type: "terminal" | "scratchpad";
 }
+export type BroadcastMode = "off" | "tab" | "all";
 /**
  * The custom / extra menu. Used in scripting API.
  */
@@ -2336,6 +2457,7 @@ export interface Store {
 	filterStr: string;
 	asyncDialogOpen: boolean;
 	sendScope: 0 | 1 | 2;
+	broadcastMode: BroadcastMode;
 	/**
 	 * Terminal Input dialog: Append new line (\n) checkbox
 	 */
@@ -2403,125 +2525,6 @@ declare const useStore: import("zustand").UseBoundStore<import("zustand").StoreA
 export type UseStore = typeof useStore;
 export interface ScratchpadHandle {
 	focus: () => void;
-}
-/**
- * Options for a search.
- */
-export interface ISearchOptions {
-	/**
-	 * Whether the search term is a regex.
-	 */
-	regex?: boolean;
-	/**
-	 * Whether to search for a whole word, the result is only valid if it's
-	 * surrounded in "non-word" characters such as `_`, `(`, `)` or space.
-	 */
-	wholeWord?: boolean;
-	/**
-	 * Whether the search is case sensitive.
-	 */
-	caseSensitive?: boolean;
-	/**
-	 * Whether to do an incremental search, this will expand the selection if it
-	 * still matches the term the user typed. Note that this only affects
-	 * `findNext`, not `findPrevious`.
-	 */
-	incremental?: boolean;
-	/**
-	 * When set, will highlight all instances of the word on search and show
-	 * them in the overview ruler if it's enabled.
-	 */
-	decorations?: ISearchDecorationOptions;
-}
-/**
- * Options for showing decorations when searching.
- */
-export interface ISearchDecorationOptions {
-	/**
-	 * The background color of a match, this must use #RRGGBB format.
-	 */
-	matchBackground?: string;
-	/**
-	 * The border color of a match.
-	 */
-	matchBorder?: string;
-	/**
-	 * The overview ruler color of a match.
-	 */
-	matchOverviewRuler: string;
-	/**
-	 * The background color for the currently active match, this must use #RRGGBB format.
-	 */
-	activeMatchBackground?: string;
-	/**
-	 * The border color of the currently active match.
-	 */
-	activeMatchBorder?: string;
-	/**
-	 * The overview ruler color of the currently active match.
-	 */
-	activeMatchColorOverviewRuler: string;
-}
-export type TerminalMarkers = {
-	/**
-	 * Last command output start
-	 */
-	$start?: IMarker;
-	/**
-	 * Last command output end
-	 */
-	$end?: IMarker;
-	/**
-	 * Last position a clear screen (Ctrl + L) is sent
-	 */
-	$lastClear?: IMarker;
-	/**
-	 * Custom / dynamic markers
-	 */
-	[key: string]: IMarker | undefined;
-};
-export interface TerminalHandle {
-	sendData: (data: string | BufferSource | Blob) => void;
-	focus: () => void;
-	getSelection: () => string;
-	selectAll: () => void;
-	clearSelection: () => void;
-	clear: () => void;
-	reset: () => void;
-	reconnect: () => void;
-	scrollLines: (amount: number) => void;
-	scrollToTop: () => void;
-	scrollToBottom: () => void;
-	scrollPages: (amount: number) => void;
-	findNext: (term: string, searchOptions?: ISearchOptions) => boolean;
-	findPrevious: (term: string, searchOptions?: ISearchOptions) => boolean;
-	clearSearchDecorations: () => void;
-	clearSearchActiveDecoration: () => void;
-	fit: () => void;
-	/**
-	 * Return registered xterm.js Terminal instance markers.
-	 * It always returns the same object during the lifespan of the terminal.
-	 * It's OK to manually register new marker (using xterm.js API) and add it to the returned object.
-	 */
-	getMarkers: () => TerminalMarkers | null;
-	getBuffer: (start?: IMarker, end?: IMarker) => string;
-	getXterm: () => Terminal | null;
-	/** Set the inputMode on the hidden xterm textarea (e.g. 'none' to suppress system keyboard) */
-	setInputMode: (mode: string) => void;
-	/**
-	 * Atomically replace whatever the user has typed at the shell prompt with
-	 * `newText`, without executing it.
-	 *
-	 * Sends: Ctrl+E (go to end of line) → Ctrl+U (kill to beginning) → newText.
-	 * Only works while the shell is at an interactive prompt (not mid-execution).
-	 */
-	replaceCmdLine: (newText: string) => void;
-	getAddon(): Record<string, ITerminalAddon>;
-	getAddon(name: string): ITerminalAddon | undefined;
-	enterMarkMode: () => void;
-	exitMarkMode: () => void;
-	toggleMarkMode: () => void;
-	isMarkMode: () => boolean;
 }
 export type AppletPosition = "widget" | "sidebar" | "dialog";
 export interface AppletData {

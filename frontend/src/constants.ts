@@ -117,6 +117,7 @@ export const TOAST_KEY_COPY_TUNNEL_ENTRYPOINT = "cs-copy-tunnel-entrypoint";
 export const TOAST_KEY_COPY = "cs-copy";
 export const TOAST_KEY_HOST_NOT_FOUND = "cs-host-not-found";
 export const TOAST_KEY_REFRESH = "cs-refresh";
+export const TOAST_KEY_BROADCAST = "cs-broadcast";
 
 /**
  * Used as a special flag in url hash to indicate the mobile input panel is currently open.

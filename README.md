@@ -90,6 +90,10 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - **High-contrast Light Theme**: Designed for readability.
   - **Multi-Tab Interface**: Run multiple concurrent SSH sessions and local shells in a single browser tab.
   - **Split Screen Window**: Display multiple ssh servers in single split-screen tab. View up to 4 terminal panes in a single tab.
+  - **Broadcast Mode**: Synchronize keyboard input across multiple panes or tabs simultaneously.
+    - **Broadcast to Current Tab Panes**: `Ctrl + Shift + I` toggles broadcasting keyboard input to all panes in the active tab.
+    - **Broadcast to All Tabs & Panes**: `Ctrl + Alt + Shift + I` toggles broadcasting keyboard input across all open tabs and their panes.
+    - **Clear Visual Clues**: High-visibility floating HUD banner, glowing colored borders (solid amber/red for active source pane, dashed for receiving target panes), pane-level corner badges (`BROADCASTING` / `RECEIVING`), tab header antenna indicators, and clickable TabBar status badge.
   - **New Tab Dialog**: Powerful "New Tab Dialog" (shortcut: `Alt + O`) to quickly create new session, navigate opened tabs, or execute custom button. Inspired by Notion New Tab dialog.
   - **Button Bar**: A scrollable toolbar at the bottom of the terminal window for quickly sending string to terminal or executing custom function. Inspired by [SecureCRT Button Bar](https://www.vandyke.com/support/tips/button_bar.html).
     - **Button Types**: Button can be configured to any of the below functions.
@@ -133,6 +137,8 @@ CozySSH is a lightweight, mobile-friendly, full-fledged & self-hosted web-based 
   - `Alt + Shift + W` : Close active tab
   - `Ctrl + Alt + Shift + W` : Close other tabs
   - `Ctrl + Alt + Shift + L` : Toggle Lock/Unlock current tab
+  - `Ctrl + Shift + I` : Toggle broadcast keyboard input to all panes in current tab
+  - `Ctrl + Alt + Shift + I` : Toggle broadcast keyboard input to all tabs & panes
   - `Alt + I` : Focus sidebar search filter and clear current value, then use `↑ ↓` to select, `Enter` to open (or toggle group expandness), `Alt + Enter` to open in current tab, `Ctrl + Enter` to open in new window (or toggle group and all sub-groups expandness), `Shift + Enter` to open context menu. `Ctrl/Alt + Mouse Click` is same as `Ctrl/Alt + Enter`, `Shift + Mouse Click` to edit host.
   - `Alt + Shift + I` : Focus sidebar search filter but preserve current value
   - `Ctrl + Alt + Backquote` : Toggle sidebar tags section expandness

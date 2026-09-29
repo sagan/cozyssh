@@ -124,3 +124,26 @@ html[data-cs-env="0"] .hide-web {
   border-color: #f85149;
 }
 
+/* ── Broadcast Mode Styles ───────────────────────────────────── */
+@keyframes broadcastBadgePulse {
+  0%, 100% {
+    opacity: 0.92;
+    transform: translateY(-50%) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-50%) scale(1.03);
+  }
+}
+
+@keyframes broadcastDotPulse {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+

@@ -3714,6 +3714,10 @@ export default function Sidebar({
                   <br />
                   <b>Ctrl + Alt + Shift + L</b> : {t("Toggle Lock/Unlock current tab")}
                   <br />
+                  <b>Ctrl + Shift + I</b> : {t("Toggle broadcast keyboard input to all panes in current tab")}
+                  <br />
+                  <b>Ctrl + Alt + Shift + I</b> : {t("Toggle broadcast keyboard input to all tabs & panes")}
+                  <br />
                   <b>Alt + I</b> : {t("Focus sidebar search filter and clear current value.")}&nbsp;
                   {t("When the search filter is focused:")}&nbsp;
                   <b>↑ ↓</b>: {t("select item")};&nbsp;

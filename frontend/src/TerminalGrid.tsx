@@ -236,6 +236,7 @@ export default function TerminalGrid({
                     ) : (
                       <TerminalComponent
                         key={pane.id}
+                        paneId={pane.id}
                         options={pane.options}
                         ref={(el) => {
                           if (el) {

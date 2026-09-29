@@ -68,7 +68,7 @@ import {
   terminalClientSideParams,
   t,
 } from "./common";
-import { type PaneData, notify, getIntVar, getTerminalContents } from "./store";
+import { type PaneData, notify, getIntVar, getTerminalContents, broadcastData } from "./store";
 import { patchAndroidSoftKeyboardInput } from "./xtermInternals";
 import { MarkModeManager } from "./markMode";
 
@@ -91,8 +91,10 @@ export type TerminalMarkers = {
   [key: string]: IMarker | undefined;
 };
 
+export type TerminalSendData = Parameters<WebSocket["send"]>[0];
+
 export interface TerminalHandle {
-  sendData: (data: string | BufferSource | Blob) => void;
+  sendData: (data: TerminalSendData) => void;
   focus: () => void;
   getSelection: () => string;
   selectAll: () => void;
@@ -136,6 +138,7 @@ export interface TerminalHandle {
 }
 
 interface TerminalProps {
+  paneId: string;
   host: string;
   options?: Record<string, string>;
   sessionId: string;
@@ -158,6 +161,7 @@ interface TerminalProps {
 const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
   (
     {
+      paneId,
       host,
       options,
       sessionId,
@@ -388,7 +392,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
     }, []);
 
     useImperativeHandle(ref, () => ({
-      sendData: (data: string | BufferSource | Blob) => {
+      sendData: (data: TerminalSendData) => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
           if (typeof data === "string") {
             // PTY input expects \r as Enter / new line
@@ -1401,6 +1405,11 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
         }
         const ws = wsRef.current;
         if (ws && ws.readyState === WebSocket.OPEN) {
+          const sendToWS = (bytes: TerminalSendData) => {
+            ws.send(bytes);
+            broadcastData(bytes, paneId);
+          };
+
           if (ctrlRef.current && data && !data.startsWith("\x1b")) {
             // Mobile IMEs often send composition artifacts. We extract the first valid char.
             // This regex matches a-z, A-Z, and the symbols @, [, \, ], ^, _, ?
@@ -1423,10 +1432,10 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
             }
             if (sent) {
               if (altRef.current) {
-                ws.send(new TextEncoder().encode("\x1b" + dataToSend));
+                sendToWS(new TextEncoder().encode("\x1b" + dataToSend));
                 onAltDone?.();
               } else {
-                ws.send(new TextEncoder().encode(dataToSend));
+                sendToWS(new TextEncoder().encode(dataToSend));
               }
               onCtrlDone?.();
               return;
@@ -1436,12 +1445,12 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
           }
 
           if (altRef.current && data) {
-            ws.send(new TextEncoder().encode("\x1b" + data));
+            sendToWS(new TextEncoder().encode("\x1b" + data));
             onAltDone?.();
             return;
           }
 
-          ws.send(new TextEncoder().encode(data));
+          sendToWS(new TextEncoder().encode(data));
         }
       });
 
@@ -1576,7 +1585,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
             const ws = wsRef.current;
             if (text && ws && ws.readyState === WebSocket.OPEN) {
               text = text.replace(/\r\n|\r|\n/g, "\n");
-              ws.send(new TextEncoder().encode(text));
+              const encoded = new TextEncoder().encode(text);
+              ws.send(encoded);
+              broadcastData(encoded, paneId);
             }
           })
           .catch(() => {});

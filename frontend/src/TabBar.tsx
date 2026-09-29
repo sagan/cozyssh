@@ -15,6 +15,7 @@ import CloudDoneIcon from "@mui/icons-material/CloudDone";
 import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
 import DoneIcon from "@mui/icons-material/Done";
 import ErrorIcon from "@mui/icons-material/Error";
+import SensorsIcon from "@mui/icons-material/Sensors";
 
 import {
   type CSEventDetailTerminalChange,
@@ -44,6 +45,8 @@ import {
   PaneStateLabels,
   getIntVar,
   getPaneTip,
+  setBroadcastMode,
+  toggleBroadcastMode,
 } from "./store";
 import {
   APP_NAME,
@@ -111,6 +114,7 @@ export default function TabBar({
   const sysSitename = useStore((state) => state.sysinfo.sitename);
   const searchOpen = useStore((state) => state.searchOpen);
   const extraTabBarMenu = useStore((state) => state.extraTabBarMenu);
+  const broadcastMode = useStore((state) => state.broadcastMode);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
@@ -571,6 +575,48 @@ export default function TabBar({
               })}
             </Tabs>
           </Box>
+          {broadcastMode !== "off" && (
+            <Box
+              id="tab-bar-broadcast-indicator"
+              sx={{
+                position: "absolute",
+                right: isMobile && hasSidebarApplet ? 92 : 48,
+                top: "50%",
+                transform: "translateY(-50%)",
+                zIndex: 1200,
+                display: "flex",
+                alignItems: "center",
+                gap: 0.6,
+                px: 1.2,
+                py: 0.35,
+                borderRadius: "16px",
+                bgcolor: broadcastMode === "all" ? "error.main" : "warning.main",
+                color: "#ffffff",
+                cursor: "pointer",
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                letterSpacing: "0.03em",
+                whiteSpace: "nowrap",
+                boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
+                animation: "broadcastBadgePulse 2.5s infinite ease-in-out",
+                userSelect: "none",
+                backdropFilter: "blur(4px)",
+                "&:hover": {
+                  opacity: 0.9,
+                },
+              }}
+              onClick={() => setBroadcastMode("off")}
+              title={
+                broadcastMode === "all"
+                  ? t("Broadcasting to all tabs & panes. Click or press Ctrl+Alt+Shift+I to stop.")
+                  : t("Broadcasting to current tab panes. Click or press Ctrl+Shift+I to stop.")
+              }
+            >
+              <SensorsIcon sx={{ fontSize: 14, animation: "broadcastDotPulse 1.5s infinite ease-in-out" }} />
+              <span>{broadcastMode === "all" ? t("BROADCAST ALL") : t("BROADCAST TAB")}</span>
+              <CloseIcon sx={{ fontSize: 13, ml: 0.2 }} />
+            </Box>
+          )}
           <IconButton
             size="small"
             title={t("New Tab") + " (alt+o)"}
@@ -725,6 +771,26 @@ export default function TabBar({
               }}
             >
               {t("Save All to Button")}
+            </MenuItem>
+            <MenuItem
+              id="tab-bar-menu-broadcast-tab"
+              disabled={tabs.length === 0}
+              onClick={() => {
+                closeContextMenus();
+                toggleBroadcastMode("tab");
+              }}
+            >
+              {broadcastMode === "tab" ? "✓ " : ""}{t("Broadcast to Tab Panes")} (ctrl+shift+i)
+            </MenuItem>
+            <MenuItem
+              id="tab-bar-menu-broadcast-all"
+              disabled={tabs.length === 0}
+              onClick={() => {
+                closeContextMenus();
+                toggleBroadcastMode("all");
+              }}
+            >
+              {broadcastMode === "all" ? "✓ " : ""}{t("Broadcast to All Tabs & Panes")} (ctrl+alt+shift+i)
             </MenuItem>
             <ExtraMenu
               extraMenu={extraTabBarMenu}

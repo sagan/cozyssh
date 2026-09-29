@@ -70,6 +70,7 @@ import {
   runButton,
   setMobileOpen,
   toggleMarkMode,
+  toggleBroadcastMode,
 } from "./store";
 
 const handleKeyDown = (e: KeyboardEvent) => {
@@ -522,6 +523,18 @@ const handleKeyDown = (e: KeyboardEvent) => {
 
     case "ctrl+shift+m": {
       toggleMarkMode(getStore().activePaneId);
+      return;
+    }
+
+    case "ctrl+shift+i": {
+      e.preventDefault();
+      toggleBroadcastMode("tab");
+      return;
+    }
+
+    case "ctrl+alt+shift+i": {
+      e.preventDefault();
+      toggleBroadcastMode("all");
       return;
     }
   }
