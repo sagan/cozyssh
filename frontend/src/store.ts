@@ -1765,7 +1765,7 @@ export async function cloneSession(id: string, cloneInSameTab?: boolean) {
       ...prev,
       {
         id: newTabId,
-        title: newTabTitle(removeNameNumSuffix(tab.title)),
+        title: newTabTitle(hostTitle(newPane.host)),
         panes: [newPane],
         activePaneId: newPaneId,
         showFiles: false,
@@ -2883,6 +2883,32 @@ export function moveTabRight(tabId?: string) {
   setTabs(newTabs);
 }
 
+export function moveTabToFirst(tabId?: string) {
+  const { tabs, activeTabId } = getStore();
+  tabId = tabId || activeTabId;
+  const i = tabs.findIndex((t) => t.id === tabId);
+  if (i <= 0) {
+    return;
+  }
+  const newTabs = tabs.slice();
+  newTabs[0] = tabs[i]!;
+  newTabs[i] = tabs[0]!;
+  setTabs(newTabs);
+}
+
+export function moveTabToLast(tabId?: string) {
+  const { tabs, activeTabId } = getStore();
+  tabId = tabId || activeTabId;
+  const i = tabs.findIndex((t) => t.id === tabId);
+  if (i < 0 || i === tabs.length - 1) {
+    return;
+  }
+  const newTabs = tabs.slice();
+  newTabs[newTabs.length - 1] = tabs[i]!;
+  newTabs[i] = tabs[newTabs.length - 1]!;
+  setTabs(newTabs);
+}
+
 /**
  * Update tab titles when host is updated.
  * @param name The host's name or hostname to update tab titles for.
@@ -3502,6 +3528,14 @@ export async function runButton(
         }
         case "MOVE_TAB_RIGHT": {
           moveTabRight();
+          break;
+        }
+        case "MOVE_TAB_TO_FIRST": {
+          moveTabToFirst();
+          break;
+        }
+        case "MOVE_TAB_TO_LAST": {
+          moveTabToLast();
           break;
         }
         case "CLOSE_OTHER_TABS":

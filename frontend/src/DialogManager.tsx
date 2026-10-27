@@ -60,7 +60,6 @@ import {
   setToasts,
   triggerFocus,
   useStore,
-  toggleBroadcastMode,
   setAppendNewLine,
   setSearchOpen,
   triggerFocusSearchInput,
@@ -135,7 +134,6 @@ export default function DialogManager({
   const inputDialogOpen = useStore((state) => state.inputDialogOpen);
   const inputValue = useStore((state) => state.inputValue);
   const sendScope = useStore((state) => state.sendScope);
-  const broadcastMode = useStore((state) => state.broadcastMode);
   const inputLiquid = useStore((state) => state.inputLiquid);
   const activePaneId = useStore((state) => state.activePaneId);
   const shellIntegrations = useStore((state) => state.shellIntegrations);
@@ -612,24 +610,6 @@ export default function DialogManager({
                       }}
                     >
                       {t("Send Input")} (alt+q)
-                    </MenuItem>
-                    <MenuItem
-                      id="tab-menu-broadcast-tab"
-                      onClick={() => {
-                        handleCloseMenu();
-                        toggleBroadcastMode("tab");
-                      }}
-                    >
-                      {broadcastMode === "tab" ? "✓ " : ""}{t("Broadcast to Tab Panes")} (ctrl+shift+i)
-                    </MenuItem>
-                    <MenuItem
-                      id="tab-menu-broadcast-all"
-                      onClick={() => {
-                        handleCloseMenu();
-                        toggleBroadcastMode("all");
-                      }}
-                    >
-                      {broadcastMode === "all" ? "✓ " : ""}{t("Broadcast to All Tabs & Panes")} (ctrl+alt+shift+i)
                     </MenuItem>
                   </>
                 )}

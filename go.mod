@@ -1,6 +1,6 @@
 module cozyssh
 
-go 1.25.5
+go 1.26.0
 
 require (
 	codeberg.org/sdassow/atomic v1.2.1
@@ -18,13 +18,13 @@ require (
 	github.com/mxschmitt/playwright-go v0.6100.0
 	github.com/openwall/yescrypt-go v1.0.0
 	github.com/ory/dockertest/v4 v4.0.0
-	github.com/pkg/sftp v1.13.11
-	github.com/things-go/go-socks5 v0.1.1
+	github.com/pkg/sftp v1.13.12
+	github.com/things-go/go-socks5 v0.1.3
 	github.com/tkrajina/typescriptify-golang-structs v0.2.0
 	github.com/zalando/go-keyring v0.2.8
-	golang.org/x/crypto v0.55.0
-	golang.org/x/sys v0.47.0
-	golang.org/x/term v0.45.0
+	golang.org/x/crypto v0.58.0
+	golang.org/x/sys v0.49.0
+	golang.org/x/term v0.47.0
 )
 
 require (
@@ -47,7 +47,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/go-webgpu/goffi v0.5.0 // indirect
-	github.com/godbus/dbus/v5 v5.2.2 // indirect
+	github.com/godbus/dbus/v5 v5.2.4 // indirect
 	github.com/jchv/go-winloader v0.0.0-20250406163304-c1995be93bd1 // indirect
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
@@ -55,7 +55,6 @@ require (
 	github.com/moby/moby/client v0.4.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
-	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/tkrajina/go-reflector v0.5.5 // indirect
 	github.com/u-root/gobusybox/src v0.0.0-20260319180309-6fd46286597e // indirect
 	github.com/u-root/u-root v0.16.0 // indirect
@@ -66,7 +65,7 @@ require (
 	go.opentelemetry.io/otel/metric v1.43.0 // indirect
 	go.opentelemetry.io/otel/trace v1.43.0 // indirect
 	golang.org/x/mod v0.40.0 // indirect
-	golang.org/x/net v0.58.0 // indirect
+	golang.org/x/net v0.61.0 // indirect
 	golang.org/x/tools v0.49.0 // indirect
 )
 

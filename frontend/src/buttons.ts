@@ -67,6 +67,8 @@ export const TERMINAL_FUNCTIONS = [
   { value: "CLOSE_OTHER_PANES", label: t("Close Other Panes") },
   { value: "MOVE_TAB_LEFT", label: t("Move Tab Left") },
   { value: "MOVE_TAB_RIGHT", label: t("Move Tab Right") },
+  { value: "MOVE_TAB_TO_FIRST", label: t("Move Tab to First") },
+  { value: "MOVE_TAB_TO_LAST", label: t("Move Tab to Last") },
 ] as const;
 
 export const MISC_FUNCTIONS = [
