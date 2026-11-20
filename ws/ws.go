@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -31,6 +32,11 @@ var globalConfig *config.Config
 func SetConfig(cfg *config.Config) {
 	globalConfig = cfg
 }
+
+var (
+	wsPingInterval = 30 * time.Second
+	wsPongTimeout  = 10 * time.Second
+)
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: common.IsSameOrigin,
@@ -398,20 +404,33 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	// sleep, network cut) keep conn.ReadMessage() blocked forever, preventing
 	// the deferred RemoveListener from firing and leaving bash/SSH processes
 	// alive indefinitely.
-	const wsPingInterval = 30 * time.Second
-	const wsPongTimeout = 10 * time.Second
 	conn.SetPongHandler(func(string) error {
 		conn.SetReadDeadline(time.Now().Add(wsPingInterval + wsPongTimeout))
 		return nil
 	})
 	// Set an initial deadline so the first ping has a window to be answered.
 	conn.SetReadDeadline(time.Now().Add(wsPingInterval + wsPongTimeout))
+
+	// Serialize all writes to conn: gorilla/websocket panics or races if
+	// WriteMessage is called concurrently from the ping and listener goroutines.
+	var writeMu sync.Mutex
+	done := make(chan struct{})
+	defer close(done)
+
 	go func() {
 		ticker := time.NewTicker(wsPingInterval)
 		defer ticker.Stop()
-		for range ticker.C {
-			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+		for {
+			select {
+			case <-done:
 				return
+			case <-ticker.C:
+				writeMu.Lock()
+				err := conn.WriteMessage(websocket.PingMessage, nil)
+				writeMu.Unlock()
+				if err != nil {
+					return
+				}
 			}
 		}
 	}()
@@ -421,12 +440,18 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 		for data := range listener {
 			if len(data) > len(models.WS_MSG_PREFIX_STATE) &&
 				string(data[:len(models.WS_MSG_PREFIX_STATE)]) == models.WS_MSG_PREFIX_STATE {
-				if err := conn.WriteMessage(websocket.TextMessage, data[len(models.WS_MSG_PREFIX_STATE):]); err != nil {
+				writeMu.Lock()
+				err := conn.WriteMessage(websocket.TextMessage, data[len(models.WS_MSG_PREFIX_STATE):])
+				writeMu.Unlock()
+				if err != nil {
 					break
 				}
 				continue
 			}
-			if err := conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
+			writeMu.Lock()
+			err := conn.WriteMessage(websocket.BinaryMessage, data)
+			writeMu.Unlock()
+			if err != nil {
 				break
 			}
 		}
