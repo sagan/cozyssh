@@ -3721,6 +3721,14 @@ export function toggleMarkMode(paneId?: string) {
   }
 }
 
+const markerEndCols = new WeakMap<IMarker, number>();
+
+export function setMarkerEndCol(marker: IMarker | undefined, col: number): void {
+  if (marker) {
+    markerEndCols.set(marker, col);
+  }
+}
+
 export function getTerminalContents(
   terminal: Terminal,
   startMarker?: IMarker | null,
@@ -3733,9 +3741,10 @@ export function getTerminalContents(
 
   // Resolve end line: use marker line if valid, otherwise default to buffer length
   const endLine = endMarker && !endMarker.isDisposed && endMarker.line !== -1 ? endMarker.line : buffer.length;
+  const endCol = endMarker && !endMarker.isDisposed && endMarker.line !== -1 ? markerEndCols.get(endMarker) : undefined;
 
   // Safeguard against inverted markers or out-of-bounds indices
-  if (startLine >= endLine) {
+  if (startLine > endLine || (startLine === endLine && (!endCol || endCol <= 0))) {
     return "";
   }
 
@@ -3744,6 +3753,12 @@ export function getTerminalContents(
     const line = buffer.getLine(i);
     if (line) {
       content.push(line.translateToString(true));
+    }
+  }
+  if (endCol && endCol > 0) {
+    const line = buffer.getLine(endLine);
+    if (line) {
+      content.push(line.translateToString(true, 0, endCol));
     }
   }
   // Remove any trailing empty lines caused by the cursor resting on a new line

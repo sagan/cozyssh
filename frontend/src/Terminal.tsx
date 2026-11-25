@@ -68,7 +68,7 @@ import {
   terminalClientSideParams,
   t,
 } from "./common";
-import { type PaneData, notify, getIntVar, getTerminalContents, broadcastData } from "./store";
+import { type PaneData, notify, getIntVar, getTerminalContents, setMarkerEndCol, broadcastData } from "./store";
 import { patchAndroidSoftKeyboardInput } from "./xtermInternals";
 import { MarkModeManager } from "./markMode";
 
@@ -736,7 +736,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
               promptEndRef.current = null;
 
               // <-- Set the end marker right after the command finishes, before the new prompt
-              markersRef.current.$end = term.registerMarker(0);
+              const endMarker = term.registerMarker(0);
+              setMarkerEndCol(endMarker, term.buffer.active.cursorX);
+              markersRef.current.$end = endMarker;
 
               const exitStatus = info.status ? parseInt(info.status) : info.exit === "success" ? 0 : 1;
               handleCommandFinishedDecoration(exitStatus, info.end);
@@ -829,7 +831,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
             const exitCodeStr = parts[1];
             const exitStatus = exitCodeStr !== undefined && exitCodeStr !== "" ? parseInt(exitCodeStr, 10) : undefined;
 
-            markersRef.current.$end = term.registerMarker(0);
+            const endMarker = term.registerMarker(0);
+            setMarkerEndCol(endMarker, term.buffer.active.cursorX);
+            markersRef.current.$end = endMarker;
             handleCommandFinishedDecoration(exitStatus, shellIntegrationRef.current.commandId);
 
             const updates: Partial<ShellIntegration> = {
@@ -920,7 +924,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
             const exitStatus = exitCodeStr !== undefined && exitCodeStr !== "" ? parseInt(exitCodeStr, 10) : undefined;
 
             // Place end marker right here before the new prompt renders
-            markersRef.current.$end = term.registerMarker(0);
+            const endMarker = term.registerMarker(0);
+            setMarkerEndCol(endMarker, term.buffer.active.cursorX);
+            markersRef.current.$end = endMarker;
             handleCommandFinishedDecoration(exitStatus, shellIntegrationRef.current.commandId);
 
             const updates: Partial<ShellIntegration> = {
