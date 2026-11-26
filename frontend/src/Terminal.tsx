@@ -986,8 +986,13 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(
             return true;
           }
 
-          // Decode the base64 payload and write to the OS clipboard
-          const decoded = atob(b64);
+          // Decode the base64 payload and write to the OS clipboard.
+          // atob() produces a binary string (one code unit per byte), so it must
+          // be converted to a byte array and decoded as UTF-8. Writing the
+          // binary string directly would mangle non-ASCII text (e.g. Chinese).
+          const binary = atob(b64);
+          const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+          const decoded = new TextDecoder("utf-8").decode(bytes);
           navigator.clipboard.writeText(decoded).catch(() => {});
         } catch (e) {
           console.error("Error parsing OSC 52:", e);
